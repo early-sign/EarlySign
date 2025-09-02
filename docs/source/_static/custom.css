@@ -1,0 +1,68 @@
+/* Custom Sphinx CSS tweaks for EarlySign docs
+ * - hide the prev/next footer area used by sphinx-book-theme
+ * - optionally hide the 'By Author name not set' fallback when
+ *   author metadata hasn't been filled.
+ */
+
+/* Hide the prev/next footer bar that appears at the bottom of pages */
+.prev-next-footer,
+.prev-next-area,
+.prev-next-footer .prev-next-area,
+.prev-next-footer a.right-next,
+.prev-next-footer a.left-prev {
+  display: none !important;
+}
+
+/* If the author fallback text appears ("By Author name not set") and
+  you want to hide it always, uncomment the rule below. We leave it
+  commented so a real author read from pyproject.toml still appears.
+
+  Example to always hide:
+  .component-author { display: none !important; }
+*/
+
+/* Remove purple hover effect on table rows introduced by the theme
+   by forcing no background change on hover for table rows. This
+   covers normal tables, `.table`, auto-generated DataFrame tables
+   from notebooks, and other similar selectors used in the built CSS. */
+.table tbody tr:hover,
+table tbody tr:hover,
+.bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:hover,
+.bd-content div.cell_output table.dataframe tbody tr:hover {
+  /* Remove any hover background-image/gradient but keep the base row color. */
+  background-image: none !important;
+}
+
+/* Re-apply zebra colors on hover so the row doesn't become 'blank' */
+.table tbody tr:nth-child(odd):hover,
+table tbody tr:nth-child(odd):hover,
+.bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:nth-child(odd):hover,
+.bd-content div.cell_output table.dataframe tbody tr:nth-child(odd):hover {
+  background-color: var(--pst-color-table-row-zebra-low-bg) !important;
+}
+.table tbody tr:nth-child(2n):hover,
+table tbody tr:nth-child(2n):hover,
+.bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:nth-child(2n):hover,
+.bd-content div.cell_output table.dataframe tbody tr:nth-child(2n):hover {
+  background-color: var(--pst-color-table-row-zebra-high-bg) !important;
+}
+
+/* Ensure same behavior in dark theme */
+html[data-theme=dark] .table tbody tr:hover,
+html[data-theme=dark] table tbody tr:hover,
+html[data-theme=dark] .bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:hover,
+html[data-theme=dark] .bd-content div.cell_output table.dataframe tbody tr:hover {
+  background-image: none !important;
+}
+html[data-theme=dark] .table tbody tr:nth-child(odd):hover,
+html[data-theme=dark] table tbody tr:nth-child(odd):hover,
+html[data-theme=dark] .bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:nth-child(odd):hover,
+html[data-theme=dark] .bd-content div.cell_output table.dataframe tbody tr:nth-child(odd):hover {
+  background-color: var(--pst-color-table-row-zebra-low-bg) !important;
+}
+html[data-theme=dark] .table tbody tr:nth-child(2n):hover,
+html[data-theme=dark] table tbody tr:nth-child(2n):hover,
+html[data-theme=dark] .bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:nth-child(2n):hover,
+html[data-theme=dark] .bd-content div.cell_output table.dataframe tbody tr:nth-child(2n):hover {
+  background-color: var(--pst-color-table-row-zebra-high-bg) !important;
+}

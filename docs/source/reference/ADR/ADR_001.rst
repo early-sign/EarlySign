@@ -1,0 +1,6 @@
+ADR 001: `__init__.py` for documentation
+-------
+
+We have decided to include `__init__.py` although our code should be able to exploit the implicit-package functionality of Python.
+This is so as to make `sphinx-autoapi` work well; the `__init__.py` files enable the package structure to be recognized correctly.
+As a byproduct, we are able to write the documentation frontpages of the API reference for each package -- we will be using the `__init__.py` mostly for writing docstring there.

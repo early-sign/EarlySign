@@ -1,0 +1,45 @@
+name: Publish Python Package with Poetry and uv
+
+on:
+  push:
+    branches:
+      - main # Trigger for TestPyPI
+  release:
+    types: [published] # Trigger for production PyPI
+
+jobs:
+  publish:
+    environment: ${{ github.event_name == 'release' && 'pypi' || 'testpypi' }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        # need full history so tags are available to the runner
+        fetch-depth: 0
+
+    - name: Install uv
+      run: pip install uv
+
+    - name: Set up Python and install Poetry
+      run: |
+        uv venv
+        uv pip install poetry
+
+    - name: Build package
+      run: |
+        source .venv/bin/activate
+        poetry install --with ci
+        poetry build
+
+    - name: Publish to PyPI or TestPyPI
+      env:
+        TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        source .venv/bin/activate
+        if [ "${{ github.event_name }}" == "release" ]; then
+          poetry publish --username __token__ --password $PYPI_API_TOKEN
+        else
+          poetry publish -r testpypi --username __token__ --password $TEST_PYPI_API_TOKEN
+        fi
