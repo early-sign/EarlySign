@@ -42,3 +42,19 @@ This library supports the following steps in your experimentation.
 1. Executing / Analyzing
 1. Reporting / Visualizing
 1. (optionally) Educating
+
+## Citing
+If you use EarlySign in publications, presentations, or reports, please consider citing it.
+Example citations are provided below.
+```bibtex
+@misc{earlysign2025,
+    title = {EarlySign Python package},
+    author = {{Takeshi Teshima}},
+    year = {2025},
+    howpublished = {\url{https://github.com/early-sign/EarlySign}},
+}
+```
+
+```
+Takeshi Teshima (2025). EarlySign Python package. https://github.com/early-sign/EarlySign.
+```
