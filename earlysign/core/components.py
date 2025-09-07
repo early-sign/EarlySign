@@ -42,10 +42,13 @@ Doctest (smoke):
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 
 from earlysign.core.names import Namespace
 from earlysign.core.ledger import NamespaceLike
+
+if TYPE_CHECKING:
+    from earlysign.core.ledger import Ledger
 
 
 @dataclass(kw_only=True)
@@ -55,7 +58,9 @@ class Statistic:
     ns_stats: NamespaceLike = Namespace.STATS
     tag_stats: Optional[str] = "stat:generic"
 
-    def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
+    def step(
+        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+    ) -> None:
         raise NotImplementedError
 
 
@@ -66,7 +71,9 @@ class Criteria:
     ns_crit: NamespaceLike = Namespace.CRITERIA
     tag_crit: Optional[str] = "crit:generic"
 
-    def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
+    def step(
+        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+    ) -> None:
         raise NotImplementedError
 
 
@@ -76,7 +83,9 @@ class Signaler:
 
     ns_sig: NamespaceLike = Namespace.SIGNALS
 
-    def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
+    def step(
+        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+    ) -> None:
         raise NotImplementedError
 
 
@@ -86,5 +95,7 @@ class Recommender:
 
     ns_sig: NamespaceLike = Namespace.SIGNALS
 
-    def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
+    def step(
+        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+    ) -> None:
         raise NotImplementedError

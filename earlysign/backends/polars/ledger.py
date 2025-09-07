@@ -5,7 +5,7 @@ earlysign.backends.polars.ledger
 A concrete **Polars-backed** ledger with JSON-UTF8 payload.
 No persistence here (see `earlysign.backends.polars.io`).
 
-- Inherits `LedgerOps` to expose the typed DSL as native methods.
+- Inherits `Ledger` to expose the typed DSL as native methods.
 - Implements `append()`, `emit_signal()`, and a `LedgerReader`.
 
 Doctest (smoke):
@@ -23,16 +23,22 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast, Iterator
 
 import polars as pl
 
-from earlysign.core.ledger import LedgerReader, Row, PayloadRegistry, NamespaceLike
+from earlysign.core.ledger import (
+    LedgerReader,
+    Row,
+    PayloadRegistry,
+    NamespaceLike,
+    Ledger,
+)
 from earlysign.core.names import Namespace
 from earlysign.core.traits import LedgerOps
 
 
-class PolarsLedger(LedgerOps):
+class PolarsLedger(LedgerOps, Ledger):
     """Polars-backed append-only ledger with JSON-UTF8 payload column."""
 
     _SCHEMA = {
@@ -49,7 +55,9 @@ class PolarsLedger(LedgerOps):
     }
 
     def __init__(self, df: Optional[pl.DataFrame] = None) -> None:
-        self._df = df if df is not None else pl.DataFrame(schema=self._SCHEMA)
+        self._df = (
+            df if df is not None else pl.DataFrame(schema=cast(Any, self._SCHEMA))
+        )
 
     # ---- Ledger interface ----
 
@@ -122,7 +130,14 @@ class PolarsLedger(LedgerOps):
         def __init__(self, df: pl.DataFrame) -> None:
             self.df = df
 
-        def _filter(self, *, namespace=None, kind=None, entity=None, tag=None):
+        def _filter(
+            self,
+            *,
+            namespace: Optional[Any] = None,
+            kind: Optional[str] = None,
+            entity: Optional[str] = None,
+            tag: Optional[str] = None,
+        ) -> pl.DataFrame:
             q = self.df
             if namespace is not None:
                 ns = namespace.value if isinstance(namespace, Namespace) else namespace
@@ -135,7 +150,14 @@ class PolarsLedger(LedgerOps):
                 q = q.filter(pl.col("tag") == tag)
             return q
 
-        def iter_rows(self, *, namespace=None, kind=None, entity=None, tag=None):
+        def iter_rows(
+            self,
+            *,
+            namespace: Optional[Any] = None,
+            kind: Optional[str] = None,
+            entity: Optional[str] = None,
+            tag: Optional[str] = None,
+        ) -> Iterator[Row]:
             q = self._filter(namespace=namespace, kind=kind, entity=entity, tag=tag)
             for rec in q.iter_rows(named=True):
                 try:
@@ -155,7 +177,14 @@ class PolarsLedger(LedgerOps):
                     payload=PayloadRegistry.decode(rec["payload_type"], payload),
                 )
 
-        def latest(self, *, namespace=None, kind=None, entity=None, tag=None):
+        def latest(
+            self,
+            *,
+            namespace: Optional[Any] = None,
+            kind: Optional[str] = None,
+            entity: Optional[str] = None,
+            tag: Optional[str] = None,
+        ) -> Optional[Row]:
             q = self._filter(namespace=namespace, kind=kind, entity=entity, tag=tag)
             if q.height == 0:
                 return None
@@ -178,7 +207,7 @@ class PolarsLedger(LedgerOps):
             )
 
         def count(self, **filters: Any) -> int:
-            return self._filter(**filters).height
+            return int(self._filter(**filters).height)
 
     def reader(self) -> LedgerReader:
         return PolarsLedger._Reader(self._df)
@@ -192,5 +221,5 @@ class PolarsLedger(LedgerOps):
         """Replace the internal frame (schema will be normalized)."""
         for c, t in self._SCHEMA.items():
             if c not in df.columns:
-                df = df.with_columns(pl.lit(None, dtype=t).alias(c))
+                df = df.with_columns(pl.lit(None, dtype=cast(Any, t)).alias(c))
         self._df = df.select(list(self._SCHEMA.keys()))

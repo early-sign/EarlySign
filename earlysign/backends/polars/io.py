@@ -81,9 +81,8 @@ class DatabaseTableSink:
         df.write_database(
             table_name=self.table,
             connection=self.conn,
-            if_table_exists=self.if_exists,
+            if_table_exists=self.if_exists,  # type: ignore
             engine="adbc",
-            batch_size=self.batch_size,
         )
 
 
@@ -107,4 +106,4 @@ class DatabaseQuerySource:
             raise RuntimeError(
                 "Polars read_database not available; upgrade Polars & install an ADBC driver."
             )
-        return pl.read_database(self.query, connection=self.conn, engine="adbc")
+        return pl.read_database(self.query, connection=self.conn, engine="adbc")  # type: ignore

@@ -48,12 +48,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional, Union
 
-from earlysign.core.ledger import Ledger, LedgerReader, Row
+from earlysign.core.ledger import LedgerBase, LedgerReader, Row
 from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
 from earlysign.core.ledger import NamespaceLike
 
 
-class LedgerOps(Ledger):
+class LedgerOps(LedgerBase):
     """A trait that attaches a small, typed DSL onto a `Ledger` implementation."""
 
     @staticmethod

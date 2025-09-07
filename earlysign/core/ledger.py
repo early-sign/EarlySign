@@ -46,9 +46,12 @@ Doctest (smoke using a trivial in-memory fake):
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Iterable, Optional, Protocol, Union
+from typing import Any, Dict, Iterable, Optional, Protocol, Union, TYPE_CHECKING
 
-from earlysign.core.names import Namespace
+from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+
+if TYPE_CHECKING:
+    from earlysign.core.traits import LedgerOps
 
 
 # Accept either Enum or plain string for flexibility with mypy/IDE help.
@@ -110,8 +113,8 @@ class LedgerReader(Protocol):
     def count(self, **filters: Any) -> int: ...
 
 
-class Ledger(Protocol):
-    """Append-only ledger protocol used throughout the framework."""
+class LedgerBase(Protocol):
+    """Base append-only ledger protocol used throughout the framework."""
 
     def append(
         self,
@@ -125,7 +128,7 @@ class Ledger(Protocol):
         payload_type: str,
         payload: Dict[str, Any],
         tag: Optional[str] = None,
-    ) -> "Ledger": ...
+    ) -> "LedgerBase": ...
     def emit_signal(
         self,
         *,
@@ -138,5 +141,52 @@ class Ledger(Protocol):
         tag: str = "signal",
         namespace: NamespaceLike = Namespace.SIGNALS,
         kind: str = "emitted",
-    ) -> "Ledger": ...
+    ) -> "LedgerBase": ...
     def reader(self) -> LedgerReader: ...
+
+
+class Ledger(LedgerBase, Protocol):
+    """Ledger protocol with LedgerOps capabilities."""
+
+    def write_event(
+        self,
+        *,
+        time_index: Union[TimeIndex, str],
+        namespace: NamespaceLike,
+        kind: str,
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        payload_type: str,
+        payload: Dict[str, Any],
+        tag: Optional[str] = None,
+        ts: Optional[datetime] = None,
+    ) -> None: ...
+
+    def emit(
+        self,
+        *,
+        time_index: Union[TimeIndex, str],
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        topic: str,
+        body: Dict[str, Any],
+        tag: str = "signal",
+        namespace: NamespaceLike = Namespace.SIGNALS,
+        ts: Optional[datetime] = None,
+    ) -> None: ...
+
+    def latest(
+        self,
+        *,
+        namespace: Optional[NamespaceLike] = None,
+        kind: Optional[str] = None,
+        experiment_id: Optional[Union[str, Any]] = None,
+        tag: Optional[str] = None,
+    ) -> Optional[Row]: ...
+
+    def iter_ns(
+        self,
+        *,
+        namespace: NamespaceLike,
+        experiment_id: Optional[Union[ExperimentId, str]] = None,
+    ) -> Iterable[Row]: ...

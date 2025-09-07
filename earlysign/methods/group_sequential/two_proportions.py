@@ -23,18 +23,18 @@ Doctest (smoke of wiring only):
 >>> L.write_event(time_index="t1", namespace=Namespace.OBS, kind="observation",
 ...               experiment_id="exp#1", step_key="s1",
 ...               payload_type="TwoPropObsBatch", payload={"nA":20,"nB":20,"mA":2,"mB":5})
->>> # statistic (requires SciPy for norm)  # doctest: +SKIP
+>>> # statistic (requires SciPy for norm)
 >>> WaldZStatistic().step(L, "exp#1", "s1", "t1")  # doctest: +SKIP
->>> # boundary at t=0.25, alpha=0.05 (OBF)       # doctest: +SKIP
+>>> # boundary at t=0.25, alpha=0.05 (OBF)
 >>> LanDeMetsBoundary(alpha_total=0.05, t=0.25, style="obf").step(L, "exp#1", "s1", "t1")  # doctest: +SKIP
->>> # signaler                                       # doctest: +SKIP
+>>> # signaler
 >>> PeekSignaler().step(L, "exp#1", "s1", "t1")  # doctest: +SKIP
 """
 
 from __future__ import annotations
 import math
 from dataclasses import dataclass
-from typing import Iterable, Tuple, Union
+from typing import Iterable, Tuple, Union, List
 
 from scipy.stats import norm  # required for thresholds
 
@@ -47,7 +47,7 @@ from earlysign.core.names import (
     WaldZTag,
     GstBoundaryTag,
 )
-from earlysign.core.traits import LedgerOps
+from earlysign.core.ledger import Ledger
 from earlysign.schemes.two_proportions.reduce import reduce_counts
 from earlysign.schemes.two_proportions.model import WaldZPayload, GstBoundaryPayload
 
@@ -77,14 +77,16 @@ def lan_demets_spending(alpha_total: float, t: float, style: str) -> float:
     """Lan–DeMets alpha spending (two-sided cumulative) for OBF/Pocock."""
     s = style.lower()
     if s in ("obf", "o'brien", "obrien", "o'brien-fleming"):
-        za2 = norm.ppf(1 - alpha_total / 2.0)
-        return 2.0 - 2.0 * norm.cdf(za2 / math.sqrt(max(t, 1e-12)))
+        za2 = float(norm.ppf(1 - alpha_total / 2.0))
+        return 2.0 - 2.0 * float(norm.cdf(za2 / math.sqrt(max(t, 1e-12))))
     if s in ("pocock",):
         return alpha_total * math.log(1.0 + (math.e - 1.0) * t)
     raise ValueError(f"Unknown spending style: {style}")
 
 
-def nominal_alpha_increments(alpha_total: float, t_grid: Iterable[float], style: str):
+def nominal_alpha_increments(
+    alpha_total: float, t_grid: Iterable[float], style: str
+) -> List[float]:
     """Convert cumulative spending to per-look increments."""
     cum = [lan_demets_spending(alpha_total, t, style) for t in t_grid]
     inc, prev = [], 0.0
@@ -105,7 +107,7 @@ class WaldZStatistic(Statistic):
 
     def step(
         self,
-        ledger: LedgerOps,
+        ledger: Ledger,
         experiment_id: Union[ExperimentId, str],
         step_key: Union[StepKey, str],
         time_index: Union[TimeIndex, str],
@@ -129,7 +131,7 @@ class WaldZStatistic(Statistic):
             experiment_id=str(experiment_id),
             step_key=str(step_key),
             payload_type="WaldZ",
-            payload=payload,
+            payload=dict(payload),
             tag=self.tag_stats,
         )
 
@@ -145,7 +147,7 @@ class LanDeMetsBoundary(Criteria):
 
     def step(
         self,
-        ledger: LedgerOps,
+        ledger: Ledger,
         experiment_id: Union[ExperimentId, str],
         step_key: Union[StepKey, str],
         time_index: Union[TimeIndex, str],
@@ -166,7 +168,7 @@ class LanDeMetsBoundary(Criteria):
             experiment_id=str(experiment_id),
             step_key=str(step_key),
             payload_type="GSTBoundary",
-            payload=payload,
+            payload=dict(payload),
             tag=self.tag_crit,
         )
 
@@ -179,7 +181,7 @@ class PeekSignaler(Signaler):
 
     def step(
         self,
-        ledger: LedgerOps,
+        ledger: Ledger,
         experiment_id: Union[ExperimentId, str],
         step_key: Union[StepKey, str],
         time_index: Union[TimeIndex, str],
