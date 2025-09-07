@@ -79,7 +79,9 @@ class LedgerOps(Ledger):
         self.append(
             time_index=str(time_index),
             ts=ts or self._now(),
-            namespace=namespace.value if isinstance(namespace, Namespace) else str(namespace),
+            namespace=(
+                namespace.value if isinstance(namespace, Namespace) else str(namespace)
+            ),
             kind=kind,
             entity=str(experiment_id),
             snapshot_id=str(step_key),
@@ -109,7 +111,9 @@ class LedgerOps(Ledger):
             topic=topic,
             body=body,
             tag=tag,
-            namespace=namespace.value if isinstance(namespace, Namespace) else str(namespace),
+            namespace=(
+                namespace.value if isinstance(namespace, Namespace) else str(namespace)
+            ),
         )
 
     # ---- readers ----
@@ -123,10 +127,26 @@ class LedgerOps(Ledger):
         tag: Optional[str] = None,
     ) -> Optional[Row]:
         """Return latest row for given filters (or None)."""
-        ns = (namespace.value if isinstance(namespace, Namespace) else namespace) if namespace is not None else None
-        return self.reader().latest(namespace=ns, kind=kind, entity=str(experiment_id) if experiment_id else None, tag=tag)
+        ns = (
+            (namespace.value if isinstance(namespace, Namespace) else namespace)
+            if namespace is not None
+            else None
+        )
+        return self.reader().latest(
+            namespace=ns,
+            kind=kind,
+            entity=str(experiment_id) if experiment_id else None,
+            tag=tag,
+        )
 
-    def iter_ns(self, *, namespace: NamespaceLike, experiment_id: Optional[Union[ExperimentId, str]] = None) -> Iterable[Row]:
+    def iter_ns(
+        self,
+        *,
+        namespace: NamespaceLike,
+        experiment_id: Optional[Union[ExperimentId, str]] = None,
+    ) -> Iterable[Row]:
         """Iterate rows in a namespace (optionally filtered by experiment_id)."""
         ns = namespace.value if isinstance(namespace, Namespace) else str(namespace)
-        return self.reader().iter_rows(namespace=ns, entity=str(experiment_id) if experiment_id else None)
+        return self.reader().iter_rows(
+            namespace=ns, entity=str(experiment_id) if experiment_id else None
+        )

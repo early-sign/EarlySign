@@ -27,6 +27,7 @@ import polars as pl
 @dataclass
 class LedgerReporter:
     """Generic reporter for raw ledger frames."""
+
     df: pl.DataFrame
 
     def ledger_table(self, max_rows: int = 60) -> pl.DataFrame:
@@ -35,7 +36,9 @@ class LedgerReporter:
             sample = df
         else:
             head_n = max_rows // 2
-            sample = pl.concat([df.head(head_n), df.tail(max_rows - head_n)], how="vertical")
+            sample = pl.concat(
+                [df.head(head_n), df.tail(max_rows - head_n)], how="vertical"
+            )
         return sample
 
     def counts(self) -> pl.DataFrame:

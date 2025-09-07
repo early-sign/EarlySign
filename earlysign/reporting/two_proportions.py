@@ -23,7 +23,6 @@ Doctest (smoke; no plotting):
 True
 """
 
-
 from dataclasses import dataclass
 import json
 from typing import Optional, Dict, Any, List
@@ -31,9 +30,11 @@ from typing import Optional, Dict, Any, List
 import polars as pl
 import matplotlib.pyplot as plt
 
+
 @dataclass
 class TwoPropGSTReporter:
     """Two-proportions GST progress view (table and simple plot)."""
+
     df: pl.DataFrame
 
     def progress_table(self) -> pl.DataFrame:
@@ -42,26 +43,56 @@ class TwoPropGSTReporter:
         - look, t, z, upper, lower, nA, nB, mA, mB, stopped ('yes'/'no')
         """
         stats = (
-            self.df
-            .filter((pl.col("namespace") == "stats") & (pl.col("kind") == "updated") & (pl.col("payload_type") == "WaldZ"))
+            self.df.filter(
+                (pl.col("namespace") == "stats")
+                & (pl.col("kind") == "updated")
+                & (pl.col("payload_type") == "WaldZ")
+            )
             .with_columns(
-                pl.col("payload").str.json_path_match("$.z").cast(pl.Float64).alias("z"),
-                pl.col("payload").str.json_path_match("$.nA").cast(pl.Int64).alias("nA"),
-                pl.col("payload").str.json_path_match("$.nB").cast(pl.Int64).alias("nB"),
-                pl.col("payload").str.json_path_match("$.mA").cast(pl.Int64).alias("mA"),
-                pl.col("payload").str.json_path_match("$.mB").cast(pl.Int64).alias("mB"),
+                pl.col("payload")
+                .str.json_path_match("$.z")
+                .cast(pl.Float64)
+                .alias("z"),
+                pl.col("payload")
+                .str.json_path_match("$.nA")
+                .cast(pl.Int64)
+                .alias("nA"),
+                pl.col("payload")
+                .str.json_path_match("$.nB")
+                .cast(pl.Int64)
+                .alias("nB"),
+                pl.col("payload")
+                .str.json_path_match("$.mA")
+                .cast(pl.Int64)
+                .alias("mA"),
+                pl.col("payload")
+                .str.json_path_match("$.mB")
+                .cast(pl.Int64)
+                .alias("mB"),
                 pl.col("time_index").str.strip_prefix("t").cast(pl.Int64).alias("look"),
             )
             .select("time_index", "ts", "entity", "look", "z", "nA", "nB", "mA", "mB")
         )
 
         crit = (
-            self.df
-            .filter((pl.col("namespace") == "criteria") & (pl.col("kind") == "updated") & (pl.col("payload_type") == "GSTBoundary"))
+            self.df.filter(
+                (pl.col("namespace") == "criteria")
+                & (pl.col("kind") == "updated")
+                & (pl.col("payload_type") == "GSTBoundary")
+            )
             .with_columns(
-                pl.col("payload").str.json_path_match("$.upper").cast(pl.Float64).alias("upper"),
-                pl.col("payload").str.json_path_match("$.lower").cast(pl.Float64).alias("lower"),
-                pl.col("payload").str.json_path_match("$.info_time").cast(pl.Float64).alias("t"),
+                pl.col("payload")
+                .str.json_path_match("$.upper")
+                .cast(pl.Float64)
+                .alias("upper"),
+                pl.col("payload")
+                .str.json_path_match("$.lower")
+                .cast(pl.Float64)
+                .alias("lower"),
+                pl.col("payload")
+                .str.json_path_match("$.info_time")
+                .cast(pl.Float64)
+                .alias("t"),
             )
             .select("time_index", "upper", "lower", "t")
         )
@@ -70,9 +101,9 @@ class TwoPropGSTReporter:
             stats.join(crit, on="time_index", how="left")
             .with_columns(
                 pl.when(pl.col("z").abs() >= pl.col("upper"))
-                  .then(pl.lit("yes"))
-                  .otherwise(pl.lit("no"))
-                  .alias("stopped")
+                .then(pl.lit("yes"))
+                .otherwise(pl.lit("no"))
+                .alias("stopped")
             )
             .sort("look")
         )
@@ -84,8 +115,9 @@ class TwoPropGSTReporter:
         Expected keys: 'alpha', 'spending', 't_grid' (list of floats).
         """
         q = (
-            self.df
-            .filter((pl.col("namespace") == "design") & (pl.col("kind") == "registered"))
+            self.df.filter(
+                (pl.col("namespace") == "design") & (pl.col("kind") == "registered")
+            )
             .sort("ts")
             .tail(1)
             .to_dicts()
@@ -94,7 +126,11 @@ class TwoPropGSTReporter:
             return None
         payload_str = q[0].get("payload", "")
         try:
-            return json.loads(payload_str) if isinstance(payload_str, str) else dict(payload_str)
+            return (
+                json.loads(payload_str)
+                if isinstance(payload_str, str)
+                else dict(payload_str)
+            )
         except Exception:
             return None
 
@@ -129,7 +165,9 @@ class TwoPropGSTReporter:
 
         # Recompute full boundaries on planned grid
         from scipy.stats import norm
-        from earlysign.methods.group_sequential.two_proportions import lan_demets_spending
+        from earlysign.methods.group_sequential.two_proportions import (
+            lan_demets_spending,
+        )
 
         uppers_full, lowers_full = [], []
         for t in t_grid_full:
@@ -142,8 +180,20 @@ class TwoPropGSTReporter:
         # Plot
         plt.figure(figsize=(6.5, 4.2))
         # Full boundaries across the design
-        plt.plot(t_grid_full, uppers_full, linestyle="--", marker=None, label="Upper boundary")
-        plt.plot(t_grid_full, lowers_full, linestyle="--", marker=None, label="Lower boundary")
+        plt.plot(
+            t_grid_full,
+            uppers_full,
+            linestyle="--",
+            marker=None,
+            label="Upper boundary",
+        )
+        plt.plot(
+            t_grid_full,
+            lowers_full,
+            linestyle="--",
+            marker=None,
+            label="Lower boundary",
+        )
         # Observed Z up to stop
         plt.plot(xs_obs, zs_obs, marker="o", label="Observed Wald Z")
 
@@ -154,7 +204,9 @@ class TwoPropGSTReporter:
             if stopped_rows.height > 0:
                 t_stop = float(stopped_rows["t"][-1])
                 z_stop = float(stopped_rows["z"][-1])
-                plt.scatter([t_stop], [z_stop], s=70, color="red", zorder=5, label="Stop")
+                plt.scatter(
+                    [t_stop], [z_stop], s=70, color="red", zorder=5, label="Stop"
+                )
 
         plt.axhline(0.0, linestyle=":", linewidth=1)
         plt.xlabel("Information fraction (t)")

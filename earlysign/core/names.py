@@ -29,6 +29,7 @@ class Namespace(str, Enum):
     - CRITERIA: critical values / boundaries / thresholds
     - SIGNALS: emitted signals / decisions / recommendations
     """
+
     OBS = "obs"
     STATS = "stats"
     CRITERIA = "criteria"

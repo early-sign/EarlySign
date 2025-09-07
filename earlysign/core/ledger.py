@@ -58,6 +58,7 @@ NamespaceLike = Union[Namespace, str]
 @dataclass(frozen=True)
 class Row:
     """A single ledger record with decoded payload (if decoder present)."""
+
     uuid: str
     time_index: str
     ts: datetime
@@ -72,6 +73,7 @@ class Row:
 
 class PayloadRegistry:
     """Optional decoders: payload_type -> callable(dict) -> typed object."""
+
     _decoders: Dict[str, Any] = {}
 
     @classmethod
@@ -88,27 +90,53 @@ class PayloadRegistry:
 
 class LedgerReader(Protocol):
     """Reader side of a ledger; supports filtered iteration and convenience queries."""
+
     def iter_rows(
-        self, *, namespace: Optional[NamespaceLike] = None, kind: Optional[str] = None,
-        entity: Optional[str] = None, tag: Optional[str] = None
+        self,
+        *,
+        namespace: Optional[NamespaceLike] = None,
+        kind: Optional[str] = None,
+        entity: Optional[str] = None,
+        tag: Optional[str] = None,
     ) -> Iterable[Row]: ...
     def latest(
-        self, *, namespace: Optional[NamespaceLike] = None, kind: Optional[str] = None,
-        entity: Optional[str] = None, tag: Optional[str] = None
+        self,
+        *,
+        namespace: Optional[NamespaceLike] = None,
+        kind: Optional[str] = None,
+        entity: Optional[str] = None,
+        tag: Optional[str] = None,
     ) -> Optional[Row]: ...
     def count(self, **filters: Any) -> int: ...
 
 
 class Ledger(Protocol):
     """Append-only ledger protocol used throughout the framework."""
+
     def append(
-        self, *, time_index: str, ts: datetime, namespace: NamespaceLike, kind: str,
-        entity: str, snapshot_id: str, payload_type: str,
-        payload: Dict[str, Any], tag: Optional[str] = None
+        self,
+        *,
+        time_index: str,
+        ts: datetime,
+        namespace: NamespaceLike,
+        kind: str,
+        entity: str,
+        snapshot_id: str,
+        payload_type: str,
+        payload: Dict[str, Any],
+        tag: Optional[str] = None,
     ) -> "Ledger": ...
     def emit_signal(
-        self, *, time_index: str, ts: datetime, entity: str,
-        snapshot_id: str, topic: str, body: Dict[str, Any],
-        tag: str = "signal", namespace: NamespaceLike = Namespace.SIGNALS, kind: str = "emitted"
+        self,
+        *,
+        time_index: str,
+        ts: datetime,
+        entity: str,
+        snapshot_id: str,
+        topic: str,
+        body: Dict[str, Any],
+        tag: str = "signal",
+        namespace: NamespaceLike = Namespace.SIGNALS,
+        kind: str = "emitted",
     ) -> "Ledger": ...
     def reader(self) -> LedgerReader: ...

@@ -31,6 +31,8 @@ def reduce_counts(ledger: Ledger, *, experiment_id: str) -> Tuple[int, int, int,
     for row in ledger.reader().iter_rows(namespace=Namespace.OBS, entity=experiment_id):
         p = row.payload
         if {"nA", "nB", "mA", "mB"} <= set(p.keys()):
-            nA += int(p["nA"]); nB += int(p["nB"])
-            mA += int(p["mA"]); mB += int(p["mB"])
+            nA += int(p["nA"])
+            nB += int(p["nB"])
+            mA += int(p["mA"])
+            mB += int(p["mB"])
     return nA, nB, mA, mB

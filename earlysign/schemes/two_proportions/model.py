@@ -24,6 +24,7 @@ from typing import Tuple, TypedDict
 
 # --- Typed payloads used in ledger records (mypy-friendly) ---
 
+
 class WaldZPayload(TypedDict):
     z: float
     se: float
@@ -43,6 +44,7 @@ class GstBoundaryPayload(TypedDict):
 
 
 # --- Typed objects (optional decoder targets) ---
+
 
 @dataclass(frozen=True)
 class TwoPropObsBatch:

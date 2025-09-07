@@ -41,8 +41,11 @@ from scipy.stats import norm  # required for thresholds
 from earlysign.core.components import Criteria, Signaler, Statistic
 from earlysign.core.names import (
     Namespace,
-    ExperimentId, StepKey, TimeIndex,
-    WaldZTag, GstBoundaryTag,
+    ExperimentId,
+    StepKey,
+    TimeIndex,
+    WaldZTag,
+    GstBoundaryTag,
 )
 from earlysign.core.traits import LedgerOps
 from earlysign.schemes.two_proportions.reduce import reduce_counts
@@ -51,7 +54,10 @@ from earlysign.schemes.two_proportions.model import WaldZPayload, GstBoundaryPay
 
 # --- math helpers ---
 
-def wald_z_from_counts(nA: int, nB: int, mA: int, mB: int) -> Tuple[float, float, float, float]:
+
+def wald_z_from_counts(
+    nA: int, nB: int, mA: int, mB: int
+) -> Tuple[float, float, float, float]:
     """Return (z, pA_hat, pB_hat, se) using unpooled SE.
 
     Note:
@@ -62,7 +68,7 @@ def wald_z_from_counts(nA: int, nB: int, mA: int, mB: int) -> Tuple[float, float
     pA_hat, pB_hat = mA / max(nA, 1), mB / max(nB, 1)
     var = pA_hat * (1 - pA_hat) / max(nA, 1) + pB_hat * (1 - pB_hat) / max(nB, 1)
     se = math.sqrt(var) if var > 0 else float("inf")
-    diff = pB_hat - pA_hat            # ← here (variant minus baseline)
+    diff = pB_hat - pA_hat  # ← here (variant minus baseline)
     z = diff / se if se not in (0.0, float("inf")) else 0.0
     return z, pA_hat, pB_hat, se
 
@@ -90,9 +96,11 @@ def nominal_alpha_increments(alpha_total: float, t_grid: Iterable[float], style:
 
 # --- components ---
 
+
 @dataclass(kw_only=True)
 class WaldZStatistic(Statistic):
     """Compute Wald Z and append to the `stats` namespace."""
+
     tag_stats: WaldZTag = "stat:waldz"
 
     def step(
@@ -105,20 +113,31 @@ class WaldZStatistic(Statistic):
         nA, nB, mA, mB = reduce_counts(ledger, experiment_id=str(experiment_id))
         z, pA, pB, se = wald_z_from_counts(nA, nB, mA, mB)
         payload: WaldZPayload = {
-            "z": float(z), "se": float(se),
-            "nA": nA, "nB": nB, "mA": mA, "mB": mB,
-            "pA_hat": pA, "pB_hat": pB,
+            "z": float(z),
+            "se": float(se),
+            "nA": nA,
+            "nB": nB,
+            "mA": mA,
+            "mB": mB,
+            "pA_hat": pA,
+            "pB_hat": pB,
         }
         ledger.write_event(
-            time_index=time_index, namespace=Namespace.STATS, kind="updated",
-            experiment_id=str(experiment_id), step_key=str(step_key),
-            payload_type="WaldZ", payload=payload, tag=self.tag_stats,
+            time_index=time_index,
+            namespace=Namespace.STATS,
+            kind="updated",
+            experiment_id=str(experiment_id),
+            step_key=str(step_key),
+            payload_type="WaldZ",
+            payload=payload,
+            tag=self.tag_stats,
         )
 
 
 @dataclass(kw_only=True)
 class LanDeMetsBoundary(Criteria):
     """Write two-sided boundary (`GSTBoundary`) for given `t` (info fraction)."""
+
     alpha_total: float
     t: float
     style: str = "obf"
@@ -135,19 +154,27 @@ class LanDeMetsBoundary(Criteria):
         alpha_i = max(min(cum_alpha, self.alpha_total), 1e-12)
         thr = float(norm.ppf(1 - alpha_i / 2))
         payload: GstBoundaryPayload = {
-            "upper": thr, "lower": -thr,
-            "info_time": float(self.t), "alpha_i": alpha_i,
+            "upper": thr,
+            "lower": -thr,
+            "info_time": float(self.t),
+            "alpha_i": alpha_i,
         }
         ledger.write_event(
-            time_index=time_index, namespace=Namespace.CRITERIA, kind="updated",
-            experiment_id=str(experiment_id), step_key=str(step_key),
-            payload_type="GSTBoundary", payload=payload, tag=self.tag_crit,
+            time_index=time_index,
+            namespace=Namespace.CRITERIA,
+            kind="updated",
+            experiment_id=str(experiment_id),
+            step_key=str(step_key),
+            payload_type="GSTBoundary",
+            payload=payload,
+            tag=self.tag_crit,
         )
 
 
 @dataclass(kw_only=True)
 class PeekSignaler(Signaler):
     """Emit a stop signal when |Z| >= boundary at the current look."""
+
     decision_topic: str = "gst:decision"
 
     def step(
@@ -157,15 +184,27 @@ class PeekSignaler(Signaler):
         step_key: Union[StepKey, str],
         time_index: Union[TimeIndex, str],
     ) -> None:
-        z_row = ledger.latest(namespace=Namespace.STATS, tag="stat:waldz", experiment_id=str(experiment_id))
-        b_row = ledger.latest(namespace=Namespace.CRITERIA, tag="crit:gst", experiment_id=str(experiment_id))
+        z_row = ledger.latest(
+            namespace=Namespace.STATS,
+            tag="stat:waldz",
+            experiment_id=str(experiment_id),
+        )
+        b_row = ledger.latest(
+            namespace=Namespace.CRITERIA,
+            tag="crit:gst",
+            experiment_id=str(experiment_id),
+        )
         if not z_row or not b_row:
             return
         z = float(z_row.payload.get("z", 0.0))
         upper = float(b_row.payload.get("upper", float("inf")))
         if abs(z) >= upper:
             ledger.emit(
-                time_index=time_index, experiment_id=str(experiment_id), step_key=str(step_key),
-                topic=self.decision_topic, body={"action": "stop", "z": z, "threshold": upper},
-                tag="gst:decision", namespace=Namespace.SIGNALS,
+                time_index=time_index,
+                experiment_id=str(experiment_id),
+                step_key=str(step_key),
+                topic=self.decision_topic,
+                body={"action": "stop", "z": z, "threshold": upper},
+                tag="gst:decision",
+                namespace=Namespace.SIGNALS,
             )

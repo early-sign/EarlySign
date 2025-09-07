@@ -41,11 +41,11 @@ class PolarsLedger(LedgerOps):
         "ts": pl.Datetime(time_unit="us", time_zone="UTC"),
         "namespace": pl.Utf8,
         "kind": pl.Utf8,
-        "entity": pl.Utf8,         # experiment_id
-        "snapshot_id": pl.Utf8,    # step_key
+        "entity": pl.Utf8,  # experiment_id
+        "snapshot_id": pl.Utf8,  # step_key
         "tag": pl.Utf8,
         "payload_type": pl.Utf8,
-        "payload": pl.Utf8,        # JSON string
+        "payload": pl.Utf8,  # JSON string
     }
 
     def __init__(self, df: Optional[pl.DataFrame] = None) -> None:
@@ -54,38 +54,68 @@ class PolarsLedger(LedgerOps):
     # ---- Ledger interface ----
 
     def append(
-        self, *, time_index: str, ts: datetime, namespace: NamespaceLike, kind: str,
-        entity: str, snapshot_id: str, payload_type: str,
-        payload: Dict[str, Any], tag: Optional[str] = None
+        self,
+        *,
+        time_index: str,
+        ts: datetime,
+        namespace: NamespaceLike,
+        kind: str,
+        entity: str,
+        snapshot_id: str,
+        payload_type: str,
+        payload: Dict[str, Any],
+        tag: Optional[str] = None,
     ) -> "PolarsLedger":
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         else:
             ts = ts.astimezone(timezone.utc)
-        row = pl.DataFrame({
-            "uuid": [str(uuid.uuid4())],
-            "time_index": [time_index],
-            "ts": [ts],
-            "namespace": [str(namespace.value if isinstance(namespace, Namespace) else namespace)],
-            "kind": [kind],
-            "entity": [entity],
-            "snapshot_id": [snapshot_id],
-            "tag": [tag],
-            "payload_type": [payload_type],
-            "payload": [json.dumps(payload, separators=(",", ":"))],
-        })
+        row = pl.DataFrame(
+            {
+                "uuid": [str(uuid.uuid4())],
+                "time_index": [time_index],
+                "ts": [ts],
+                "namespace": [
+                    str(
+                        namespace.value
+                        if isinstance(namespace, Namespace)
+                        else namespace
+                    )
+                ],
+                "kind": [kind],
+                "entity": [entity],
+                "snapshot_id": [snapshot_id],
+                "tag": [tag],
+                "payload_type": [payload_type],
+                "payload": [json.dumps(payload, separators=(",", ":"))],
+            }
+        )
         self._df = pl.concat([self._df, row], how="vertical_relaxed")
         return self
 
     def emit_signal(
-        self, *, time_index: str, ts: datetime, entity: str,
-        snapshot_id: str, topic: str, body: Dict[str, Any],
-        tag: str = "signal", namespace: NamespaceLike = Namespace.SIGNALS, kind: str = "emitted"
+        self,
+        *,
+        time_index: str,
+        ts: datetime,
+        entity: str,
+        snapshot_id: str,
+        topic: str,
+        body: Dict[str, Any],
+        tag: str = "signal",
+        namespace: NamespaceLike = Namespace.SIGNALS,
+        kind: str = "emitted",
     ) -> "PolarsLedger":
         return self.append(
-            time_index=time_index, ts=ts, namespace=namespace, kind=kind,
-            entity=entity, snapshot_id=snapshot_id, payload_type="Signal",
-            payload={"topic": topic, "body": body}, tag=tag
+            time_index=time_index,
+            ts=ts,
+            namespace=namespace,
+            kind=kind,
+            entity=entity,
+            snapshot_id=snapshot_id,
+            payload_type="Signal",
+            payload={"topic": topic, "body": body},
+            tag=tag,
         )
 
     class _Reader(LedgerReader):
@@ -113,9 +143,14 @@ class PolarsLedger(LedgerOps):
                 except Exception:
                     payload = {}
                 yield Row(
-                    uuid=rec["uuid"], time_index=rec["time_index"], ts=rec["ts"],
-                    namespace=rec["namespace"], kind=rec["kind"], entity=rec["entity"],
-                    snapshot_id=rec["snapshot_id"], tag=rec["tag"],
+                    uuid=rec["uuid"],
+                    time_index=rec["time_index"],
+                    ts=rec["ts"],
+                    namespace=rec["namespace"],
+                    kind=rec["kind"],
+                    entity=rec["entity"],
+                    snapshot_id=rec["snapshot_id"],
+                    tag=rec["tag"],
                     payload_type=rec["payload_type"],
                     payload=PayloadRegistry.decode(rec["payload_type"], payload),
                 )
@@ -130,9 +165,14 @@ class PolarsLedger(LedgerOps):
             except Exception:
                 payload = {}
             return Row(
-                uuid=rec["uuid"], time_index=rec["time_index"], ts=rec["ts"],
-                namespace=rec["namespace"], kind=rec["kind"], entity=rec["entity"],
-                snapshot_id=rec["snapshot_id"], tag=rec["tag"],
+                uuid=rec["uuid"],
+                time_index=rec["time_index"],
+                ts=rec["ts"],
+                namespace=rec["namespace"],
+                kind=rec["kind"],
+                entity=rec["entity"],
+                snapshot_id=rec["snapshot_id"],
+                tag=rec["tag"],
                 payload_type=rec["payload_type"],
                 payload=PayloadRegistry.decode(rec["payload_type"], payload),
             )

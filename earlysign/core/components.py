@@ -51,29 +51,40 @@ from earlysign.core.ledger import NamespaceLike
 @dataclass(kw_only=True)
 class Statistic:
     """Base class for statistics updaters."""
+
     ns_stats: NamespaceLike = Namespace.STATS
     tag_stats: Optional[str] = "stat:generic"
+
     def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
         raise NotImplementedError
+
 
 @dataclass(kw_only=True)
 class Criteria:
     """Base class for criteria/boundary updaters."""
+
     ns_crit: NamespaceLike = Namespace.CRITERIA
     tag_crit: Optional[str] = "crit:generic"
+
     def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
         raise NotImplementedError
+
 
 @dataclass(kw_only=True)
 class Signaler:
     """Base class for signal emitters (e.g., stop/continue)."""
+
     ns_sig: NamespaceLike = Namespace.SIGNALS
+
     def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
         raise NotImplementedError
+
 
 @dataclass(kw_only=True)
 class Recommender:
     """Base class for recommendation emitters (optional)."""
+
     ns_sig: NamespaceLike = Namespace.SIGNALS
+
     def step(self, ledger, experiment_id: str, step_key: str, time_index: str) -> None:
         raise NotImplementedError
