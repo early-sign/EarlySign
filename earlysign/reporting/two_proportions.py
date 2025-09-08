@@ -6,7 +6,8 @@ Two-proportions specific reporter that understands:
 - 'WaldZ' (stats) payloads
 - 'GSTBoundary' (criteria) payloads
 
-Doctest (smoke; no plotting):
+Examples
+--------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
 >>> from earlysign.reporting.two_proportions import TwoPropGSTReporter

@@ -8,7 +8,8 @@ Typed names shared across the package.
 - `ExperimentId`, `StepKey`, `TimeIndex`: NewType wrappers for clarity.
 - Common `Literal` tags for GST-two-proportions (optional; extend per method).
 
-Doctest (smoke):
+Examples
+--------
 >>> from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
 >>> Namespace.OBS.value
 'obs'

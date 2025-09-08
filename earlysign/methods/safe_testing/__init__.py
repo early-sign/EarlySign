@@ -16,7 +16,8 @@ References:
 - Grünwald, P., de Heide, R., & Koolen, W. (2020). Safe testing. arXiv:1906.07801.
 - Ramdas, A., Grünwald, P., Vovk, V., & Shafer, G. (2023). Game-theoretic statistics and safe anytime-valid inference.
 
-Doctest (basic usage):
+Examples
+--------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
 >>> L = PolarsLedger()

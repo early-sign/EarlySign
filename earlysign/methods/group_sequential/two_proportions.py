@@ -15,7 +15,8 @@ Note:
 - Boundary spending uses Lan–DeMets approx for OBF/Pocock.
 - Doctests that require SciPy are marked `+SKIP` to keep the suite light.
 
-Doctest (smoke of wiring only):
+Examples
+--------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
 >>> L = PolarsLedger()

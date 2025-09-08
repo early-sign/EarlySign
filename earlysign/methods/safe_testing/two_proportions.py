@@ -30,7 +30,8 @@ References:
 - Turner, A. et al. (2024). Safe testing for two-sample binomial problems.
 - Grünwald, P. et al. (2020). Safe testing. Statistical Science.
 
-Doctest (smoke test):
+Examples
+--------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
 >>> L = PolarsLedger()

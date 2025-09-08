@@ -7,7 +7,8 @@ Scheme-specific reducers for two-proportions.
 - `reduce_counts(ledger, experiment_id)`: accumulate nA, nB, mA, mB
   from the `obs` namespace.
 
-Doctest (smoke):
+Examples
+--------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
 >>> from earlysign.schemes.two_proportions.model import TwoPropObsBatch

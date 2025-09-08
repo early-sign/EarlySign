@@ -7,6 +7,7 @@ EarlySign is a Python library designed to accelerate decision-making in A/B test
 
 .. image:: https://raw.githubusercontent.com/early-sign/EarlySign/refs/heads/main/docs/logo.png
    :width: 80%
+   :class: no-scaled-link
    :align: center
 
 .. note::

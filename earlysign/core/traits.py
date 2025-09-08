@@ -11,8 +11,8 @@ and `Ledger.reader`. By inheriting `LedgerOps`, concrete ledgers gain:
 - `emit()`        : append a signal record
 - `latest()` / `iter_ns()` : typed convenience readers
 
-Doctest (smoke with a tiny in-memory host):
-
+Examples
+--------
 >>> from datetime import datetime, timezone
 >>> from earlysign.core.ledger import Row, LedgerReader
 >>> from earlysign.core.names import Namespace

@@ -7,7 +7,8 @@ Thin base classes for components that *write to* and *read from* the ledger.
 They only centralize **namespace/tag conventions** so all concrete implementations
 stay consistent. Concrete classes must implement `step()`.
 
-Doctest (smoke):
+Examples
+--------
 >>> from earlysign.core.traits import LedgerOps
 >>> from earlysign.core.ledger import Row, LedgerReader
 >>> from earlysign.core.names import Namespace

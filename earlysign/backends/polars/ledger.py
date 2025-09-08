@@ -8,7 +8,8 @@ No persistence here (see `earlysign.backends.polars.io`).
 - Inherits `Ledger` to expose the typed DSL as native methods.
 - Implements `append()`, `emit_signal()`, and a `LedgerReader`.
 
-Doctest (smoke):
+Examples
+--------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
 >>> L = PolarsLedger()

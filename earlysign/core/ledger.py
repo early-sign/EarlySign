@@ -11,8 +11,8 @@ Core *backend-agnostic* ledger interfaces and shared types.
 
 This module intentionally knows nothing about any storage backend.
 
-Doctest (smoke using a trivial in-memory fake):
-
+Examples:
+---------
 >>> from datetime import datetime, timezone
 >>> from earlysign.core.names import Namespace
 >>> class FakeReader:

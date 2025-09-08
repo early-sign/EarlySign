@@ -5,7 +5,8 @@ earlysign.reporting.generic
 A *scheme-agnostic* reporter that simply shows raw ledger events and
 namespace×kind counts. Scheme-specific visualization lives elsewhere.
 
-Doctest (smoke):
+Examples
+--------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
 >>> from earlysign.reporting.generic import LedgerReporter

@@ -8,7 +8,8 @@ Typed payloads for the *two-sample binomial* scheme.
 - `TwoPropDesign`: design metadata (optional)
 - TypedDict payload contracts for statistics/criteria (mypy-friendly)
 
-Doctest (decoder registration):
+Examples
+--------
 >>> from earlysign.core.ledger import PayloadRegistry
 >>> from earlysign.schemes.two_proportions.model import TwoPropObsBatch
 >>> PayloadRegistry.register("TwoPropObsBatch", lambda d: TwoPropObsBatch(**d))

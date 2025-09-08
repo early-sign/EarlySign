@@ -9,10 +9,10 @@
 
 # EarlySign
 
-<center>
+<center><picture>
 <img src="https://raw.githubusercontent.com/early-sign/EarlySign/refs/heads/main/docs/logo.png" width="80%"><br/>
 Early signs, faster decisions.
-</center>
+</picture></center>
 
 ---
 

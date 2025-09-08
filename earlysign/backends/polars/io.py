@@ -9,7 +9,8 @@ Pluggable persistence for the Polars-backed ledger via **sinks/sources**.
 
 This module deliberately contains no ledger semantics—just I/O.
 
-Doctest (smoke):
+Examples
+--------
 >>> import polars as pl
 >>> from earlysign.backends.polars.io import ParquetFileSink, ParquetFileSource
 >>> df = pl.DataFrame({"x":[1,2,3]})
