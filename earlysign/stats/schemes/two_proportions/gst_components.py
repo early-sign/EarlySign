@@ -1,9 +1,10 @@
 """
-earlysign.methods.group_sequential.two_proportions
-==================================================
+earlysign.stats.schemes.two_proportions.gst_components
+=====================================================
 
-Group Sequential Testing components for two-proportions:
+Group Sequential Testing components for two-proportions experiments.
 
+Components:
 - `WaldZStatistic`: compute Wald Z with unpooled SE from ledger counts
 - `LanDeMetsBoundary`: compute two-sided critical boundary at info fraction `t`
 - `PeekSignaler`: emit stop signal when |Z| >= boundary
@@ -35,7 +36,7 @@ Examples
 from __future__ import annotations
 import math
 from dataclasses import dataclass
-from typing import Iterable, Tuple, Union, List
+from typing import Iterable, Tuple, Union, List, Optional
 
 from scipy.stats import norm  # required for thresholds
 
@@ -49,52 +50,16 @@ from earlysign.core.names import (
     GstBoundaryTag,
 )
 from earlysign.core.ledger import Ledger
-from earlysign.schemes.two_proportions.reduce import reduce_counts
-from earlysign.schemes.two_proportions.model import WaldZPayload, GstBoundaryPayload
-
-
-# --- math helpers ---
-
-
-def wald_z_from_counts(
-    nA: int, nB: int, mA: int, mB: int
-) -> Tuple[float, float, float, float]:
-    """Return (z, pA_hat, pB_hat, se) using unpooled SE.
-
-    Note:
-        We define Z = (pB_hat - pA_hat) / SE so that a *better variant B* yields positive Z.
-    """
-    if min(nA, nB) == 0:
-        return 0.0, 0.0, 0.0, float("inf")
-    pA_hat, pB_hat = mA / max(nA, 1), mB / max(nB, 1)
-    var = pA_hat * (1 - pA_hat) / max(nA, 1) + pB_hat * (1 - pB_hat) / max(nB, 1)
-    se = math.sqrt(var) if var > 0 else float("inf")
-    diff = pB_hat - pA_hat  # ← here (variant minus baseline)
-    z = diff / se if se not in (0.0, float("inf")) else 0.0
-    return z, pA_hat, pB_hat, se
-
-
-def lan_demets_spending(alpha_total: float, t: float, style: str) -> float:
-    """Lan–DeMets alpha spending (two-sided cumulative) for OBF/Pocock."""
-    s = style.lower()
-    if s in ("obf", "o'brien", "obrien", "o'brien-fleming"):
-        za2 = float(norm.ppf(1 - alpha_total / 2.0))
-        return 2.0 - 2.0 * float(norm.cdf(za2 / math.sqrt(max(t, 1e-12))))
-    if s in ("pocock",):
-        return alpha_total * math.log(1.0 + (math.e - 1.0) * t)
-    raise ValueError(f"Unknown spending style: {style}")
-
-
-def nominal_alpha_increments(
-    alpha_total: float, t_grid: Iterable[float], style: str
-) -> List[float]:
-    """Convert cumulative spending to per-look increments."""
-    cum = [lan_demets_spending(alpha_total, t, style) for t in t_grid]
-    inc, prev = [], 0.0
-    for c in cum:
-        inc.append(max(c - prev, 0.0))
-        prev = c
-    return inc
+from earlysign.stats.methods.common.statistical import wald_z_from_counts
+from earlysign.stats.methods.group_sequential.core import (
+    lan_demets_spending,
+    nominal_alpha_increments,
+)
+from earlysign.stats.schemes.two_proportions.reduce import reduce_counts
+from earlysign.stats.schemes.two_proportions.model import (
+    WaldZPayload,
+    GstBoundaryPayload,
+)
 
 
 # --- components ---
@@ -104,7 +69,7 @@ def nominal_alpha_increments(
 class WaldZStatistic(Statistic):
     """Compute Wald Z and append to the `stats` namespace."""
 
-    tag_stats: WaldZTag = "stat:waldz"
+    tag_stats: Optional[str] = "stat:waldz"
 
     def step(
         self,
@@ -144,7 +109,7 @@ class LanDeMetsBoundary(Criteria):
     alpha_total: float
     t: float
     style: str = "obf"
-    tag_crit: GstBoundaryTag = "crit:gst"
+    tag_crit: Optional[str] = "crit:gst"
 
     def step(
         self,

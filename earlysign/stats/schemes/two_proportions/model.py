@@ -11,7 +11,7 @@ Typed payloads for the *two-sample binomial* scheme.
 Examples
 --------
 >>> from earlysign.core.ledger import PayloadRegistry
->>> from earlysign.schemes.two_proportions.model import TwoPropObsBatch
+>>> from earlysign.stats.schemes.two_proportions.model import TwoPropObsBatch
 >>> PayloadRegistry.register("TwoPropObsBatch", lambda d: TwoPropObsBatch(**d))
 >>> from earlysign.core.ledger import PayloadRegistry as PR
 >>> isinstance(PR.decode("TwoPropObsBatch", {"nA":1,"nB":2,"mA":0,"mB":1}), TwoPropObsBatch)

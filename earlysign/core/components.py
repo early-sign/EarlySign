@@ -7,6 +7,13 @@ Thin base classes for components that *write to* and *read from* the ledger.
 They only centralize **namespace/tag conventions** so all concrete implementations
 stay consistent. Concrete classes must implement `step()`.
 
+Component Types:
+- `Statistic`: Compute and register statistical values from observations
+- `Criteria`: Compute and register boundaries, thresholds, or critical values
+- `Signaler`: Emit stop/continue decisions based on statistics and criteria
+- `Recommender`: Emit recommendations or guidance (optional)
+- `Observation`: Validate, transform, and register raw observations
+
 Examples
 --------
 >>> from earlysign.core.traits import LedgerOps
@@ -95,6 +102,19 @@ class Recommender:
     """Base class for recommendation emitters (optional)."""
 
     ns_sig: NamespaceLike = Namespace.SIGNALS
+
+    def step(
+        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+    ) -> None:
+        raise NotImplementedError
+
+
+@dataclass(kw_only=True)
+class Observation:
+    """Base class for data observation components."""
+
+    ns_obs: NamespaceLike = Namespace.OBS
+    tag_obs: Optional[str] = "obs"
 
     def step(
         self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str

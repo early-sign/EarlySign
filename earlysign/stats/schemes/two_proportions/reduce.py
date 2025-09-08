@@ -11,7 +11,7 @@ Examples
 --------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.names import Namespace
->>> from earlysign.schemes.two_proportions.model import TwoPropObsBatch
+>>> from earlysign.stats.schemes.two_proportions.model import TwoPropObsBatch
 >>> from earlysign.core.ledger import PayloadRegistry
 >>> PayloadRegistry.register("TwoPropObsBatch", lambda d: TwoPropObsBatch(**d))
 >>> L = PolarsLedger()

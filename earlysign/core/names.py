@@ -29,12 +29,14 @@ class Namespace(str, Enum):
     - STATS: statistics (derived)
     - CRITERIA: critical values / boundaries / thresholds
     - SIGNALS: emitted signals / decisions / recommendations
+    - DESIGN: experiment design information
     """
 
     OBS = "obs"
     STATS = "stats"
     CRITERIA = "criteria"
     SIGNALS = "signals"
+    DESIGN = "design"
 
 
 # Optional: typed aliases for logical identifiers (thin wrappers over str).
