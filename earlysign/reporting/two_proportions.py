@@ -185,14 +185,16 @@ class TwoPropGSTReporter:
             t_grid_full,
             uppers_full,
             linestyle="--",
-            marker=None,
+            marker="s",
+            markersize=4,
             label="Upper boundary",
         )
         plt.plot(
             t_grid_full,
             lowers_full,
             linestyle="--",
-            marker=None,
+            marker="s",
+            markersize=4,
             label="Lower boundary",
         )
         # Observed Z up to stop
