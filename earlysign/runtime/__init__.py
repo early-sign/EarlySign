@@ -17,7 +17,8 @@ Key Components
 Examples
 --------
 >>> # Import runtime components
->>> from earlysign.runtime import ExperimentModule, SequentialRunner, AnalysisResult
+>>> from earlysign.runtime.experiment_module import ExperimentModule, AnalysisResult
+>>> from earlysign.runtime.runners import SequentialRunner
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>>
 >>> # Create custom module (implementation needed)

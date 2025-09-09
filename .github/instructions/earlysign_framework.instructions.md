@@ -8,7 +8,7 @@ applyTo: "earlysign/**"
 
 ### Core Principles
 - **Immutable events**: Never modify events after ledger writes
-- **Event versioning**: Use `payload_type` for schema evolution (`StatType_v1`, `StatType_v2`)
+- **Event versioning**: Use `payload_type` for schema evolution (`WaldZ_v1`, `WaldZ_v2`)
 - **Idempotent operations**: Components handle replay gracefully
 - **Temporal consistency**: Respect `time_index` ordering
 
@@ -20,8 +20,9 @@ ledger.write_event(
     namespace=Namespace.STATS,
     kind="updated",
     experiment_id=experiment_id,
-    payload_type="MyStatistic_v1",
-    payload={"value": computed_value}
+    step_key=step_key,
+    payload_type="WaldZ",
+    payload={"z": z_value, "se": standard_error, "nA": n_treatment, "nB": n_control}
 )
 
 # ❌ Incorrect: Never modify existing events
@@ -32,6 +33,12 @@ ledger.write_event(
 
 ### Statistic Components
 ```python
+from dataclasses import dataclass
+from typing import Optional, Union
+from earlysign.core.components import Statistic
+from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+from earlysign.core.ledger import Ledger
+
 @dataclass(kw_only=True)
 class MyStatistic(Statistic):
     """
@@ -48,12 +55,18 @@ class MyStatistic(Statistic):
         - Namespace.STATS: computed statistic value
     """
 
-    tag_stats: str = "stat:mystat"
+    tag_stats: Optional[str] = "stat:mystat"
 
-    def step(self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str) -> None:
+    def step(
+        self,
+        ledger: Ledger,
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
+    ) -> None:
         # 1. Read required events
-        obs_events = ledger.iter_ns(namespace=Namespace.OBS, experiment_id=experiment_id)
-        design_event = ledger.latest(namespace=Namespace.DESIGN, experiment_id=experiment_id)
+        obs_events = ledger.iter_ns(namespace=Namespace.OBS, experiment_id=str(experiment_id))
+        design_event = ledger.latest(namespace=Namespace.DESIGN, experiment_id=str(experiment_id))
 
         # 2. Compute statistic
         statistic_value = self._compute_statistic(obs_events, design_event)
@@ -63,9 +76,9 @@ class MyStatistic(Statistic):
             time_index=time_index,
             namespace=Namespace.STATS,
             kind="updated",
-            experiment_id=experiment_id,
-            step_key=step_key,
-            payload_type="MyStatistic_v1",
+            experiment_id=str(experiment_id),
+            step_key=str(step_key),
+            payload_type="MyStatistic",
             payload={"value": statistic_value, "n_obs": len(list(obs_events))},
             tag=self.tag_stats,
         )
@@ -73,6 +86,10 @@ class MyStatistic(Statistic):
 
 ### Criteria Components
 ```python
+from dataclasses import dataclass
+from typing import Optional, Union
+from earlysign.core.components import Criteria
+
 @dataclass(kw_only=True)
 class MyCriteria(Criteria):
     """
@@ -82,13 +99,19 @@ class MyCriteria(Criteria):
         boundary = g(α, β, information_fraction)
     """
 
-    tag_crit: str = "crit:mycrit"
+    tag_crit: Optional[str] = "crit:mycrit"
     alpha: float = 0.05
 
-    def step(self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str) -> None:
+    def step(
+        self,
+        ledger: Ledger,
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
+    ) -> None:
         # Read latest statistic and design
-        stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id=experiment_id)
-        design_event = ledger.latest(namespace=Namespace.DESIGN, experiment_id=experiment_id)
+        stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id=str(experiment_id))
+        design_event = ledger.latest(namespace=Namespace.DESIGN, experiment_id=str(experiment_id))
 
         if not stat_event or not design_event:
             return
@@ -101,9 +124,9 @@ class MyCriteria(Criteria):
             time_index=time_index,
             namespace=Namespace.CRITERIA,
             kind="updated",
-            experiment_id=experiment_id,
-            step_key=step_key,
-            payload_type="MyCriteria_v1",
+            experiment_id=str(experiment_id),
+            step_key=str(step_key),
+            payload_type="MyCriteria",
             payload={"boundary": boundary, "alpha": self.alpha},
             tag=self.tag_crit,
         )
@@ -111,6 +134,10 @@ class MyCriteria(Criteria):
 
 ### Signaler Components
 ```python
+from dataclasses import dataclass
+from typing import Union
+from earlysign.core.components import Signaler
+
 @dataclass(kw_only=True)
 class MySignaler(Signaler):
     """
@@ -122,10 +149,16 @@ class MySignaler(Signaler):
 
     decision_topic: str = "decision"
 
-    def step(self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str) -> None:
+    def step(
+        self,
+        ledger: Ledger,
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
+    ) -> None:
         # Read latest statistic and criteria
-        stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id=experiment_id)
-        crit_event = ledger.latest(namespace=Namespace.CRITERIA, experiment_id=experiment_id)
+        stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id=str(experiment_id))
+        crit_event = ledger.latest(namespace=Namespace.CRITERIA, experiment_id=str(experiment_id))
 
         if not stat_event or not crit_event:
             return
@@ -136,8 +169,8 @@ class MySignaler(Signaler):
         if decision["should_signal"]:
             ledger.emit(
                 time_index=time_index,
-                experiment_id=experiment_id,
-                step_key=step_key,
+                experiment_id=str(experiment_id),
+                step_key=str(step_key),
                 topic=self.decision_topic,
                 body=decision,
                 tag=f"{self.decision_topic}:decision",
@@ -146,26 +179,32 @@ class MySignaler(Signaler):
 
 ## 📦 Payload Design
 
-### Type Safety
+### Type Safety with TypedDict
 ```python
-from typing import TypedDict
+from typing import TypedDict, Tuple
 
-class MyStatisticPayload(TypedDict):
-    """Payload schema for MyStatistic events."""
-    value: float
-    n_obs: int
-    confidence_interval: tuple[float, float]
+class WaldZPayload(TypedDict):
+    """Payload schema for Wald Z-test statistic events."""
+    z: float
+    se: float
+    nA: int
+    nB: int
+    mA: int
+    mB: int
+    pA_hat: float
+    pB_hat: float
 
-class MyCriteriaPayload(TypedDict):
-    """Payload schema for MyCriteria events."""
+class GstBoundaryPayload(TypedDict):
+    """Payload schema for Group Sequential Testing boundary events."""
     boundary: float
-    alpha: float
-    information_fraction: float
+    alpha_total: float
+    t: float  # information fraction
+    cumulative_alpha: float
 
-# Register for typed parsing
+# Register for typed parsing (if needed)
 from earlysign.core.ledger import PayloadRegistry
-PayloadRegistry.register("MyStatistic_v1", lambda d: MyStatisticPayload(**d))
-PayloadRegistry.register("MyCriteria_v1", lambda d: MyCriteriaPayload(**d))
+PayloadRegistry.register("WaldZ", lambda d: WaldZPayload(**d))
+PayloadRegistry.register("GstBoundary", lambda d: GstBoundaryPayload(**d))
 ```
 
 ### Design Guidelines
@@ -190,16 +229,17 @@ def test_my_statistic():
         namespace=Namespace.OBS,
         kind="registered",
         experiment_id="test_exp",
-        payload_type="Observation_v1",
-        payload={"treatment": "A", "outcome": 1}
+        step_key="step1",
+        payload_type="TwoPropObsBatch",
+        payload={"nA": 10, "nB": 10, "mA": 2, "mB": 5}
     )
 
     # Execute component
     component = MyStatistic()
-    component.step(ledger, "test_exp", "test_step", "t002")
+    component.step(ledger, "test_exp", "step1", "t002")
 
     # Verify result
-    stat_event = ledger.latest(namespace=Namespace.STATS, tag="stat:mystat")
+    stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id="test_exp", tag="stat:mystat")
     assert stat_event is not None
     assert stat_event.payload["value"] == expected_value
 ```
@@ -211,19 +251,20 @@ def test_component_workflow():
     ledger = PolarsLedger()
 
     # Setup components
-    statistic = MyStatistic()
-    criteria = MyCriteria(alpha=0.05)
-    signaler = MySignaler()
+    statistic = WaldZStatistic()
+    criteria = LanDeMetsBoundary(alpha_total=0.05, t=0.5, style="obf")
+    signaler = PeekSignaler()
 
     # Add observations
-    for i, outcome in enumerate([1, 0, 1, 1, 0]):
+    for i, (treatment, outcome) in enumerate([("A", 1), ("B", 0), ("A", 1), ("B", 1), ("A", 0)]):
         ledger.write_event(
             time_index=f"t{i:03d}",
             namespace=Namespace.OBS,
             kind="registered",
             experiment_id="test_exp",
-            payload_type="Observation_v1",
-            payload={"treatment": "A" if i % 2 == 0 else "B", "outcome": outcome}
+            step_key="step1",
+            payload_type="TwoPropObsBatch",
+            payload={"nA": 3, "nB": 2, "mA": 2, "mB": 1}
         )
 
     # Execute workflow
@@ -245,41 +286,56 @@ def test_component_workflow():
 
 ```
 earlysign/
-├── methods/                    # Statistical method implementations
-│   ├── safe_testing/          # E-values, always-valid inference
-│   ├── group_sequential/      # Lan-DeMets, O'Brien-Fleming
-│   ├── bayesian/             # Bayesian sequential testing
-│   └── {method_name}/        # New method families
+├── stats/                     # Statistical method implementations
+│   ├── methods/              # Core statistical methods
+│   │   ├── safe_testing/     # E-values, always-valid inference
+│   │   ├── group_sequential/ # Lan-DeMets, O'Brien-Fleming
+│   │   ├── common/          # Shared statistical utilities
+│   │   └── {method_name}/   # New method families
+│   │
+│   └── schemes/             # Domain-specific data handling
+│       ├── two_proportions/ # Binary outcomes, A/B tests
+│       ├── continuous/      # Continuous outcomes (future)
+│       └── {outcome_type}/  # New outcome types
 │
-├── schemes/                   # Domain-specific data handling
-│   ├── two_proportions/      # Binary outcomes, A/B tests
-│   ├── continuous/           # Continuous outcomes
-│   └── {outcome_type}/       # New outcome types
+├── backends/                # Storage implementations
+│   ├── polars/             # Polars DataFrame backend
+│   │   ├── ledger.py       # Core ledger implementation
+│   │   └── io.py           # Persistence utilities
+│   └── {backend_name}/     # Additional backends
 │
-├── backends/                 # Storage implementations
-│   ├── polars/              # Polars DataFrame backend
-│   └── {backend_name}/      # Additional backends
+├── core/                   # Framework essentials
+│   ├── components.py       # Component base classes
+│   ├── ledger.py          # Event store interfaces
+│   ├── traits.py          # LedgerOps mixin
+│   └── names.py           # Shared types and namespaces
 │
-├── core/                    # Framework essentials
-│   ├── components.py        # Component protocols
-│   ├── ledger.py           # Event store interface
-│   ├── modules.py          # Module composition
-│   └── traits.py           # Shared component traits
+├── api/                    # High-level interfaces
+│   ├── ab_test.py         # A/B testing API
+│   └── compatibility/     # External tool compatibility
 │
-├── api/                     # High-level interfaces
-│   ├── experiment.py       # Experiment management
-│   ├── ab_test.py          # A/B testing API
-│   └── compatibility/      # External tool compatibility
+├── runtime/               # Orchestration and modules
+│   ├── experiment_module.py # Base experiment module
+│   └── runners.py         # Execution runners
 │
-└── reporting/              # Analysis and visualization
-    ├── generic.py          # Generic reporting components
-    └── {domain_specific}.py # Domain-specific reports
+└── reporting/            # Analysis and visualization
+    ├── generic.py        # Generic reporting components
+    └── two_proportions.py # Domain-specific reports
 ```
 
 ## 🚀 Performance Guidelines
 
 ### Event Processing
 - **Efficient queries**: Use namespace and tag filtering to minimize event processing
+```python
+# ✅ Efficient: Use specific namespace and filters
+obs_events = ledger.iter_ns(namespace=Namespace.OBS, experiment_id=experiment_id)
+latest_stat = ledger.latest(namespace=Namespace.STATS, experiment_id=experiment_id, tag="stat:waldz")
+
+# ❌ Inefficient: Process all events
+all_events = list(ledger.reader().iter_rows())
+```
+
 - **Latest event optimization**: Cache frequently accessed latest events
 - **Batch processing**: Process multiple observations when possible
 
@@ -289,7 +345,95 @@ earlysign/
 - **Resource cleanup**: Properly close ledger connections and free resources
 
 ### Backend Considerations
-- **Backend-specific optimizations**: Leverage each backend's strengths
+- **Backend-specific optimizations**: Leverage each backend's strengths (Polars vectorization)
 - **Indexing strategies**: Use appropriate indexing for query patterns
 - **Connection pooling**: Reuse connections for better performance
+
+## 🔧 Runtime and Execution Patterns
+
+### Experiment Modules
+```python
+from earlysign.runtime.experiment_module import ExperimentModule, AnalysisResult
+from earlysign.stats.schemes.two_proportions.gst_components import (
+    WaldZStatistic, LanDeMetsBoundary, PeekSignaler
+)
+
+class TwoPropGSTModule(ExperimentModule):
+    """Two-proportions Group Sequential Testing module."""
+
+    def __init__(self, experiment_id: str, alpha_total: float = 0.05, looks: int = 4):
+        super().__init__(experiment_id)
+        self.alpha_total = alpha_total
+        self.looks = looks
+
+    def configure_components(self) -> Dict[str, Any]:
+        return {
+            "statistic": WaldZStatistic(),
+            "criteria": LanDeMetsBoundary(
+                alpha_total=self.alpha_total,
+                t=1.0 / self.looks,  # Equal spacing
+                style="obf"
+            ),
+            "signaler": PeekSignaler(),
+        }
+
+    def register_design(self, ledger: Ledger) -> None:
+        ledger.write_event(
+            time_index="t000",
+            namespace=Namespace.DESIGN,
+            kind="registered",
+            experiment_id=str(self.experiment_id),
+            step_key="design",
+            payload_type="TwoPropGSTDesign",
+            payload={"alpha_total": self.alpha_total, "looks": self.looks}
+        )
+```
+
+### Sequential Runners
+```python
+from earlysign.runtime.runners import SequentialRunner
+
+# Setup
+experiment = TwoPropGSTModule("checkout_v1", alpha_total=0.05, looks=4)
+runner = SequentialRunner(experiment, PolarsLedger())
+
+# Run analysis
+batch_data = {"nA": 100, "nB": 100, "mA": 12, "mB": 8}
+result = runner.analyze(batch_data, look_number=1)
+
+if result.should_stop:
+    print(f"Early stopping recommended: {result.statistic_value} vs {result.threshold_value}")
+```
+
+## 🎯 API Design Patterns
+
+### Business-Friendly Interfaces
+```python
+from earlysign.api.ab_test import interim_analysis, guardrail_monitoring
+
+# High-level A/B testing API
+experiment = interim_analysis(
+    experiment_id="checkout_test",
+    alpha=0.05,
+    looks=4,
+    spending="conservative"  # Maps to O'Brien-Fleming
+)
+
+# Guardrail monitoring
+guardrail = guardrail_monitoring(
+    experiment_id="payment_safety",
+    sensitivity="balanced"
+)
+```
+
+### Compatibility Layer
+```python
+# Support for common A/B testing tools
+from earlysign.api.compatibility import from_optimizely_config, to_statsig_format
+
+config = from_optimizely_config(optimizely_experiment_json)
+experiment = interim_analysis(**config)
+```
+
+This implementation guide reflects the actual EarlySign framework structure and provides concrete examples based on the existing codebase.
 
