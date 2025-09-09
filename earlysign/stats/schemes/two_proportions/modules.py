@@ -2,35 +2,35 @@
 earlysign.schemes.two_proportions.modules
 =========================================
 
-Base module classes for two-proportions experiments.
+Base template classes for two-proportions experiments.
 
 Provides common functionality for binomial comparison experiments
 while allowing different statistical methods to be plugged in.
 
 Examples
 --------
->>> from earlysign.stats.schemes.two_proportions.modules import TwoPropModule
+>>> from earlysign.stats.schemes.two_proportions.modules import TwoPropTemplate
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>>
->>> class MyTwoPropExperiment(TwoPropModule):
+>>> class MyTwoPropExperiment(TwoPropTemplate):
 ...     def configure_components(self): return {...}
 ...     def extract_results(self, ledger): return AnalysisResult(...)
 ...     def register_design(self, ledger): pass
 >>>
->>> # module = MyTwoPropExperiment("test", alpha_total=0.05)
->>> # module.setup(PolarsLedger())
+>>> # template = MyTwoPropExperiment("test", alpha_total=0.05)
+>>> # template.setup(PolarsLedger())
 """
 
 from __future__ import annotations
 from typing import Dict, Any, List
 
-from earlysign.runtime.experiment_module import ExperimentModule, AnalysisResult
+from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
 from earlysign.core.names import Namespace
 from earlysign.core.ledger import Ledger
 
 
-class TwoPropModule(ExperimentModule):
-    """Base class for two-proportions experiment modules."""
+class TwoPropTemplate(ExperimentTemplate):
+    """Base class for two-proportions experiment templates."""
 
     def __init__(
         self,
@@ -57,7 +57,7 @@ class TwoPropModule(ExperimentModule):
                 kwargs["data"], batch
             )
         else:
-            raise ValueError("Unsupported observation format for TwoPropModule")
+            raise ValueError("Unsupported observation format for TwoPropTemplate")
 
     def get_summary(self) -> Dict[str, Any]:
         """Enhanced summary for two-proportions experiments."""

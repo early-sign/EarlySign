@@ -13,12 +13,12 @@ from typing import Optional, Union, List, Dict, Any
 from earlysign.core.ledger import Ledger
 from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
 from earlysign.core.components import Statistic, Criteria, Signaler
-from earlysign.runtime.experiment_module import AnalysisResult
-from earlysign.stats.schemes.two_proportions.modules import TwoPropModule
+from earlysign.runtime.experiment_template import AnalysisResult
+from earlysign.stats.schemes.two_proportions.modules import TwoPropTemplate
 from earlysign.stats.schemes.two_proportions.ingest import TwoPropObservation
 
 
-class TwoPropGSTModule(TwoPropModule):
+class TwoPropGSTTemplate(TwoPropTemplate):
     """Two-proportions Group Sequential Testing experiment module.
 
     Implements group sequential testing with error spending functions

@@ -315,7 +315,7 @@ earlysign/
 │   └── compatibility/     # External tool compatibility
 │
 ├── runtime/               # Orchestration and modules
-│   ├── experiment_module.py # Base experiment module
+│   ├── experiment_template.py # Base experiment module
 │   └── runners.py         # Execution runners
 │
 └── reporting/            # Analysis and visualization
@@ -353,12 +353,12 @@ all_events = list(ledger.reader().iter_rows())
 
 ### Experiment Modules
 ```python
-from earlysign.runtime.experiment_module import ExperimentModule, AnalysisResult
+from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
 from earlysign.stats.schemes.two_proportions.gst_components import (
     WaldZStatistic, LanDeMetsBoundary, PeekSignaler
 )
 
-class TwoPropGSTModule(ExperimentModule):
+class TwoPropGSTModule(ExperimentTemplate):
     """Two-proportions Group Sequential Testing module."""
 
     def __init__(self, experiment_id: str, alpha_total: float = 0.05, looks: int = 4):

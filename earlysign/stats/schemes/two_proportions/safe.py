@@ -13,12 +13,12 @@ from typing import Optional, Union, List, Dict, Any
 from earlysign.core.ledger import Ledger
 from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
 from earlysign.core.components import Statistic, Criteria, Signaler
-from earlysign.runtime.experiment_module import AnalysisResult
-from earlysign.stats.schemes.two_proportions.modules import TwoPropModule
+from earlysign.runtime.experiment_template import AnalysisResult
+from earlysign.stats.schemes.two_proportions.modules import TwoPropTemplate
 from earlysign.stats.schemes.two_proportions.ingest import TwoPropObservation
 
 
-class TwoPropSafeModule(TwoPropModule):
+class TwoPropSafeTemplate(TwoPropTemplate):
     """Two-proportions Safe Testing experiment module.
 
     Implements safe testing with beta-binomial e-processes

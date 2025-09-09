@@ -1,26 +1,26 @@
 """
-earlysign.runtime.experiment_module
-===================================
+earlysign.runtime.experiment_template
+====================================
 
-Base classes and infrastructure for experiment modules.
+Base classes and infrastructure for experiment templates.
 
 This module provides the foundational building blocks for creating portable,
 reusable experiment definitions that can work with any backend.
 
 Examples
 --------
->>> from earlysign.runtime.experiment_module import ExperimentModule, AnalysisResult
+>>> from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
 >>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.components import Observation
 >>>
->>> class MyModule(ExperimentModule):
+>>> class MyTemplate(ExperimentTemplate):
 ...     def configure_components(self): return {"ingestor": Observation()}
 ...     def register_design(self, ledger): pass
 ...     def extract_results(self, ledger): return AnalysisResult(should_stop=False, statistic_value=0.0, threshold_value=None, look_number=1)
 ...     def _populate_batch(self, batch, **kwargs): pass
 >>>
->>> module = MyModule("test")
->>> module.setup(PolarsLedger())
+>>> template = MyTemplate("test")
+>>> template.setup(PolarsLedger())
 """
 
 from __future__ import annotations
@@ -57,9 +57,9 @@ class AnalysisResult:
     signal_event: Optional[Any] = None
 
 
-class ExperimentModule(ABC):
+class ExperimentTemplate(ABC):
     """
-    Base class for portable experiment modules.
+    Base class for portable experiment templates.
 
     Encapsulates all the logic for a specific type of experiment including:
     - Design parameters and validation
@@ -101,7 +101,7 @@ class ExperimentModule(ABC):
         pass
 
     def setup(self, ledger: Ledger) -> None:
-        """Setup the module with a specific ledger backend."""
+        """Setup the template with a specific ledger backend."""
         self.ledger = ledger
         self.components = self.configure_components()
         self.register_design(ledger)
@@ -110,7 +110,7 @@ class ExperimentModule(ABC):
     def add_observations(self, **kwargs: Any) -> None:
         """Add observations using the configured ingestor."""
         if not self._is_setup or self.ledger is None:
-            raise RuntimeError("Module not setup. Call setup(ledger) first.")
+            raise RuntimeError("Template not setup. Call setup(ledger) first.")
 
         self._current_look += 1
         time_index = TimeIndex(f"t{self._current_look}")
@@ -141,7 +141,7 @@ class ExperimentModule(ABC):
     def analyze(self) -> AnalysisResult:
         """Run the analysis pipeline and return results."""
         if not self._is_setup or self.ledger is None:
-            raise RuntimeError("Module not setup. Call setup(ledger) first.")
+            raise RuntimeError("Template not setup. Call setup(ledger) first.")
 
         if self._current_look == 0:
             raise ValueError(
@@ -179,6 +179,6 @@ class ExperimentModule(ABC):
         }
 
     def reset(self) -> None:
-        """Reset the module to initial state (but keep configuration)."""
+        """Reset the template to initial state (but keep configuration)."""
         self._current_look = 0
         # Note: This doesn't clear the ledger - that's the runner's responsibility

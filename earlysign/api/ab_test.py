@@ -25,8 +25,8 @@ from __future__ import annotations
 from typing import Optional, Literal, Dict, Any, List
 from dataclasses import dataclass, field
 
-from earlysign.stats.schemes.two_proportions.gst import TwoPropGSTModule
-from earlysign.stats.schemes.two_proportions.safe import TwoPropSafeModule
+from earlysign.stats.schemes.two_proportions.gst import TwoPropGSTTemplate
+from earlysign.stats.schemes.two_proportions.safe import TwoPropSafeTemplate
 
 
 def interim_analysis(
@@ -34,7 +34,7 @@ def interim_analysis(
     alpha: float = 0.05,
     looks: int = 4,
     spending: Literal["conservative", "aggressive"] = "conservative",
-) -> TwoPropGSTModule:
+) -> TwoPropGSTTemplate:
     """
     Create an A/B test experiment with interim analysis capabilities.
 
@@ -56,7 +56,7 @@ def interim_analysis(
 
     Returns
     -------
-    TwoPropGSTModule
+    TwoPropGSTTemplate
         A configured experiment module ready for execution
 
     Examples
@@ -73,7 +73,7 @@ def interim_analysis(
         "aggressive": "pocock",  # Pocock
     }
 
-    return TwoPropGSTModule(
+    return TwoPropGSTTemplate(
         experiment_id=experiment_id,
         alpha_total=alpha,
         looks=looks,
@@ -84,7 +84,7 @@ def interim_analysis(
 def fixed_sample_test(
     experiment_id: str,
     alpha: float = 0.05,
-) -> TwoPropGSTModule:
+) -> TwoPropGSTTemplate:
     """
     Create a traditional fixed-sample A/B test.
 
@@ -100,14 +100,14 @@ def fixed_sample_test(
 
     Returns
     -------
-    TwoPropGSTModule
+    TwoPropGSTTemplate
         A configured experiment module for fixed-sample testing
 
     Examples
     --------
     >>> experiment = fixed_sample_test("checkout_final", alpha=0.05)
     """
-    return TwoPropGSTModule(
+    return TwoPropGSTTemplate(
         experiment_id=experiment_id,
         alpha_total=alpha,
         looks=1,
@@ -120,7 +120,7 @@ def guardrail_monitoring(
     alpha: float = 0.05,
     sensitivity: Literal["conservative", "balanced", "sensitive"] = "balanced",
     prior_strength: Optional[float] = None,
-) -> TwoPropSafeModule:
+) -> TwoPropSafeTemplate:
     """
     Create a safe test for guardrail monitoring.
 
@@ -144,7 +144,7 @@ def guardrail_monitoring(
 
     Returns
     -------
-    TwoPropSafeModule
+    TwoPropSafeTemplate
         A configured safe testing module ready for continuous monitoring
 
     Examples
@@ -168,7 +168,7 @@ def guardrail_monitoring(
     else:
         prior_params = sensitivity_priors[sensitivity]
 
-    return TwoPropSafeModule(
+    return TwoPropSafeTemplate(
         experiment_id=experiment_id,
         alpha_total=alpha,
         prior_params=prior_params,
@@ -180,7 +180,7 @@ def continuous_monitoring(
     alpha: float = 0.05,
     baseline_assumption: Literal["no_effect", "small_effect", "custom"] = "no_effect",
     custom_prior: Optional[Dict[str, float]] = None,
-) -> TwoPropSafeModule:
+) -> TwoPropSafeTemplate:
     """
     Set up continuous monitoring for ongoing experiments or features.
 
@@ -204,7 +204,7 @@ def continuous_monitoring(
 
     Returns
     -------
-    TwoPropSafeModule
+    TwoPropSafeTemplate
         A configured module for continuous monitoring
 
     Examples
@@ -236,7 +236,7 @@ def continuous_monitoring(
     else:
         prior_params = baseline_priors[baseline_assumption]
 
-    return TwoPropSafeModule(
+    return TwoPropSafeTemplate(
         experiment_id=experiment_id,
         alpha_total=alpha,
         prior_params=prior_params,
@@ -419,7 +419,7 @@ def ab_test_with_guardrails(
 
 
 # Import the implementation from the moved multi_metric content
-from earlysign.runtime.experiment_module import ExperimentModule
+from earlysign.runtime.experiment_template import ExperimentTemplate
 from earlysign.core.ledger import Ledger
 from earlysign.core.names import Namespace, ExperimentId
 from earlysign.stats.methods.group_sequential.adaptive import AdaptiveInfoTime
@@ -437,7 +437,7 @@ from earlysign.stats.schemes.two_proportions.ingest import TwoPropObservation
 
 
 @dataclass
-class ABTestExperiment(ExperimentModule):
+class ABTestExperiment(ExperimentTemplate):
     """
     Comprehensive A/B testing experiment with primary endpoint and guardrails.
 
