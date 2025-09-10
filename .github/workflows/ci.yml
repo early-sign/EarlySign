@@ -29,4 +29,4 @@ jobs:
           poetry install --with dev,ci --no-interaction
       - name: Run tests
         run: |
-          make check
+          make lint-type-test
