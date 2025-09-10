@@ -9,7 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.11, 3.12]
+        python-version: ["3.11", "3.12", "3.13"]
+      fail-fast: false  # 一つのバージョンが失敗しても他を継続
     steps:
       - uses: actions/checkout@v4
         with:

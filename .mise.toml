@@ -1,0 +1,24 @@
+# EarlySign project mise configuration
+# All Python versions managed in this file
+
+[tools]
+# Primary development version - active by default
+python = "3.11"
+
+[env]
+# Environment variables
+PYTHONPATH = "."
+# Ensure poetry uses the correct Python version
+POETRY_PYTHON = "{{exec(command='mise which python')}}"
+
+# Development tasks
+[tasks.install-all]
+description = "Install Python versions and project dependencies"
+run = [
+    "echo 'Installing Python versions...'",
+    "mise install python@3.11",
+    "mise install python@3.12",
+    "mise install python@3.13",
+    "echo 'Installing project dependencies...'",
+    "poetry install --all-extras --with dev,ci"
+]

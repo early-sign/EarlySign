@@ -48,13 +48,13 @@ pytest = "^8.4.1"
 #==== Test tools ====#
 [tool.black]
 line-length = 88
-target-version = ["py311"]
+target-version = ["py311", "py312", "py313"]
 exclude = '''
-/(\.|venv|\.venv|\.git|\.mypy_cache|\.pytest_cache|build|dist|\.venv|\.poetry)/
+/(\.|venv|\.venv|\.git|\.mypy_cache|\.pytest_cache|\.tox|build|dist|\.poetry|docs/_build)/
 '''
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.11"  # Base version for compatibility
 ignore_missing_imports = true
 show_error_codes = true
 strict = true
