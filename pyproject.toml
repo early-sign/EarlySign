@@ -15,14 +15,12 @@ poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
 scipy = "^1.16.1"
-
-## Extra dependencies
-numpy = {version = "^2.3.2", optional = true}
-matplotlib = {version = "^3.10.6", optional = true}
+numpy = "^2.3.2"
+matplotlib = "^3.10.6"
 polars = "^1.33.0"
 
 [tool.poetry.extras]
-examples = ["matplotlib", "numpy"]
+examples = []
 
 #==== Development ====#
 [tool.poetry.group.dev.dependencies]
