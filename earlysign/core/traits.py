@@ -46,7 +46,7 @@ Examples
 
 from __future__ import annotations
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, Optional, Union
+from typing import Any, Dict, Iterable, Optional, Union, List
 
 from earlysign.core.ledger import LedgerBase, LedgerReader, Row
 from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
@@ -150,3 +150,74 @@ class LedgerOps(LedgerBase):
         return self.reader().iter_rows(
             namespace=ns, entity=str(experiment_id) if experiment_id else None
         )
+
+    # ---- aggregation utilities ----
+
+    def aggregate_observation_fields(
+        self,
+        *,
+        experiment_id: Union[ExperimentId, str],
+        field_names: List[str],
+        namespace: NamespaceLike = Namespace.OBS,
+    ) -> Dict[str, Union[int, float]]:
+        """
+        Aggregate numeric fields from observation events.
+
+        This is a general-purpose aggregation utility that can be used across
+        different statistical schemes. Handles both dict payloads and decoded
+        objects with attributes.
+
+        Parameters
+        ----------
+        experiment_id : str or ExperimentId
+            Experiment identifier to filter by
+        field_names : list of str
+            Field names to aggregate (e.g., ["nA", "nB", "mA", "mB"])
+        namespace : NamespaceLike
+            Namespace to read from (default: Namespace.OBS)
+
+        Returns
+        -------
+        dict
+            Field names mapped to their aggregated values
+
+        Examples
+        --------
+        Two-proportions aggregation example:
+
+        >>> from earlysign.backends.polars.ledger import PolarsLedger
+        >>> ledger = PolarsLedger()
+        >>> result = ledger.aggregate_observation_fields(
+        ...     experiment_id="exp1",
+        ...     field_names=["nA", "nB", "mA", "mB"]
+        ... )
+        >>> isinstance(result, dict)
+        True
+        """
+        aggregated: Dict[str, Union[int, float]] = {field: 0 for field in field_names}
+
+        for row in self.iter_ns(namespace=namespace, experiment_id=experiment_id):
+            payload = row.payload
+
+            # Handle both dict payload and decoded objects
+            for field in field_names:
+                if hasattr(payload, field):
+                    # Decoded object with attributes
+                    value = getattr(payload, field, 0)
+                elif isinstance(payload, dict) and field in payload:
+                    # Dict payload
+                    value = payload[field]
+                else:
+                    # Field not found, use 0
+                    value = 0
+
+                # Convert to numeric and accumulate
+                try:
+                    aggregated[field] += (
+                        int(value) if isinstance(value, (int, float)) else 0
+                    )
+                except (ValueError, TypeError):
+                    # Skip non-numeric values
+                    pass
+
+        return aggregated

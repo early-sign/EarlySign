@@ -25,8 +25,8 @@ from __future__ import annotations
 from typing import Optional, Literal, Dict, Any, List
 from dataclasses import dataclass, field
 
-from earlysign.stats.schemes.two_proportions.gst import TwoPropGSTTemplate
-from earlysign.stats.schemes.two_proportions.safe import TwoPropSafeTemplate
+from earlysign.stats.schemes.two_proportions.experiments import TwoPropGSTTemplate
+from earlysign.stats.schemes.two_proportions.experiments import TwoPropSafeTemplate
 
 
 def interim_analysis(
@@ -423,17 +423,15 @@ from earlysign.runtime.experiment_template import ExperimentTemplate
 from earlysign.core.ledger import Ledger
 from earlysign.core.names import Namespace, ExperimentId
 from earlysign.stats.methods.group_sequential.adaptive import AdaptiveInfoTime
-from earlysign.stats.schemes.two_proportions.gst_components import (
+from earlysign.stats.schemes.two_proportions.statistics import (
     WaldZStatistic,
     LanDeMetsBoundary,
     PeekSignaler,
-)
-from earlysign.stats.schemes.two_proportions.safe_components import (
     BetaBinomialEValue,
     SafeThreshold,
     SafeSignaler,
 )
-from earlysign.stats.schemes.two_proportions.ingest import TwoPropObservation
+from earlysign.stats.schemes.two_proportions.core import TwoPropObservation
 
 
 @dataclass

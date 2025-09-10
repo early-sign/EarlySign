@@ -2,19 +2,66 @@
 Two-proportion testing schemes for A/B experiments.
 
 This module provides complete implementations for comparing two binomial
-proportions using different statistical methodologies:
+proportions using different statistical methodologies with event-sourcing
+architecture for regulatory compliance and reproducible research.
 
-- Group Sequential Testing (GST) implementations with error spending
-- Safe Testing implementations using beta-binomial e-processes
-- Data ingestion and validation for two-proportion experiments
-- Experiment orchestration and result extraction
+**Statistical Methods Supported:**
+- Group Sequential Testing (GST) with error spending functions
+- Safe Testing using beta-binomial e-processes for anytime-valid inference
+- Complete audit trails and immutable event histories
 
-Main components:
-- `gst.py`: Group sequential testing experiment modules
-- `safe.py`: Safe testing experiment modules
-- `gst_components.py`: GST-specific statistical components
-- `safe_components.py`: Safe testing statistical components
-- `ingest.py`: Data validation and ingestion
-- `model.py`: Type definitions and payload schemas
-- `reduce.py`: Data aggregation utilities
+**Module Organization:**
+
+Core Infrastructure
+-------------------
+- `core`: Data models, observation components, and aggregation utilities
+- `statistics`: All statistical computation components (GST and Safe Testing)
+- `experiments`: High-level experiment templates and orchestration
+
+Example Usage
+-------------
+>>> from earlysign.backends.polars.ledger import PolarsLedger
+>>> from earlysign.stats.schemes.two_proportions.experiments import TwoPropGSTTemplate
+>>> from earlysign.stats.schemes.two_proportions.core import ObservationBatch
+>>>
+>>> # Create GST experiment
+>>> experiment = TwoPropGSTTemplate("my_ab_test", alpha_total=0.05, looks=4)
+>>> ledger = PolarsLedger()
+>>> experiment.setup(ledger)
+>>>
+>>> # Create observation batch
+>>> batch = ObservationBatch()
+>>> batch.add_group_a_observations(successes=45, total=100)
+>>> batch.add_group_b_observations(successes=52, total=100)
+>>>
+>>> # Validate batch
+>>> batch.validate()
+True
+
+Safe Testing Example
+--------------------
+>>> from earlysign.stats.schemes.two_proportions.experiments import TwoPropSafeTemplate
+>>>
+>>> # Create Safe Testing experiment
+>>> safe_exp = TwoPropSafeTemplate("safe_test", alpha_total=0.05)
+>>> isinstance(safe_exp.experiment_id, str)
+True
+
+Component-Level Usage
+--------------------
+>>> from earlysign.stats.schemes.two_proportions.statistics import WaldZStatistic
+>>> from earlysign.stats.schemes.two_proportions.core import TwoPropObservation
+>>>
+>>> # Individual components for custom workflows
+>>> observation = TwoPropObservation()
+>>> statistic = WaldZStatistic()
+>>> isinstance(observation, TwoPropObservation)
+True
+
+Design Principles
+-----------------
+- **Event-sourcing**: All state changes captured as immutable events
+- **Separation of concerns**: Statistics compute, users decide
+- **Regulatory compliance**: Complete audit trails and reproducibility
+- **Framework agnostic**: Core concepts portable across languages
 """

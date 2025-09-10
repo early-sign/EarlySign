@@ -33,7 +33,7 @@ from typing import List, Optional, Union, Dict, Any
 from earlysign.core.components import Criteria
 from earlysign.core.ledger import Ledger
 from earlysign.core.names import Namespace, GstBoundaryTag
-from earlysign.stats.schemes.two_proportions.gst_components import LanDeMetsBoundary
+from earlysign.stats.schemes.two_proportions.statistics import LanDeMetsBoundary
 
 
 @dataclass

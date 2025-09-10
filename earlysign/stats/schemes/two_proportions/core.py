@@ -1,16 +1,23 @@
 """
-earlysign.schemes.two_proportions.ingest
-========================================
+earlysign.stats.schemes.two_proportions.core
+============================================
 
-Data observation components for two-proportions experiments.
+Core data structures and utilities for two-proportions testing.
 
-Provides structured data validation, transformation, and registration
-for binomial observations with proper event-sourcing integration.
+This module provides the foundational elements for comparing two binomial
+proportions:
+
+- Type definitions and payload schemas
+- Data validation and ingestion components
+- Data aggregation utilities from the event store
+
+All components follow event-sourcing principles with immutable events
+and complete audit trails for regulatory compliance.
 
 Examples
 --------
 >>> from earlysign.backends.polars.ledger import PolarsLedger
->>> from earlysign.stats.schemes.two_proportions.ingest import TwoPropObservation, ObservationBatch
+>>> from earlysign.stats.schemes.two_proportions.core import TwoPropObservation, ObservationBatch
 >>>
 >>> # Create observation component
 >>> observation = TwoPropObservation()
@@ -25,22 +32,71 @@ Examples
 >>> result = observation.register_batch(ledger, "exp1", "step1", "t1", batch)
 >>> result  # Should return True if successful
 True
->>>
->>> # Or use the step interface for component coordination
->>> observation.current_batch = batch
->>> observation.step(ledger, "exp1", "step1", "t1")
 """
 
 from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple, TypedDict
 
 from earlysign.core.components import Observation
 from earlysign.core.ledger import Ledger
-from earlysign.core.names import ExperimentId, StepKey, TimeIndex
-from earlysign.stats.schemes.two_proportions.model import TwoPropObsBatch
+from earlysign.core.names import ExperimentId, StepKey, TimeIndex, Namespace
+
+
+# --- Type Definitions and Payload Schemas ---
+
+
+class WaldZPayload(TypedDict):
+    """Payload for Wald Z-statistic results."""
+
+    z: float
+    se: float
+    nA: int
+    nB: int
+    mA: int
+    mB: int
+    pA_hat: float
+    pB_hat: float
+
+
+class GstBoundaryPayload(TypedDict):
+    """Payload for GST boundary computation results."""
+
+    upper: float
+    lower: float
+    info_time: float
+    alpha_i: float
+
+
+@dataclass(frozen=True)
+class TwoPropObsBatch:
+    """Typed observation batch for two-proportions testing."""
+
+    nA: int
+    nB: int
+    mA: int
+    mB: int
+
+
+@dataclass(frozen=True)
+class TwoPropDesign:
+    """Design specification for two-proportions experiments."""
+
+    design_id: str
+    version: int
+    alpha: float
+    power: float
+    pA: float
+    pB: float
+    looks: int
+    spending: str
+    t_grid: Tuple[float, ...]
+    note: str = ""
+
+
+# --- Data Validation and Ingestion ---
 
 
 @dataclass
@@ -319,3 +375,60 @@ class TwoPropObservation(Observation):
         )
 
         return batch
+
+
+# --- Data Aggregation Utilities ---
+
+
+def reduce_counts(ledger: Ledger, *, experiment_id: str) -> Tuple[int, int, int, int]:
+    """
+    Aggregate counts from all observation records for the experiment.
+
+    Parameters
+    ----------
+    ledger : Ledger
+        The event store to read from
+    experiment_id : str
+        Experiment identifier to filter by
+
+    Returns
+    -------
+    tuple[int, int, int, int]
+        (nA, nB, mA, mB) - total counts and successes for groups A and B
+
+    Examples
+    --------
+    >>> from earlysign.backends.polars.ledger import PolarsLedger
+    >>> from earlysign.core.names import Namespace
+    >>> from earlysign.stats.schemes.two_proportions.core import TwoPropObsBatch
+    >>> from earlysign.core.ledger import PayloadRegistry
+    >>> PayloadRegistry.register("TwoPropObsBatch", lambda d: TwoPropObsBatch(**d))
+    >>> L = PolarsLedger()
+    >>> L.write_event(time_index="t1", namespace=Namespace.OBS, kind="observation",
+    ...               experiment_id="exp#1", step_key="s1",
+    ...               payload_type="TwoPropObsBatch", payload={"nA":5,"nB":6,"mA":1,"mB":0})
+    >>> reduce_counts(L, experiment_id="exp#1")
+    (5, 6, 1, 0)
+    """
+    nA = nB = mA = mB = 0
+    for row in ledger.reader().iter_rows(namespace=Namespace.OBS, entity=experiment_id):
+        p = row.payload
+        # Handle both dict payload and decoded TwoPropObsBatch objects
+        if (
+            hasattr(p, "nA")
+            and hasattr(p, "nB")
+            and hasattr(p, "mA")
+            and hasattr(p, "mB")
+        ):
+            # TwoPropObsBatch object
+            nA += int(p.nA)
+            nB += int(p.nB)
+            mA += int(p.mA)
+            mB += int(p.mB)
+        elif isinstance(p, dict) and {"nA", "nB", "mA", "mB"} <= set(p.keys()):
+            # dict payload
+            nA += int(p["nA"])
+            nB += int(p["nB"])
+            mA += int(p["mA"])
+            mB += int(p["mB"])
+    return nA, nB, mA, mB
