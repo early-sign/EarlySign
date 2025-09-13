@@ -1,0 +1,57 @@
+.. ADR-002: Initial Directory Structure for the Stats Module
+.. :Date: 2025-09-13
+
+===============================================================
+ADR-002: Initial Directory Structure for the Stats Module
+===============================================================
+
+**Status**: `Proposed` | **`Accepted`** | `Deprecated` | `Superseded`
+
+📋 Context
+-----------
+When designing the statistical module for this library, we face a key architectural choice. The functionality has two natural dimensions:
+1.  **The Statistical Scheme**: The type of analysis being performed (e.g., `one_proportion`, `two_proportions`).
+2.  **The Statistical Method**: The technique applied to the scheme (e.g., `group_sequential`, `e_process`).
+
+We need to establish a primary organizational axis to ensure the structure is clear, scalable, and avoids code duplication. The main challenge is cleanly separating generic, reusable algorithms from their specific application to a given statistical scheme.
+
+💡 Decision
+------------
+We will adopt a structure that separates generic methods from scheme-specific implementations. The `stats/` directory will contain two primary subdirectories:
+1.  `common/`: This will house the core, generic, and reusable implementations of statistical methods.
+2.  `schemes/`: This directory will organize the concepts and logic for specific statistical schemes, applying the generic methods from `common/`.
+
+The resulting internal structure will look as follows::
+
+    earlysign/
+    └── stats/
+        ├── __init__.py
+        ├── common/
+        │   ├── __init__.py
+        │   ├── group_sequential.py
+        │   └── e_process.py
+        └── schemes/
+            ├── __init__.py
+            ├── one_proportion/
+            │   ├── __init__.py
+            │   ├── common.py
+            │   ├── group_sequential.py
+            │   └── e_process.py
+            └── two_proportions/
+                ├── __init__.py
+                ├── common.py
+                ├── group_sequential.py
+                └── e_process.py
+
+In this design, a file like `stats/schemes/two_proportions/group_sequential.py` would import the generic algorithm from `stats/common/group_sequential.py` and apply it with the specific statistical formulas and data structures relevant to the two-proportions scheme.
+
+✨ Consequences
+-----------------
+**Positive:**
+* ⭐ **Clear Separation of Concerns:** The structure creates a strong boundary between the abstract algorithm (`common`) and its concrete application (`schemes`). This makes the code easier to reason about, test, and maintain.
+* ♻️ **Maximizes Reusability:** Generic methods are defined in one place (`common`) and reused across multiple schemes, explicitly discouraging code duplication.
+* 🧭 **Logical Organization:** The `schemes/` directory provides a clear, scheme-centric structure for developers, making it easy to locate and manage code related to specific schemes.
+* 🌱 **High Extensibility:** Adding a new shared method or a new statistical scheme is a well-defined process.
+
+**Negative:**
+* 🧠 **Requires Discipline:** Developers must understand the distinction and place logic correctly, either in a generic `common` module or a specific `schemes` module.

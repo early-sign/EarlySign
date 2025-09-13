@@ -17,7 +17,7 @@ extensions = [
     "sphinx_copybutton",
 ]
 templates_path = []
-exclude_patterns = []
+exclude_patterns = ["ADR_template.rst"]
 
 nb_execution_mode = "off"
 
