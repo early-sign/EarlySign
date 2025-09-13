@@ -43,7 +43,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union, Type
-import uuid as uuid_module
 import json
 
 # Direct ibis import - required dependency
@@ -174,10 +173,10 @@ class Ledger:
         try:
             self.connection.table(self.table_name)
         except Exception:
-            # Use DDL to create table with proper JSON type
+            # Use DDL to create table with proper JSON and UUID types
             ddl = f"""
             CREATE TABLE IF NOT EXISTS {self.table_name} (
-                uuid STRING,
+                uuid UUID DEFAULT gen_random_uuid(),
                 ledger_name STRING,
                 time_index STRING,
                 ts TIMESTAMP,
@@ -288,6 +287,7 @@ class Ledger:
 
         # For JSON columns, we need to store the dict object, not JSON string
         import json
+
         if isinstance(payload_json, str):
             try:
                 payload_obj = json.loads(payload_json)
@@ -296,9 +296,8 @@ class Ledger:
         else:
             payload_obj = payload_json
 
-        # Create record
+        # Create record without UUID (will be auto-generated)
         record = {
-            "uuid": str(uuid_module.uuid4()),
             "ledger_name": self.ledger_name,
             "time_index": str(time_index),
             "ts": ts,
@@ -312,28 +311,10 @@ class Ledger:
             "earlysign_version": __version__,
         }
 
-        # Insert using ibis - this approach works for most backends
-        # Create a temporary table with the single record and union it
-        import pandas as pd
+        # Use ibis insert method with auto-generated UUID
+        self.connection.insert(self.table_name, [record])
 
-        temp_df = pd.DataFrame([record])
-
-        try:
-            # Try to get existing data and append new record
-            existing_data = self.raw_table.to_pandas()
-            new_data = pd.concat([existing_data, temp_df], ignore_index=True)
-
-            # Overwrite table with combined data
-            self.connection.create_table(
-                self.table_name, ibis.memtable(new_data), overwrite=True
-            )
-        except Exception:
-            # If table doesn't exist or is empty, create with new record
-            self.connection.create_table(
-                self.table_name, ibis.memtable(temp_df), overwrite=True
-            )
-
-    def unwrap_payload(self, payload_type: str, payload_json: str) -> Any:
+    def unwrap_payload(self, payload_type: str, payload_json: Any) -> Any:
         """
         Unwrap payload using PayloadTypeRegistry.
 
@@ -344,14 +325,19 @@ class Ledger:
         ----------
         payload_type : str
             Type of payload for unwrap handling
-        payload_json : str
-            JSON payload string to unwrap
+        payload_json : str or dict
+            JSON payload string to unwrap, or dict if from native JSON column
 
         Returns
         -------
         Any
             Unwrapped payload data
         """
+        # Handle native JSON column types that return dict objects directly
+        if isinstance(payload_json, dict):
+            return payload_json
+
+        # Handle traditional JSON strings
         return PayloadTypeRegistry.unwrap(payload_type, payload_json)
 
     def unwrap_results(self, df: Any) -> List[Dict[str, Any]]:

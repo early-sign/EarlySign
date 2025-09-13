@@ -413,23 +413,28 @@ def reduce_counts(ledger: Ledger, *, experiment_id: str) -> Tuple[int, int, int,
     (5, 6, 1, 0)
     """
     observations = ledger.table.filter(
-        (ledger.table.namespace == str(Namespace.OBS)) &
-        (ledger.table.entity.startswith(f"{experiment_id}#"))
+        (ledger.table.namespace == str(Namespace.OBS))
+        & (ledger.table.entity.startswith(f"{experiment_id}#"))
     )
 
     # Use select with JSON extraction to sum counts directly
     result = observations.select(
-        nA=observations.payload["nA"].sum(),
-        nB=observations.payload["nB"].sum(),
-        mA=observations.payload["mA"].sum(),
-        mB=observations.payload["mB"].sum(),
+        nA=observations.payload["nA"].int.sum(),
+        nB=observations.payload["nB"].int.sum(),
+        mA=observations.payload["mA"].int.sum(),
+        mB=observations.payload["mB"].int.sum(),
     ).execute()
 
     if result.empty:
         return 0, 0, 0, 0
 
     row = result.iloc[0]
-    return int(row["nA"] or 0), int(row["nB"] or 0), int(row["mA"] or 0), int(row["mB"] or 0)
+    return (
+        int(row["nA"] or 0),
+        int(row["nB"] or 0),
+        int(row["mA"] or 0),
+        int(row["mB"] or 0),
+    )
 
 
 # Register payload encoders/decoders for two-proportions types

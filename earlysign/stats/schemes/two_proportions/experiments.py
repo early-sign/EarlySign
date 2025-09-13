@@ -124,25 +124,11 @@ class TwoPropTemplate(ExperimentTemplate):
 
             # Use ibis to sum the JSON-extracted values directly in the query
             aggregated = (
-                obs_table.aggregate(
-                    [
-                        obs_table.payload.json_extract_path("$.nA")
-                        .cast("int")
-                        .sum()
-                        .name("total_nA"),
-                        obs_table.payload.json_extract_path("$.nB")
-                        .cast("int")
-                        .sum()
-                        .name("total_nB"),
-                        obs_table.payload.json_extract_path("$.mA")
-                        .cast("int")
-                        .sum()
-                        .name("total_mA"),
-                        obs_table.payload.json_extract_path("$.mB")
-                        .cast("int")
-                        .sum()
-                        .name("total_mB"),
-                    ]
+                obs_table.select(
+                    total_nA=obs_table.payload["nA"].int.sum(),
+                    total_nB=obs_table.payload["nB"].int.sum(),
+                    total_mA=obs_table.payload["mA"].int.sum(),
+                    total_mB=obs_table.payload["mB"].int.sum(),
                 )
                 .execute()
                 .iloc[0]
@@ -294,25 +280,11 @@ class TwoPropGSTTemplate(TwoPropTemplate):
 
         # Use ibis to sum the JSON-extracted values directly in the query
         aggregated = (
-            obs_table.aggregate(
-                [
-                    obs_table.payload.json_extract_path("$.nA")
-                    .cast("int")
-                    .sum()
-                    .name("total_nA"),
-                    obs_table.payload.json_extract_path("$.nB")
-                    .cast("int")
-                    .sum()
-                    .name("total_nB"),
-                    obs_table.payload.json_extract_path("$.mA")
-                    .cast("int")
-                    .sum()
-                    .name("total_mA"),
-                    obs_table.payload.json_extract_path("$.mB")
-                    .cast("int")
-                    .sum()
-                    .name("total_mB"),
-                ]
+            obs_table.select(
+                total_nA=obs_table.payload["nA"].int.sum(),
+                total_nB=obs_table.payload["nB"].int.sum(),
+                total_mA=obs_table.payload["mA"].int.sum(),
+                total_mB=obs_table.payload["mB"].int.sum(),
             )
             .execute()
             .iloc[0]
@@ -467,25 +439,11 @@ class TwoPropSafeTemplate(TwoPropTemplate):
 
         # Use ibis to sum the JSON-extracted values directly in the query
         aggregated = (
-            obs_table.aggregate(
-                [
-                    obs_table.payload.json_extract_path("$.nA")
-                    .cast("int")
-                    .sum()
-                    .name("total_nA"),
-                    obs_table.payload.json_extract_path("$.nB")
-                    .cast("int")
-                    .sum()
-                    .name("total_nB"),
-                    obs_table.payload.json_extract_path("$.mA")
-                    .cast("int")
-                    .sum()
-                    .name("total_mA"),
-                    obs_table.payload.json_extract_path("$.mB")
-                    .cast("int")
-                    .sum()
-                    .name("total_mB"),
-                ]
+            obs_table.select(
+                total_nA=obs_table.payload["nA"].int.sum(),
+                total_nB=obs_table.payload["nB"].int.sum(),
+                total_mA=obs_table.payload["mA"].int.sum(),
+                total_mB=obs_table.payload["mB"].int.sum(),
             )
             .execute()
             .iloc[0]

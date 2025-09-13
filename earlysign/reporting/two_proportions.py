@@ -62,7 +62,31 @@ class TwoPropGSTReporter:
 
         # Get data as Polars DataFrame via ibis
         table = ledger.raw_table
-        polars_df = table.to_polars()
+
+        # Convert problematic column types for Polars compatibility
+        try:
+            # Try to convert UUIDs to strings and handle JSON columns
+            table_for_polars = table
+
+            # Convert UUID columns to string if they exist
+            if "uuid" in table.columns:
+                table_for_polars = table_for_polars.mutate(
+                    uuid=table_for_polars.uuid.cast("string")
+                )
+
+            polars_df = table_for_polars.to_polars()
+        except (NotImplementedError, AttributeError) as e:
+            # Fallback: use pandas instead of polars for incompatible types
+            pandas_df = table.to_pandas()
+            # Convert to polars from pandas if possible
+            try:
+                import polars as pl
+
+                polars_df = pl.from_pandas(pandas_df)
+            except Exception:
+                # Final fallback: return pandas DataFrame
+                polars_df = pandas_df
+
         return cls(polars_df)
 
     @classmethod
