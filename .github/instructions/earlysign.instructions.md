@@ -260,9 +260,10 @@ PayloadRegistry.register("GstBoundary", lambda d: GstBoundaryPayload(**d))
 ```python
 def test_my_statistic():
     """Test component behavior in isolation."""
-    from earlysign.backends.polars.ledger import PolarsLedger
+    from earlysign.core.ledger import Ledger, create_test_connection
 
-    ledger = PolarsLedger()
+    conn = create_test_connection("duckdb")
+    ledger = Ledger(conn, "test")
 
     # Setup test events
     ledger.write_event(

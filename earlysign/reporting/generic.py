@@ -13,79 +13,91 @@ Examples
 >>> from earlysign.reporting.generic import LedgerReporter
 >>> conn = ibis.duckdb.connect(":memory:")
 >>> L = Ledger(conn, "test")
->>> rep = LedgerReporter(L.raw_table.to_pandas())
->>> isinstance(rep.ledger_table(), type(L.raw_table.to_pandas()))
-True
+>>> rep = LedgerReporter(L)  # Direct ledger usage
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
 
-import warnings
+import ibis
 
-try:
-    import pandas as pd
-except ImportError as e:
-    raise ImportError("pandas is required for reporting functionality") from e
+if TYPE_CHECKING:
+    from earlysign.core.ledger import Ledger
 
 
+@dataclass
 class LedgerReporter:
     """
     A generic, scheme-agnostic reporter for any experiment ledger.
-    Works with pandas DataFrames for compatibility across different backends.
+    Works with ibis-based ledgers for backend-agnostic operations.
     """
 
-    def __init__(self, df: pd.DataFrame):
-        """Initialize with a pandas DataFrame."""
-        if not isinstance(df, pd.DataFrame):
-            raise ValueError("DataFrame must be pandas.DataFrame")
-        self.df = df
+    ledger: "Ledger"
 
-    def ledger_table(self) -> pd.DataFrame:
-        """Return the underlying ledger DataFrame."""
-        return self.df
+    def ledger_table(self) -> Any:
+        """Return the underlying ledger table as ibis expression."""
+        return self.ledger.table
 
     def unique_entities(self) -> list[str]:
         """List all unique experiment entities."""
-        if "entity" not in self.df.columns:
+        table = self.ledger.table
+        try:
+            # Check if entity column exists and get unique values
+            unique_values = table.select(table.entity).distinct().execute()
+            entities = [row.entity for row in unique_values if row.entity is not None]
+            return sorted(entities)
+        except Exception:
+            # Column doesn't exist or other error
             return []
-        return sorted(self.df["entity"].dropna().unique().tolist())
 
     def unique_namespaces(self) -> list[str]:
         """List all unique event namespaces."""
-        if "namespace" not in self.df.columns:
+        table = self.ledger.table
+        try:
+            # Get unique namespace values
+            unique_values = table.select(table.namespace).distinct().execute()
+            namespaces = [
+                row.namespace for row in unique_values if row.namespace is not None
+            ]
+            return sorted(namespaces)
+        except Exception:
             return []
-        return sorted(self.df["namespace"].dropna().unique().tolist())
 
     def unique_kinds(self) -> list[str]:
         """List all unique event kinds."""
-        if "kind" not in self.df.columns:
+        table = self.ledger.table
+        try:
+            # Get unique kind values
+            unique_values = table.select(table.kind).distinct().execute()
+            kinds = [row.kind for row in unique_values if row.kind is not None]
+            return sorted(kinds)
+        except Exception:
             return []
-        return sorted(self.df["kind"].dropna().unique().tolist())
 
-    def namespace_kind_counts(self) -> pd.DataFrame:
+    def namespace_kind_counts(self) -> Any:
         """
-        Return a pivot table of namespace x kind with event counts.
+        Return counts of events grouped by namespace and kind.
 
         Returns
         -------
-        pd.DataFrame
-            Rows = namespaces, Columns = kinds, Values = event counts
+        ibis.Table
+            Table with namespace, kind, and count columns
         """
-        if (
-            self.df.empty
-            or "namespace" not in self.df.columns
-            or "kind" not in self.df.columns
-        ):
-            return pd.DataFrame()
-
-        counts = self.df.groupby(["namespace", "kind"]).size().reset_index(name="count")
-
-        if counts.empty:
-            return pd.DataFrame()
-
-        pivot = counts.pivot(index="namespace", columns="kind", values="count").fillna(
-            0
-        )
-        return pivot.astype(int)
+        table = self.ledger.table
+        try:
+            # Group by namespace and kind, count events
+            counts = (
+                table.group_by([table.namespace, table.kind])
+                .aggregate(count=ibis._.count())
+                .order_by([table.namespace, table.kind])
+            )
+            return counts
+        except Exception:
+            # Return empty table if error occurs
+            return table.limit(0).select(
+                namespace=ibis.literal("").cast("string"),
+                kind=ibis.literal("").cast("string"),
+                count=ibis.literal(0).cast("int64"),
+            )

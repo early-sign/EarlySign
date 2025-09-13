@@ -23,7 +23,6 @@ from dataclasses import dataclass
 import json
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
-import ibis
 import matplotlib.pyplot as plt
 
 if TYPE_CHECKING:
