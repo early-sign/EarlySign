@@ -23,7 +23,7 @@ Example Usage
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
 >>> from earlysign.stats.schemes.two_proportions.experiments import TwoPropGSTTemplate
->>> from earlysign.stats.schemes.two_proportions.core import ObservationBatch
+>>> from earlysign.stats.schemes.two_proportions.common import ObservationBatch
 >>>
 >>> # Create GST experiment
 >>> experiment = TwoPropGSTTemplate("my_ab_test", alpha_total=0.05, looks=4)
@@ -51,8 +51,8 @@ True
 
 Component-Level Usage
 --------------------
->>> from earlysign.stats.schemes.two_proportions.statistics import WaldZStatistic
->>> from earlysign.stats.schemes.two_proportions.core import TwoPropObservation
+>>> from earlysign.stats.schemes.two_proportions.group_sequential import WaldZStatistic
+>>> from earlysign.stats.schemes.two_proportions.common import TwoPropObservation
 >>>
 >>> # Individual components for custom workflows
 >>> observation = TwoPropObservation()

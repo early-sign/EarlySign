@@ -424,17 +424,19 @@ def ab_test_with_guardrails(
 # Import the implementation from the moved multi_metric content
 from earlysign.runtime.experiment_template import ExperimentTemplate
 from earlysign.core.ledger import Ledger
-from earlysign.core.names import Namespace, ExperimentId
+from earlysign.core.ledger import Ledger, Namespace
 from earlysign.stats.common.group_sequential import AdaptiveInfoTime
-from earlysign.stats.schemes.two_proportions.statistics import (
+from earlysign.stats.schemes.two_proportions.group_sequential import (
     WaldZStatistic,
     LanDeMetsBoundary,
     PeekSignaler,
+)
+from earlysign.stats.schemes.two_proportions.e_process import (
     BetaBinomialEValue,
     SafeThreshold,
     SafeSignaler,
 )
-from earlysign.stats.schemes.two_proportions.core import TwoPropObservation
+from earlysign.stats.schemes.two_proportions.common import TwoPropObservation
 
 
 @dataclass
@@ -484,7 +486,7 @@ class ABTestExperiment(ExperimentTemplate):
     >>> # )
     """
 
-    experiment_id: ExperimentId
+    experiment_id: str
     primary_alpha: float = 0.05
     guardrails: List[GuardrailConfig] = field(default_factory=list)
     looks: int = 5

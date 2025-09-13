@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Union, Optional, Dict, Any
 
 from earlysign.core.components import Criteria, Signaler, Statistic
-from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+from earlysign.core.ledger import Namespace
 from earlysign.core.ledger import Ledger
 from earlysign.stats.common.group_sequential import (
     lan_demets_spending,
@@ -33,8 +33,8 @@ from earlysign.stats.schemes.two_proportions.common import (
     get_latest_criteria,
     WaldZPayload,
     wald_z_from_counts,
-    GstBoundaryPayload,
 )
+from earlysign.stats.common.group_sequential import GstBoundaryPayload
 
 # Import norm from scipy for boundary calculations
 try:
@@ -77,9 +77,9 @@ class WaldZStatistic(Statistic):
     def step(
         self,
         ledger: Ledger,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Compute Wald Z-statistic and write to ledger."""
         nA, nB, mA, mB = reduce_counts(ledger, experiment_id=str(experiment_id))
@@ -135,9 +135,9 @@ class LanDeMetsBoundary(Criteria):
     def step(
         self,
         ledger: Ledger,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Compute GST boundary and write to ledger."""
         cum_alpha = lan_demets_spending(self.alpha_total, self.t, self.style)
@@ -186,9 +186,9 @@ class PeekSignaler(Signaler):
     def step(
         self,
         ledger: Ledger,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Check boundary crossing and emit signal if needed."""
         # Get latest Z statistic
@@ -254,9 +254,9 @@ class AdaptiveGSTBoundary(Criteria):
     def step(
         self,
         ledger: Ledger,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """
         Update boundary using adaptive information time for two-proportions.

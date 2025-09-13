@@ -8,8 +8,7 @@ namespace x kind counts. Works with ibis-based ledgers.
 Examples
 --------
 >>> import ibis
->>> from earlysign.core.ledger import Ledger
->>> from earlysign.core.names import Namespace
+>>> from earlysign.core.ledger import Ledger, Namespace
 >>> from earlysign.reporting.generic import LedgerReporter
 >>> conn = ibis.duckdb.connect(":memory:")
 >>> L = Ledger(conn, "test")

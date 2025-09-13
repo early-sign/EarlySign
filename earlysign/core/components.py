@@ -17,8 +17,7 @@ Component Types:
 
 Examples
 --------
->>> from earlysign.core.ledger import Ledger, create_test_connection
->>> from earlysign.core.names import Namespace
+>>> from earlysign.core.ledger import Ledger, create_test_connection, Namespace
 >>>
 >>> conn = create_test_connection("duckdb")
 >>> ledger = Ledger(conn, "test")
@@ -52,7 +51,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, Union, Optional, TYPE_CHECKING
 
-from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+from earlysign.core.ledger import Namespace
 
 # Type aliases
 NamespaceLike = Union[Namespace, str]
@@ -73,9 +72,9 @@ class ComponentBase(ABC):
     def step(
         self,
         ledger: "Ledger",
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """
         Execute this component's logic for a given experiment step.
@@ -101,9 +100,9 @@ class Statistic(ComponentBase):
     def step(
         self,
         ledger: "Ledger",
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Override this method to implement statistic computation."""
         raise NotImplementedError("Subclasses must implement step()")
@@ -124,9 +123,9 @@ class Criteria(ComponentBase):
     def step(
         self,
         ledger: "Ledger",
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Override this method to implement criteria computation."""
         raise NotImplementedError("Subclasses must implement step()")
@@ -147,9 +146,9 @@ class Signaler(ComponentBase):
     def step(
         self,
         ledger: "Ledger",
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Override this method to implement signaling logic."""
         raise NotImplementedError("Subclasses must implement step()")
@@ -170,9 +169,9 @@ class Recommender(ComponentBase):
     def step(
         self,
         ledger: "Ledger",
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Override this method to implement recommendation logic."""
         raise NotImplementedError("Subclasses must implement step()")
@@ -193,9 +192,9 @@ class Observer(ComponentBase):
     def step(
         self,
         ledger: "Ledger",
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Override this method to implement observation processing."""
         raise NotImplementedError("Subclasses must implement step()")

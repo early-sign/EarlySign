@@ -7,19 +7,6 @@ Generic runners that execute experiment templates with different strategies.
 Runners provide the execution environment while templates define the experiment logic.
 This separation allows for different execution patterns (sequential, parallel, batch, etc.)
 while keeping experiment definitions portable.
-
-Examples
---------
->>> import ibis
->>> from earlysign.core.ledger import Ledger
->>> from earlysign.runtime.experiment_template import ExperimentTemplate
->>> from earlysign.runtime.runners import SequentialRunner
->>>
->>> # conn = ibis.duckdb.connect(":memory:")
->>> # ledger = Ledger(conn, "test")
->>> # runner = SequentialRunner(custom_template, ledger)
->>> # runner.add_observations(**data)
->>> # result = runner.analyze()
 """
 
 from __future__ import annotations

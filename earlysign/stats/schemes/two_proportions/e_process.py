@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Union, Dict, Any
 
 from earlysign.core.components import Criteria, Signaler, Statistic
-from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+from earlysign.core.ledger import Namespace
 from earlysign.core.ledger import Ledger
 from earlysign.stats.common.e_process import (
     log_beta_binomial_evalue_simple,
@@ -72,9 +72,9 @@ class BetaBinomialEValue(Statistic):
     def step(
         self,
         ledger: Ledger,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """
         Compute and record beta-binomial e-value for two-proportions.
@@ -162,9 +162,9 @@ class SafeThreshold(Criteria):
     def step(
         self,
         ledger: Ledger,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Compute and record safe testing threshold for two-proportions."""
         threshold = safe_threshold(self.alpha_level)
@@ -220,9 +220,9 @@ class SafeSignaler(Signaler):
     def step(
         self,
         ledger: Ledger,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
-        time_index: Union[TimeIndex, str],
+        experiment_id: str,
+        step_key: str,
+        time_index: str,
     ) -> None:
         """Check e-value against threshold and emit decision signal for two-proportions."""
         # Get latest e-value and threshold

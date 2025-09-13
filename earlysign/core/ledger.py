@@ -13,8 +13,7 @@ This module provides an ibis-based ledger system focused on essential functional
 Examples:
 ---------
 >>> import ibis
->>> from earlysign.core.ledger import Ledger, create_test_connection
->>> from earlysign.core.names import Namespace
+>>> from earlysign.core.ledger import Ledger, create_test_connection, Namespace
 >>>
 >>> # Create test connection
 >>> conn = create_test_connection("duckdb")
@@ -42,6 +41,7 @@ Examples:
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union, Type
 import json
 
@@ -50,8 +50,25 @@ import ibis
 from ibis import BaseBackend
 from ibis.expr.types import Table
 
-from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
 from earlysign.__version__ import __version__
+
+
+class Namespace(str, Enum):
+    """Well-known ledger namespaces.
+
+    - OBS: raw observations
+    - STATS: statistics (derived)
+    - CRITERIA: critical values / boundaries / thresholds
+    - SIGNALS: emitted signals / decisions / recommendations
+    - DESIGN: experiment design information
+    """
+
+    OBS = "obs"
+    STATS = "stats"
+    CRITERIA = "criteria"
+    SIGNALS = "signals"
+    DESIGN = "design"
+
 
 # Type aliases
 NamespaceLike = Union[Namespace, str]
@@ -241,11 +258,11 @@ class Ledger:
     def write_event(
         self,
         *,
-        time_index: Union[TimeIndex, str],
+        time_index: str,
         namespace: NamespaceLike,
         kind: str,
-        experiment_id: Union[ExperimentId, str],
-        step_key: Union[StepKey, str],
+        experiment_id: str,
+        step_key: str,
         payload_type: str,
         payload: Any,
         tag: Optional[str] = None,
@@ -255,15 +272,15 @@ class Ledger:
 
         Parameters
         ----------
-        time_index : TimeIndex or str
+        time_index : str
             Time index for the event
         namespace : NamespaceLike
             Event namespace
         kind : str
             Event kind/type
-        experiment_id : ExperimentId or str
+        experiment_id : str
             Experiment identifier
-        step_key : StepKey or str
+        step_key : str
             Step key within experiment
         payload_type : str
             Type of payload for wrap/unwrap handling

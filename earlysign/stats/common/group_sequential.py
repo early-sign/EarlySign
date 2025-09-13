@@ -16,10 +16,19 @@ management.
 
 from __future__ import annotations
 import math
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Optional, Union, Dict, Any, TypedDict
 from dataclasses import dataclass, field
 
 from scipy.stats import norm
+
+
+class GstBoundaryPayload(TypedDict):
+    """Payload structure for GST boundary events."""
+
+    upper: float
+    lower: float
+    info_time: float
+    alpha_i: float
 
 
 def lan_demets_spending(alpha_total: float, t: float, style: str = "obf") -> float:

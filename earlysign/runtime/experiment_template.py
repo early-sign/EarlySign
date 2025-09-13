@@ -66,7 +66,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Any
 
 from earlysign.core.ledger import Ledger
-from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+from earlysign.core.ledger import Namespace
 
 
 @dataclass
@@ -108,7 +108,7 @@ class ExperimentTemplate(ABC):
     """
 
     def __init__(self, experiment_id: str):
-        self.experiment_id = ExperimentId(experiment_id)
+        self.experiment_id = experiment_id
         self.ledger: Optional[Ledger] = None
         self._is_setup = False
         self._current_look = 0
@@ -149,8 +149,8 @@ class ExperimentTemplate(ABC):
             raise RuntimeError("Template not setup. Call setup(ledger) first.")
 
         self._current_look += 1
-        time_index = TimeIndex(f"t{self._current_look}")
-        step_key = StepKey(f"look-{self._current_look}")
+        time_index = f"t{self._current_look}"
+        step_key = f"look-{self._current_look}"
 
         # Use the configured ingestor
         ingestor = self.components["ingestor"]
@@ -184,8 +184,8 @@ class ExperimentTemplate(ABC):
                 "No observations registered yet. Call add_observations() first."
             )
 
-        time_index = TimeIndex(f"t{self._current_look}")
-        step_key = StepKey(f"look-{self._current_look}")
+        time_index = f"t{self._current_look}"
+        step_key = f"look-{self._current_look}"
 
         # Run component pipeline
         for component_name, component in self.components.items():

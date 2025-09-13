@@ -46,10 +46,10 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Union
 
 from earlysign.core.ledger import Ledger
-from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+from earlysign.core.ledger import Namespace
 from earlysign.core.components import Statistic, Criteria, Signaler
 from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
-from earlysign.stats.schemes.two_proportions.core import TwoPropObservation
+from earlysign.stats.schemes.two_proportions.common import TwoPropObservation
 from earlysign.stats.schemes.two_proportions.group_sequential import (
     WaldZStatistic,
     LanDeMetsBoundary,
