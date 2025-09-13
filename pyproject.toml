@@ -77,9 +77,8 @@ addopts = "--import-mode=importlib --doctest-modules --pyargs -v --nb-test-files
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 testpaths = ["earlysign", "docs/source"]
 norecursedirs = ["docs/_build"]
-ignore = []
 # This tells pytest-notebook to test that the jupyter-notebook executions will not stop with an error (and not comparing the results with the expectation).
-nb_diff_ignore = ["/cells/*/outputs"]
+nb_diff_ignore = ["/cells/*/outputs", "/cells/*/execution_count"]
 
 #==== CI ====#
 [build-system]
