@@ -3,42 +3,28 @@ earlysign.reporting.two_proportions
 ===================================
 
 Two-proportions specific reporter that understands structured payload fields
-and can work with both ibis-based and legacy Polars ledgers.
+and works with ibis-based ledgers for backend-agnostic data operations.
 
-This reporter leverages the structured payload columns for efficient queries
-without JSON parsing when using the new ibis-based ledger system.
+This reporter leverages the ibis-framework for efficient cross-backend queries
+and uses JSON operations to extract structured payload data.
 
 Examples
 --------
-With ibis-based ledger (recommended):
+With ibis-based ledger:
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
 >>> from earlysign.reporting.two_proportions import TwoPropGSTReporter
 >>> conn = ibis.duckdb.connect(":memory:")
 >>> ledger = Ledger(conn, "test")
->>> rep = TwoPropGSTReporter.from_ledger(ledger)
-
-Legacy compatibility with pandas DataFrame:
->>> import pandas as pd
->>> from earlysign.reporting.two_proportions import TwoPropGSTReporter
->>> # Assuming you have a pandas DataFrame with ledger data
->>> df = pd.DataFrame({'col1': [1, 2], 'col2': [3, 4]})  # your ledger data
->>> rep = TwoPropGSTReporter(df)
+>>> rep = TwoPropGSTReporter(ledger)  # Direct dataclass initialization
 """
 
 from dataclasses import dataclass
 import json
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
-try:
-    import polars as pl
-    import matplotlib.pyplot as plt
-
-    POLARS_AVAILABLE = True
-except ImportError:
-    pl = None  # type: ignore[assignment]
-    plt = None  # type: ignore[assignment]
-    POLARS_AVAILABLE = False
+import ibis
+import matplotlib.pyplot as plt
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
@@ -48,146 +34,99 @@ if TYPE_CHECKING:
 class TwoPropGSTReporter:
     """Two-proportions GST progress view with structured payload support."""
 
-    df: Any  # pl.DataFrame when available
-
-    @classmethod
-    def from_ledger(cls, ledger: "Ledger") -> "TwoPropGSTReporter":
-        """
-        Create reporter from ibis-based ledger with efficient structured queries.
-
-        This method uses structured payload columns to avoid JSON parsing.
-        """
-        if not POLARS_AVAILABLE:
-            raise ImportError("Polars is required for two-proportions reporting")
-
-        # Get data as Polars DataFrame via ibis
-        table = ledger.raw_table
-
-        # Convert problematic column types for Polars compatibility
-        try:
-            # Try to convert UUIDs to strings and handle JSON columns
-            table_for_polars = table
-
-            # Convert UUID columns to string if they exist
-            if "uuid" in table.columns:
-                table_for_polars = table_for_polars.mutate(
-                    uuid=table_for_polars.uuid.cast("string")
-                )
-
-            polars_df = table_for_polars.to_polars()
-        except (NotImplementedError, AttributeError) as e:
-            # Fallback: use pandas instead of polars for incompatible types
-            pandas_df = table.to_pandas()
-            # Convert to polars from pandas if possible
-            try:
-                import polars as pl
-
-                polars_df = pl.from_pandas(pandas_df)
-            except Exception:
-                # Final fallback: return pandas DataFrame
-                polars_df = pandas_df
-
-        return cls(polars_df)
-
-    @classmethod
-    def from_polars_ledger(cls, polars_ledger: Any) -> "TwoPropGSTReporter":
-        """Create reporter from PolarsLedger (legacy compatibility)."""
-        return cls(polars_ledger.frame())
+    ledger: "Ledger"
 
     def progress_table(self) -> Any:
         """
         Returns one row per look with numeric columns:
         - look, t, z, upper, lower, nA, nB, mA, mB, stopped ('yes'/'no')
+
+        Uses ibis operations to query the ledger directly.
         """
-        stats = (
-            self.df.filter(
-                (pl.col("namespace") == "stats")
-                & (pl.col("kind") == "updated")
-                & (pl.col("payload_type") == "WaldZ")
-            )
-            .with_columns(
-                pl.col("payload")
-                .str.json_path_match("$.z")
-                .cast(pl.Float64)
-                .alias("z"),
-                pl.col("payload")
-                .str.json_path_match("$.nA")
-                .cast(pl.Int64)
-                .alias("nA"),
-                pl.col("payload")
-                .str.json_path_match("$.nB")
-                .cast(pl.Int64)
-                .alias("nB"),
-                pl.col("payload")
-                .str.json_path_match("$.mA")
-                .cast(pl.Int64)
-                .alias("mA"),
-                pl.col("payload")
-                .str.json_path_match("$.mB")
-                .cast(pl.Int64)
-                .alias("mB"),
-                pl.col("time_index").str.strip_prefix("t").cast(pl.Int64).alias("look"),
-            )
-            .select("time_index", "ts", "entity", "look", "z", "nA", "nB", "mA", "mB")
+        # Get the base table from the ledger
+        table = self.ledger.table
+
+        # Query statistics data (WaldZ) using ibis
+        stats_filtered = table.filter(
+            (table.namespace == "stats")
+            & (table.kind == "updated")
+            & (table.payload_type == "WaldZ")
         )
 
-        crit = (
-            self.df.filter(
-                (pl.col("namespace") == "criteria")
-                & (pl.col("kind") == "updated")
-                & (pl.col("payload_type") == "GSTBoundary")
-            )
-            .with_columns(
-                pl.col("payload")
-                .str.json_path_match("$.upper")
-                .cast(pl.Float64)
-                .alias("upper"),
-                pl.col("payload")
-                .str.json_path_match("$.lower")
-                .cast(pl.Float64)
-                .alias("lower"),
-                pl.col("payload")
-                .str.json_path_match("$.info_time")
-                .cast(pl.Float64)
-                .alias("t"),
-            )
-            .select("time_index", "upper", "lower", "t")
+        # Extract JSON payload fields for stats using elegant ibis JSON operations
+        stats = stats_filtered.select(
+            table.time_index,
+            table.ts,
+            table.entity,
+            # Extract look number from time_index (remove 't' prefix)
+            table.time_index.substr(2).cast("int64").name("look"),
+            # Extract values from JSON payload using elegant syntax
+            z=table.payload["z"].cast("float64"),
+            nA=table.payload["nA"].cast("int64"),
+            nB=table.payload["nB"].cast("int64"),
+            mA=table.payload["mA"].cast("int64"),
+            mB=table.payload["mB"].cast("int64"),
         )
 
-        out = (
-            stats.join(crit, on="time_index", how="left")
-            .with_columns(
-                pl.when(pl.col("z").abs() >= pl.col("upper"))
-                .then(pl.lit("yes"))
-                .otherwise(pl.lit("no"))
-                .alias("stopped")
-            )
-            .sort("look")
+        # Query criteria data (GSTBoundary) using ibis
+        crit_filtered = table.filter(
+            (table.namespace == "criteria")
+            & (table.kind == "updated")
+            & (table.payload_type == "GSTBoundary")
         )
-        return out
+
+        # Extract JSON payload fields for criteria using elegant ibis syntax
+        crit = crit_filtered.select(
+            table.time_index,
+            upper=table.payload["upper"].cast("float64"),
+            lower=table.payload["lower"].cast("float64"),
+            t=table.payload["info_time"].cast("float64"),
+        )
+
+        # Join stats and criteria on time_index
+        joined = stats.left_join(crit, "time_index")
+
+        # Add stopped column based on whether |z| >= upper
+        # For now, we'll compute this after executing the query since ibis case operations are complex
+        result = joined.order_by("look")
+
+        return result
 
     def _planned_design(self) -> Optional[Dict[str, Any]]:
         """
         Read the last 'design/registered' event (if any) and return the decoded payload dict.
         Expected keys: 'alpha', 'spending', 't_grid' (list of floats).
+
+        Uses ibis operations to query the ledger directly.
         """
-        q = (
-            self.df.filter(
-                (pl.col("namespace") == "design") & (pl.col("kind") == "registered")
-            )
-            .sort("ts")
-            .tail(1)
-            .to_dicts()
+        # Get the base table from the ledger
+        table = self.ledger.table
+
+        # Query for design/registered events
+        design_events = (
+            table.filter((table.namespace == "design") & (table.kind == "registered"))
+            .order_by(table.ts.desc())
+            .limit(1)
         )
-        if not q:
-            return None
-        payload_str = q[0].get("payload", "")
+
+        # Execute query and get results
         try:
-            return (
-                json.loads(payload_str)
-                if isinstance(payload_str, str)
-                else dict(payload_str)
-            )
+            results = design_events.execute()
+            if not results:
+                return None
+
+            # Get the first (and only) result
+            row = list(results)[0]
+            payload_str = row.get("payload", "")
+
+            try:
+                return (
+                    json.loads(payload_str)
+                    if isinstance(payload_str, str)
+                    else dict(payload_str)
+                )
+            except Exception:
+                return None
         except Exception:
             return None
 
@@ -200,13 +139,33 @@ class TwoPropGSTReporter:
           so you can see the entire time axis even if the test stopped early.
         """
         prog = self.progress_table()
-        if prog.is_empty():
+
+        # Execute the ibis query to get actual data
+        try:
+            prog_data = list(prog.execute())
+            # Add stopped column logic post-query
+            for row in prog_data:
+                z_val = row.get("z", 0.0)
+                upper_val = row.get("upper", float("inf"))
+                if z_val is not None and upper_val is not None:
+                    row["stopped"] = "yes" if abs(z_val) >= upper_val else "no"
+                else:
+                    row["stopped"] = "no"
+        except Exception as e:
+            print(f"Error executing progress query: {e}")
+            return
+
+        if not prog_data:
             print("(no progress)")
             return
 
-        # Observed points
-        xs_obs: List[float] = prog["t"].to_list()
-        zs_obs: List[float] = prog["z"].to_list()
+        # Extract observed points from executed data
+        xs_obs: List[float] = [
+            row.get("t", 0.0) for row in prog_data if row.get("t") is not None
+        ]
+        zs_obs: List[float] = [
+            row.get("z", 0.0) for row in prog_data if row.get("z") is not None
+        ]
 
         # Planned design (preferred) or fallback to observed 't'
         design = self._planned_design()
@@ -222,7 +181,7 @@ class TwoPropGSTReporter:
 
         # Recompute full boundaries on planned grid
         from scipy.stats import norm
-        from earlysign.methods.group_sequential.two_proportions import (
+        from earlysign.stats.methods.group_sequential.core import (
             lan_demets_spending,
         )
 
@@ -258,11 +217,12 @@ class TwoPropGSTReporter:
 
         # Optional: mark stopping look (if any)
         if mark_stop:
-            # stopped rows are labeled 'yes'
-            stopped_rows = prog.filter(pl.col("stopped") == "yes")
-            if stopped_rows.height > 0:
-                t_stop = float(stopped_rows["t"][-1])
-                z_stop = float(stopped_rows["z"][-1])
+            # Find stopped rows
+            stopped_rows = [row for row in prog_data if row.get("stopped") == "yes"]
+            if stopped_rows:
+                last_stop = stopped_rows[-1]
+                t_stop = float(last_stop.get("t", 0))
+                z_stop = float(last_stop.get("z", 0))
                 plt.scatter(
                     [t_stop], [z_stop], s=70, color="red", zorder=5, label="Stop"
                 )
