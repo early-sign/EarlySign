@@ -78,7 +78,7 @@ doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 testpaths = ["earlysign", "docs/source"]
 norecursedirs = ["docs/_build"]
 # This tells pytest-notebook to test that the jupyter-notebook executions will not stop with an error (and not comparing the results with the expectation).
-nb_diff_ignore = ["/cells/*/outputs", "/cells/*/execution_count", "/metadata/*/*"]
+nb_diff_ignore = ["/cells/*/outputs", "/cells/*/execution_count", "/metadata/language_info/version"]
 
 #==== CI ====#
 [build-system]
