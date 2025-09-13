@@ -35,9 +35,11 @@ Uses beta-binomial e-processes with conjugate priors:
 
 Examples
 --------
->>> from earlysign.backends.polars.ledger import PolarsLedger
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>> from earlysign.core.names import Namespace
->>> L = PolarsLedger()
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> L = Ledger(conn, "test")
 >>> # Ingest observations
 >>> L.write_event(time_index="t1", namespace=Namespace.OBS, kind="observation",
 ...               experiment_id="exp#1", step_key="s1",
@@ -111,7 +113,7 @@ class WaldZStatistic(Statistic):
         tag_stats: Tag for statistic events (default "stat:waldz")
     """
 
-    tag_stats: Optional[str] = "stat:waldz"
+    tag_stats: str = "stat:waldz"
 
     def step(
         self,
@@ -169,7 +171,7 @@ class LanDeMetsBoundary(Criteria):
     alpha_total: float
     t: float
     style: str = "obf"
-    tag_crit: Optional[str] = "crit:gst"
+    tag_crit: str = "crit:gst"
 
     def step(
         self,
@@ -228,32 +230,50 @@ class PeekSignaler(Signaler):
         time_index: Union[TimeIndex, str],
     ) -> None:
         """Check boundary crossing and emit signal if needed."""
-        z_row = ledger.latest(
-            namespace=Namespace.STATS,
-            tag="stat:waldz",
-            experiment_id=str(experiment_id),
+        # Get latest Z statistic
+        z_query = (
+            ledger.table.filter(
+                (ledger.table.namespace == str(Namespace.STATS))
+                & (ledger.table.tag == "stat:waldz")
+                & (ledger.table.experiment_id == str(experiment_id))
+            )
+            .order_by(ledger.table.timestamp.desc())
+            .limit(1)
         )
-        b_row = ledger.latest(
-            namespace=Namespace.CRITERIA,
-            tag="crit:gst",
-            experiment_id=str(experiment_id),
-        )
+        z_results = z_query.execute()
 
-        if not z_row or not b_row:
+        # Get latest boundary criteria
+        b_query = (
+            ledger.table.filter(
+                (ledger.table.namespace == str(Namespace.CRITERIA))
+                & (ledger.table.tag == "crit:gst")
+                & (ledger.table.experiment_id == str(experiment_id))
+            )
+            .order_by(ledger.table.timestamp.desc())
+            .limit(1)
+        )
+        b_results = b_query.execute()
+
+        if z_results.empty or b_results.empty:
             return
 
-        z = float(z_row.payload.get("z", 0.0))
-        upper = float(b_row.payload.get("upper", float("inf")))
+        # Unwrap payloads
+        z_records = ledger.unwrap_results(z_results)
+        b_records = ledger.unwrap_results(b_results)
+
+        z = float(z_records[0]["payload"].get("z", 0.0))
+        upper = float(b_records[0]["payload"].get("upper", float("inf")))
 
         if abs(z) >= upper:
-            ledger.emit(
+            ledger.write_event(
                 time_index=time_index,
                 experiment_id=str(experiment_id),
                 step_key=str(step_key),
-                topic=self.decision_topic,
-                body={"action": "stop", "z": z, "threshold": upper},
-                tag="gst:decision",
                 namespace=Namespace.SIGNALS,
+                kind="decision",
+                tag="gst:decision",
+                payload_type="dict",  # Default JSON payload
+                payload={"action": "stop", "z": z, "threshold": upper},
             )
 
 
@@ -289,7 +309,7 @@ class BetaBinomialEValue(Statistic):
     alpha_prior: float = 1.0
     beta_prior: float = 1.0
     method: str = "simple"  # "simple" or "adaptive"
-    tag_stats: Optional[str] = "stat:evalue"
+    tag_stats: str = "stat:evalue"
 
     def step(
         self,
@@ -375,7 +395,7 @@ class SafeThreshold(Criteria):
     """
 
     alpha_level: float = 0.05
-    tag_crit: Optional[str] = "crit:safe_threshold"
+    tag_crit: str = "crit:safe_threshold"
 
     def step(
         self,
@@ -441,25 +461,45 @@ class SafeSignaler(Signaler):
         time_index: Union[TimeIndex, str],
     ) -> None:
         """Check e-value against threshold and emit decision signal."""
-        # Get latest e-value and threshold
-        evalue_row = ledger.latest(
-            namespace=Namespace.STATS,
-            tag="stat:evalue",
-            experiment_id=str(experiment_id),
+        # Get latest e-value
+        evalue_query = (
+            ledger.table.filter(
+                (ledger.table.namespace == str(Namespace.STATS))
+                & (ledger.table.tag == "stat:evalue")
+                & (ledger.table.experiment_id == str(experiment_id))
+            )
+            .order_by(ledger.table.timestamp.desc())
+            .limit(1)
         )
-        threshold_row = ledger.latest(
-            namespace=Namespace.CRITERIA,
-            tag="crit:safe_threshold",
-            experiment_id=str(experiment_id),
-        )
+        evalue_results = evalue_query.execute()
 
-        if not evalue_row or not threshold_row:
+        # Get latest threshold
+        threshold_query = (
+            ledger.table.filter(
+                (ledger.table.namespace == str(Namespace.CRITERIA))
+                & (ledger.table.tag == "crit:safe_threshold")
+                & (ledger.table.experiment_id == str(experiment_id))
+            )
+            .order_by(ledger.table.timestamp.desc())
+            .limit(1)
+        )
+        threshold_results = threshold_query.execute()
+
+        if evalue_results.empty or threshold_results.empty:
             return
 
+        # Unwrap payloads
+        evalue_records = ledger.unwrap_results(evalue_results)
+        threshold_records = ledger.unwrap_results(threshold_results)
+
         # Extract values
-        e_value = float(evalue_row.payload.get("e_value", 0.0))
-        threshold = float(threshold_row.payload.get("threshold", float("inf")))
-        total_n = evalue_row.payload.get("nA", 0) + evalue_row.payload.get("nB", 0)
+        e_value = float(evalue_records[0]["payload"].get("e_value", 0.0))
+        threshold = float(
+            threshold_records[0]["payload"].get("threshold", float("inf"))
+        )
+        total_n = evalue_records[0]["payload"].get("nA", 0) + evalue_records[0][
+            "payload"
+        ].get("nB", 0)
 
         # Check minimum observations
         if total_n < self.min_observations:
@@ -476,12 +516,15 @@ class SafeSignaler(Signaler):
             confidence = f"e_value={e_value:.3f}, threshold={threshold:.1f}"
 
         # Emit decision signal
-        ledger.emit(
+        ledger.write_event(
             time_index=time_index,
             experiment_id=str(experiment_id),
             step_key=str(step_key),
-            topic=self.decision_topic,
-            body={
+            namespace=Namespace.SIGNALS,
+            kind="decision",
+            tag=f"{self.decision_topic}:decision",
+            payload_type="dict",
+            payload={
                 "action": action,
                 "reason": reason,
                 "e_value": e_value,
@@ -489,6 +532,4 @@ class SafeSignaler(Signaler):
                 "confidence": confidence,
                 "total_n": total_n,
             },
-            tag=f"{self.decision_topic}:decision",
-            namespace=Namespace.SIGNALS,
         )

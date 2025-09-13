@@ -2,50 +2,90 @@
 earlysign.reporting.generic
 ===========================
 
-A *scheme-agnostic* reporter that simply shows raw ledger events and
-namespace×kind counts. Scheme-specific visualization lives elsewhere.
+A scheme-agnostic reporter that shows raw ledger events and
+namespace x kind counts. Works with ibis-based ledgers.
 
 Examples
 --------
->>> from earlysign.backends.polars.ledger import PolarsLedger
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>> from earlysign.core.names import Namespace
 >>> from earlysign.reporting.generic import LedgerReporter
->>> L = PolarsLedger()
->>> L.write_event(time_index="t1", namespace=Namespace.OBS, kind="observation",
-...               experiment_id="E", step_key="s1",
-...               payload_type="Obs", payload={"x":1})
->>> rep = LedgerReporter(L.frame())
->>> tbl = rep.ledger_table(); "namespace" in tbl.columns
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> L = Ledger(conn, "test")
+>>> rep = LedgerReporter(L.raw_table.to_pandas())
+>>> isinstance(rep.ledger_table(), type(L.raw_table.to_pandas()))
 True
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
 
-import polars as pl
+from typing import Optional
+
+import warnings
+
+try:
+    import pandas as pd
+except ImportError as e:
+    raise ImportError("pandas is required for reporting functionality") from e
 
 
-@dataclass
 class LedgerReporter:
-    """Generic reporter for raw ledger frames."""
+    """
+    A generic, scheme-agnostic reporter for any experiment ledger.
+    Works with pandas DataFrames for compatibility across different backends.
+    """
 
-    df: pl.DataFrame
+    def __init__(self, df: pd.DataFrame):
+        """Initialize with a pandas DataFrame."""
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError("DataFrame must be pandas.DataFrame")
+        self.df = df
 
-    def ledger_table(self, max_rows: int = 60) -> pl.DataFrame:
-        df = self.df.sort("ts")
-        if df.height <= max_rows:
-            sample = df
-        else:
-            head_n = max_rows // 2
-            sample = pl.concat(
-                [df.head(head_n), df.tail(max_rows - head_n)], how="vertical"
-            )
-        return sample
+    def ledger_table(self) -> pd.DataFrame:
+        """Return the underlying ledger DataFrame."""
+        return self.df
 
-    def counts(self) -> pl.DataFrame:
-        return (
-            self.df.group_by(["namespace", "kind"])
-            .len()
-            .rename({"len": "count"})
-            .sort(["namespace", "kind"])
+    def unique_entities(self) -> list[str]:
+        """List all unique experiment entities."""
+        if "entity" not in self.df.columns:
+            return []
+        return sorted(self.df["entity"].dropna().unique().tolist())
+
+    def unique_namespaces(self) -> list[str]:
+        """List all unique event namespaces."""
+        if "namespace" not in self.df.columns:
+            return []
+        return sorted(self.df["namespace"].dropna().unique().tolist())
+
+    def unique_kinds(self) -> list[str]:
+        """List all unique event kinds."""
+        if "kind" not in self.df.columns:
+            return []
+        return sorted(self.df["kind"].dropna().unique().tolist())
+
+    def namespace_kind_counts(self) -> pd.DataFrame:
+        """
+        Return a pivot table of namespace x kind with event counts.
+
+        Returns
+        -------
+        pd.DataFrame
+            Rows = namespaces, Columns = kinds, Values = event counts
+        """
+        if (
+            self.df.empty
+            or "namespace" not in self.df.columns
+            or "kind" not in self.df.columns
+        ):
+            return pd.DataFrame()
+
+        counts = self.df.groupby(["namespace", "kind"]).size().reset_index(name="count")
+
+        if counts.empty:
+            return pd.DataFrame()
+
+        pivot = counts.pivot(index="namespace", columns="kind", values="count").fillna(
+            0
         )
+        return pivot.astype(int)

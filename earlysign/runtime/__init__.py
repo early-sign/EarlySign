@@ -17,11 +17,14 @@ Key Components
 Examples
 --------
 >>> # Import runtime components
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>> from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
 >>> from earlysign.runtime.runners import SequentialRunner
->>> from earlysign.backends.polars.ledger import PolarsLedger
 >>>
 >>> # Create custom template (implementation needed)
->>> # runner = SequentialRunner(custom_template, PolarsLedger())
+>>> # conn = ibis.duckdb.connect(":memory:")
+>>> # ledger = Ledger(conn, "test")
+>>> # runner = SequentialRunner(custom_template, ledger)
 >>> # result = runner.analyze()
 """

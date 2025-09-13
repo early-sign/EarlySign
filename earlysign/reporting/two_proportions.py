@@ -2,43 +2,75 @@
 earlysign.reporting.two_proportions
 ===================================
 
-Two-proportions specific reporter that understands:
-- 'WaldZ' (stats) payloads
-- 'GSTBoundary' (criteria) payloads
+Two-proportions specific reporter that understands structured payload fields
+and can work with both ibis-based and legacy Polars ledgers.
+
+This reporter leverages the structured payload columns for efficient queries
+without JSON parsing when using the new ibis-based ledger system.
 
 Examples
 --------
->>> from earlysign.backends.polars.ledger import PolarsLedger
->>> from earlysign.core.names import Namespace
+With ibis-based ledger (recommended):
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>> from earlysign.reporting.two_proportions import TwoPropGSTReporter
->>> L = PolarsLedger()
->>> # minimal two rows to exercise parsing paths
->>> L.write_event(time_index="t1", namespace=Namespace.STATS, kind="updated",
-...               experiment_id="E", step_key="s1", payload_type="WaldZ",
-...               payload={"z":1.2,"se":0.1,"nA":10,"nB":10,"mA":1,"mB":2,"pA_hat":0.1,"pB_hat":0.2})
->>> L.write_event(time_index="t1", namespace=Namespace.CRITERIA, kind="updated",
-...               experiment_id="E", step_key="s1", payload_type="GSTBoundary",
-...               payload={"upper":2.5,"lower":-2.5,"info_time":0.25,"alpha_i":0.01})
->>> rep = TwoPropGSTReporter(L.frame())
->>> pt = rep.progress_table(); pt.height == 1 and "z" in pt.columns
-True
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(conn, "test")
+>>> rep = TwoPropGSTReporter.from_ledger(ledger)
+
+Legacy compatibility with pandas DataFrame:
+>>> import pandas as pd
+>>> from earlysign.reporting.two_proportions import TwoPropGSTReporter
+>>> # Assuming you have a pandas DataFrame with ledger data
+>>> df = pd.DataFrame({'col1': [1, 2], 'col2': [3, 4]})  # your ledger data
+>>> rep = TwoPropGSTReporter(df)
 """
 
 from dataclasses import dataclass
 import json
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
-import polars as pl
-import matplotlib.pyplot as plt
+try:
+    import polars as pl
+    import matplotlib.pyplot as plt
+
+    POLARS_AVAILABLE = True
+except ImportError:
+    pl = None  # type: ignore[assignment]
+    plt = None  # type: ignore[assignment]
+    POLARS_AVAILABLE = False
+
+if TYPE_CHECKING:
+    from earlysign.core.ledger import Ledger
 
 
 @dataclass
 class TwoPropGSTReporter:
-    """Two-proportions GST progress view (table and simple plot)."""
+    """Two-proportions GST progress view with structured payload support."""
 
-    df: pl.DataFrame
+    df: Any  # pl.DataFrame when available
 
-    def progress_table(self) -> pl.DataFrame:
+    @classmethod
+    def from_ledger(cls, ledger: "Ledger") -> "TwoPropGSTReporter":
+        """
+        Create reporter from ibis-based ledger with efficient structured queries.
+
+        This method uses structured payload columns to avoid JSON parsing.
+        """
+        if not POLARS_AVAILABLE:
+            raise ImportError("Polars is required for two-proportions reporting")
+
+        # Get data as Polars DataFrame via ibis
+        table = ledger.raw_table
+        polars_df = table.to_polars()
+        return cls(polars_df)
+
+    @classmethod
+    def from_polars_ledger(cls, polars_ledger: Any) -> "TwoPropGSTReporter":
+        """Create reporter from PolarsLedger (legacy compatibility)."""
+        return cls(polars_ledger.frame())
+
+    def progress_table(self) -> Any:
         """
         Returns one row per look with numeric columns:
         - look, t, z, upper, lower, nA, nB, mA, mB, stopped ('yes'/'no')

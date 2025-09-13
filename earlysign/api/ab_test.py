@@ -11,11 +11,14 @@ Examples
 --------
 >>> from earlysign.api.ab_test import interim_analysis, guardrail_monitoring
 >>> from earlysign.runtime.runners import SequentialRunner
->>> from earlysign.backends.polars.ledger import PolarsLedger
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>>
 >>> # A/B Test with interim analysis
 >>> experiment = interim_analysis("checkout_test", alpha=0.05, looks=4)
->>> runner = SequentialRunner(experiment, PolarsLedger())
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(conn, "checkout_test")
+>>> runner = SequentialRunner(experiment, ledger)
 >>>
 >>> # Guardrail monitoring
 >>> guardrail = guardrail_monitoring("payment_safety", sensitivity="balanced")

@@ -1,5 +1,5 @@
 ---
-applyTo: "**"
+applyTo: "earlysign/**"
 ---
 
 # 🏗️ EarlySign Design Principles

@@ -5,13 +5,45 @@ earlysign.runtime.experiment_template
 Base classes and infrastructure for experiment templates.
 
 This module provides the foundational building blocks for creating portable,
-reusable experiment definitions that can work with any backend.
+reusable experiment templates.
+
+Examples
+--------
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
+>>> from earlysign.runtime.experiment_template import ExperimentTemplate
+>>>
+>>> # Example template implementation (inherit from ExperimentTemplate)
+>>> class MyTemplate(ExperimentTemplate):
+...     def analyze(self, ledger):
+...         # Your analysis logic here
+...         return {"result": "example"}
+...     def _populate_batch(self, ledger, batch_data):
+...         # Required abstract method implementation
+...         pass
+...     def configure_components(self):
+...         # Required abstract method implementation
+...         return {}
+...     def extract_results(self, results):
+...         # Required abstract method implementation
+...         return results
+...     def register_design(self, ledger):
+...         # Required abstract method implementation
+...         pass
+>>>
+>>> template = MyTemplate("my_experiment")
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(conn, "test")
+>>> template.setup(ledger)
+>>> template._is_setup
+True
 
 Examples
 --------
 >>> from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
->>> from earlysign.backends.polars.ledger import PolarsLedger
 >>> from earlysign.core.components import Observation
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>>
 >>> class MyTemplate(ExperimentTemplate):
 ...     def configure_components(self): return {"ingestor": Observation()}
@@ -20,7 +52,11 @@ Examples
 ...     def _populate_batch(self, batch, **kwargs): pass
 >>>
 >>> template = MyTemplate("test")
->>> template.setup(PolarsLedger())
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(conn, "test")
+>>> template.setup(ledger)
+>>> template._is_setup
+True
 """
 
 from __future__ import annotations

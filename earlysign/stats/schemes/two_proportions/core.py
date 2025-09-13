@@ -16,12 +16,14 @@ and complete audit trails for regulatory compliance.
 
 Examples
 --------
->>> from earlysign.backends.polars.ledger import PolarsLedger
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>> from earlysign.stats.schemes.two_proportions.core import TwoPropObservation, ObservationBatch
 >>>
 >>> # Create observation component
 >>> observation = TwoPropObservation()
->>> ledger = PolarsLedger()
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(conn, "test")
 >>>
 >>> # Create and populate a batch
 >>> batch = ObservationBatch()
@@ -40,8 +42,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Union, Tuple, TypedDict
 
-from earlysign.core.components import Observation
-from earlysign.core.ledger import Ledger
+from earlysign.core.components import Observer
+from earlysign.core.ledger import Ledger, PayloadTypeRegistry, PayloadType
 from earlysign.core.names import ExperimentId, StepKey, TimeIndex, Namespace
 
 
@@ -208,7 +210,7 @@ class ObservationBatch:
 
 
 @dataclass(kw_only=True)
-class TwoPropObservation(Observation):
+class TwoPropObservation(Observer):
     """
     Data observation component for two-proportions experiments.
 
@@ -398,12 +400,12 @@ def reduce_counts(ledger: Ledger, *, experiment_id: str) -> Tuple[int, int, int,
 
     Examples
     --------
-    >>> from earlysign.backends.polars.ledger import PolarsLedger
+    >>> import ibis
+    >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.core.names import Namespace
     >>> from earlysign.stats.schemes.two_proportions.core import TwoPropObsBatch
-    >>> from earlysign.core.ledger import PayloadRegistry
-    >>> PayloadRegistry.register("TwoPropObsBatch", lambda d: TwoPropObsBatch(**d))
-    >>> L = PolarsLedger()
+    >>> conn = ibis.duckdb.connect(":memory:")
+    >>> L = Ledger(conn, "test")
     >>> L.write_event(time_index="t1", namespace=Namespace.OBS, kind="observation",
     ...               experiment_id="exp#1", step_key="s1",
     ...               payload_type="TwoPropObsBatch", payload={"nA":5,"nB":6,"mA":1,"mB":0})
@@ -411,24 +413,93 @@ def reduce_counts(ledger: Ledger, *, experiment_id: str) -> Tuple[int, int, int,
     (5, 6, 1, 0)
     """
     nA = nB = mA = mB = 0
-    for row in ledger.reader().iter_rows(namespace=Namespace.OBS, entity=experiment_id):
-        p = row.payload
-        # Handle both dict payload and decoded TwoPropObsBatch objects
-        if (
-            hasattr(p, "nA")
-            and hasattr(p, "nB")
-            and hasattr(p, "mA")
-            and hasattr(p, "mB")
-        ):
-            # TwoPropObsBatch object
-            nA += int(p.nA)
-            nB += int(p.nB)
-            mA += int(p.mA)
-            mB += int(p.mB)
-        elif isinstance(p, dict) and {"nA", "nB", "mA", "mB"} <= set(p.keys()):
-            # dict payload
-            nA += int(p["nA"])
-            nB += int(p["nB"])
-            mA += int(p["mA"])
-            mB += int(p["mB"])
+
+    # Iterate through all rows in the OBS namespace and filter by experiment_id prefix
+    # Use ibis directly for querying observations
+    obs_data = ledger.table.filter(
+        ledger.table.namespace == str(Namespace.OBS)
+    ).execute()
+
+    for _, row in obs_data.iterrows():
+        payload = ledger.unwrap_payload(row["payload_type"], row["payload"])
+        # Check if this row belongs to our experiment (entity starts with experiment_id#)
+        if row["entity"].startswith(f"{experiment_id}#"):
+            p = payload
+            # Handle both dict payload and decoded TwoPropObsBatch objects
+            if (
+                hasattr(p, "nA")
+                and hasattr(p, "nB")
+                and hasattr(p, "mA")
+                and hasattr(p, "mB")
+            ):
+                # TwoPropObsBatch object
+                nA += int(p.nA)
+                nB += int(p.nB)
+                mA += int(p.mA)
+                mB += int(p.mB)
+            elif isinstance(p, dict) and {"nA", "nB", "mA", "mB"} <= set(p.keys()):
+                # dict payload
+                nA += int(p["nA"])
+                nB += int(p["nB"])
+                mA += int(p["mA"])
+                mB += int(p["mB"])
     return nA, nB, mA, mB
+
+
+# Register payload encoders/decoders for two-proportions types
+def _register_two_prop_payloads() -> None:
+    """Register two-proportions payload types for efficient structured queries."""
+
+    # TwoPropObsBatch handler
+    class TwoPropObsBatchHandler(PayloadType):
+        def wrap(self, data: Union[TwoPropObsBatch, Dict[str, Any]]) -> str:
+            if isinstance(data, dict):
+                payload = {
+                    "nA": data["nA"],
+                    "nB": data["nB"],
+                    "mA": data["mA"],
+                    "mB": data["mB"],
+                }
+            else:
+                payload = {
+                    "nA": data.nA,
+                    "nB": data.nB,
+                    "mA": data.mA,
+                    "mB": data.mB,
+                }
+            return PayloadTypeRegistry._default_handler.wrap(payload)
+
+        def unwrap(self, json_str: str) -> TwoPropObsBatch:
+            payload = PayloadTypeRegistry._default_handler.unwrap(json_str)
+            return TwoPropObsBatch(
+                nA=payload["nA"],
+                nB=payload["nB"],
+                mA=payload["mA"],
+                mB=payload["mB"],
+            )
+
+    PayloadTypeRegistry.register("TwoPropObsBatch", TwoPropObsBatchHandler())
+
+    # WaldZ payload handler
+    class WaldZPayloadHandler(PayloadType):
+        def wrap(self, data: Union[WaldZPayload, Dict[str, Any]]) -> str:
+            return PayloadTypeRegistry._default_handler.wrap(dict(data))
+
+        def unwrap(self, json_str: str) -> WaldZPayload:
+            payload = PayloadTypeRegistry._default_handler.unwrap(json_str)
+            return WaldZPayload(
+                z=payload["z"],
+                se=payload["se"],
+                nA=payload["nA"],
+                nB=payload["nB"],
+                mA=payload["mA"],
+                mB=payload["mB"],
+                pA_hat=payload["pA_hat"],
+                pB_hat=payload["pB_hat"],
+            )
+
+    PayloadTypeRegistry.register("WaldZPayload", WaldZPayloadHandler())
+
+
+# Auto-register payload types
+_register_two_prop_payloads()

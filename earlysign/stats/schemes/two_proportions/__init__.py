@@ -20,13 +20,15 @@ Core Infrastructure
 
 Example Usage
 -------------
->>> from earlysign.backends.polars.ledger import PolarsLedger
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>> from earlysign.stats.schemes.two_proportions.experiments import TwoPropGSTTemplate
 >>> from earlysign.stats.schemes.two_proportions.core import ObservationBatch
 >>>
 >>> # Create GST experiment
 >>> experiment = TwoPropGSTTemplate("my_ab_test", alpha_total=0.05, looks=4)
->>> ledger = PolarsLedger()
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(conn, "test")
 >>> experiment.setup(ledger)
 >>>
 >>> # Create observation batch

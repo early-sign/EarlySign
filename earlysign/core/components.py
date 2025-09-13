@@ -2,111 +2,203 @@
 earlysign.core.components
 =========================
 
-Thin base classes for components that *write to* and *read from* the ledger.
+Clean base classes for components that write to and read from the ledger.
 
-They only centralize **namespace/tag conventions** so all concrete implementations
-stay consistent. Concrete classes must implement `step()`.
+Instead of using mixins/traits, these components work directly with
+the Ledger class and use ibis expressions for querying. This provides
+better separation of concerns and leverages ibis-framework's capabilities.
 
 Component Types:
 - `Statistic`: Compute and register statistical values from observations
 - `Criteria`: Compute and register boundaries, thresholds, or critical values
 - `Signaler`: Emit stop/continue decisions based on statistics and criteria
 - `Recommender`: Emit recommendations or guidance (optional)
-- `Observation`: Validate, transform, and register raw observations
+- `Observer`: Validate, transform, and register raw observations
 
 Examples
 --------
->>> from earlysign.core.traits import LedgerOps
->>> from earlysign.core.ledger import Row, LedgerReader
+>>> from earlysign.core.ledger import Ledger, create_test_connection
 >>> from earlysign.core.names import Namespace
->>> class Host(LedgerOps):
-...   def __init__(self): self.rows=[]
-...   def append(self, **kw):
-...     self.rows.append(Row(uuid="u", time_index=kw["time_index"], ts=kw["ts"],
-...       namespace=str(kw["namespace"]), kind=kw["kind"], entity=kw["entity"],
-...       snapshot_id=kw["snapshot_id"], tag=kw.get("tag"),
-...       payload_type=kw["payload_type"], payload=kw["payload"]))
-...     return self
-...   def emit_signal(self, **kw):
-...     return self.append(time_index=kw["time_index"], ts=kw["ts"],
-...       namespace=kw.get("namespace", Namespace.SIGNALS.value), kind=kw.get("kind","emitted"),
-...       entity=kw["entity"], snapshot_id=kw["snapshot_id"],
-...       payload_type="Signal", payload={"topic": kw["topic"], "body": kw["body"]},
-...       tag=kw.get("tag","signal"))
-...   class R(LedgerReader):
-...     def __init__(self, host): self.h=host
-...     def iter_rows(self, **f): return iter(self.h.rows)
-...     def latest(self, **f): return self.h.rows[-1] if self.h.rows else None
-...     def count(self, **f): return len(self.h.rows)
-...   def reader(self): return Host.R(self)
+>>>
+>>> conn = create_test_connection("duckdb")
+>>> ledger = Ledger(conn, "test")
+>>>
 >>> class DummyStat(Statistic):
-...   def step(self, ledger, experiment_id, step_key, time_index):
-...     ledger.write_event(time_index=time_index, namespace=self.ns_stats, kind="updated",
-...                        experiment_id=experiment_id, step_key=step_key,
-...                        payload_type="Stat", payload={"v":1}, tag=self.tag_stats)
->>> host = Host(); DummyStat().step(host, "exp#1", "s1", "t1"); host.reader().count()
-1
+...     def step(self, ledger, experiment_id, step_key, time_index):
+...         # Direct ibis querying for observations
+...         obs_count = (ledger.table
+...                     .filter(ledger.table.namespace == str(self.ns_stats))
+...                     .filter(ledger.table.entity.contains(str(experiment_id)))
+...                     .count()
+...                     .execute())
+...
+...         # Write computed statistic
+...         ledger.write_event(
+...             time_index=time_index,
+...             namespace=self.ns_stats,
+...             kind="updated",
+...             experiment_id=experiment_id,
+...             step_key=step_key,
+...             payload_type="StatValue",
+...             payload={"obs_count": obs_count}
+...         )
+...
+>>> stat = DummyStat()
+>>> stat.step(ledger, "exp1", "step1", "t1")
 """
 
 from __future__ import annotations
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Any, Dict, Union, Optional, TYPE_CHECKING
 
-from earlysign.core.names import Namespace
-from earlysign.core.ledger import NamespaceLike
+from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
+
+# Type aliases
+NamespaceLike = Union[Namespace, str]
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
 
 
+class ComponentBase(ABC):
+    """
+    Base class for all ledger components.
+
+    Provides namespace conventions and requires subclasses to implement step().
+    Components work directly with Ledger instances and use ibis for querying.
+    """
+
+    @abstractmethod
+    def step(
+        self,
+        ledger: "Ledger",
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
+    ) -> None:
+        """
+        Execute this component's logic for a given experiment step.
+
+        Components should use ibis expressions on ledger.table for queries
+        and ledger.write_event() for recording results.
+        """
+        pass
+
+
 @dataclass(kw_only=True)
-class Statistic:
-    """Base class for statistics updaters."""
+class Statistic(ComponentBase):
+    """
+    Base class for statistics updaters.
+
+    Statistics read observations and compute statistical values,
+    which they then write back to the ledger for use by other components.
+    """
 
     ns_stats: NamespaceLike = Namespace.STATS
-    tag_stats: Optional[str] = "stat:generic"
+    tag_stats: str = "stat:generic"
 
     def step(
-        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+        self,
+        ledger: "Ledger",
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
     ) -> None:
-        raise NotImplementedError
+        """Override this method to implement statistic computation."""
+        raise NotImplementedError("Subclasses must implement step()")
 
 
 @dataclass(kw_only=True)
-class Criteria:
-    """Base class for criteria/boundary updaters."""
+class Criteria(ComponentBase):
+    """
+    Base class for criteria/boundary updaters.
+
+    Criteria components compute decision boundaries, thresholds, or
+    critical values based on current statistics and experimental design.
+    """
 
     ns_crit: NamespaceLike = Namespace.CRITERIA
-    tag_crit: Optional[str] = "crit:generic"
+    tag_crit: str = "crit:generic"
 
     def step(
-        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+        self,
+        ledger: "Ledger",
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
     ) -> None:
-        raise NotImplementedError
+        """Override this method to implement criteria computation."""
+        raise NotImplementedError("Subclasses must implement step()")
 
 
 @dataclass(kw_only=True)
-class Signaler:
-    """Base class for signal emitters (e.g., stop/continue)."""
+class Signaler(ComponentBase):
+    """
+    Base class for signal emitters (e.g., stop/continue decisions).
+
+    Signalers compare statistics to criteria and emit actionable signals
+    about whether to continue, stop, or take other actions.
+    """
 
     ns_sig: NamespaceLike = Namespace.SIGNALS
+    tag_sig: str = "signal:generic"
 
     def step(
-        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+        self,
+        ledger: "Ledger",
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
     ) -> None:
-        raise NotImplementedError
+        """Override this method to implement signaling logic."""
+        raise NotImplementedError("Subclasses must implement step()")
 
 
 @dataclass(kw_only=True)
-class Recommender:
-    """Base class for recommendation emitters (optional)."""
+class Recommender(ComponentBase):
+    """
+    Base class for recommendation emitters.
 
-    ns_sig: NamespaceLike = Namespace.SIGNALS
+    Recommenders provide higher-level guidance based on experimental
+    results and can suggest next actions or parameter adjustments.
+    """
+
+    ns_rec: NamespaceLike = Namespace.SIGNALS  # Often use same namespace as signals
+    tag_rec: str = "recommendation:generic"
 
     def step(
-        self, ledger: Ledger, experiment_id: str, step_key: str, time_index: str
+        self,
+        ledger: "Ledger",
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
     ) -> None:
-        raise NotImplementedError
+        """Override this method to implement recommendation logic."""
+        raise NotImplementedError("Subclasses must implement step()")
+
+
+@dataclass(kw_only=True)
+class Observer(ComponentBase):
+    """
+    Base class for observation validators/transformers.
+
+    Observers validate, clean, and transform raw observations before
+    they are processed by statistical components.
+    """
+
+    ns_obs: NamespaceLike = Namespace.OBS
+    tag_obs: str = "obs:generic"
+
+    def step(
+        self,
+        ledger: "Ledger",
+        experiment_id: Union[ExperimentId, str],
+        step_key: Union[StepKey, str],
+        time_index: Union[TimeIndex, str],
+    ) -> None:
+        """Override this method to implement observation processing."""
+        raise NotImplementedError("Subclasses must implement step()")
 
 
 @dataclass(kw_only=True)

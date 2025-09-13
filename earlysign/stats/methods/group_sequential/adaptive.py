@@ -263,16 +263,25 @@ class AdaptiveGSTBoundary(Criteria):
         This is a simplified implementation that would need to be enhanced
         to properly aggregate observation batches.
         """
-        # Get latest observation
-        latest_obs = ledger.latest(namespace=Namespace.OBS, experiment_id=experiment_id)
+        # Get latest observation using ibis query
+        latest_query = (
+            ledger.table.filter(
+                (ledger.table.namespace == str(Namespace.OBS))
+                & (ledger.table.experiment_id == experiment_id)
+            )
+            .order_by(ledger.table.time_index.desc())
+            .limit(1)
+        )
+        latest_results = latest_query.execute()
 
-        if latest_obs and latest_obs.payload:
-            # Extract sample size from observation payload
-            payload = latest_obs.payload
-            if isinstance(payload, dict):
-                n_a = payload.get("nA", 0)
-                n_b = payload.get("nB", 0)
-                return int(n_a + n_b)
+        if not latest_results.empty:
+            latest_records = ledger.unwrap_results(latest_results)
+            if latest_records:
+                payload = latest_records[0]["payload"]
+                if isinstance(payload, dict):
+                    n_a = payload.get("nA", 0)
+                    n_b = payload.get("nB", 0)
+                    return int(n_a + n_b)
 
         # Fallback
         return 500

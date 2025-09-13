@@ -22,12 +22,14 @@ result extraction while maintaining complete event-sourcing audit trails.
 
 Examples
 --------
->>> from earlysign.backends.polars.ledger import PolarsLedger
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
 >>> from earlysign.stats.schemes.two_proportions.experiments import TwoPropGSTTemplate
 
 GST experiment:
 >>> gst_exp = TwoPropGSTTemplate("test_gst", alpha_total=0.05, looks=4)
->>> ledger = PolarsLedger()
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(conn, "test_gst")
 >>> gst_exp.setup(ledger)
 >>> # Add observations and run analysis steps...
 
@@ -113,17 +115,43 @@ class TwoPropTemplate(ExperimentTemplate):
         )
 
         if self._is_setup and self.ledger:
-            # Add observation counts
-            obs_events = list(
-                self.ledger.iter_ns(
-                    namespace=Namespace.OBS, experiment_id=self.experiment_id
-                )
+            # Add observation counts using ibis aggregations
+            obs_table = self.ledger.table.filter(
+                (self.ledger.table.namespace == str(Namespace.OBS))
+                & (self.ledger.table.experiment_id == self.experiment_id)
+                & (self.ledger.table.payload_type == "TwoPropObsBatch")
             )
 
-            total_nA = sum(event.payload.get("nA", 0) for event in obs_events)
-            total_nB = sum(event.payload.get("nB", 0) for event in obs_events)
-            total_mA = sum(event.payload.get("mA", 0) for event in obs_events)
-            total_mB = sum(event.payload.get("mB", 0) for event in obs_events)
+            # Use ibis to sum the JSON-extracted values directly in the query
+            aggregated = (
+                obs_table.aggregate(
+                    [
+                        obs_table.payload.json_extract_path("$.nA")
+                        .cast("int")
+                        .sum()
+                        .name("total_nA"),
+                        obs_table.payload.json_extract_path("$.nB")
+                        .cast("int")
+                        .sum()
+                        .name("total_nB"),
+                        obs_table.payload.json_extract_path("$.mA")
+                        .cast("int")
+                        .sum()
+                        .name("total_mA"),
+                        obs_table.payload.json_extract_path("$.mB")
+                        .cast("int")
+                        .sum()
+                        .name("total_mB"),
+                    ]
+                )
+                .execute()
+                .iloc[0]
+            )
+
+            total_nA = aggregated["total_nA"] or 0
+            total_nB = aggregated["total_nB"] or 0
+            total_mA = aggregated["total_mA"] or 0
+            total_mB = aggregated["total_mB"] or 0
 
             summary.update(
                 {
@@ -221,49 +249,79 @@ class TwoPropGSTTemplate(TwoPropTemplate):
     def extract_results(self, ledger: Ledger) -> AnalysisResult:
         """Extract GST analysis results."""
         # Get the latest signal event
-        signal_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.SIGNALS, experiment_id=str(self.experiment_id)
-            )
-        )
+        signal_query = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.SIGNALS))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+        ).order_by(ledger.table.time_index.desc())
+        signal_results = signal_query.execute()
+        signal_events = ledger.unwrap_results(signal_results)
 
         if not signal_events:
             raise ValueError("No signal events found")
 
         latest_signal = signal_events[-1]
-        should_stop = latest_signal.payload.get("action") == "stop"
+        should_stop = latest_signal["payload"].get("action") == "stop"
 
         # Get corresponding statistic and criteria events
-        statistic_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.STATS, experiment_id=str(self.experiment_id)
-            )
-        )
-        criteria_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.CRITERIA, experiment_id=str(self.experiment_id)
-            )
-        )
+        stats_query = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.STATS))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+        ).order_by(ledger.table.time_index.desc())
+        stats_results = stats_query.execute()
+        statistic_events = ledger.unwrap_results(stats_results)
+
+        criteria_query = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.CRITERIA))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+        ).order_by(ledger.table.time_index.desc())
+        criteria_results = criteria_query.execute()
+        criteria_events = ledger.unwrap_results(criteria_results)
 
         latest_stat = statistic_events[-1] if statistic_events else None
         latest_criteria = criteria_events[-1] if criteria_events else None
 
-        statistic_value = latest_stat.payload.get("z", 0.0) if latest_stat else 0.0
+        statistic_value = latest_stat["payload"].get("z", 0.0) if latest_stat else 0.0
         threshold_value = (
-            latest_criteria.payload.get("upper", None) if latest_criteria else None
+            latest_criteria["payload"].get("upper", None) if latest_criteria else None
         )
 
-        # Calculate sample proportions from observations
-        obs_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.OBS, experiment_id=str(self.experiment_id)
+        # Calculate sample proportions from observations using ibis aggregations
+        obs_table = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.OBS))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.payload_type == "TwoPropObsBatch")
+        )
+
+        # Use ibis to sum the JSON-extracted values directly in the query
+        aggregated = (
+            obs_table.aggregate(
+                [
+                    obs_table.payload.json_extract_path("$.nA")
+                    .cast("int")
+                    .sum()
+                    .name("total_nA"),
+                    obs_table.payload.json_extract_path("$.nB")
+                    .cast("int")
+                    .sum()
+                    .name("total_nB"),
+                    obs_table.payload.json_extract_path("$.mA")
+                    .cast("int")
+                    .sum()
+                    .name("total_mA"),
+                    obs_table.payload.json_extract_path("$.mB")
+                    .cast("int")
+                    .sum()
+                    .name("total_mB"),
+                ]
             )
+            .execute()
+            .iloc[0]
         )
 
-        total_nA = sum(event.payload.get("nA", 0) for event in obs_events)
-        total_nB = sum(event.payload.get("nB", 0) for event in obs_events)
-        total_mA = sum(event.payload.get("mA", 0) for event in obs_events)
-        total_mB = sum(event.payload.get("mB", 0) for event in obs_events)
+        total_nA = aggregated["total_nA"] or 0
+        total_nB = aggregated["total_nB"] or 0
+        total_mA = aggregated["total_mA"] or 0
+        total_mB = aggregated["total_mB"] or 0
 
         return AnalysisResult(
             should_stop=should_stop,
@@ -275,12 +333,12 @@ class TwoPropGSTTemplate(TwoPropTemplate):
             total_sample_size=total_nA + total_nB,
             additional_metrics={
                 "z_statistic": statistic_value,
-                "se": latest_stat.payload.get("se", 0.0) if latest_stat else 0.0,
+                "se": latest_stat["payload"].get("se", 0.0) if latest_stat else 0.0,
                 "spending_function": self.spending_function,
                 "looks_completed": len(signal_events),
                 "total_looks": self.looks,
                 "info_fraction": (
-                    latest_criteria.payload.get("info_time", 0.0)
+                    latest_criteria["payload"].get("info_time", 0.0)
                     if latest_criteria
                     else 0.0
                 ),
@@ -362,49 +420,81 @@ class TwoPropSafeTemplate(TwoPropTemplate):
     def extract_results(self, ledger: Ledger) -> AnalysisResult:
         """Extract Safe Testing analysis results."""
         # Get the latest signal event
-        signal_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.SIGNALS, experiment_id=str(self.experiment_id)
-            )
-        )
+        signal_query = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.SIGNALS))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+        ).order_by(ledger.table.time_index.desc())
+        signal_results = signal_query.execute()
+        signal_events = ledger.unwrap_results(signal_results)
 
         if not signal_events:
             raise ValueError("No signal events found")
 
         latest_signal = signal_events[-1]
-        should_stop = latest_signal.payload.get("action") == "stop"
+        should_stop = latest_signal["payload"].get("action") == "stop"
 
         # Get corresponding statistic and criteria events
-        statistic_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.STATS, experiment_id=str(self.experiment_id)
-            )
-        )
-        criteria_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.CRITERIA, experiment_id=str(self.experiment_id)
-            )
-        )
+        stats_query = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.STATS))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+        ).order_by(ledger.table.time_index.desc())
+        stats_results = stats_query.execute()
+        statistic_events = ledger.unwrap_results(stats_results)
+
+        criteria_query = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.CRITERIA))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+        ).order_by(ledger.table.time_index.desc())
+        criteria_results = criteria_query.execute()
+        criteria_events = ledger.unwrap_results(criteria_results)
 
         latest_stat = statistic_events[-1] if statistic_events else None
         latest_criteria = criteria_events[-1] if criteria_events else None
 
-        e_value = latest_stat.payload.get("e_value", 1.0) if latest_stat else 1.0
+        e_value = latest_stat["payload"].get("e_value", 1.0) if latest_stat else 1.0
         threshold_value = (
-            latest_criteria.payload.get("threshold", None) if latest_criteria else None
+            latest_criteria["payload"].get("threshold", None)
+            if latest_criteria
+            else None
         )
 
-        # Calculate sample proportions from observations
-        obs_events = list(
-            ledger.iter_ns(
-                namespace=Namespace.OBS, experiment_id=str(self.experiment_id)
+        # Calculate sample proportions from observations using ibis aggregations
+        obs_table = ledger.table.filter(
+            (ledger.table.namespace == str(Namespace.OBS))
+            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.payload_type == "TwoPropObsBatch")
+        )
+
+        # Use ibis to sum the JSON-extracted values directly in the query
+        aggregated = (
+            obs_table.aggregate(
+                [
+                    obs_table.payload.json_extract_path("$.nA")
+                    .cast("int")
+                    .sum()
+                    .name("total_nA"),
+                    obs_table.payload.json_extract_path("$.nB")
+                    .cast("int")
+                    .sum()
+                    .name("total_nB"),
+                    obs_table.payload.json_extract_path("$.mA")
+                    .cast("int")
+                    .sum()
+                    .name("total_mA"),
+                    obs_table.payload.json_extract_path("$.mB")
+                    .cast("int")
+                    .sum()
+                    .name("total_mB"),
+                ]
             )
+            .execute()
+            .iloc[0]
         )
 
-        total_nA = sum(event.payload.get("nA", 0) for event in obs_events)
-        total_nB = sum(event.payload.get("nB", 0) for event in obs_events)
-        total_mA = sum(event.payload.get("mA", 0) for event in obs_events)
-        total_mB = sum(event.payload.get("mB", 0) for event in obs_events)
+        total_nA = aggregated["total_nA"] or 0
+        total_nB = aggregated["total_nB"] or 0
+        total_mA = aggregated["total_mA"] or 0
+        total_mB = aggregated["total_mB"] or 0
 
         return AnalysisResult(
             should_stop=should_stop,
