@@ -2,6 +2,14 @@
 applyTo: "**"
 ---
 
+# TL;DR
+- `make format` to auto-format code, and then `make check` to run all sanity checks (lints, tests, and type checks).
+- Main architectural decisions:
+  - `event-sourcing` to accommodate existing complex sequential procedures and ones that we are yet to see. We call the event-source a `ledger`.
+    - For example, we separate the statistic calculation and the criteria to turn the statsitical value into signals or decisions. We can pass the values and other info via writing to and reading from the ledger.
+    - Multiple ledger operators (e.g., observation, statistic, criteria, signal, other kinds of messages) are coordinated to form a statsitical method.
+  - We rely on `ibis-framework` to enable efficient and consistent data-handling. The modules that operate on the ledger can leverage the features of `ibis`.
+
 # Development
 - Whenever you run a terminal command and the output seems empty, you should absolutely always autonomously check out "terminalLastCommand" to fetch the results. Sometimes you need to wait for a few seconds and check again. Keep in mind that VSCode GitHub copilot extension (the platform you are working in) seems to have issues with the integrated terminal connection. Therefore, you need the above workaround.
 - This repository uses `make` to organize workspace tasks. For the details, see the Makefile.
