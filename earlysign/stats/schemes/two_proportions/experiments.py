@@ -118,26 +118,26 @@ class TwoPropTemplate(ExperimentTemplate):
             # Add observation counts using ibis aggregations
             obs_table = self.ledger.table.filter(
                 (self.ledger.table.namespace == str(Namespace.OBS))
-                & (self.ledger.table.experiment_id == self.experiment_id)
+                & (self.ledger.table.entity.startswith(str(self.experiment_id) + "#"))
                 & (self.ledger.table.payload_type == "TwoPropObsBatch")
             )
 
             # Use ibis to sum the JSON-extracted values directly in the query
-            aggregated = (
-                obs_table.select(
-                    total_nA=obs_table.payload["nA"].int.sum(),
-                    total_nB=obs_table.payload["nB"].int.sum(),
-                    total_mA=obs_table.payload["mA"].int.sum(),
-                    total_mB=obs_table.payload["mB"].int.sum(),
-                )
-                .execute()
-                .iloc[0]
-            )
+            result_df = obs_table.select(
+                total_nA=obs_table.payload["nA"].int.sum(),
+                total_nB=obs_table.payload["nB"].int.sum(),
+                total_mA=obs_table.payload["mA"].int.sum(),
+                total_mB=obs_table.payload["mB"].int.sum(),
+            ).execute()
 
-            total_nA = aggregated["total_nA"] or 0
-            total_nB = aggregated["total_nB"] or 0
-            total_mA = aggregated["total_mA"] or 0
-            total_mB = aggregated["total_mB"] or 0
+            if len(result_df) > 0:
+                aggregated = result_df.iloc[0]
+                total_nA = aggregated["total_nA"] or 0
+                total_nB = aggregated["total_nB"] or 0
+                total_mA = aggregated["total_mA"] or 0
+                total_mB = aggregated["total_mB"] or 0
+            else:
+                total_nA = total_nB = total_mA = total_mB = 0
 
             summary.update(
                 {
@@ -237,7 +237,7 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         # Get the latest signal event
         signal_query = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.SIGNALS))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
         ).order_by(ledger.table.time_index.desc())
         signal_results = signal_query.execute()
         signal_events = ledger.unwrap_results(signal_results)
@@ -251,14 +251,14 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         # Get corresponding statistic and criteria events
         stats_query = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.STATS))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
         ).order_by(ledger.table.time_index.desc())
         stats_results = stats_query.execute()
         statistic_events = ledger.unwrap_results(stats_results)
 
         criteria_query = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.CRITERIA))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
         ).order_by(ledger.table.time_index.desc())
         criteria_results = criteria_query.execute()
         criteria_events = ledger.unwrap_results(criteria_results)
@@ -274,7 +274,7 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         # Calculate sample proportions from observations using ibis aggregations
         obs_table = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.OBS))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
             & (ledger.table.payload_type == "TwoPropObsBatch")
         )
 
@@ -394,7 +394,7 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         # Get the latest signal event
         signal_query = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.SIGNALS))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
         ).order_by(ledger.table.time_index.desc())
         signal_results = signal_query.execute()
         signal_events = ledger.unwrap_results(signal_results)
@@ -408,14 +408,14 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         # Get corresponding statistic and criteria events
         stats_query = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.STATS))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
         ).order_by(ledger.table.time_index.desc())
         stats_results = stats_query.execute()
         statistic_events = ledger.unwrap_results(stats_results)
 
         criteria_query = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.CRITERIA))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
         ).order_by(ledger.table.time_index.desc())
         criteria_results = criteria_query.execute()
         criteria_events = ledger.unwrap_results(criteria_results)
@@ -433,7 +433,7 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         # Calculate sample proportions from observations using ibis aggregations
         obs_table = ledger.table.filter(
             (ledger.table.namespace == str(Namespace.OBS))
-            & (ledger.table.experiment_id == str(self.experiment_id))
+            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
             & (ledger.table.payload_type == "TwoPropObsBatch")
         )
 

@@ -144,7 +144,7 @@ class ExperimentTemplate(ABC):
         self._is_setup = True
 
     def add_observations(self, **kwargs: Any) -> None:
-        """Add observations using the configured ingestor."""
+        """Add observations using the configured observation component."""
         if not self._is_setup or self.ledger is None:
             raise RuntimeError("Template not setup. Call setup(ledger) first.")
 
@@ -152,15 +152,15 @@ class ExperimentTemplate(ABC):
         time_index = f"t{self._current_look}"
         step_key = f"look-{self._current_look}"
 
-        # Use the configured ingestor
-        ingestor = self.components["ingestor"]
-        batch = ingestor.create_batch()
+        # Use the configured observation component
+        observer = self.components["observation"]
+        batch = observer.create_batch()
 
         # Let subclasses handle the specific observation format
         self._populate_batch(batch, **kwargs)
 
         # Register the batch
-        success = ingestor.register_batch(
+        success = observer.register_batch(
             self.ledger, self.experiment_id, step_key, time_index, batch
         )
 

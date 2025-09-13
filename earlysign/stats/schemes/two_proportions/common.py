@@ -373,7 +373,7 @@ def reduce_counts(
     """
     # Base query for observation events
     obs_filter = (ledger.table.namespace == str(Namespace.OBS)) & (
-        ledger.table.experiment_id == str(experiment_id)
+        ledger.table.entity.startswith(str(experiment_id) + "#")
     )
 
     # Add step key filter if specified
@@ -420,9 +420,9 @@ def get_latest_statistic(
         ledger.table.filter(
             (ledger.table.namespace == str(Namespace.STATS))
             & (ledger.table.tag == stat_tag)
-            & (ledger.table.experiment_id == str(experiment_id))
+            & (ledger.table.entity.startswith(str(experiment_id) + "#"))
         )
-        .order_by(ledger.table.timestamp.desc())
+        .order_by(ledger.table.ts.desc())
         .limit(1)
     )
 
@@ -453,9 +453,9 @@ def get_latest_criteria(
         ledger.table.filter(
             (ledger.table.namespace == str(Namespace.CRITERIA))
             & (ledger.table.tag == criteria_tag)
-            & (ledger.table.experiment_id == str(experiment_id))
+            & (ledger.table.entity.startswith(str(experiment_id) + "#"))
         )
-        .order_by(ledger.table.timestamp.desc())
+        .order_by(ledger.table.ts.desc())
         .limit(1)
     )
 

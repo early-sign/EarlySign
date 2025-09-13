@@ -42,6 +42,7 @@ sphinx-intl = "^2.3.2"
 babel = "^2.17.0"
 sphinx-autoapi = "^3.6.0"
 ibis-framework = {extras = ["duckdb", "polars"], version = "^10.8.0"}
+pytest-notebook = "^0.10.0"
 
 [tool.poetry.group.ci.dependencies]
 pytest = "^8.4.1"
@@ -71,10 +72,14 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--import-mode=importlib --doctest-modules --pyargs -v"
+# --nb-test-files is run the notebooks that do not follow the test naming convention: `test_*.ipynb`.
+addopts = "--import-mode=importlib --doctest-modules --pyargs -v --nb-test-files"
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
-testpaths = ["earlysign"]
-norecursedirs = ["docs"]
+testpaths = ["earlysign", "docs/source"]
+norecursedirs = ["docs/_build"]
+ignore = []
+# This tells pytest-notebook to test that the jupyter-notebook executions will not stop with an error (and not comparing the results with the expectation).
+nb_diff_ignore = ["/cells/*/outputs"]
 
 #==== CI ====#
 [build-system]

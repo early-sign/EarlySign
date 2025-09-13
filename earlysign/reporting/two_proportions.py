@@ -47,7 +47,7 @@ class TwoPropGSTReporter:
 
         # Query statistics data (WaldZ) using ibis
         stats_filtered = table.filter(
-            (table.namespace == "stats")
+            (table.namespace == "Namespace.STATS")
             & (table.kind == "updated")
             & (table.payload_type == "WaldZ")
         )
@@ -57,8 +57,12 @@ class TwoPropGSTReporter:
             table.time_index,
             table.ts,
             table.entity,
-            # Extract look number from time_index (remove 't' prefix)
-            table.time_index.substr(2).cast("int64").name("look"),
+            # Extract look number from time_index (remove 't' prefix), handle empty strings
+            table.time_index.substr(2)
+            .nullif("")
+            .coalesce("0")
+            .cast("int64")
+            .name("look"),
             # Extract values from JSON payload using elegant syntax
             z=table.payload["z"].cast("float64"),
             nA=table.payload["nA"].cast("int64"),
@@ -69,7 +73,7 @@ class TwoPropGSTReporter:
 
         # Query criteria data (GSTBoundary) using ibis
         crit_filtered = table.filter(
-            (table.namespace == "criteria")
+            (table.namespace == "Namespace.CRITERIA")
             & (table.kind == "updated")
             & (table.payload_type == "GSTBoundary")
         )
@@ -103,7 +107,10 @@ class TwoPropGSTReporter:
 
         # Query for design/registered events
         design_events = (
-            table.filter((table.namespace == "design") & (table.kind == "registered"))
+            table.filter(
+                (table.namespace == "Namespace.DESIGN")
+                & (table.kind == "experiment_design")
+            )
             .order_by(table.ts.desc())
             .limit(1)
         )
@@ -111,12 +118,22 @@ class TwoPropGSTReporter:
         # Execute query and get results
         try:
             results = design_events.execute()
-            if not results:
+            if len(results) == 0:
                 return None
 
             # Get the first (and only) result
-            row = list(results)[0]
-            payload_str = row.get("payload", "")
+            if hasattr(results, "iloc"):
+                # pandas DataFrame
+                row = results.iloc[0]
+                payload_str = (
+                    row.get("payload", "") if hasattr(row, "get") else row["payload"]
+                )
+            else:
+                # Other format
+                row = list(results)[0]
+                payload_str = (
+                    row.get("payload", "") if hasattr(row, "get") else row["payload"]
+                )
 
             try:
                 return (
@@ -139,9 +156,16 @@ class TwoPropGSTReporter:
         """
         prog = self.progress_table()
 
-        # Execute the ibis query to get actual data
+        # Execute progress query to get DataFrame
         try:
-            prog_data = list(prog.execute())
+            prog_df = prog.execute()
+            # Convert DataFrame to records (list of dictionaries)
+            if hasattr(prog_df, "to_dict"):
+                prog_data = prog_df.to_dict("records")
+            else:
+                # Fallback for other formats - convert to list
+                prog_data = list(prog_df)
+
             # Add stopped column logic post-query
             for row in prog_data:
                 z_val = row.get("z", 0.0)
@@ -154,7 +178,7 @@ class TwoPropGSTReporter:
             print(f"Error executing progress query: {e}")
             return
 
-        if not prog_data:
+        if len(prog_data) == 0:
             print("(no progress)")
             return
 
