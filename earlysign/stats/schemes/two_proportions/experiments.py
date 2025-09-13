@@ -50,12 +50,12 @@ from earlysign.core.names import Namespace, ExperimentId, StepKey, TimeIndex
 from earlysign.core.components import Statistic, Criteria, Signaler
 from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
 from earlysign.stats.schemes.two_proportions.core import TwoPropObservation
-from earlysign.stats.schemes.two_proportions.statistics import (
-    # GST components
+from earlysign.stats.schemes.two_proportions.group_sequential import (
     WaldZStatistic,
     LanDeMetsBoundary,
     PeekSignaler,
-    # Safe testing components
+)
+from earlysign.stats.schemes.two_proportions.e_process import (
     BetaBinomialEValue,
     SafeThreshold,
     SafeSignaler,

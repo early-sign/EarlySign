@@ -425,7 +425,7 @@ def ab_test_with_guardrails(
 from earlysign.runtime.experiment_template import ExperimentTemplate
 from earlysign.core.ledger import Ledger
 from earlysign.core.names import Namespace, ExperimentId
-from earlysign.stats.methods.group_sequential.adaptive import AdaptiveInfoTime
+from earlysign.stats.common.group_sequential import AdaptiveInfoTime
 from earlysign.stats.schemes.two_proportions.statistics import (
     WaldZStatistic,
     LanDeMetsBoundary,

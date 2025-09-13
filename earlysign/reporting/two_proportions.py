@@ -180,7 +180,7 @@ class TwoPropGSTReporter:
 
         # Recompute full boundaries on planned grid
         from scipy.stats import norm
-        from earlysign.stats.methods.group_sequential.core import (
+        from earlysign.stats.common.group_sequential import (
             lan_demets_spending,
         )
 
