@@ -3,7 +3,9 @@ applyTo: "**"
 ---
 
 # TL;DR
-- `make format` to auto-format code, and then `make check` to run all sanity checks (lints, tests, and type checks).
+- Toolkit
+  - `make format` to auto-format code, and then `make check` to run all sanity checks (lints, tests, and type checks).
+  - We use `poetry` to manage dependencies. So you need to use `poetry run python` when you run Python commands.
 - Main architectural decisions:
   - `event-sourcing` to accommodate existing complex sequential procedures and ones that we are yet to see. We call the event-source a `ledger`.
     - For example, we separate the statistic calculation and the criteria to turn the statsitical value into signals or decisions. We can pass the values and other info via writing to and reading from the ledger.
