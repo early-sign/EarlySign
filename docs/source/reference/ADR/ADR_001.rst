@@ -1,6 +1,28 @@
-ADR 001: `__init__.py` for documentation
--------
+.. ADR-001: __init__.py for documentation
+.. :Date: 2025-09-13
 
-We have decided to include `__init__.py` although our code should be able to exploit the implicit-package functionality of Python.
-This is so as to make `sphinx-autoapi` work well; the `__init__.py` files enable the package structure to be recognized correctly.
-As a byproduct, we are able to write the documentation frontpages of the API reference for each package -- we will be using the `__init__.py` mostly for writing docstring there.
+==========================================
+ADR-001: `__init__.py` for documentation
+==========================================
+
+**Status**: `Proposed` | **`Accepted`** | `Deprecated` | `Superseded`
+
+📋 Context
+-----------
+Our codebase can leverage Python's implicit namespace packages, which do not require ``__init__.py`` files. However, this modern feature poses a compatibility challenge for our documentation toolchain. Specifically, ``sphinx-autoapi`` fails to correctly discover and map the package structure without the presence of ``__init__.py`` files, leading to incomplete API references.
+
+💡 Decision
+------------
+We will explicitly include an ``__init__.py`` file in every package directory.
+
+While the primary motivation is to ensure compatibility with ``sphinx-autoapi``, we will also leverage these files to improve our documentation. The docstring within each ``__init__.py`` will serve as the landing page for its respective module in the API reference, providing a high-level overview.
+
+✨ Consequences
+-----------------
+**Positive:**
+* ✅ **Reliable Doc Generation:** Guarantees that our API documentation is generated correctly and completely by Sphinx.
+* 📚 **Improved Readability:** The API reference for each package will start with a helpful summary, making the library easier to navigate for users.
+* 🧐 **Clear Package Boundaries:** Explicitly marks directories as packages, leaving no room for ambiguity.
+
+**Negative:**
+* 📂 **Slight File Increase:** Adds a number of empty or near-empty files to the repository.

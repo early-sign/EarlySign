@@ -17,7 +17,7 @@ extensions = [
     "sphinx_copybutton",
 ]
 templates_path = []
-exclude_patterns = []
+exclude_patterns = ["ADR_template.rst"]
 
 nb_execution_mode = "off"
 
@@ -36,6 +36,7 @@ try:
             "use_repository_button": True,
             "use_issues_button": True,
             "path_to_docs": "docs/source",
+            "launch_buttons": {"colab_url": "https://colab.research.google.com"},
         }
     else:
         html_theme = "alabaster"
