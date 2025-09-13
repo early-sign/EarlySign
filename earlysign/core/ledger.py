@@ -72,7 +72,7 @@ def get_ledger_schema() -> ibis.Schema:
             ("snapshot_id", "string"),
             ("tag", "string"),
             ("payload_type", "string"),
-            ("payload", "string"),  # JSON string - renamed from payload_json
+            ("payload", "json"),  # JSON data - supports ibis JSON operations
             ("earlysign_version", "string"),  # Auto-populated version
         ]
     )
@@ -174,8 +174,24 @@ class Ledger:
         try:
             self.connection.table(self.table_name)
         except Exception:
-            schema = get_ledger_schema()
-            self.connection.create_table(self.table_name, schema=schema, temp=False)
+            # Use DDL to create table with proper JSON type
+            ddl = f"""
+            CREATE TABLE IF NOT EXISTS {self.table_name} (
+                uuid STRING,
+                ledger_name STRING,
+                time_index STRING,
+                ts TIMESTAMP,
+                namespace STRING,
+                kind STRING,
+                entity STRING,
+                snapshot_id STRING,
+                tag STRING,
+                payload_type STRING,
+                payload JSON,
+                earlysign_version STRING
+            )
+            """
+            self.connection.raw_sql(ddl)
 
     @property
     def table(self) -> Table:
@@ -270,6 +286,16 @@ class Ledger:
         # Wrap payload using registered handler
         payload_json = PayloadTypeRegistry.wrap(payload_type, payload)
 
+        # For JSON columns, we need to store the dict object, not JSON string
+        import json
+        if isinstance(payload_json, str):
+            try:
+                payload_obj = json.loads(payload_json)
+            except (json.JSONDecodeError, TypeError):
+                payload_obj = payload_json
+        else:
+            payload_obj = payload_json
+
         # Create record
         record = {
             "uuid": str(uuid_module.uuid4()),
@@ -282,7 +308,7 @@ class Ledger:
             "snapshot_id": str(step_key),
             "tag": tag or "",
             "payload_type": payload_type,
-            "payload": payload_json,
+            "payload": payload_obj,
             "earlysign_version": __version__,
         }
 

@@ -412,38 +412,24 @@ def reduce_counts(ledger: Ledger, *, experiment_id: str) -> Tuple[int, int, int,
     >>> reduce_counts(L, experiment_id="exp#1")
     (5, 6, 1, 0)
     """
-    nA = nB = mA = mB = 0
+    observations = ledger.table.filter(
+        (ledger.table.namespace == str(Namespace.OBS)) &
+        (ledger.table.entity.startswith(f"{experiment_id}#"))
+    )
 
-    # Iterate through all rows in the OBS namespace and filter by experiment_id prefix
-    # Use ibis directly for querying observations
-    obs_data = ledger.table.filter(
-        ledger.table.namespace == str(Namespace.OBS)
+    # Use select with JSON extraction to sum counts directly
+    result = observations.select(
+        nA=observations.payload["nA"].sum(),
+        nB=observations.payload["nB"].sum(),
+        mA=observations.payload["mA"].sum(),
+        mB=observations.payload["mB"].sum(),
     ).execute()
 
-    for _, row in obs_data.iterrows():
-        payload = ledger.unwrap_payload(row["payload_type"], row["payload"])
-        # Check if this row belongs to our experiment (entity starts with experiment_id#)
-        if row["entity"].startswith(f"{experiment_id}#"):
-            p = payload
-            # Handle both dict payload and decoded TwoPropObsBatch objects
-            if (
-                hasattr(p, "nA")
-                and hasattr(p, "nB")
-                and hasattr(p, "mA")
-                and hasattr(p, "mB")
-            ):
-                # TwoPropObsBatch object
-                nA += int(p.nA)
-                nB += int(p.nB)
-                mA += int(p.mA)
-                mB += int(p.mB)
-            elif isinstance(p, dict) and {"nA", "nB", "mA", "mB"} <= set(p.keys()):
-                # dict payload
-                nA += int(p["nA"])
-                nB += int(p["nB"])
-                mA += int(p["mA"])
-                mB += int(p["mB"])
-    return nA, nB, mA, mB
+    if result.empty:
+        return 0, 0, 0, 0
+
+    row = result.iloc[0]
+    return int(row["nA"] or 0), int(row["nB"] or 0), int(row["mA"] or 0), int(row["mB"] or 0)
 
 
 # Register payload encoders/decoders for two-proportions types
