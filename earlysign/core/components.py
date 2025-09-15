@@ -17,27 +17,32 @@ Component Types:
 
 Examples
 --------
->>> from earlysign.core.ledger import Ledger, create_test_connection, Namespace
+>>> from earlysign.core.ledger import Ledger
+>>> from earlysign.core.components import Namespace
+>>> from earlysign.test_util import create_test_connection
 >>>
->>> conn = create_test_connection("duckdb")
+>>> conn = create_test_connection()
 >>> ledger = Ledger(conn, "test")
+>>> ledger.ensure()
 >>>
 >>> class DummyStat(Statistic):
 ...     def step(self, ledger, experiment_id, step_key, time_index):
 ...         # Direct ibis querying for observations
-...         obs_count = (ledger.table
-...                     .filter(ledger.table.namespace == str(self.ns_stats))
-...                     .filter(ledger.table.entity.contains(str(experiment_id)))
+...         obs_count = (ledger.df
+...                     .filter(ledger.df.labels["namespace"].cast("string") == str(self.ns_stats))
+...                     .filter(ledger.df.labels["entity"].cast("string").contains(str(experiment_id)))
 ...                     .count()
 ...                     .execute())
 ...
 ...         # Write computed statistic
-...         ledger.write_event(
-...             time_index=time_index,
-...             namespace=self.ns_stats,
-...             kind="updated",
-...             experiment_id=experiment_id,
-...             step_key=step_key,
+...         ledger.insert_event(
+...             labels={
+...                 "time_index": time_index,
+...                 "namespace": self.ns_stats,
+...                 "kind": "updated",
+...                 "entity": experiment_id,
+...                 "step_key": step_key,
+...             },
 ...             payload_type="StatValue",
 ...             payload={"obs_count": obs_count}
 ...         )

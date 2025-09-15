@@ -206,7 +206,7 @@ class Ledger:
         )
         self.ensure()
         self.df.append_rows([row])
-        return row["uuid"]
+        return str(row["uuid"])
 
     def insert_events(self, events: List[Mapping[str, Any]]) -> Dict[str, Any]:
         rows = [self._normalize(e) for e in events]

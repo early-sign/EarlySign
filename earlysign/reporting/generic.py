@@ -8,7 +8,8 @@ namespace x kind counts. Works with ibis-based ledgers.
 Examples
 --------
 >>> import ibis
->>> from earlysign.core.ledger import Ledger, Namespace
+>>> from earlysign.core.ledger import Ledger
+>>> from earlysign.core.components import Namespace
 >>> from earlysign.reporting.generic import LedgerReporter
 >>> conn = ibis.duckdb.connect(":memory:")
 >>> L = Ledger(conn, "test")
@@ -44,7 +45,13 @@ class LedgerReporter:
         table = self.ledger.df
         try:
             # Check if entity column exists and get unique values
-            unique_values = table.select(table.labels["experiment_id"].cast("string").name("entity")).distinct().execute()
+            unique_values = (
+                table.select(
+                    table.labels["experiment_id"].cast("string").name("entity")
+                )
+                .distinct()
+                .execute()
+            )
             entities = [row.entity for row in unique_values if row.entity is not None]
             return sorted(entities)
         except Exception:
@@ -56,7 +63,11 @@ class LedgerReporter:
         table = self.ledger.df
         try:
             # Get unique namespace values
-            unique_values = table.select(table.labels["namespace"].cast("string").name("namespace")).distinct().execute()
+            unique_values = (
+                table.select(table.labels["namespace"].cast("string").name("namespace"))
+                .distinct()
+                .execute()
+            )
             namespaces = [
                 row.namespace for row in unique_values if row.namespace is not None
             ]
@@ -69,7 +80,11 @@ class LedgerReporter:
         table = self.ledger.df
         try:
             # Get unique kind values
-            unique_values = table.select(table.labels["kind"].cast("string").name("kind")).distinct().execute()
+            unique_values = (
+                table.select(table.labels["kind"].cast("string").name("kind"))
+                .distinct()
+                .execute()
+            )
             kinds = [row.kind for row in unique_values if row.kind is not None]
             return sorted(kinds)
         except Exception:
@@ -90,7 +105,7 @@ class LedgerReporter:
             counts = (
                 table.select(
                     namespace=table.labels["namespace"].cast("string"),
-                    kind=table.labels["kind"].cast("string")
+                    kind=table.labels["kind"].cast("string"),
                 )
                 .group_by(["namespace", "kind"])
                 .aggregate(count=ibis._.count())

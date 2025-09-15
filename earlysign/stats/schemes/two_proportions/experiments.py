@@ -116,10 +116,20 @@ class TwoPropTemplate(ExperimentTemplate):
 
         if self._is_setup and self.ledger:
             # Add observation counts using ibis aggregations
-            obs_table = self.ledger.table.filter(
-                (self.ledger.table.namespace == str(Namespace.OBS))
-                & (self.ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-                & (self.ledger.table.payload_type == "TwoPropObsBatch")
+            obs_table = self.ledger.df.filter(
+                (
+                    self.ledger.df.labels["namespace"].cast("string")
+                    == str(Namespace.OBS)
+                )
+                & (
+                    self.ledger.df.labels["entity"]
+                    .cast("string")
+                    .startswith(str(self.experiment_id) + "#")
+                )
+                & (
+                    self.ledger.df.labels["payload_type"].cast("string")
+                    == "TwoPropObsBatch"
+                )
             )
 
             # Use ibis to sum the JSON-extracted values directly in the query
@@ -222,25 +232,30 @@ class TwoPropGSTTemplate(TwoPropTemplate):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        ledger.write_event(
-            namespace=Namespace.DESIGN,
-            kind="experiment_design",
+        ledger.insert_event(
             payload_type="gst_design",
-            experiment_id=str(self.experiment_id),
-            step_key="design",
-            time_index="t0",
             payload=design_payload,
+            labels={
+                "namespace": Namespace.DESIGN,
+                "kind": "experiment_design",
+                "experiment_id": str(self.experiment_id),
+                "step_key": "design",
+            },
         )
 
     def extract_results(self, ledger: Ledger) -> AnalysisResult:
         """Extract GST analysis results."""
         # Get the latest signal event
-        signal_query = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.SIGNALS))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-        ).order_by(ledger.table.time_index.desc())
+        signal_query = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.SIGNALS))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+        ).order_by(ledger.df.time_index.desc())
         signal_results = signal_query.execute()
-        signal_events = ledger.unwrap_results(signal_results)
+        signal_events = list(signal_results.to_dicts())
 
         if not signal_events:
             raise ValueError("No signal events found")
@@ -249,19 +264,27 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         should_stop = latest_signal["payload"].get("action") == "stop"
 
         # Get corresponding statistic and criteria events
-        stats_query = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.STATS))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-        ).order_by(ledger.table.time_index.desc())
+        stats_query = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.STATS))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+        ).order_by(ledger.df.time_index.desc())
         stats_results = stats_query.execute()
-        statistic_events = ledger.unwrap_results(stats_results)
+        statistic_events = list(stats_results.to_dicts())
 
-        criteria_query = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.CRITERIA))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-        ).order_by(ledger.table.time_index.desc())
+        criteria_query = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.CRITERIA))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+        ).order_by(ledger.df.time_index.desc())
         criteria_results = criteria_query.execute()
-        criteria_events = ledger.unwrap_results(criteria_results)
+        criteria_events = list(criteria_results.to_dicts())
 
         latest_stat = statistic_events[-1] if statistic_events else None
         latest_criteria = criteria_events[-1] if criteria_events else None
@@ -272,10 +295,14 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         )
 
         # Calculate sample proportions from observations using ibis aggregations
-        obs_table = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.OBS))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-            & (ledger.table.payload_type == "TwoPropObsBatch")
+        obs_table = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.OBS))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+            & (ledger.df.labels["payload_type"].cast("string") == "TwoPropObsBatch")
         )
 
         # Use ibis to sum the JSON-extracted values directly in the query
@@ -379,25 +406,30 @@ class TwoPropSafeTemplate(TwoPropTemplate):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        ledger.write_event(
-            namespace=Namespace.DESIGN,
-            kind="experiment_design",
+        ledger.insert_event(
             payload_type="safe_design",
-            experiment_id=str(self.experiment_id),
-            step_key="design",
-            time_index="t0",
             payload=design_payload,
+            labels={
+                "namespace": Namespace.DESIGN,
+                "kind": "experiment_design",
+                "experiment_id": str(self.experiment_id),
+                "step_key": "design",
+            },
         )
 
     def extract_results(self, ledger: Ledger) -> AnalysisResult:
         """Extract Safe Testing analysis results."""
         # Get the latest signal event
-        signal_query = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.SIGNALS))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-        ).order_by(ledger.table.time_index.desc())
+        signal_query = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.SIGNALS))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+        ).order_by(ledger.df.time_index.desc())
         signal_results = signal_query.execute()
-        signal_events = ledger.unwrap_results(signal_results)
+        signal_events = list(signal_results.to_dicts())
 
         if not signal_events:
             raise ValueError("No signal events found")
@@ -406,19 +438,27 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         should_stop = latest_signal["payload"].get("action") == "stop"
 
         # Get corresponding statistic and criteria events
-        stats_query = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.STATS))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-        ).order_by(ledger.table.time_index.desc())
+        stats_query = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.STATS))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+        ).order_by(ledger.df.time_index.desc())
         stats_results = stats_query.execute()
-        statistic_events = ledger.unwrap_results(stats_results)
+        statistic_events = list(stats_results.to_dicts())
 
-        criteria_query = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.CRITERIA))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-        ).order_by(ledger.table.time_index.desc())
+        criteria_query = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.CRITERIA))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+        ).order_by(ledger.df.time_index.desc())
         criteria_results = criteria_query.execute()
-        criteria_events = ledger.unwrap_results(criteria_results)
+        criteria_events = list(criteria_results.to_dicts())
 
         latest_stat = statistic_events[-1] if statistic_events else None
         latest_criteria = criteria_events[-1] if criteria_events else None
@@ -431,10 +471,14 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         )
 
         # Calculate sample proportions from observations using ibis aggregations
-        obs_table = ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.OBS))
-            & (ledger.table.entity.startswith(str(self.experiment_id) + "#"))
-            & (ledger.table.payload_type == "TwoPropObsBatch")
+        obs_table = ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.OBS))
+            & (
+                ledger.df.labels["entity"]
+                .cast("string")
+                .startswith(str(self.experiment_id) + "#")
+            )
+            & (ledger.df.labels["payload_type"].cast("string") == "TwoPropObsBatch")
         )
 
         # Use ibis to sum the JSON-extracted values directly in the query

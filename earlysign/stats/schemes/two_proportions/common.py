@@ -373,7 +373,9 @@ def reduce_counts(
         Tuple of (nA, nB, mA, mB) - total and success counts for both groups
     """
     # Base query for observation events
-    obs_filter = (ledger.df.labels["namespace"].cast("string") == str(Namespace.OBS)) & (
+    obs_filter = (
+        ledger.df.labels["namespace"].cast("string") == str(Namespace.OBS)
+    ) & (
         ledger.df.labels["experiment_id"].cast("string").startswith(str(experiment_id))
     )
 
@@ -388,7 +390,11 @@ def reduce_counts(
         return 0, 0, 0, 0
 
     # Aggregate counts across all observations
-    records = obs_results.to_pylist() if hasattr(obs_results, 'to_pylist') else obs_results.to_dict('records')
+    records = (
+        obs_results.to_pylist()
+        if hasattr(obs_results, "to_pylist")
+        else obs_results.to_dict("records")
+    )
 
     nA_total, nB_total, mA_total, mB_total = 0, 0, 0, 0
 
@@ -432,7 +438,11 @@ def get_latest_statistic(
     if len(stat_results) == 0:
         return None
 
-    records = stat_results.to_pylist() if hasattr(stat_results, 'to_pylist') else stat_results.to_dict('records')
+    records = (
+        stat_results.to_pylist()
+        if hasattr(stat_results, "to_pylist")
+        else stat_results.to_dict("records")
+    )
     return records[0]["payload"] if records else None
 
 
@@ -465,7 +475,11 @@ def get_latest_criteria(
     if len(criteria_results) == 0:
         return None
 
-    records = criteria_results.to_pylist() if hasattr(criteria_results, 'to_pylist') else criteria_results.to_dict('records')
+    records = (
+        criteria_results.to_pylist()
+        if hasattr(criteria_results, "to_pylist")
+        else criteria_results.to_dict("records")
+    )
     return records[0]["payload"] if records else None
 
 

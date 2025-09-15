@@ -123,15 +123,16 @@ class BetaBinomialEValue(Statistic):
         }
 
         # Write statistic event to ledger
-        ledger.write_event(
-            time_index=time_index,
-            namespace=Namespace.STATS,
-            kind="updated",
-            experiment_id=str(experiment_id),
-            step_key=str(step_key),
+        ledger.insert_event(
             payload_type="BetaBinomialEValue",
             payload=payload,
-            tag=self.tag_stats,
+            labels={
+                "namespace": Namespace.STATS,
+                "kind": "updated",
+                "experiment_id": str(experiment_id),
+                "step_key": str(step_key),
+                "tag": self.tag_stats,
+            },
         )
 
 
@@ -176,15 +177,16 @@ class SafeThreshold(Criteria):
             "scheme": "two_proportions",
         }
 
-        ledger.write_event(
-            time_index=time_index,
-            namespace=Namespace.CRITERIA,
-            kind="updated",
-            experiment_id=str(experiment_id),
-            step_key=str(step_key),
+        ledger.insert_event(
             payload_type="SafeThreshold",
             payload=payload,
-            tag=self.tag_crit,
+            labels={
+                "namespace": Namespace.CRITERIA,
+                "kind": "updated",
+                "experiment_id": str(experiment_id),
+                "step_key": str(step_key),
+                "tag": self.tag_crit,
+            },
         )
 
 
@@ -266,13 +268,7 @@ class SafeSignaler(Signaler):
             confidence = f"e_value={e_value:.3f}, threshold={threshold:.1f}"
 
         # Emit decision signal with two-proportions context
-        ledger.write_event(
-            time_index=time_index,
-            experiment_id=str(experiment_id),
-            step_key=str(step_key),
-            namespace=Namespace.SIGNALS,
-            kind="decision",
-            tag=f"{self.decision_topic}:decision",
+        ledger.insert_event(
             payload_type="dict",
             payload={
                 "action": action,
@@ -288,5 +284,12 @@ class SafeSignaler(Signaler):
                 "pB_hat": pB_hat,
                 "effect_size": pB_hat - pA_hat,
                 "scheme": "two_proportions",
+            },
+            labels={
+                "namespace": Namespace.SIGNALS,
+                "kind": "decision",
+                "experiment_id": str(experiment_id),
+                "step_key": str(step_key),
+                "tag": f"{self.decision_topic}:decision",
             },
         )

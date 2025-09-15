@@ -41,8 +41,13 @@ True
 True
 >>> isinstance(df.limit(1), TableExpr)
 True
->>> df.expr() is df.t  # the underlying ibis table
-True
+>>> df.t  # the underlying ibis table
+DatabaseTable: events
+  uuid         string
+  ts           string
+  payload_type string
+  labels       json
+  payload      json
 
 # -- TypedStrategy: join-based exposure must keep the same access API --
 >>> class Obs(TypedDict):

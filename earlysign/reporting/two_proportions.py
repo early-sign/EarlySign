@@ -19,7 +19,14 @@ With ibis-based ledger:
 >>> rep = TwoPropGSTReporter(ledger)  # Direct dataclass initialization
 """
 
+from __future__ import annotations
 from dataclasses import dataclass
+from typing import Any, TYPE_CHECKING
+
+from earlysign.core.components import Namespace
+
+if TYPE_CHECKING:
+    from earlysign.core.ledger import Ledger
 import json
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
@@ -43,11 +50,11 @@ class TwoPropGSTReporter:
         Uses ibis operations to query the ledger directly.
         """
         # Get the base table from the ledger
-        table = self.ledger.table
+        table = self.ledger.df
 
         # Query statistics data (WaldZ) using ibis
         stats_filtered = table.filter(
-            (table.namespace == "Namespace.STATS")
+            (table.labels["namespace"].cast("string") == str(Namespace.STATS))
             & (table.kind == "updated")
             & (table.payload_type == "WaldZ")
         )
@@ -103,13 +110,13 @@ class TwoPropGSTReporter:
         Uses ibis operations to query the ledger directly.
         """
         # Get the base table from the ledger
-        table = self.ledger.table
+        table = self.ledger.df
 
         # Query for design/registered events
         design_events = (
             table.filter(
-                (table.namespace == "Namespace.DESIGN")
-                & (table.kind == "experiment_design")
+                (table.labels["namespace"].cast("string") == str(Namespace.DESIGN))
+                & (table.labels["kind"].cast("string") == "experiment_design")
             )
             .order_by(table.ts.desc())
             .limit(1)

@@ -424,7 +424,7 @@ def ab_test_with_guardrails(
 # Import the implementation from the moved multi_metric content
 from earlysign.runtime.experiment_template import ExperimentTemplate
 from earlysign.core.ledger import Ledger
-from earlysign.core.ledger import Ledger, Namespace
+from earlysign.core.components import Namespace
 from earlysign.stats.common.group_sequential import AdaptiveInfoTime
 from earlysign.stats.schemes.two_proportions.group_sequential import (
     WaldZStatistic,

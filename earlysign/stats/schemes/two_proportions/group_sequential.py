@@ -96,15 +96,16 @@ class WaldZStatistic(Statistic):
             "pB_hat": pB,
         }
 
-        ledger.write_event(
-            time_index=time_index,
-            namespace=Namespace.STATS,
-            kind="updated",
-            experiment_id=str(experiment_id),
-            step_key=str(step_key),
+        ledger.insert_event(
             payload_type="WaldZ",
             payload=dict(payload),
-            tag=self.tag_stats,
+            labels={
+                "namespace": Namespace.STATS,
+                "kind": "updated",
+                "experiment_id": str(experiment_id),
+                "step_key": str(step_key),
+                "tag": self.tag_stats,
+            },
         )
 
 
@@ -151,15 +152,16 @@ class LanDeMetsBoundary(Criteria):
             "alpha_i": alpha_i,
         }
 
-        ledger.write_event(
-            time_index=time_index,
-            namespace=Namespace.CRITERIA,
-            kind="updated",
-            experiment_id=str(experiment_id),
-            step_key=str(step_key),
+        ledger.insert_event(
             payload_type="GSTBoundary",
             payload=dict(payload),
-            tag=self.tag_crit,
+            labels={
+                "namespace": Namespace.CRITERIA,
+                "kind": "updated",
+                "experiment_id": str(experiment_id),
+                "step_key": str(step_key),
+                "tag": self.tag_crit,
+            },
         )
 
 
@@ -208,13 +210,7 @@ class PeekSignaler(Signaler):
 
         if abs(z) >= upper:
             significance = "significant" if z > 0 else "significant_negative"
-            ledger.write_event(
-                time_index=time_index,
-                experiment_id=str(experiment_id),
-                step_key=str(step_key),
-                namespace=Namespace.SIGNALS,
-                kind="decision",
-                tag="gst:decision",
+            ledger.insert_event(
                 payload_type="dict",
                 payload={
                     "action": "stop",
@@ -224,6 +220,13 @@ class PeekSignaler(Signaler):
                     "total_n": total_n,
                     "pA_hat": z_payload.get("pA_hat", 0.0),
                     "pB_hat": z_payload.get("pB_hat", 0.0),
+                },
+                labels={
+                    "namespace": Namespace.SIGNALS,
+                    "kind": "decision",
+                    "experiment_id": str(experiment_id),
+                    "step_key": str(step_key),
+                    "tag": "gst:decision",
                 },
             )
 
@@ -299,12 +302,7 @@ class AdaptiveGSTBoundary(Criteria):
             else 1.0
         )
 
-        ledger.write_event(
-            time_index=time_index,
-            namespace=Namespace.STATS,
-            kind="adapted",
-            experiment_id=str(experiment_id),
-            step_key=str(step_key),
+        ledger.insert_event(
             payload_type="AdaptiveInfoTime",
             payload={
                 "current_look": current_look,
@@ -316,5 +314,11 @@ class AdaptiveGSTBoundary(Criteria):
                 "adaptation_ratio": adapted_t / planned_t if planned_t > 0 else 1.0,
                 "scheme": "two_proportions",
             },
-            tag="adapt:info_time",
+            labels={
+                "namespace": Namespace.STATS,
+                "kind": "adapted",
+                "experiment_id": str(experiment_id),
+                "step_key": str(step_key),
+                "tag": "adapt:info_time",
+            },
         )
