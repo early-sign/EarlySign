@@ -83,6 +83,7 @@ LEDGER_SCHEMA = ibis.schema(
 
 # ---------- Handlers (describe typed payloads) ----------
 
+
 class LedgerDataHandler:
     """Describe a typed payload and (optionally) an external typed table.
 
@@ -181,6 +182,7 @@ class LedgerDataHandler:
 
 # ---------- Strategies (persistence policy) ----------
 
+
 def _table_names(be: ibis.BaseBackend) -> set[str]:
     """Return a set of table names across backends.
 
@@ -220,7 +222,9 @@ class PersistStrategy:
     def replace_all(self, df: "LedgerDF", rows: Iterable[Mapping[str, Any]]) -> int:
         raise NotImplementedError
 
-    def upsert(self, df: "LedgerDF", rows: Iterable[Mapping[str, Any]]) -> Dict[str, int]:
+    def upsert(
+        self, df: "LedgerDF", rows: Iterable[Mapping[str, Any]]
+    ) -> Dict[str, int]:
         raise NotImplementedError
 
 
@@ -254,7 +258,9 @@ class JsonStrategy(PersistStrategy):
             be.insert(df.table_name, data)
         return 0
 
-    def upsert(self, df: "LedgerDF", rows: Iterable[Mapping[str, Any]]) -> Dict[str, int]:
+    def upsert(
+        self, df: "LedgerDF", rows: Iterable[Mapping[str, Any]]
+    ) -> Dict[str, int]:
         data = list(rows)
         if not data:
             return {"deleted": 0, "inserted": 0, "updated": 0}
@@ -320,7 +326,9 @@ class TypedStrategy(JsonStrategy):
             self.append(df, data)
         return 0
 
-    def upsert(self, df: "LedgerDF", rows: Iterable[Mapping[str, Any]]) -> Dict[str, int]:
+    def upsert(
+        self, df: "LedgerDF", rows: Iterable[Mapping[str, Any]]
+    ) -> Dict[str, int]:
         data = list(rows)
         if not data:
             return {"deleted": 0, "inserted": 0, "updated": 0}
@@ -338,6 +346,7 @@ class TypedStrategy(JsonStrategy):
 
 
 # ---------- Main DF wrapper (thin) ----------
+
 
 @dataclass
 class LedgerDF:
@@ -444,7 +453,9 @@ class LedgerDF:
         self._t_cache = None
         return n
 
-    def upsert_rows(self, rows: Iterable[Mapping[str, Any]], keys: List[str]) -> Dict[str, Any]:
+    def upsert_rows(
+        self, rows: Iterable[Mapping[str, Any]], keys: List[str]
+    ) -> Dict[str, Any]:
         # We only implement naive uuid-based upsert; `keys` kept for compatibility/logging
         res = (self._strategy or JsonStrategy()).upsert(self, rows)
         self._t_cache = None

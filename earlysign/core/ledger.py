@@ -165,11 +165,13 @@ class Ledger:
     # Internals ----------------------------------------------------------
     def _now(self) -> str:
         from datetime import datetime, timezone
+
         return datetime.now(timezone.utc).isoformat()
 
     def _normalize(self, e: Mapping[str, Any]) -> dict:
         """Normalize a user event to the base row shape. No dtype decisions here."""
         import uuid as _uuid
+
         ts = e.get("ts") or self._now()
         return {
             "uuid": e.get("uuid") or _uuid.uuid4().hex,

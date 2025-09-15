@@ -55,11 +55,13 @@ from typing import Any, Dict, Union, Optional, TYPE_CHECKING
 
 class Namespace(str, Enum):
     """Optional helper to mirror legacy 'Namespace' labels."""
+
     OBS = "obs"
     STATS = "stats"
     CRITERIA = "criteria"
     SIGNALS = "signals"
     DESIGN = "design"
+
 
 # Type aliases
 NamespaceLike = Union[Namespace, str]
