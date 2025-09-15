@@ -49,9 +49,17 @@ Examples
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Dict, Union, Optional, TYPE_CHECKING
 
-from earlysign.core.ledger import Namespace
+
+class Namespace(str, Enum):
+    """Optional helper to mirror legacy 'Namespace' labels."""
+    OBS = "obs"
+    STATS = "stats"
+    CRITERIA = "criteria"
+    SIGNALS = "signals"
+    DESIGN = "design"
 
 # Type aliases
 NamespaceLike = Union[Namespace, str]

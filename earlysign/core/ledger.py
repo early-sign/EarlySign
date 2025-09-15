@@ -1,422 +1,283 @@
 """
-earlysign.core.ledger
-=====================
+High level Ledger facade over LedgerDF.
 
-Core ibis-framework based ledger implementation with simplified design.
+- Keeps a *thin* surface and delegates all query ops to Ibis via LedgerDF.
+- Default persistence is JsonStrategy; can be switched to TypedStrategy.
+- Handlers (LedgerDataHandler) define typed payloads; in TypedStrategy we
+  materialize them and auto-join so that JSON access pattern stays identical.
 
-This module provides an ibis-based ledger system focused on essential functionality:
-- Backend-agnostic via ibis-framework
-- JSON payload support with type-based wrap/unwrap
-- Automatic earlysign_version tracking
-- Simple get() interface with raw/unwrapped options
+Doctests include:
+  * Unit-level: handler creation, basic write paths
+  * End-to-end usage example mirroring your workflow expectations
 
-Examples:
----------
->>> import ibis
->>> from earlysign.core.ledger import Ledger, create_test_connection, Namespace
->>>
->>> # Create test connection
->>> conn = create_test_connection("duckdb")
->>> ledger = Ledger(conn)
->>>
->>> # Write event
->>> ledger.write_event(
-...     time_index="t1", namespace=Namespace.OBS, kind="observation",
-...     experiment_id="exp1", step_key="s1", payload_type="TwoProportion",
-...     payload={"n_treatment": 100, "n_control": 95}
+>>> import ibis, duckdb  # noqa: F401
+>>> from typing import TypedDict
+>>> from earlysign.core.ledger_df import (
+...     LEDGER_SCHEMA, LedgerDF, LedgerDataHandler, JsonStrategy, TypedStrategy
 ... )
->>>
->>> # Query data (raw JSON)
->>> query = ledger.table.filter(ledger.table.payload_type == "TwoProportion")
+
+# --- Basic JSON-mode roundtrip (no typed tables) ----------------------
+>>> con = ibis.duckdb.connect(":memory:")
+>>> _ = con.create_table("events", schema=LEDGER_SCHEMA)
+>>> L = Ledger().set_connector(con).use_default_table("events")
+>>> L.ensure()  # JsonStrategy by default
+>>> _ = L.insert_events([
+...   dict(payload={"nA": 100, "mA": 38, "nB": 120, "mB": 51}, labels={"kind":"observation","batch":1}),
+...   dict(payload={"nA":  80, "mA": 22, "nB":  90, "mB": 30}, labels={"kind":"observation","batch":2}),
+... ])
+
+# Query using Ibis JSON API (delegate end-to-end)
+>>> obs = (
+...   L.df
+...     .select(
+...       "uuid",
+...       nA=L.df.payload["nA"].cast("int64"),
+...       mA=L.df.payload["mA"].cast("int64"),
+...       nB=L.df.payload["nB"].cast("int64"),
+...       mB=L.df.payload["mB"].cast("int64"),
+...     )
+...     .execute()
+... )
+>>> set({"uuid","nA","mA","nB","mB"}) <= set(obs.columns)
+True
+
+# --- Typed handler registration + switch to TypedStrategy --------------
+>>> class TwoPropObsBatch(TypedDict):
+...     nA: int; nB: int; mA: int; mB: int
+...
+>>> handler = LedgerDataHandler.from_typeddict("TwoPropObsBatch", TwoPropObsBatch)
+>>> _ = L.register_handler(handler)
+>>> _ = L.set_strategy(TypedStrategy())
+>>> L.ensure()  # creates typed table alongside base
+>>> _ = L.insert_event(
+...     payload_type="TwoPropObsBatch",
+...     payload={"nA":150,"mA":60,"nB":140,"mB":48},
+...     labels={"kind":"observation","batch":3}
+... )
+
+# JSON access keeps working the same way (joined or JSON)
+>>> q2 = (
+...   L.df
+...     .filter(L.df.t.payload_type == "TwoPropObsBatch")
+...     .select(n_treat=L.df.payload["nA"].cast("int64"))
+... )
+>>> rows = q2.execute().to_dict("records")
+>>> rows[0]["n_treat"]
+150
+
+# --- Minimal "compat" scenario (namespaces & arbitrary labels) --------
+>>> from enum import Enum
+>>> class Namespace(str, Enum):
+...     OBS = "obs"; STATS = "stats"; CRITERIA = "criteria"; SIGNALS = "signals"; DESIGN = "design"
+...
+>>> conn = ibis.duckdb.connect(":memory:")
+>>> _ = conn.create_table("ledger_compat", schema=LEDGER_SCHEMA)
+>>> ledger = Ledger().set_connector(conn).use_default_table("ledger_compat")
+>>> ledger.ensure()
+>>> _ = ledger.insert_event(
+...     payload_type="TwoProportion",
+...     payload={"n_treatment": 100, "n_control": 95},
+...     labels={
+...         "namespace": Namespace.OBS.value,
+...         "kind": "observation",
+...         "experiment_id": "exp1",
+...         "step_key": "s1",
+...         "tag": "demo",
+...     },
+... )
+>>> query = ledger.df.filter(ledger.df.t.payload_type == "TwoProportion")
 >>> results = query.execute()
->>> len(results)
-1
->>>
->>> # Query data (unwrapped)
->>> rows = ledger.unwrap_results(results)
->>> rows[0]["payload"]["n_treatment"]
+>>> len(results) >= 1
+True
+>>> qn = (
+...   ledger.df
+...     .filter(ledger.df.t.payload_type == "TwoProportion")
+...     .select(n_treatment=ledger.df.payload["n_treatment"].cast("int64"))
+... )
+>>> r2 = qn.execute().to_dict("records")
+>>> r2[0]["n_treatment"]
 100
 """
 
-from __future__ import annotations
-from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Type
-import json
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Literal
 
-# Direct ibis import - required dependency
 import ibis
-from ibis import BaseBackend
-from ibis.expr.types import Table
+from ibis.expr.types import Table as TableExpr
 
-from earlysign.__version__ import __version__
-
-
-class Namespace(str, Enum):
-    """Well-known ledger namespaces.
-
-    - OBS: raw observations
-    - STATS: statistics (derived)
-    - CRITERIA: critical values / boundaries / thresholds
-    - SIGNALS: emitted signals / decisions / recommendations
-    - DESIGN: experiment design information
-    """
-
-    OBS = "obs"
-    STATS = "stats"
-    CRITERIA = "criteria"
-    SIGNALS = "signals"
-    DESIGN = "design"
+from earlysign.core.ledger_df import (
+    LEDGER_SCHEMA,
+    LedgerDF,
+    LedgerDataHandler,
+    JsonStrategy,
+    TypedStrategy,
+)
 
 
-# Type aliases
-NamespaceLike = Union[Namespace, str]
-
-
-def get_ledger_schema() -> ibis.Schema:
-    """Get the standardized ledger schema using ibis.Schema."""
-    return ibis.schema(
-        [
-            ("uuid", "string"),
-            ("ledger_name", "string"),
-            ("time_index", "string"),
-            ("ts", "timestamp"),
-            ("namespace", "string"),
-            ("kind", "string"),
-            ("entity", "string"),
-            ("snapshot_id", "string"),
-            ("tag", "string"),
-            ("payload_type", "string"),
-            ("payload", "json"),  # JSON data - supports ibis JSON operations
-            ("earlysign_version", "string"),  # Auto-populated version
-        ]
-    )
-
-
-class PayloadType(ABC):
-    """Abstract base class for payload type handlers."""
-
-    @abstractmethod
-    def wrap(self, data: Any) -> str:
-        """Convert data to JSON string for storage."""
-        pass
-
-    @abstractmethod
-    def unwrap(self, json_str: str) -> Any:
-        """Convert JSON string back to data."""
-        pass
-
-
-class JSONPayloadType(PayloadType):
-    """Default JSON payload type handler."""
-
-    def wrap(self, data: Any) -> str:
-        """Convert data to JSON string."""
-        return json.dumps(data, separators=(",", ":"))
-
-    def unwrap(self, json_str: str) -> Any:
-        """Convert JSON string back to data."""
-        return json.loads(json_str)
-
-
-class PayloadTypeRegistry:
-    """Registry for payload type handlers."""
-
-    _handlers: Dict[str, PayloadType] = {}
-    _default_handler = JSONPayloadType()
-
-    @classmethod
-    def register(cls, payload_type: str, handler: PayloadType) -> None:
-        """Register a payload type handler."""
-        cls._handlers[payload_type] = handler
-
-    @classmethod
-    def get_handler(cls, payload_type: str) -> PayloadType:
-        """Get handler for payload type, fallback to default JSON handler."""
-        return cls._handlers.get(payload_type, cls._default_handler)
-
-    @classmethod
-    def wrap(cls, payload_type: str, data: Any) -> str:
-        """Wrap data using appropriate handler."""
-        handler = cls.get_handler(payload_type)
-        return handler.wrap(data)
-
-    @classmethod
-    def unwrap(cls, payload_type: str, json_str: str) -> Any:
-        """Unwrap data using appropriate handler."""
-        handler = cls.get_handler(payload_type)
-        return handler.unwrap(json_str)
-
-
+@dataclass
 class Ledger:
-    """
-    Clean, focused ledger class using ibis-framework.
+    """High-level convenience API over LedgerDF.
 
-    Responsibilities:
-    - Database connection management
-    - Schema guarantee and table lifecycle
-    - Automatic ledger_name and earlysign_version injection
-    - Payload wrapping/unwrapping via PayloadTypeRegistry
-
-    Query construction, aggregation, and complex transformations
-    are delegated to callers using ibis table expressions.
+    - Keeps default JsonStrategy until caller switches.
+    - Delegates all read/query operations to Ibis via `df` (LedgerDF).
+    - Provides light write/save helpers.
     """
 
-    def __init__(
-        self,
-        connection: BaseBackend,
-        ledger_name: str = "default",
-        table_name: str = "ledger",
-    ):
-        """Initialize ledger with connection and names.
+    connector: Optional[ibis.BaseBackend] = None
+    table_name: str = "events"
+    _df: Optional[LedgerDF] = field(default=None, repr=False)
 
-        Parameters
-        ----------
-        connection : BaseBackend
-            Ibis backend connection
-        ledger_name : str
-            Name of this ledger instance (for multi-ledger support)
-        table_name : str
-            Name of the table in the backend
-        """
-        self.connection = connection
-        self.ledger_name = ledger_name
-        self.table_name = table_name
-        self._ensure_table_exists()
+    # Setup --------------------------------------------------------------
+    def set_connector(self, connector: ibis.BaseBackend) -> "Ledger":
+        self.connector = connector
+        self._df = None  # rebuild on next access
+        return self
 
-    def _ensure_table_exists(self) -> None:
-        """Create table with standardized schema if it doesn't exist."""
-        try:
-            self.connection.table(self.table_name)
-        except Exception:
-            # Use DDL to create table with proper JSON and UUID types
-            ddl = f"""
-            CREATE TABLE IF NOT EXISTS {self.table_name} (
-                uuid UUID DEFAULT gen_random_uuid(),
-                ledger_name STRING,
-                time_index STRING,
-                ts TIMESTAMP,
-                namespace STRING,
-                kind STRING,
-                entity STRING,
-                snapshot_id STRING,
-                tag STRING,
-                payload_type STRING,
-                payload JSON,
-                earlysign_version STRING
-            )
-            """
-            self.connection.raw_sql(ddl)
+    def use_default_table(self, name: str) -> "Ledger":
+        self.table_name = name
+        self._df = None
+        return self
 
     @property
-    def table(self) -> Table:
-        """
-        Get ibis table filtered by ledger name.
+    def df(self) -> LedgerDF:
+        """Build a LedgerDF lazily; default JsonStrategy unless changed later."""
+        if not self.connector:
+            raise ValueError("Connector not set")
+        if self._df is None:
+            self._df = LedgerDF(self.connector, self.table_name)
+            self._df.set_strategy(JsonStrategy())
+        return self._df
 
-        This is the main interface for querying - callers use this
-        to build ibis expressions for filtering, aggregation, etc.
+    # Strategy / handler configuration ----------------------------------
+    def set_strategy(self, strategy) -> "Ledger":
+        self.df.set_strategy(strategy)
+        return self
 
-        Returns
-        -------
-        Table
-            Ibis table expression filtered to this ledger's name
+    def register_handler(self, handler: LedgerDataHandler) -> "Ledger":
+        self.df.register_handler(handler)
+        return self
 
-        Examples
-        --------
-        >>> conn = create_test_connection("duckdb")
-        >>> ledger = Ledger(conn, "test_ledger")
-        >>> # Direct ibis querying
-        >>> filtered = ledger.table.filter(ledger.table.namespace == "OBS")
-        >>> count = filtered.count().execute()
+    def set_handlers(self, handlers: Mapping[str, LedgerDataHandler]) -> "Ledger":
+        for h in handlers.values():
+            self.register_handler(h)
+        return self
 
-        >>> # Complex aggregations
-        >>> import ibis
-        >>> aggregated = (ledger.table
-        ...     .filter(ledger.table.payload_type == "TwoProportion")
-        ...     .group_by("entity")
-        ...     .aggregate(total_events=ibis._.count())
-        ...     .execute())
-        """
-        table = self.connection.table(self.table_name)
-        return table.filter(table.ledger_name == self.ledger_name)
+    # Internals ----------------------------------------------------------
+    def _now(self) -> str:
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).isoformat()
 
-    @property
-    def raw_table(self) -> Table:
-        """
-        Get raw ibis table without ledger filtering.
-
-        Useful for meta-analysis across multiple ledgers.
-
-        Returns
-        -------
-        Table
-            Unfiltered ibis table expression
-        """
-        return self.connection.table(self.table_name)
-
-    def write_event(
-        self,
-        *,
-        time_index: str,
-        namespace: NamespaceLike,
-        kind: str,
-        experiment_id: str,
-        step_key: str,
-        payload_type: str,
-        payload: Any,
-        tag: Optional[str] = None,
-        ts: Optional[datetime] = None,
-    ) -> None:
-        """Write a typed event to the ledger.
-
-        Parameters
-        ----------
-        time_index : str
-            Time index for the event
-        namespace : NamespaceLike
-            Event namespace
-        kind : str
-            Event kind/type
-        experiment_id : str
-            Experiment identifier
-        step_key : str
-            Step key within experiment
-        payload_type : str
-            Type of payload for wrap/unwrap handling
-        payload : Any
-            Payload data to be wrapped
-        tag : str, optional
-            Optional tag for filtering
-        ts : datetime, optional
-            Timestamp, defaults to now
-        """
-        if ts is None:
-            ts = datetime.now(timezone.utc)
-        elif ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-
-        # Convert experiment_id + step_key to entity format
-        entity = f"{experiment_id}#{step_key}"
-
-        # Wrap payload using registered handler
-        payload_json = PayloadTypeRegistry.wrap(payload_type, payload)
-
-        # For JSON columns, we need to store the dict object, not JSON string
-        import json
-
-        if isinstance(payload_json, str):
-            try:
-                payload_obj = json.loads(payload_json)
-            except (json.JSONDecodeError, TypeError):
-                payload_obj = payload_json
-        else:
-            payload_obj = payload_json
-
-        # Create record without UUID (will be auto-generated)
-        record = {
-            "ledger_name": self.ledger_name,
-            "time_index": str(time_index),
+    def _normalize(self, e: Mapping[str, Any]) -> dict:
+        """Normalize a user event to the base row shape. No dtype decisions here."""
+        import uuid as _uuid
+        ts = e.get("ts") or self._now()
+        return {
+            "uuid": e.get("uuid") or _uuid.uuid4().hex,
             "ts": ts,
-            "namespace": str(namespace),
-            "kind": kind,
-            "entity": entity,
-            "snapshot_id": str(step_key),
-            "tag": tag or "",
-            "payload_type": payload_type,
-            "payload": payload_obj,
-            "earlysign_version": __version__,
+            "payload_type": e.get("payload_type", "json"),
+            "labels": dict(e.get("labels") or {}),
+            "payload": dict(e.get("payload") or {}),
         }
 
-        # Use ibis insert method with auto-generated UUID
-        self.connection.insert(self.table_name, [record])
+    # Write API ----------------------------------------------------------
+    def ensure(self) -> None:
+        """Ensure base (and typed) tables exist per the active strategy."""
+        self.df.ensure()
 
-    def unwrap_payload(self, payload_type: str, payload_json: Any) -> Any:
+    def insert_event(
+        self,
+        *,
+        payload_type: str = "json",
+        payload: Mapping[str, Any] | None = None,
+        labels: Mapping[str, Any] | None = None,
+        ts: Optional[str] = None,
+        uuid: Optional[str] = None,
+    ) -> str:
+        row = self._normalize(
+            {
+                "uuid": uuid,
+                "ts": ts,
+                "payload_type": payload_type,
+                "payload": payload or {},
+                "labels": labels or {},
+            }
+        )
+        self.ensure()
+        self.df.append_rows([row])
+        return row["uuid"]
+
+    def insert_events(self, events: List[Mapping[str, Any]]) -> Dict[str, Any]:
+        rows = [self._normalize(e) for e in events]
+        self.ensure()
+        self.df.append_rows(rows)
+        return {
+            "inserted": len(rows),
+            "failed": 0,
+            "errors": [],
+            "uuids": [r["uuid"] for r in rows],
+        }
+
+    def save(
+        self,
+        records: Optional[Iterable[Mapping[str, Any]]] | None = None,
+        *,
+        mode: Literal["append", "replace", "upsert"] = "append",
+        match_keys: Optional[List[str]] = None,
+        dest_connector: Optional[ibis.BaseBackend] = None,
+        dest_strategy: Optional[Any] = None,
+        dest_table_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Save the current view (or provided records) into a destination.
+
+        If dest_* are omitted, saves back into this ledger.
+        We do not choose types here; we only hand rows to the destination DF/strategy.
         """
-        Unwrap payload using PayloadTypeRegistry.
+        # Materialize source rows
+        if records is None:
+            cur = self.df.t.execute()
+            recs = cur.to_dict("records") if hasattr(cur, "to_dict") else list(cur)
+        else:
+            recs = list(records)
+        rows = [self._normalize(r) for r in recs]
 
-        This is a convenience method for callers who need to decode
-        payloads from query results.
+        # Destination selection
+        if dest_connector or dest_table_name or dest_strategy:
+            dest_con = dest_connector or self.connector
+            if not dest_con:
+                raise ValueError("Destination connector not set")
+            dest_tbl = dest_table_name or self.table_name
+            dest_df = LedgerDF(dest_con, dest_tbl)
+            if dest_strategy is not None:
+                dest_df.set_strategy(dest_strategy)
+            else:
+                # Mirror current style (typed or json) without guessing types
+                if isinstance(self.df._strategy, TypedStrategy):  # type: ignore[attr-defined]
+                    dest_df.set_strategy(TypedStrategy())
+                else:
+                    dest_df.set_strategy(JsonStrategy())
+            for h in self.df._handlers.values():  # type: ignore[attr-defined]
+                dest_df.register_handler(h)
+            dest_df.ensure()
+            target = dest_df
+        else:
+            self.ensure()
+            target = self.df
 
-        Parameters
-        ----------
-        payload_type : str
-            Type of payload for unwrap handling
-        payload_json : str or dict
-            JSON payload string to unwrap, or dict if from native JSON column
-
-        Returns
-        -------
-        Any
-            Unwrapped payload data
-        """
-        # Handle native JSON column types that return dict objects directly
-        if isinstance(payload_json, dict):
-            return payload_json
-
-        # Handle traditional JSON strings
-        return PayloadTypeRegistry.unwrap(payload_type, payload_json)
-
-    def unwrap_results(self, df: Any) -> List[Dict[str, Any]]:
-        """
-        Convenience method to unwrap payloads in query results.
-
-        Takes a pandas DataFrame from ibis query execution and
-        unwraps the payload column using payload_type.
-
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            Query results with payload and payload_type columns
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            Records with unwrapped payloads
-        """
-        records: List[Dict[str, Any]] = df.to_dict("records")
-
-        for record in records:
-            if "payload" in record and "payload_type" in record:
-                record["payload"] = self.unwrap_payload(
-                    record["payload_type"], record["payload"]
-                )
-
-        return records
-
-
-def create_test_connection(backend: str = "duckdb") -> BaseBackend:
-    """Create a test connection for testing purposes.
-
-    Parameters
-    ----------
-    backend : str
-        Backend type ("duckdb" or "polars")
-
-    Returns
-    -------
-    BaseBackend
-        Ibis backend connection
-
-    Examples
-    --------
-    >>> conn = create_test_connection("duckdb")
-    >>> ledger = Ledger(conn, "test")
-    >>> ledger.write_event(
-    ...     time_index="t1", namespace=Namespace.OBS, kind="test",
-    ...     experiment_id="exp1", step_key="s1", payload_type="TestData",
-    ...     payload={"value": 42}
-    ... )
-    >>> results = ledger.table.execute()
-    >>> records = ledger.unwrap_results(results)
-    >>> len(records)
-    1
-    >>> records[0]["payload"]["value"]
-    42
-    """
-    if backend == "duckdb":
-        return ibis.duckdb.connect(":memory:")
-    elif backend == "polars":
-        return ibis.polars.connect()
-    else:
-        raise ValueError(f"Unsupported backend: {backend}. Use 'duckdb' or 'polars'.")
+        # Execute write
+        if mode == "append":
+            target.append_rows(rows)
+            return {"written": len(rows), "replaced": 0, "upserted": 0, "errors": []}
+        if mode == "replace":
+            prev = target.replace_all(rows)
+            return {"written": len(rows), "replaced": prev, "upserted": 0, "errors": []}
+        if mode == "upsert":
+            keys = match_keys or ["uuid"]  # reserved for future smarter policies
+            _ = keys  # keep signature stable; implementation is naive by uuid
+            res = target.upsert_rows(rows, keys)
+            return {
+                "written": len(rows),
+                "replaced": 0,
+                "upserted": res.get("inserted", 0) + res.get("updated", 0),
+                "errors": [],
+            }
+        raise ValueError("mode must be append|replace|upsert")
