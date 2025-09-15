@@ -109,10 +109,10 @@ True
 ...   L.df
 ...     .select(
 ...       "uuid",
-...       nA=L.df.payload["nA"].cast("int64"),
-...       mA=L.df.payload["mA"].cast("int64"),
-...       nB=L.df.payload["nB"].cast("int64"),
-...       mB=L.df.payload["mB"].cast("int64"),
+...       nA=L.t.payload["nA"].cast("int64"),
+...       mA=L.t.payload["mA"].cast("int64"),
+...       nB=L.t.payload["nB"].cast("int64"),
+...       mB=L.t.payload["mB"].cast("int64"),
 ...     )
 ...     .execute()
 ... )
@@ -138,8 +138,8 @@ True
 ... )
 >>> q2 = (
 ...   L.df
-...     .filter(L.df.t.payload_type == "TwoPropObsBatch")
-...     .select(n_treat=L.df.payload["nA"].cast("int64"))
+...     .filter(L.t.payload_type == "TwoPropObsBatch")
+...     .select(n_treat=L.t.payload["nA"].cast("int64"))
 ... )
 >>> rows = q2.execute().to_dict("records")
 >>> rows[0]["n_treat"]
@@ -161,13 +161,13 @@ True
 # create stats rows (typed handler is optional for stats; we use json)
 >>> obs_df = (
 ...   L.df
-...     .filter(L.df.labels["kind"] == "observation")
+...     .filter(L.t.labels["kind"].cast("string") == "observation")
 ...     .select(
 ...       "uuid",
-...       nA=L.df.payload["nA"].cast("int64"),
-...       mA=L.df.payload["mA"].cast("int64"),
-...       nB=L.df.payload["nB"].cast("int64"),
-...       mB=L.df.payload["mB"].cast("int64"),
+...       nA=L.t.payload["nA"].cast("int64"),
+...       mA=L.t.payload["mA"].cast("int64"),
+...       nB=L.t.payload["nB"].cast("int64"),
+...       mB=L.t.payload["mB"].cast("int64"),
 ...     )
 ...     .execute()
 ... )
@@ -182,7 +182,7 @@ True
 >>> _ = L.insert_events(stat_rows)
 
 # criteria rows from stats
->>> stats_df = L.df.select(p=L.df.payload["p"].cast("float64")).execute()
+>>> stats_df = L.t.select(p=L.t.payload["p"].cast("float64")).execute()
 >>> crit_rows = []
 >>> for _, r in stats_df.iterrows():
 ...     ok = bool(r["p"] < 0.05)
@@ -194,7 +194,7 @@ True
 >>> _ = L.insert_events(crit_rows)
 
 # final signal
->>> crit = L.df.select(ok=L.df.payload["ok"].cast("boolean")).execute()
+>>> crit = L.t.select(ok=L.t.payload["ok"].cast("boolean")).execute()
 >>> decision = "Go" if (len(crit) and crit["ok"].any()) else "Hold"
 >>> _ = L.insert_event(payload_type="json", payload={"decision": decision}, labels={"kind":"signal"})
 
@@ -203,10 +203,10 @@ True
 ...   L.df
 ...     .select(
 ...       "ts",
-...       kind=L.df.labels["kind"],
-...       z=L.df.payload["z"].cast("float64"),
-...       p=L.df.payload["p"].cast("float64"),
-...       decision=L.df.payload["decision"],
+...       kind=L.t.labels["kind"],
+...       z=L.t.payload["z"].cast("float64"),
+...       p=L.t.payload["p"].cast("float64"),
+...       decision=L.t.payload["decision"],
 ...     )
 ...     .execute()
 ...     .sort_values("ts")
@@ -218,13 +218,13 @@ True
 
 # -- save(): append / replace / upsert の最小確認 --
 >>> # snapshot current rows
->>> snap = L.df.t.execute()
+>>> snap = L.t.execute()
 >>> n0 = len(snap)
 >>> res_append = L.save(mode="append")
 >>> assert res_append["written"] >= 0  # append may repeat
 >>> res_replace = L.save(mode="replace")
 >>> assert res_replace["replaced"] >= 0
 >>> res_upsert = L.save(mode="upsert", match_keys=["uuid"])
->>> assert "upserted" in res_upsert
+>>> "upserted" in res_upsert
 True
 """

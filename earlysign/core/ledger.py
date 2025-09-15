@@ -28,13 +28,13 @@ Doctests include:
 
 # Query using Ibis JSON API (delegate end-to-end)
 >>> obs = (
-...   L.df
+...   L.t
 ...     .select(
 ...       "uuid",
-...       nA=L.df.payload["nA"].cast("int64"),
-...       mA=L.df.payload["mA"].cast("int64"),
-...       nB=L.df.payload["nB"].cast("int64"),
-...       mB=L.df.payload["mB"].cast("int64"),
+...       nA=L.t.payload["nA"].cast("int64"),
+...       mA=L.t.payload["mA"].cast("int64"),
+...       nB=L.t.payload["nB"].cast("int64"),
+...       mB=L.t.payload["mB"].cast("int64"),
 ...     )
 ...     .execute()
 ... )
@@ -57,9 +57,9 @@ True
 
 # JSON access keeps working the same way (joined or JSON)
 >>> q2 = (
-...   L.df
-...     .filter(L.df.t.payload_type == "TwoPropObsBatch")
-...     .select(n_treat=L.df.payload["nA"].cast("int64"))
+...   L.t
+...     .filter(L.t.payload_type == "TwoPropObsBatch")
+...     .select(n_treat=L.t.payload["nA"].cast("int64"))
 ... )
 >>> rows = q2.execute().to_dict("records")
 >>> rows[0]["n_treat"]
@@ -85,14 +85,14 @@ True
 ...         "tag": "demo",
 ...     },
 ... )
->>> query = ledger.df.filter(ledger.df.t.payload_type == "TwoProportion")
+>>> query = ledger.t.filter(ledger.t.payload_type == "TwoProportion")
 >>> results = query.execute()
 >>> len(results) >= 1
 True
 >>> qn = (
-...   ledger.df
-...     .filter(ledger.df.t.payload_type == "TwoProportion")
-...     .select(n_treatment=ledger.df.payload["n_treatment"].cast("int64"))
+...   ledger.t
+...     .filter(ledger.t.payload_type == "TwoProportion")
+...     .select(n_treatment=ledger.t.payload["n_treatment"].cast("int64"))
 ... )
 >>> r2 = qn.execute().to_dict("records")
 >>> r2[0]["n_treatment"]
@@ -139,7 +139,7 @@ class Ledger:
         return self
 
     @property
-    def df(self) -> LedgerDF:
+    def t(self) -> LedgerDF:
         """Build a LedgerDF lazily; default JsonStrategy unless changed later."""
         if not self.connector:
             raise ValueError("Connector not set")
@@ -148,13 +148,25 @@ class Ledger:
             self._df.set_strategy(JsonStrategy())
         return self._df
 
+    @property
+    def df(self) -> LedgerDF:
+        """Legacy alias for .t property. Use .t for consistency with ibis-framework."""
+        import warnings
+
+        warnings.warn(
+            "ledger.df is deprecated. Use ledger.t for consistency with ibis-framework.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.t
+
     # Strategy / handler configuration ----------------------------------
     def set_strategy(self, strategy: Any) -> "Ledger":
-        self.df.set_strategy(strategy)
+        self.t.set_strategy(strategy)
         return self
 
     def register_handler(self, handler: LedgerDataHandler) -> "Ledger":
-        self.df.register_handler(handler)
+        self.t.register_handler(handler)
         return self
 
     def set_handlers(self, handlers: Mapping[str, LedgerDataHandler]) -> "Ledger":
@@ -184,7 +196,7 @@ class Ledger:
     # Write API ----------------------------------------------------------
     def ensure(self) -> None:
         """Ensure base (and typed) tables exist per the active strategy."""
-        self.df.ensure()
+        self.t.ensure()
 
     def insert_event(
         self,
@@ -205,13 +217,13 @@ class Ledger:
             }
         )
         self.ensure()
-        self.df.append_rows([row])
+        self.t.append_rows([row])
         return str(row["uuid"])
 
     def insert_events(self, events: List[Mapping[str, Any]]) -> Dict[str, Any]:
         rows = [self._normalize(e) for e in events]
         self.ensure()
-        self.df.append_rows(rows)
+        self.t.append_rows(rows)
         return {
             "inserted": len(rows),
             "failed": 0,
@@ -236,7 +248,7 @@ class Ledger:
         """
         # Materialize source rows
         if records is None:
-            cur = self.df.t.execute()
+            cur = self.t.execute()
             recs = cur.to_dict("records") if hasattr(cur, "to_dict") else list(cur)
         else:
             recs = list(records)
@@ -253,17 +265,17 @@ class Ledger:
                 dest_df.set_strategy(dest_strategy)
             else:
                 # Mirror current style (typed or json) without guessing types
-                if isinstance(self.df._strategy, TypedStrategy):
+                if isinstance(self.t._strategy, TypedStrategy):
                     dest_df.set_strategy(TypedStrategy())
                 else:
                     dest_df.set_strategy(JsonStrategy())
-            for h in self.df._handlers.values():
+            for h in self.t._handlers.values():
                 dest_df.register_handler(h)
             dest_df.ensure()
             target = dest_df
         else:
             self.ensure()
-            target = self.df
+            target = self.t
 
         # Execute write
         if mode == "append":

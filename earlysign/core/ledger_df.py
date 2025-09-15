@@ -122,9 +122,9 @@ class LedgerDataHandler:
         return list(self._payload_cols)
 
     def join_to_base(self, base: TableExpr, typed: TableExpr) -> TableExpr:
-        # Thin default: inner join on FK; strategies may choose a different join
+        # Use left join so base records remain even if no typed data
         fk_column = getattr(typed, self._fk_name)
-        return base.join(typed, base.uuid == fk_column)
+        return base.left_join(typed, base.uuid == fk_column)
 
     @classmethod
     def from_schema(
@@ -264,14 +264,21 @@ class JsonStrategy(PersistStrategy):
     ) -> Dict[str, int]:
         data = list(rows)
         if not data:
-            return {"deleted": 0, "inserted": 0, "updated": 0}
+            return {"deleted": 0, "inserted": 0, "updated": 0, "upserted": 0}
         be = df.connector
         uuids = [r["uuid"] for r in data if "uuid" in r]
         if uuids:
             inlist = ",".join(f"'{u}'" for u in uuids)
             be.raw_sql(f'DELETE FROM "{df.table_name}" WHERE uuid IN ({inlist})')
         be.insert(df.table_name, data)
-        return {"deleted": len(uuids), "inserted": len(data), "updated": 0}
+        inserted = len(data)
+        updated = 0
+        return {
+            "deleted": len(uuids),
+            "inserted": inserted,
+            "updated": updated,
+            "upserted": inserted + updated,
+        }
 
 
 class TypedStrategy(JsonStrategy):
@@ -332,7 +339,7 @@ class TypedStrategy(JsonStrategy):
     ) -> Dict[str, int]:
         data = list(rows)
         if not data:
-            return {"deleted": 0, "inserted": 0, "updated": 0}
+            return {"deleted": 0, "inserted": 0, "updated": 0, "upserted": 0}
         be = df.connector
         uuids = [r["uuid"] for r in data if "uuid" in r]
         if uuids:
@@ -343,7 +350,14 @@ class TypedStrategy(JsonStrategy):
                     f'DELETE FROM "{h.typed_table_name(df.table_name)}" WHERE event_uuid IN ({inlist})'
                 )
         self.append(df, data)
-        return {"deleted": len(uuids), "inserted": len(data), "updated": 0}
+        inserted = len(data)
+        updated = 0
+        return {
+            "deleted": len(uuids),
+            "inserted": inserted,
+            "updated": updated,
+            "upserted": inserted + updated,
+        }
 
 
 # ---------- Main DF wrapper (thin) ----------
@@ -397,6 +411,11 @@ class LedgerDF:
     # ---- Core table exposure & dynamic delegation ----
     @property
     def t(self) -> TableExpr:
+        """Legacy property for backward compatibility. Use direct column access instead."""
+        return self._get_table()
+
+    def _get_table(self) -> TableExpr:
+        """Internal method to get the actual table expression."""
         if self._t_cache is not None:
             return self._t_cache
         base = self.connector.table(self.table_name)
@@ -414,12 +433,12 @@ class LedgerDF:
     @property
     def payload(self) -> Any:
         # Expose JSON column exactly as Ibis does
-        return self.t.payload
+        return self._get_table().payload
 
     @property
     def labels(self) -> Any:
         # Expose JSON column exactly as Ibis does
-        return self.t.labels
+        return self._get_table().labels
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -427,7 +446,7 @@ class LedgerDF:
         This keeps the wrapper thin and future-proof to Ibis API changes.
         """
         try:
-            return getattr(self.t, name)
+            return getattr(self._get_table(), name)
         except AttributeError:
             raise
 
@@ -435,7 +454,7 @@ class LedgerDF:
         """
         Improve IDE completion by merging our attributes with Ibis table attributes.
         """
-        return sorted(set(super().__dir__()) | set(dir(self.t)))
+        return sorted(set(super().__dir__()) | set(dir(self._get_table())))
 
     # Persistence (owned by strategy) -----------------------------------
     def ensure(self) -> None:
