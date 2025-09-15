@@ -37,14 +37,14 @@ class LedgerReporter:
 
     def ledger_table(self) -> Any:
         """Return the underlying ledger table as ibis expression."""
-        return self.ledger.table
+        return self.ledger.df
 
     def unique_entities(self) -> list[str]:
         """List all unique experiment entities."""
-        table = self.ledger.table
+        table = self.ledger.df
         try:
             # Check if entity column exists and get unique values
-            unique_values = table.select(table.entity).distinct().execute()
+            unique_values = table.select(table.labels["experiment_id"].cast("string").name("entity")).distinct().execute()
             entities = [row.entity for row in unique_values if row.entity is not None]
             return sorted(entities)
         except Exception:
@@ -53,10 +53,10 @@ class LedgerReporter:
 
     def unique_namespaces(self) -> list[str]:
         """List all unique event namespaces."""
-        table = self.ledger.table
+        table = self.ledger.df
         try:
             # Get unique namespace values
-            unique_values = table.select(table.namespace).distinct().execute()
+            unique_values = table.select(table.labels["namespace"].cast("string").name("namespace")).distinct().execute()
             namespaces = [
                 row.namespace for row in unique_values if row.namespace is not None
             ]
@@ -66,10 +66,10 @@ class LedgerReporter:
 
     def unique_kinds(self) -> list[str]:
         """List all unique event kinds."""
-        table = self.ledger.table
+        table = self.ledger.df
         try:
             # Get unique kind values
-            unique_values = table.select(table.kind).distinct().execute()
+            unique_values = table.select(table.labels["kind"].cast("string").name("kind")).distinct().execute()
             kinds = [row.kind for row in unique_values if row.kind is not None]
             return sorted(kinds)
         except Exception:
@@ -84,13 +84,17 @@ class LedgerReporter:
         ibis.Table
             Table with namespace, kind, and count columns
         """
-        table = self.ledger.table
+        table = self.ledger.df
         try:
             # Group by namespace and kind, count events
             counts = (
-                table.group_by([table.namespace, table.kind])
+                table.select(
+                    namespace=table.labels["namespace"].cast("string"),
+                    kind=table.labels["kind"].cast("string")
+                )
+                .group_by(["namespace", "kind"])
                 .aggregate(count=ibis._.count())
-                .order_by([table.namespace, table.kind])
+                .order_by(["namespace", "kind"])
             )
             return counts
         except Exception:

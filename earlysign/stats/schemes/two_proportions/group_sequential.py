@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Union, Optional, Dict, Any
 
 from earlysign.core.components import Criteria, Signaler, Statistic
-from earlysign.core.ledger import Namespace
+from earlysign.core.components import Namespace
 from earlysign.core.ledger import Ledger
 from earlysign.stats.common.group_sequential import (
     lan_demets_spending,

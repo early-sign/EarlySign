@@ -66,7 +66,6 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Any
 
 from earlysign.core.ledger import Ledger
-from earlysign.core.ledger import Namespace
 
 
 @dataclass

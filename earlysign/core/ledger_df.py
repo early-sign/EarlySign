@@ -123,7 +123,8 @@ class LedgerDataHandler:
 
     def join_to_base(self, base: TableExpr, typed: TableExpr) -> TableExpr:
         # Thin default: inner join on FK; strategies may choose a different join
-        return base.join(typed, base.uuid == typed[self._fk_name])  # type: ignore[index]
+        fk_column = getattr(typed, self._fk_name)
+        return base.join(typed, base.uuid == fk_column)
 
     @classmethod
     def from_schema(
@@ -148,7 +149,7 @@ class LedgerDataHandler:
     def from_typeddict(
         cls,
         name: str,
-        typed_dict: Type,
+        typed_dict: Type[Any],
         *,
         typed_table_name: Optional[str] = None,
         fk_name: str = "event_uuid",
@@ -411,16 +412,16 @@ class LedgerDF:
         return self._t_cache
 
     @property
-    def payload(self):
+    def payload(self) -> Any:
         # Expose JSON column exactly as Ibis does
-        return self.t.payload  # type: ignore[attr-defined]
+        return self.t.payload
 
     @property
-    def labels(self):
+    def labels(self) -> Any:
         # Expose JSON column exactly as Ibis does
-        return self.t.labels  # type: ignore[attr-defined]
+        return self.t.labels
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         """
         Delegate unknown attributes/methods to the underlying Ibis table.
         This keeps the wrapper thin and future-proof to Ibis API changes.
@@ -430,7 +431,7 @@ class LedgerDF:
         except AttributeError:
             raise
 
-    def __dir__(self):
+    def __dir__(self) -> List[str]:
         """
         Improve IDE completion by merging our attributes with Ibis table attributes.
         """

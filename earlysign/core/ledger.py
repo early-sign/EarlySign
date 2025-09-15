@@ -149,7 +149,7 @@ class Ledger:
         return self._df
 
     # Strategy / handler configuration ----------------------------------
-    def set_strategy(self, strategy) -> "Ledger":
+    def set_strategy(self, strategy: Any) -> "Ledger":
         self.df.set_strategy(strategy)
         return self
 
@@ -168,7 +168,7 @@ class Ledger:
 
         return datetime.now(timezone.utc).isoformat()
 
-    def _normalize(self, e: Mapping[str, Any]) -> dict:
+    def _normalize(self, e: Mapping[str, Any]) -> Dict[str, Any]:
         """Normalize a user event to the base row shape. No dtype decisions here."""
         import uuid as _uuid
 
@@ -253,11 +253,11 @@ class Ledger:
                 dest_df.set_strategy(dest_strategy)
             else:
                 # Mirror current style (typed or json) without guessing types
-                if isinstance(self.df._strategy, TypedStrategy):  # type: ignore[attr-defined]
+                if isinstance(self.df._strategy, TypedStrategy):
                     dest_df.set_strategy(TypedStrategy())
                 else:
                     dest_df.set_strategy(JsonStrategy())
-            for h in self.df._handlers.values():  # type: ignore[attr-defined]
+            for h in self.df._handlers.values():
                 dest_df.register_handler(h)
             dest_df.ensure()
             target = dest_df

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Union, Dict, Any
 
 from earlysign.core.components import Criteria, Signaler, Statistic
-from earlysign.core.ledger import Namespace
+from earlysign.core.components import Namespace
 from earlysign.core.ledger import Ledger
 from earlysign.stats.common.e_process import (
     log_beta_binomial_evalue_simple,

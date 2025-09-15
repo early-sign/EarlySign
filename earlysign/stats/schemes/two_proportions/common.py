@@ -16,8 +16,8 @@ from datetime import datetime, timezone
 from typing import TypedDict, Union, List, Dict, Any, Optional, Tuple
 
 from earlysign.core.components import Observer
-from earlysign.core.ledger import Ledger, PayloadTypeRegistry, PayloadType
-from earlysign.core.ledger import Namespace
+from earlysign.core.ledger import Ledger
+from earlysign.core.components import Namespace
 
 
 # --- Type Definitions ---
@@ -257,16 +257,17 @@ class TwoPropObservation(Observer):
                 return False
 
         # Register to ledger
-        ledger.write_event(
-            time_index=str(time_index),
-            namespace=self.ns_obs,
-            kind="observation",
-            experiment_id=str(experiment_id),
-            step_key=str(step_key),
+        ledger.insert_event(
             payload_type="TwoPropObsBatch",
             payload=batch.to_payload(),
-            tag=self.tag_obs,
-            ts=batch.timestamp or datetime.now(timezone.utc),
+            labels={
+                "namespace": self.ns_obs,
+                "kind": "observation",
+                "experiment_id": str(experiment_id),
+                "step_key": str(step_key),
+                "tag": self.tag_obs,
+            },
+            ts=batch.timestamp.isoformat() if batch.timestamp else None,
         )
 
         return True
@@ -372,22 +373,22 @@ def reduce_counts(
         Tuple of (nA, nB, mA, mB) - total and success counts for both groups
     """
     # Base query for observation events
-    obs_filter = (ledger.table.namespace == str(Namespace.OBS)) & (
-        ledger.table.entity.startswith(str(experiment_id) + "#")
+    obs_filter = (ledger.df.labels["namespace"].cast("string") == str(Namespace.OBS)) & (
+        ledger.df.labels["experiment_id"].cast("string").startswith(str(experiment_id))
     )
 
     # Add step key filter if specified
     if step_key is not None:
-        obs_filter &= ledger.table.step_key == str(step_key)
+        obs_filter &= ledger.df.labels["step_key"].cast("string") == str(step_key)
 
-    obs_query = ledger.table.filter(obs_filter)
+    obs_query = ledger.df.filter(obs_filter)
     obs_results = obs_query.execute()
 
-    if obs_results.empty:
+    if len(obs_results) == 0:
         return 0, 0, 0, 0
 
     # Aggregate counts across all observations
-    records = ledger.unwrap_results(obs_results)
+    records = obs_results.to_pylist() if hasattr(obs_results, 'to_pylist') else obs_results.to_dict('records')
 
     nA_total, nB_total, mA_total, mB_total = 0, 0, 0, 0
 
@@ -417,21 +418,21 @@ def get_latest_statistic(
         Latest statistic payload or None if not found
     """
     stat_query = (
-        ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.STATS))
-            & (ledger.table.tag == stat_tag)
-            & (ledger.table.entity.startswith(str(experiment_id) + "#"))
+        ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.STATS))
+            & (ledger.df.labels["tag"].cast("string") == stat_tag)
+            & (ledger.df.labels["experiment_id"].cast("string") == str(experiment_id))
         )
-        .order_by(ledger.table.ts.desc())
+        .order_by(ledger.df.ts.desc())
         .limit(1)
     )
 
     stat_results = stat_query.execute()
 
-    if stat_results.empty:
+    if len(stat_results) == 0:
         return None
 
-    records = ledger.unwrap_results(stat_results)
+    records = stat_results.to_pylist() if hasattr(stat_results, 'to_pylist') else stat_results.to_dict('records')
     return records[0]["payload"] if records else None
 
 
@@ -450,21 +451,21 @@ def get_latest_criteria(
         Latest criteria payload or None if not found
     """
     criteria_query = (
-        ledger.table.filter(
-            (ledger.table.namespace == str(Namespace.CRITERIA))
-            & (ledger.table.tag == criteria_tag)
-            & (ledger.table.entity.startswith(str(experiment_id) + "#"))
+        ledger.df.filter(
+            (ledger.df.labels["namespace"].cast("string") == str(Namespace.CRITERIA))
+            & (ledger.df.labels["tag"].cast("string") == criteria_tag)
+            & (ledger.df.labels["experiment_id"].cast("string") == str(experiment_id))
         )
-        .order_by(ledger.table.ts.desc())
+        .order_by(ledger.df.ts.desc())
         .limit(1)
     )
 
     criteria_results = criteria_query.execute()
 
-    if criteria_results.empty:
+    if len(criteria_results) == 0:
         return None
 
-    records = ledger.unwrap_results(criteria_results)
+    records = criteria_results.to_pylist() if hasattr(criteria_results, 'to_pylist') else criteria_results.to_dict('records')
     return records[0]["payload"] if records else None
 
 
@@ -630,64 +631,3 @@ def unpooled_proportion_se(nA: int, nB: int, mA: int, mB: int) -> float:
     var = pA_hat * (1 - pA_hat) / max(nA, 1) + pB_hat * (1 - pB_hat) / max(nB, 1)
 
     return math.sqrt(var) if var > 0 else float("inf")
-
-
-# --- Payload Type Handlers ---
-
-
-def _register_two_prop_payloads() -> None:
-    """Register two-proportions payload types for efficient structured queries."""
-
-    # TwoPropObsBatch handler
-    class TwoPropObsBatchHandler(PayloadType):
-        def wrap(self, data: Union[TwoPropObsBatchData, Dict[str, Any]]) -> str:
-            if isinstance(data, dict):
-                payload = {
-                    "nA": data["nA"],
-                    "nB": data["nB"],
-                    "mA": data["mA"],
-                    "mB": data["mB"],
-                }
-            else:
-                payload = {
-                    "nA": data.nA,
-                    "nB": data.nB,
-                    "mA": data.mA,
-                    "mB": data.mB,
-                }
-            return PayloadTypeRegistry._default_handler.wrap(payload)
-
-        def unwrap(self, json_str: str) -> TwoPropObsBatchData:
-            payload = PayloadTypeRegistry._default_handler.unwrap(json_str)
-            return TwoPropObsBatchData(
-                nA=payload["nA"],
-                nB=payload["nB"],
-                mA=payload["mA"],
-                mB=payload["mB"],
-            )
-
-    PayloadTypeRegistry.register("TwoPropObsBatch", TwoPropObsBatchHandler())
-
-    # WaldZ payload handler
-    class WaldZPayloadHandler(PayloadType):
-        def wrap(self, data: Union[WaldZPayload, Dict[str, Any]]) -> str:
-            return PayloadTypeRegistry._default_handler.wrap(dict(data))
-
-        def unwrap(self, json_str: str) -> WaldZPayload:
-            payload = PayloadTypeRegistry._default_handler.unwrap(json_str)
-            return WaldZPayload(
-                z=payload["z"],
-                se=payload["se"],
-                nA=payload["nA"],
-                nB=payload["nB"],
-                mA=payload["mA"],
-                mB=payload["mB"],
-                pA_hat=payload["pA_hat"],
-                pB_hat=payload["pB_hat"],
-            )
-
-    PayloadTypeRegistry.register("WaldZPayload", WaldZPayloadHandler())
-
-
-# Auto-register payload types
-_register_two_prop_payloads()
