@@ -58,10 +58,10 @@ class BetaBinomialEValue(Statistic):
         tag_stats: Tag for statistic events
 
     Events consumed:
-        - Namespace.OBS: TwoPropObsBatch observations
+        - Namespace.OBS.value: TwoPropObsBatch observations
 
     Events produced:
-        - Namespace.STATS: BetaBinomialEValue with e-value and metadata
+        - Namespace.STATS.value: BetaBinomialEValue with e-value and metadata
     """
 
     alpha_prior: float = 1.0
@@ -127,7 +127,7 @@ class BetaBinomialEValue(Statistic):
             payload_type="BetaBinomialEValue",
             payload=payload,
             labels={
-                "namespace": Namespace.STATS,
+                "namespace": Namespace.STATS.value,
                 "kind": "updated",
                 "experiment_id": str(experiment_id),
                 "step_key": str(step_key),
@@ -154,7 +154,7 @@ class SafeThreshold(Criteria):
         tag_crit: Tag for criteria events in ledger
 
     Events produced:
-        - Namespace.CRITERIA: SafeThreshold with threshold value
+        - Namespace.CRITERIA.value: SafeThreshold with threshold value
     """
 
     alpha_level: float = 0.05
@@ -181,7 +181,7 @@ class SafeThreshold(Criteria):
             payload_type="SafeThreshold",
             payload=payload,
             labels={
-                "namespace": Namespace.CRITERIA,
+                "namespace": Namespace.CRITERIA.value,
                 "kind": "updated",
                 "experiment_id": str(experiment_id),
                 "step_key": str(step_key),
@@ -209,11 +209,11 @@ class SafeSignaler(Signaler):
         min_observations: Minimum observations required before signaling
 
     Events consumed:
-        - Namespace.STATS: BetaBinomialEValue events
-        - Namespace.CRITERIA: SafeThreshold events
+        - Namespace.STATS.value: BetaBinomialEValue events
+        - Namespace.CRITERIA.value: SafeThreshold events
 
     Events produced:
-        - Namespace.SIGNALS: Decision signals with action and evidence
+        - Namespace.SIGNALS.value: Decision signals with action and evidence
     """
 
     decision_topic: str = "safe_decision"
@@ -286,7 +286,7 @@ class SafeSignaler(Signaler):
                 "scheme": "two_proportions",
             },
             labels={
-                "namespace": Namespace.SIGNALS,
+                "namespace": Namespace.SIGNALS.value,
                 "kind": "decision",
                 "experiment_id": str(experiment_id),
                 "step_key": str(step_key),

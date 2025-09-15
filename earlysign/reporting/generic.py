@@ -46,9 +46,7 @@ class LedgerReporter:
         try:
             # Check if entity column exists and get unique values
             unique_values = (
-                table.select(
-                    table.labels["experiment_id"].cast("string").name("entity")
-                )
+                table.select(table.labels["experiment_id"].str.name("entity"))
                 .distinct()
                 .execute()
             )
@@ -64,7 +62,7 @@ class LedgerReporter:
         try:
             # Get unique namespace values
             unique_values = (
-                table.select(table.labels["namespace"].cast("string").name("namespace"))
+                table.select(table.labels["namespace"].str.name("namespace"))
                 .distinct()
                 .execute()
             )
@@ -81,9 +79,7 @@ class LedgerReporter:
         try:
             # Get unique kind values
             unique_values = (
-                table.select(table.labels["kind"].cast("string").name("kind"))
-                .distinct()
-                .execute()
+                table.select(table.labels["kind"].str.name("kind")).distinct().execute()
             )
             kinds = [row.kind for row in unique_values if row.kind is not None]
             return sorted(kinds)
@@ -104,8 +100,8 @@ class LedgerReporter:
             # Group by namespace and kind, count events
             counts = (
                 table.select(
-                    namespace=table.labels["namespace"].cast("string"),
-                    kind=table.labels["kind"].cast("string"),
+                    namespace=table.labels["namespace"].str,
+                    kind=table.labels["kind"].str,
                 )
                 .group_by(["namespace", "kind"])
                 .aggregate(count=ibis._.count())
@@ -115,7 +111,7 @@ class LedgerReporter:
         except Exception:
             # Return empty table if error occurs
             return table.limit(0).select(
-                namespace=ibis.literal("").cast("string"),
-                kind=ibis.literal("").cast("string"),
+                namespace=ibis.literal("").str,
+                kind=ibis.literal("").str,
                 count=ibis.literal(0).cast("int64"),
             )

@@ -29,8 +29,8 @@ Examples
 ...     def step(self, ledger, experiment_id, step_key, time_index):
 ...         # Direct ibis querying for observations
 ...         obs_count = (ledger.df
-...                     .filter(ledger.df.labels["namespace"].cast("string") == str(self.ns_stats))
-...                     .filter(ledger.df.labels["entity"].cast("string").contains(str(experiment_id)))
+...                     .filter(ledger.df.labels["namespace"].str == str(self.ns_stats))
+...                     .filter(ledger.df.labels["entity"].str.contains(str(experiment_id)))
 ...                     .count()
 ...                     .execute())
 ...
@@ -109,7 +109,7 @@ class Statistic(ComponentBase):
     which they then write back to the ledger for use by other components.
     """
 
-    ns_stats: NamespaceLike = Namespace.STATS
+    ns_stats: NamespaceLike = Namespace.STATS.value
     tag_stats: str = "stat:generic"
 
     def step(
@@ -132,7 +132,7 @@ class Criteria(ComponentBase):
     critical values based on current statistics and experimental design.
     """
 
-    ns_crit: NamespaceLike = Namespace.CRITERIA
+    ns_crit: NamespaceLike = str(Namespace.CRITERIA.value)
     tag_crit: str = "crit:generic"
 
     def step(
@@ -155,7 +155,7 @@ class Signaler(ComponentBase):
     about whether to continue, stop, or take other actions.
     """
 
-    ns_sig: NamespaceLike = Namespace.SIGNALS
+    ns_sig: NamespaceLike = Namespace.SIGNALS.value
     tag_sig: str = "signal:generic"
 
     def step(
@@ -178,7 +178,9 @@ class Recommender(ComponentBase):
     results and can suggest next actions or parameter adjustments.
     """
 
-    ns_rec: NamespaceLike = Namespace.SIGNALS  # Often use same namespace as signals
+    ns_rec: NamespaceLike = (
+        Namespace.SIGNALS.value
+    )  # Often use same namespace as signals
     tag_rec: str = "recommendation:generic"
 
     def step(
@@ -201,7 +203,7 @@ class Observer(ComponentBase):
     they are processed by statistical components.
     """
 
-    ns_obs: NamespaceLike = Namespace.OBS
+    ns_obs: NamespaceLike = Namespace.OBS.value
     tag_obs: str = "obs:generic"
 
     def step(
@@ -219,7 +221,7 @@ class Observer(ComponentBase):
 class Observation:
     """Base class for data observation components."""
 
-    ns_obs: NamespaceLike = Namespace.OBS
+    ns_obs: NamespaceLike = Namespace.OBS.value
     tag_obs: Optional[str] = "obs"
 
     def step(

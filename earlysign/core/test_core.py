@@ -161,7 +161,7 @@ True
 # create stats rows (typed handler is optional for stats; we use json)
 >>> obs_df = (
 ...   L.df
-...     .filter(L.t.labels["kind"].cast("string") == "observation")
+...     .filter(L.t.labels["kind"].str == "observation")
 ...     .select(
 ...       "uuid",
 ...       nA=L.t.payload["nA"].cast("int64"),

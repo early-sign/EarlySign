@@ -63,10 +63,10 @@ class WaldZStatistic(Statistic):
     where SE_unpooled = sqrt(p̂_A(1-p̂_A)/n_A + p̂_B(1-p̂_B)/n_B)
 
     Events consumed:
-        - Namespace.OBS: TwoPropObsBatch observations
+        - Namespace.OBS.value: TwoPropObsBatch observations
 
     Events produced:
-        - Namespace.STATS: WaldZ statistic with test details
+        - Namespace.STATS.value: WaldZ statistic with test details
 
     Attributes:
         tag_stats: Tag for statistic events (default "stat:waldz")
@@ -100,7 +100,7 @@ class WaldZStatistic(Statistic):
             payload_type="WaldZ",
             payload=dict(payload),
             labels={
-                "namespace": Namespace.STATS,
+                "namespace": Namespace.STATS.value,
                 "kind": "updated",
                 "experiment_id": str(experiment_id),
                 "step_key": str(step_key),
@@ -156,7 +156,7 @@ class LanDeMetsBoundary(Criteria):
             payload_type="GSTBoundary",
             payload=dict(payload),
             labels={
-                "namespace": Namespace.CRITERIA,
+                "namespace": str(Namespace.CRITERIA.value),
                 "kind": "updated",
                 "experiment_id": str(experiment_id),
                 "step_key": str(step_key),
@@ -222,7 +222,7 @@ class PeekSignaler(Signaler):
                     "pB_hat": z_payload.get("pB_hat", 0.0),
                 },
                 labels={
-                    "namespace": Namespace.SIGNALS,
+                    "namespace": Namespace.SIGNALS.value,
                     "kind": "decision",
                     "experiment_id": str(experiment_id),
                     "step_key": str(step_key),
@@ -315,7 +315,7 @@ class AdaptiveGSTBoundary(Criteria):
                 "scheme": "two_proportions",
             },
             labels={
-                "namespace": Namespace.STATS,
+                "namespace": Namespace.STATS.value,
                 "kind": "adapted",
                 "experiment_id": str(experiment_id),
                 "step_key": str(step_key),

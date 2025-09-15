@@ -50,26 +50,27 @@ class TwoPropGSTReporter:
         Uses ibis operations to query the ledger directly.
         """
         # Get the base table from the ledger
-        table = self.ledger.df
+        table = self.ledger.t
 
         # Query statistics data (WaldZ) using ibis
         stats_filtered = table.filter(
-            (table.labels["namespace"].cast("string") == str(Namespace.STATS))
-            & (table.kind == "updated")
+            (table.labels["namespace"].str == str(Namespace.STATS.value))
+            & (table.labels["kind"].str == "updated")
             & (table.payload_type == "WaldZ")
         )
 
         # Extract JSON payload fields for stats using elegant ibis JSON operations
         stats = stats_filtered.select(
-            table.time_index,
             table.ts,
-            table.entity,
+            table.labels["entity"],
             # Extract look number from time_index (remove 't' prefix), handle empty strings
-            table.time_index.substr(2)
+            table.labels["time_index"]
+            .str.substr(2)
             .nullif("")
             .coalesce("0")
             .cast("int64")
             .name("look"),
+            time_index=table.labels["time_index"],
             # Extract values from JSON payload using elegant syntax
             z=table.payload["z"].cast("float64"),
             nA=table.payload["nA"].cast("int64"),
@@ -80,14 +81,14 @@ class TwoPropGSTReporter:
 
         # Query criteria data (GSTBoundary) using ibis
         crit_filtered = table.filter(
-            (table.namespace == "Namespace.CRITERIA")
-            & (table.kind == "updated")
+            (table.labels["namespace"].str == str(Namespace.CRITERIA.value))
+            # & (table.labels["kind"].str == "updated")
             & (table.payload_type == "GSTBoundary")
         )
 
         # Extract JSON payload fields for criteria using elegant ibis syntax
         crit = crit_filtered.select(
-            table.time_index,
+            time_index=table.labels["time_index"],
             upper=table.payload["upper"].cast("float64"),
             lower=table.payload["lower"].cast("float64"),
             t=table.payload["info_time"].cast("float64"),
@@ -100,7 +101,7 @@ class TwoPropGSTReporter:
         # For now, we'll compute this after executing the query since ibis case operations are complex
         result = joined.order_by("look")
 
-        return result
+        return result.execute()
 
     def _planned_design(self) -> Optional[Dict[str, Any]]:
         """
@@ -110,48 +111,42 @@ class TwoPropGSTReporter:
         Uses ibis operations to query the ledger directly.
         """
         # Get the base table from the ledger
-        table = self.ledger.df
+        table = self.ledger.t
 
         # Query for design/registered events
         design_events = (
             table.filter(
-                (table.labels["namespace"].cast("string") == str(Namespace.DESIGN))
-                & (table.labels["kind"].cast("string") == "experiment_design")
+                (table.labels["namespace"].str == str(Namespace.DESIGN.value))
+                & (table.labels["kind"].str == "experiment_design")
             )
             .order_by(table.ts.desc())
             .limit(1)
         )
 
         # Execute query and get results
-        try:
-            results = design_events.execute()
-            if len(results) == 0:
-                return None
-
-            # Get the first (and only) result
-            if hasattr(results, "iloc"):
-                # pandas DataFrame
-                row = results.iloc[0]
-                payload_str = (
-                    row.get("payload", "") if hasattr(row, "get") else row["payload"]
-                )
-            else:
-                # Other format
-                row = list(results)[0]
-                payload_str = (
-                    row.get("payload", "") if hasattr(row, "get") else row["payload"]
-                )
-
-            try:
-                return (
-                    json.loads(payload_str)
-                    if isinstance(payload_str, str)
-                    else dict(payload_str)
-                )
-            except Exception:
-                return None
-        except Exception:
+        results = design_events.execute()
+        if len(results) == 0:
             return None
+
+        # Get the first (and only) result
+        if hasattr(results, "iloc"):
+            # pandas DataFrame
+            row = results.iloc[0]
+            payload_str = (
+                row.get("payload", "") if hasattr(row, "get") else row["payload"]
+            )
+        else:
+            # Other format
+            row = list(results)[0]
+            payload_str = (
+                row.get("payload", "") if hasattr(row, "get") else row["payload"]
+            )
+
+        return (
+            json.loads(payload_str)
+            if isinstance(payload_str, str)
+            else dict(payload_str)
+        )
 
     def plot(self, show: bool = True, mark_stop: bool = True) -> None:
         """
@@ -161,33 +156,27 @@ class TwoPropGSTReporter:
         - Boundaries are recomputed across the full planned t_grid from the design
           so you can see the entire time axis even if the test stopped early.
         """
-        prog = self.progress_table()
+        prog_df = self.progress_table()
 
-        # Execute progress query to get DataFrame
-        try:
-            prog_df = prog.execute()
-            # Convert DataFrame to records (list of dictionaries)
-            if hasattr(prog_df, "to_dict"):
-                prog_data = prog_df.to_dict("records")
+        # Convert DataFrame to records (list of dictionaries)
+        if hasattr(prog_df, "to_dict"):
+            prog_data = prog_df.to_dict("records")
+        else:
+            # Fallback for other formats - convert to list
+            prog_data = list(prog_df)
+
+        # Add stopped column logic post-query
+        for row in prog_data:
+            z_val = row.get("z", 0.0)
+            upper_val = row.get("upper", float("inf"))
+            if z_val is not None and upper_val is not None:
+                row["stopped"] = "yes" if abs(z_val) >= upper_val else "no"
             else:
-                # Fallback for other formats - convert to list
-                prog_data = list(prog_df)
+                row["stopped"] = "no"
 
-            # Add stopped column logic post-query
-            for row in prog_data:
-                z_val = row.get("z", 0.0)
-                upper_val = row.get("upper", float("inf"))
-                if z_val is not None and upper_val is not None:
-                    row["stopped"] = "yes" if abs(z_val) >= upper_val else "no"
-                else:
-                    row["stopped"] = "no"
-        except Exception as e:
-            print(f"Error executing progress query: {e}")
-            return
-
-        if len(prog_data) == 0:
-            print("(no progress)")
-            return
+        # if len(prog_data) == 0:
+        #     print("(no progress)")
+        #     return
 
         # Extract observed points from executed data
         xs_obs: List[float] = [

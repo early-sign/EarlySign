@@ -58,7 +58,7 @@ All operations are **pull-based**: components read from the ledger through typed
 ```python
 # Always use structured payloads with types
 ledger.write_event(
-    time_index="t1", namespace=Namespace.OBS, kind="observation",
+    time_index="t1", namespace=Namespace.OBS.value, kind="observation",
     payload_type="TwoProportion", payload={"n_treatment": 100, ...}
 )
 

@@ -58,7 +58,7 @@ applyTo: "earlysign/**"
 # ✅ Correct: Write immutable events
 ledger.write_event(
     time_index=time_index,
-    namespace=Namespace.STATS,
+    namespace=Namespace.STATS.value,
     kind="updated",
     experiment_id=experiment_id,
     step_key=step_key,
@@ -89,11 +89,11 @@ class MyStatistic(Statistic):
         τ = f(X₁, X₂, ..., Xₙ)
 
     Events consumed:
-        - Namespace.OBS: observation data
-        - Namespace.DESIGN: experiment configuration
+        - Namespace.OBS.value: observation data
+        - Namespace.DESIGN.value: experiment configuration
 
     Events produced:
-        - Namespace.STATS: computed statistic value
+        - Namespace.STATS.value: computed statistic value
     """
 
     tag_stats: Optional[str] = "stat:mystat"
@@ -106,8 +106,8 @@ class MyStatistic(Statistic):
         time_index: Union[TimeIndex, str],
     ) -> None:
         # 1. Read required events
-        obs_events = ledger.iter_ns(namespace=Namespace.OBS, experiment_id=str(experiment_id))
-        design_event = ledger.latest(namespace=Namespace.DESIGN, experiment_id=str(experiment_id))
+        obs_events = ledger.iter_ns(namespace=Namespace.OBS.value, experiment_id=str(experiment_id))
+        design_event = ledger.latest(namespace=Namespace.DESIGN.value, experiment_id=str(experiment_id))
 
         # 2. Compute statistic
         statistic_value = self._compute_statistic(obs_events, design_event)
@@ -115,7 +115,7 @@ class MyStatistic(Statistic):
         # 3. Write result event
         ledger.write_event(
             time_index=time_index,
-            namespace=Namespace.STATS,
+            namespace=Namespace.STATS.value,
             kind="updated",
             experiment_id=str(experiment_id),
             step_key=str(step_key),
@@ -151,8 +151,8 @@ class MyCriteria(Criteria):
         time_index: Union[TimeIndex, str],
     ) -> None:
         # Read latest statistic and design
-        stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id=str(experiment_id))
-        design_event = ledger.latest(namespace=Namespace.DESIGN, experiment_id=str(experiment_id))
+        stat_event = ledger.latest(namespace=Namespace.STATS.value, experiment_id=str(experiment_id))
+        design_event = ledger.latest(namespace=Namespace.DESIGN.value, experiment_id=str(experiment_id))
 
         if not stat_event or not design_event:
             return
@@ -163,7 +163,7 @@ class MyCriteria(Criteria):
         # Write criteria event
         ledger.write_event(
             time_index=time_index,
-            namespace=Namespace.CRITERIA,
+            namespace=Namespace.CRITERIA.value,
             kind="updated",
             experiment_id=str(experiment_id),
             step_key=str(step_key),
@@ -198,8 +198,8 @@ class MySignaler(Signaler):
         time_index: Union[TimeIndex, str],
     ) -> None:
         # Read latest statistic and criteria
-        stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id=str(experiment_id))
-        crit_event = ledger.latest(namespace=Namespace.CRITERIA, experiment_id=str(experiment_id))
+        stat_event = ledger.latest(namespace=Namespace.STATS.value, experiment_id=str(experiment_id))
+        crit_event = ledger.latest(namespace=Namespace.CRITERIA.value, experiment_id=str(experiment_id))
 
         if not stat_event or not crit_event:
             return
@@ -268,7 +268,7 @@ def test_my_statistic():
     # Setup test events
     ledger.write_event(
         time_index="t001",
-        namespace=Namespace.OBS,
+        namespace=Namespace.OBS.value,
         kind="registered",
         experiment_id="test_exp",
         step_key="step1",
@@ -281,7 +281,7 @@ def test_my_statistic():
     component.step(ledger, "test_exp", "step1", "t002")
 
     # Verify result
-    stat_event = ledger.latest(namespace=Namespace.STATS, experiment_id="test_exp", tag="stat:mystat")
+    stat_event = ledger.latest(namespace=Namespace.STATS.value, experiment_id="test_exp", tag="stat:mystat")
     assert stat_event is not None
     assert stat_event.payload["value"] == expected_value
 ```
@@ -301,7 +301,7 @@ def test_component_workflow():
     for i, (treatment, outcome) in enumerate([("A", 1), ("B", 0), ("A", 1), ("B", 1), ("A", 0)]):
         ledger.write_event(
             time_index=f"t{i:03d}",
-            namespace=Namespace.OBS,
+            namespace=Namespace.OBS.value,
             kind="registered",
             experiment_id="test_exp",
             step_key="step1",
@@ -371,8 +371,8 @@ earlysign/
 - **Efficient queries**: Use namespace and tag filtering to minimize event processing
 ```python
 # ✅ Efficient: Use specific namespace and filters
-obs_events = ledger.iter_ns(namespace=Namespace.OBS, experiment_id=experiment_id)
-latest_stat = ledger.latest(namespace=Namespace.STATS, experiment_id=experiment_id, tag="stat:waldz")
+obs_events = ledger.iter_ns(namespace=Namespace.OBS.value, experiment_id=experiment_id)
+latest_stat = ledger.latest(namespace=Namespace.STATS.value, experiment_id=experiment_id, tag="stat:waldz")
 
 # ❌ Inefficient: Process all events
 all_events = list(ledger.reader().iter_rows())
@@ -422,7 +422,7 @@ class TwoPropGSTModule(ExperimentTemplate):
     def register_design(self, ledger: Ledger) -> None:
         ledger.write_event(
             time_index="t000",
-            namespace=Namespace.DESIGN,
+            namespace=Namespace.DESIGN.value,
             kind="registered",
             experiment_id=str(self.experiment_id),
             step_key="design",

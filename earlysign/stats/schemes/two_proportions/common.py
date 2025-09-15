@@ -373,15 +373,13 @@ def reduce_counts(
         Tuple of (nA, nB, mA, mB) - total and success counts for both groups
     """
     # Base query for observation events
-    obs_filter = (
-        ledger.df.labels["namespace"].cast("string") == str(Namespace.OBS)
-    ) & (
-        ledger.df.labels["experiment_id"].cast("string").startswith(str(experiment_id))
+    obs_filter = (ledger.df.labels["namespace"].str == str(Namespace.OBS.value)) & (
+        ledger.df.labels["experiment_id"].str.startswith(str(experiment_id))
     )
 
     # Add step key filter if specified
     if step_key is not None:
-        obs_filter &= ledger.df.labels["step_key"].cast("string") == str(step_key)
+        obs_filter &= ledger.df.labels["step_key"].str == str(step_key)
 
     obs_query = ledger.df.filter(obs_filter)
     obs_results = obs_query.execute()
@@ -425,9 +423,9 @@ def get_latest_statistic(
     """
     stat_query = (
         ledger.df.filter(
-            (ledger.df.labels["namespace"].cast("string") == str(Namespace.STATS))
-            & (ledger.df.labels["tag"].cast("string") == stat_tag)
-            & (ledger.df.labels["experiment_id"].cast("string") == str(experiment_id))
+            (ledger.df.labels["namespace"].str == str(Namespace.STATS.value))
+            & (ledger.df.labels["tag"].str == stat_tag)
+            & (ledger.df.labels["experiment_id"].str == str(experiment_id))
         )
         .order_by(ledger.df.ts.desc())
         .limit(1)
@@ -462,9 +460,9 @@ def get_latest_criteria(
     """
     criteria_query = (
         ledger.df.filter(
-            (ledger.df.labels["namespace"].cast("string") == str(Namespace.CRITERIA))
-            & (ledger.df.labels["tag"].cast("string") == criteria_tag)
-            & (ledger.df.labels["experiment_id"].cast("string") == str(experiment_id))
+            (ledger.df.labels["namespace"].str == str(Namespace.CRITERIA.value))
+            & (ledger.df.labels["tag"].str == criteria_tag)
+            & (ledger.df.labels["experiment_id"].str == str(experiment_id))
         )
         .order_by(ledger.df.ts.desc())
         .limit(1)
