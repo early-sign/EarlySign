@@ -37,6 +37,7 @@ def interim_analysis(
     alpha: float = 0.05,
     looks: int = 4,
     spending: Literal["conservative", "aggressive"] = "conservative",
+    max_sample_size: Optional[int] = None,
 ) -> TwoPropGSTTemplate:
     """
     Create an A/B test experiment with interim analysis capabilities.
@@ -56,6 +57,10 @@ def interim_analysis(
         Spending function approach:
         - "conservative": O'Brien-Fleming (saves alpha for later looks)
         - "aggressive": Pocock (equal spending across looks)
+    max_sample_size : int, optional
+        Maximum total sample size for adaptive information time calculation.
+        If not provided, defaults to 1000. Used to calculate proper
+        information fractions based on observed vs planned sample sizes.
 
     Returns
     -------
@@ -64,8 +69,9 @@ def interim_analysis(
 
     Examples
     --------
-    >>> # Conservative approach (O'Brien-Fleming)
-    >>> experiment = interim_analysis("test_v1", alpha=0.05, looks=3, spending="conservative")
+    >>> # Conservative approach with adaptive information time
+    >>> experiment = interim_analysis("test_v1", alpha=0.05, looks=3,
+    ...                               spending="conservative", max_sample_size=800)
     >>>
     >>> # Aggressive approach (Pocock)
     >>> experiment = interim_analysis("test_v2", alpha=0.05, looks=3, spending="aggressive")
@@ -81,6 +87,7 @@ def interim_analysis(
         alpha_total=alpha,
         looks=looks,
         spending_function=spending_function_map[spending],
+        max_sample_size=max_sample_size,
     )
 
 
