@@ -30,7 +30,7 @@ Examples
 ...         # Direct ibis querying for observations
 ...         obs_count = (ledger.df
 ...                     .filter(ledger.df.labels["namespace"].str == str(self.ns_stats))
-...                     .filter(ledger.df.labels["entity"].str.contains(str(experiment_id)))
+...                     .filter(ledger.df.labels["exp_id"].str.contains(str(experiment_id)))
 ...                     .count()
 ...                     .execute())
 ...
@@ -40,7 +40,7 @@ Examples
 ...                 "time_index": time_index,
 ...                 "namespace": self.ns_stats,
 ...                 "kind": "updated",
-...                 "entity": experiment_id,
+...                 "exp_id": experiment_id,
 ...                 "step_key": step_key,
 ...             },
 ...             payload_type="StatValue",
