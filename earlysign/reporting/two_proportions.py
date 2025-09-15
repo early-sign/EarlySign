@@ -63,14 +63,14 @@ class TwoPropGSTReporter:
         stats = stats_filtered.select(
             table.ts,
             table.labels["entity"],
-            # Extract look number from time_index (remove 't' prefix), handle empty strings
-            table.labels["time_index"]
-            .str.substr(2)
+            # Extract look number from step_key (remove 'look-' prefix), handle empty strings
+            table.labels["step_key"]
+            .str.substr(5)
             .nullif("")
             .coalesce("0")
             .cast("int64")
             .name("look"),
-            time_index=table.labels["time_index"],
+            step_key=table.labels["step_key"],
             # Extract values from JSON payload using elegant syntax
             z=table.payload["z"].cast("float64"),
             nA=table.payload["nA"].cast("int64"),
@@ -88,14 +88,14 @@ class TwoPropGSTReporter:
 
         # Extract JSON payload fields for criteria using elegant ibis syntax
         crit = crit_filtered.select(
-            time_index=table.labels["time_index"],
+            step_key=table.labels["step_key"],
             upper=table.payload["upper"].cast("float64"),
             lower=table.payload["lower"].cast("float64"),
             t=table.payload["info_time"].cast("float64"),
         )
 
-        # Join stats and criteria on time_index
-        joined = stats.left_join(crit, "time_index")
+        # Join stats and criteria on step_key
+        joined = stats.left_join(crit, "step_key")
 
         # Add stopped column based on whether |z| >= upper
         # For now, we'll compute this after executing the query since ibis case operations are complex
@@ -251,6 +251,7 @@ class TwoPropGSTReporter:
         plt.ylabel("Z")
         plt.title("GST Progress (Two-Proportions)")
         plt.legend()
+        plt.xlim(-0.1, 1.1)  # Show full information time range with margins
         plt.tight_layout()
         if show:
             plt.show()

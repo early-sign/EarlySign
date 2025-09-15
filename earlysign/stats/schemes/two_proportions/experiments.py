@@ -53,8 +53,10 @@ from earlysign.stats.schemes.two_proportions.common import TwoPropObservation
 from earlysign.stats.schemes.two_proportions.group_sequential import (
     WaldZStatistic,
     LanDeMetsBoundary,
+    AdaptiveGSTBoundary,
     PeekSignaler,
 )
+from earlysign.stats.common.group_sequential import AdaptiveInfoTime
 from earlysign.stats.schemes.two_proportions.e_process import (
     BetaBinomialEValue,
     SafeThreshold,
@@ -118,11 +120,7 @@ class TwoPropTemplate(ExperimentTemplate):
             # Add observation counts using ibis aggregations
             obs_table = self.ledger.t.filter(
                 (self.ledger.t.labels["namespace"].str == str(Namespace.OBS.value))
-                & (
-                    self.ledger.t.labels["entity"].str.startswith(
-                        str(self.experiment_id) + "#"
-                    )
-                )
+                & (self.ledger.t.labels["experiment_id"].str == str(self.experiment_id))
                 & (self.ledger.t.labels["payload_type"].str == "TwoPropObsBatch")
             )
 
@@ -186,10 +184,14 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         alpha_total: float = 0.05,
         looks: int = 4,
         spending_function: str = "obf",  # "obf" or "pocock"
+        max_sample_size: Optional[
+            int
+        ] = None,  # Maximum total sample size for information time calculation
     ):
         super().__init__(experiment_id, alpha_total)
         self.looks = looks
         self.spending_function = spending_function
+        self.max_sample_size = max_sample_size
 
     def configure_components(self) -> Dict[str, Any]:
         """Configure GST components."""
@@ -205,11 +207,18 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         return WaldZStatistic()
 
     def _create_criteria(self) -> Criteria:
-        """Create GST error spending criteria."""
-        return LanDeMetsBoundary(
+        """Create adaptive GST error spending criteria."""
+        # Create adaptive info time with appropriate max sample size
+        adaptive_info_time = AdaptiveInfoTime(
+            initial_target=self.max_sample_size
+            or 1000,  # Default 1000 if not specified
+            looks=self.looks,
+        )
+
+        return AdaptiveGSTBoundary(
             alpha_total=self.alpha_total,
-            t=1.0,  # This will need to be calculated dynamically
             style=self.spending_function,
+            adaptive_info_time=adaptive_info_time,
         )
 
     def _create_signaler(self) -> Signaler:
@@ -242,7 +251,7 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         # Get the latest signal event
         signal_query = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.SIGNALS.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
         ).order_by(ledger.t.ts.desc())
         signal_results = signal_query.execute()
         signal_events = list(signal_results.to_dict("records"))
@@ -258,14 +267,14 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         # Get corresponding statistic and criteria events
         stats_query = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.STATS.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
         ).order_by(ledger.t.ts.desc())
         stats_results = stats_query.execute()
         statistic_events = list(stats_results.to_dict("records"))
 
         criteria_query = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.CRITERIA.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
         ).order_by(ledger.t.ts.desc())
         criteria_results = criteria_query.execute()
         criteria_events = list(criteria_results.to_dict("records"))
@@ -281,7 +290,7 @@ class TwoPropGSTTemplate(TwoPropTemplate):
         # Calculate sample proportions from observations using ibis aggregations
         obs_table = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.OBS.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
             & (ledger.t.labels["payload_type"].str == "TwoPropObsBatch")
         )
 
@@ -402,7 +411,7 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         # Get the latest signal event
         signal_query = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.SIGNALS.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
         ).order_by(ledger.t.ts.desc())
         signal_results = signal_query.execute()
         signal_events = list(signal_results.to_dict("records"))
@@ -418,14 +427,14 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         # Get corresponding statistic and criteria events
         stats_query = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.STATS.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
         ).order_by(ledger.t.ts.desc())
         stats_results = stats_query.execute()
         statistic_events = list(stats_results.to_dict("records"))
 
         criteria_query = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.CRITERIA.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
         ).order_by(ledger.t.ts.desc())
         criteria_results = criteria_query.execute()
         criteria_events = list(criteria_results.to_dict("records"))
@@ -443,7 +452,7 @@ class TwoPropSafeTemplate(TwoPropTemplate):
         # Calculate sample proportions from observations using ibis aggregations
         obs_table = ledger.t.filter(
             (ledger.t.labels["namespace"].str == str(Namespace.OBS.value))
-            & (ledger.t.labels["entity"].str.startswith(str(self.experiment_id) + "#"))
+            & (ledger.t.labels["experiment_id"].str == str(self.experiment_id))
             & (ledger.t.labels["payload_type"].str == "TwoPropObsBatch")
         )
 
