@@ -384,48 +384,48 @@ class LedgerDF:
         self._t_cache = None
         return self
 
-    # Core table exposure -----------------------------------------------
+    # ---- Core table exposure & dynamic delegation ----
     @property
     def t(self) -> TableExpr:
         if self._t_cache is not None:
             return self._t_cache
         base = self.connector.table(self.table_name)
-        # In TypedStrategy, join side tables so extra columns are available.
         if isinstance(self._strategy, TypedStrategy) and self._handlers:
             for h in self._handlers.values():
                 tname = h.typed_table_name(self.table_name)
-                # Be tolerant if the typed table is not created yet.
                 try:
                     typed_tbl = self.connector.table(tname)
                 except Exception:
-                    # Skip joining when the typed table is not available yet.
                     continue
                 base = h.join_to_base(base, typed_tbl)
         self._t_cache = base
         return self._t_cache
 
-    # Convenience accessors to match Ibis JSON API (no custom JSON helper)
     @property
     def payload(self):
+        # Expose JSON column exactly as Ibis does
         return self.t.payload  # type: ignore[attr-defined]
 
     @property
     def labels(self):
+        # Expose JSON column exactly as Ibis does
         return self.t.labels  # type: ignore[attr-defined]
 
-    # Delegations to Ibis (return TableExpr directly) -------------------
-    def select(self, *args, **kwargs) -> TableExpr:
-        return self.t.select(*args, **kwargs)
+    def __getattr__(self, name: str):
+        """
+        Delegate unknown attributes/methods to the underlying Ibis table.
+        This keeps the wrapper thin and future-proof to Ibis API changes.
+        """
+        try:
+            return getattr(self.t, name)
+        except AttributeError:
+            raise
 
-    def filter(self, *preds) -> TableExpr:
-        return self.t.filter(*preds)
-
-    def limit(self, n: int) -> TableExpr:
-        return self.t.limit(n)
-
-    def expr(self) -> TableExpr:
-        """Return the underlying Ibis expression unmodified."""
-        return self.t
+    def __dir__(self):
+        """
+        Improve IDE completion by merging our attributes with Ibis table attributes.
+        """
+        return sorted(set(super().__dir__()) | set(dir(self.t)))
 
     # Persistence (owned by strategy) -----------------------------------
     def ensure(self) -> None:
@@ -449,15 +449,3 @@ class LedgerDF:
         res = (self._strategy or JsonStrategy()).upsert(self, rows)
         self._t_cache = None
         return res
-
-    # Labels/payload convenience (no magic; still Ibis expressions) -----
-    def data(self) -> TableExpr:
-        """Alias for the base expression for readability."""
-        return self.t
-
-    def __getattr__(self, name: str):
-        # Allow df.uuid, df.ts, etc. by forwarding to self.t
-        try:
-            return getattr(self.t, name)
-        except AttributeError:
-            raise
