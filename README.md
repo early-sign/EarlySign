@@ -5,7 +5,7 @@
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/earlysign)
 [![Documentation](https://img.shields.io/badge/docs-early--sign-blue?label=documentation)](https://early-sign.github.io/EarlySign/)
 
-[![TestPyPI version](https://img.shields.io/pypi/v/earlysign?label=test-pypi&pypiBaseUrl=https://test.pypi.org&color=lightgray)](https://test.pypi.org/project/earlysign/)
+<!-- [![TestPyPI version](https://img.shields.io/pypi/v/earlysign?label=test-pypi&pypiBaseUrl=https://test.pypi.org&color=lightgray)](https://test.pypi.org/project/earlysign/) -->
 
 # EarlySign
 
