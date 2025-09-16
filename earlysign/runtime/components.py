@@ -100,7 +100,7 @@ class PersistentExperiment(ABC):
 
     @classmethod
     def from_ledger(
-        cls, experiment_id: str, ledger: Union[Ledger, ibis.BaseBackend], **kwargs
+        cls, experiment_id: str, ledger: Union[Ledger, ibis.BaseBackend], **kwargs: Any
     ) -> "PersistentExperiment":
         """
         Recover an existing experiment from the ledger.
