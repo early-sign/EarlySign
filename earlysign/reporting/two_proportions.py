@@ -19,18 +19,13 @@ With ibis-based ledger:
 >>> rep = TwoPropGSTReporter(ledger)  # Direct dataclass initialization
 """
 
-from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
-
-from earlysign.core.components import Namespace
-
-if TYPE_CHECKING:
-    from earlysign.core.ledger import Ledger
 import json
 from typing import Optional, Dict, Any, List, TYPE_CHECKING
-
 import matplotlib.pyplot as plt
+import pandas as pd
+
+from earlysign.core.components import Namespace
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
@@ -252,6 +247,245 @@ class TwoPropGSTReporter:
         plt.title("GST Progress (Two-Proportions)")
         plt.legend()
         plt.xlim(-0.1, 1.1)  # Show full information time range with margins
+        plt.tight_layout()
+        if show:
+            plt.show()
+
+
+@dataclass
+class TwoPropSafeReporter:
+    """Two-proportions safe testing progress view with e-value support."""
+
+    ledger: "Ledger"
+
+    def progress_table(self) -> Any:
+        """
+        Returns one row per step with numeric columns:
+        - step, e_value, threshold, nA, nB, mA, mB, stopped ('yes'/'no')
+
+        Uses pandas operations after getting raw data from ledger.
+        """
+        # Get the raw table from the ledger
+        table = self.ledger.t
+        all_data = table.execute()
+
+        # Filter for e-value statistics data
+        stats_data = all_data[
+            (
+                all_data["labels"].apply(
+                    lambda x: x.get("namespace") == str(Namespace.STATS.value)
+                )
+            )
+            & (all_data["labels"].apply(lambda x: x.get("kind") == "updated"))
+            & (all_data["payload_type"] == "BetaBinomialEValue")
+        ].copy()
+
+        # Filter for criteria data (thresholds)
+        criteria_data = all_data[
+            (
+                all_data["labels"].apply(
+                    lambda x: x.get("namespace") == str(Namespace.CRITERIA.value)
+                )
+            )
+            & (all_data["payload_type"] == "SafeThreshold")
+        ].copy()
+
+        if len(stats_data) == 0:
+            return pd.DataFrame()
+
+        # Extract step_key and payload data for stats
+        stats_data["step_key"] = stats_data["labels"].apply(lambda x: x.get("step_key"))
+        stats_data["e_value"] = stats_data["payload"].apply(lambda x: x.get("e_value"))
+        stats_data["nA"] = stats_data["payload"].apply(lambda x: x.get("nA"))
+        stats_data["nB"] = stats_data["payload"].apply(lambda x: x.get("nB"))
+        stats_data["mA"] = stats_data["payload"].apply(lambda x: x.get("mA"))
+        stats_data["mB"] = stats_data["payload"].apply(lambda x: x.get("mB"))
+
+        # Extract step_key and threshold for criteria
+        if len(criteria_data) > 0:
+            criteria_data["step_key"] = criteria_data["labels"].apply(
+                lambda x: x.get("step_key")
+            )
+            criteria_data["threshold"] = criteria_data["payload"].apply(
+                lambda x: x.get("threshold")
+            )
+
+        # Select relevant columns and sort by timestamp
+        progress_df = (
+            stats_data[["ts", "step_key", "e_value", "nA", "nB", "mA", "mB"]]
+            .sort_values("ts")
+            .reset_index(drop=True)
+        )
+
+        # Add step numbers
+        progress_df["step"] = range(1, len(progress_df) + 1)
+
+        # Merge with criteria data to get thresholds
+        if len(criteria_data) > 0:
+            threshold_df = criteria_data[["step_key", "threshold"]]
+            progress_df = progress_df.merge(threshold_df, on="step_key", how="left")
+        else:
+            progress_df["threshold"] = None
+
+        # Add stopped column based on signal data
+        signal_data = all_data[
+            (
+                all_data["labels"].apply(
+                    lambda x: x.get("namespace") == str(Namespace.SIGNALS.value)
+                )
+            )
+            & (all_data["labels"].apply(lambda x: x.get("kind") == "decision"))
+        ].copy()
+
+        if len(signal_data) > 0:
+            signal_data["step_key"] = signal_data["labels"].apply(
+                lambda x: x.get("step_key")
+            )
+            signal_data["action"] = signal_data["payload"].apply(
+                lambda x: x.get("action")
+            )
+            signal_df = signal_data[["step_key", "action"]]
+            progress_df = progress_df.merge(signal_df, on="step_key", how="left")
+            progress_df["stopped"] = progress_df["action"].apply(
+                lambda x: "yes" if x == "stop" else "no"
+            )
+            progress_df = progress_df.drop("action", axis=1)
+        else:
+            progress_df["stopped"] = "no"
+
+        # Reorder columns nicely
+        columns_order = [
+            "step",
+            "step_key",
+            "e_value",
+            "threshold",
+            "nA",
+            "nB",
+            "mA",
+            "mB",
+            "stopped",
+            "ts",
+        ]
+        progress_df = progress_df[
+            [col for col in columns_order if col in progress_df.columns]
+        ]
+
+        return progress_df
+
+    def _planned_design(self) -> Optional[Dict[str, Any]]:
+        """
+        Read the last 'design/registered' event and return the decoded payload dict.
+        Expected keys: 'alpha', 'prior_params', etc.
+
+        Uses ibis operations to query the ledger directly.
+        """
+        # Get the base table from the ledger
+        table = self.ledger.t
+
+        # Query for design/registered events
+        design_events = (
+            table.filter(
+                (table.labels["namespace"] == str(Namespace.DESIGN.value))
+                & (table.labels["kind"] == "experiment_design")
+            )
+            .order_by(table.ts.desc())
+            .limit(1)
+        )
+
+        # Execute query and get results
+        results = design_events.execute()
+        if len(results) == 0:
+            return None
+
+        # Get the first (and only) result
+        if hasattr(results, "iloc"):
+            # pandas DataFrame
+            row = results.iloc[0]
+            payload_str = (
+                row.get("payload", "") if hasattr(row, "get") else row["payload"]
+            )
+        else:
+            # Other format
+            row = list(results)[0]
+            payload_str = (
+                row.get("payload", "") if hasattr(row, "get") else row["payload"]
+            )
+
+        return (
+            json.loads(payload_str)
+            if isinstance(payload_str, str)
+            else dict(payload_str)
+        )
+
+    def plot(self, show: bool = True, mark_stop: bool = True) -> None:
+        """
+        Plot e-value evolution over time with threshold line.
+
+        - Observed e-value trajectory comes from progress_table()
+        - Threshold line shows stopping criterion
+        """
+        prog_df = self.progress_table()
+
+        # Convert DataFrame to records (list of dictionaries) if needed
+        if hasattr(prog_df, "to_dict"):
+            prog_data = prog_df.to_dict("records")
+        else:
+            # Fallback for other formats - convert to list
+            prog_data = list(prog_df)
+
+        if len(prog_data) == 0:
+            print("(no progress data)")
+            return
+
+        # Extract observed points from executed data
+        xs_obs: List[int] = [
+            row.get("step", 0) for row in prog_data if row.get("step") is not None
+        ]
+        e_values_obs: List[float] = [
+            row.get("e_value", 1.0)
+            for row in prog_data
+            if row.get("e_value") is not None
+        ]
+        thresholds_obs: List[float] = [
+            row.get("threshold", 20.0)
+            for row in prog_data
+            if row.get("threshold") is not None
+        ]
+
+        # Use first threshold as the line (should be constant for safe tests)
+        threshold_line = thresholds_obs[0] if thresholds_obs else 20.0
+
+        # Plot
+        plt.figure(figsize=(6.5, 4.2))
+        # E-value trajectory
+        plt.plot(xs_obs, e_values_obs, marker="o", linewidth=2, label="E-value")
+        # Threshold line
+        plt.axhline(
+            y=threshold_line,
+            linestyle="--",
+            color="red",
+            alpha=0.7,
+            label=f"Threshold (1/α = {threshold_line:.0f})",
+        )
+
+        # Optional: mark stopping step (if any)
+        if mark_stop:
+            # Find stopped rows
+            stopped_rows = [row for row in prog_data if row.get("stopped") == "yes"]
+            if stopped_rows:
+                last_stop = stopped_rows[-1]
+                step_stop = int(last_stop.get("step", 0))
+                e_stop = float(last_stop.get("e_value", 1.0))
+                plt.scatter(
+                    [step_stop], [e_stop], s=70, color="red", zorder=5, label="Stop"
+                )
+
+        plt.xlabel("Step")
+        plt.ylabel("E-value")
+        plt.title("Safe Testing Progress (Two-Proportions)")
+        plt.yscale("log")  # E-values can grow very large
+        plt.legend()
+        plt.grid(True, alpha=0.3)
         plt.tight_layout()
         if show:
             plt.show()

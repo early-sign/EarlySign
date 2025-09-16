@@ -373,15 +373,15 @@ def reduce_counts(
         Tuple of (nA, nB, mA, mB) - total and success counts for both groups
     """
     # Base query for observation events
-    obs_filter = (ledger.df.labels["namespace"].str == str(Namespace.OBS.value)) & (
-        ledger.df.labels["experiment_id"].str.startswith(str(experiment_id))
+    obs_filter = (ledger.t.labels["namespace"].str == str(Namespace.OBS.value)) & (
+        ledger.t.labels["experiment_id"].str.startswith(str(experiment_id))
     )
 
     # Add step key filter if specified
     if step_key is not None:
-        obs_filter &= ledger.df.labels["step_key"].str == str(step_key)
+        obs_filter &= ledger.t.labels["step_key"].str == str(step_key)
 
-    obs_query = ledger.df.filter(obs_filter)
+    obs_query = ledger.t.filter(obs_filter)
     obs_results = obs_query.execute()
 
     if len(obs_results) == 0:
@@ -422,12 +422,12 @@ def get_latest_statistic(
         Latest statistic payload or None if not found
     """
     stat_query = (
-        ledger.df.filter(
-            (ledger.df.labels["namespace"].str == str(Namespace.STATS.value))
-            & (ledger.df.labels["tag"].str == stat_tag)
-            & (ledger.df.labels["experiment_id"].str == str(experiment_id))
+        ledger.t.filter(
+            (ledger.t.labels["namespace"].str == str(Namespace.STATS.value))
+            & (ledger.t.labels["tag"].str == stat_tag)
+            & (ledger.t.labels["experiment_id"].str == str(experiment_id))
         )
-        .order_by(ledger.df.ts.desc())
+        .order_by(ledger.t.ts.desc())
         .limit(1)
     )
 
@@ -459,12 +459,12 @@ def get_latest_criteria(
         Latest criteria payload or None if not found
     """
     criteria_query = (
-        ledger.df.filter(
-            (ledger.df.labels["namespace"].str == str(Namespace.CRITERIA.value))
-            & (ledger.df.labels["tag"].str == criteria_tag)
-            & (ledger.df.labels["experiment_id"].str == str(experiment_id))
+        ledger.t.filter(
+            (ledger.t.labels["namespace"].str == str(Namespace.CRITERIA.value))
+            & (ledger.t.labels["tag"].str == criteria_tag)
+            & (ledger.t.labels["experiment_id"].str == str(experiment_id))
         )
-        .order_by(ledger.df.ts.desc())
+        .order_by(ledger.t.ts.desc())
         .limit(1)
     )
 

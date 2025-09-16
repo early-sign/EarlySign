@@ -128,7 +128,7 @@ def fixed_sample_test(
 def guardrail_monitoring(
     experiment_id: str,
     alpha: float = 0.05,
-    sensitivity: Literal["conservative", "balanced", "sensitive"] = "balanced",
+    sensitivity: Literal["conservative", "balanced", "sensitive", "Turner"] = "balanced",
     prior_strength: Optional[float] = None,
 ) -> TwoPropSafeTemplate:
     """
@@ -170,6 +170,7 @@ def guardrail_monitoring(
         "conservative": {"alpha": 0.5, "beta": 0.5},  # Weak prior, conservative
         "balanced": {"alpha": 1.0, "beta": 1.0},  # Uniform prior, balanced
         "sensitive": {"alpha": 2.0, "beta": 2.0},  # Stronger prior, more sensitive
+        "Turner": {"alpha": 0.18, "beta": 0.18},  # Suggested by Turner et al. (2024)
     }
 
     if prior_strength is not None:
