@@ -19,7 +19,7 @@ Examples
 --------
 >>> from earlysign.core.ledger import Ledger
 >>> from earlysign.core.components import Namespace
->>> from earlysign.test_util import create_test_connection
+>>> from earlysign.tests.util import create_test_connection
 >>>
 >>> conn = create_test_connection()
 >>> ledger = Ledger(conn, "test")

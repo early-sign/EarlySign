@@ -1,5 +1,5 @@
 """
-earlysign.test_util
+earlysign.tests.util
 ===================
 
 Utility functions for testing across the EarlySign package.
