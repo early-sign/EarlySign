@@ -128,7 +128,9 @@ def fixed_sample_test(
 def guardrail_monitoring(
     experiment_id: str,
     alpha: float = 0.05,
-    sensitivity: Literal["conservative", "balanced", "sensitive", "Turner"] = "balanced",
+    sensitivity: Literal[
+        "conservative", "balanced", "sensitive", "Turner"
+    ] = "balanced",
     prior_strength: Optional[float] = None,
 ) -> TwoPropSafeTemplate:
     """
