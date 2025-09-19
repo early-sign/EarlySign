@@ -1,238 +1,119 @@
 """
-High level Ledger facade over LedgerDF.
+Thin, backend-agnostic Ibis wrapper for an append-only event ledger.
 
-- Keeps a *thin* surface and delegates all query ops to Ibis via LedgerDF.
-- Uses JsonStrategy for persistence with JSON payload and labels columns.
-- JSON access patterns: L.t.payload["key"].cast("type")
+Design goals
+------------
+- Keep this layer *thin*. Defer to Ibis for expressions, typing, JSON access.
+- Use JSON columns for payload and labels storage.
+  Users can do: ledger.t.select(ledger.t.uuid, ledger.t.payload["x"].cast("int64"))
 
-Doctests include:
-  * Unit-level: basic write paths and JSON access
-  * End-to-end usage example mirroring workflow expectations
+- Methods like select/filter/limit delegate directly to Ibis (no wrappers).
+- Table schema is fixed and owned by this module.
 
->>> import ibis, duckdb  # noqa: F401
->>> from typing import TypedDict
->>> from earlysign.core.ledger_df import LEDGER_SCHEMA, LedgerDF
+Table contract
+--------------
+Base table (`table_name`) has:
+  - uuid: string (auto-generated)
+  - ts:   timestamp("UTC") (auto-generated)
+  - payload_type: string
+  - labels: json
+  - payload: json
 
-# --- Basic JSON-mode roundtrip ----------------------------------------
+Doctests
+--------
+>>> import ibis
 >>> con = ibis.duckdb.connect(":memory:")
->>> _ = con.create_table("events", schema=LEDGER_SCHEMA)
->>> L = Ledger().set_connector(con).use_default_table("events")
->>> L.ensure()
->>> _ = L.insert_events([
-...   dict(payload={"nA": 100, "mA": 38, "nB": 120, "mB": 51}, labels={"kind":"observation","batch":1}),
-...   dict(payload={"nA":  80, "mA": 22, "nB":  90, "mB": 30}, labels={"kind":"observation","batch":2}),
-... ])
-
-# Query using Ibis JSON API (delegate end-to-end)
->>> obs = (
-...   L.t
-...     .select(
-...       "uuid",
-...       nA=L.t.payload["nA"].cast("int64"),
-...       mA=L.t.payload["mA"].cast("int64"),
-...       nB=L.t.payload["nB"].cast("int64"),
-...       mB=L.t.payload["mB"].cast("int64"),
-...     )
-...     .execute()
-... )
->>> set({"uuid","nA","mA","nB","mB"}) <= set(obs.columns)
-True
-
-# --- Minimal "compat" scenario (namespaces & arbitrary labels) --------
->>> from enum import Enum
->>> class Namespace(str, Enum):
-...     OBS = "obs"; STATS = "stats"; CRITERIA = "criteria"; SIGNALS = "signals"; DESIGN = "design"
-...
->>> conn = ibis.duckdb.connect(":memory:")
->>> _ = conn.create_table("ledger_compat", schema=LEDGER_SCHEMA)
->>> ledger = Ledger().set_connector(conn).use_default_table("ledger_compat")
+>>> from earlysign.core.ledger import Ledger
+>>> ledger = Ledger().set_connector(con).use_default_table("events")
 >>> ledger.ensure()
->>> _ = ledger.insert_event(
+>>> row_id = ledger.insert(
 ...     payload_type="TwoProportion",
 ...     payload={"n_treatment": 100, "n_control": 95},
-...     labels={
-...         "namespace": Namespace.OBS.value,
-...         "kind": "observation",
-...         "experiment_id": "exp1",
-...         "step_key": "s1",
-...         "tag": "demo",
-...     },
+...     labels={"experiment_id": "exp1"},
 ... )
->>> query = ledger.t.filter(ledger.t.payload_type == "TwoProportion")
->>> results = query.execute()
->>> len(results) >= 1
+>>> isinstance(row_id, str)
 True
->>> qn = (
-...   ledger.t
-...     .filter(ledger.t.payload_type == "TwoProportion")
-...     .select(n_treatment=ledger.t.payload["n_treatment"].cast("int64"))
-... )
->>> r2 = qn.execute().to_dict("records")
->>> r2[0]["n_treatment"]
+>>> res = ledger.t.select(
+...     ledger.t.payload["n_treatment"].cast("int64").name("n_treatment")
+... ).execute()
+>>> res.to_dict("records")[0]["n_treatment"]
 100
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Literal
-
+from dataclasses import dataclass
+from typing import Any, Mapping
 import ibis
-from ibis.expr.types import Table as TableExpr
+import ibis.expr.datatypes as dt
+import ibis.expr.schema as sch
+from ibis import Table as TableExpr
 
-from earlysign.core.ledger_df import LEDGER_SCHEMA, LedgerDF
+
+# ---------- Fixed schema ----------
+
+LEDGER_SCHEMA = sch.schema(
+    dict(
+        uuid=dt.string,
+        ts=dt.timestamp(timezone="UTC"),
+        payload_type=dt.string,
+        payload=dt.json,
+        labels=dt.json,
+    )
+)
+
+
+# ---------- Main Ledger facade ----------
 
 
 @dataclass
 class Ledger:
-    """High-level convenience API over LedgerDF.
-
-    - Uses JSON-based persistence for all operations.
-    - Delegates all read/query operations to Ibis via `t` (LedgerDF).
-    - Provides light write/save helpers.
-    """
-
-    connector: Optional[ibis.BaseBackend] = None
+    connector: ibis.BaseBackend | None = None
     table_name: str = "events"
-    _df: Optional[LedgerDF] = field(default=None, repr=False)
 
-    # Setup --------------------------------------------------------------
     def set_connector(self, connector: ibis.BaseBackend) -> "Ledger":
         self.connector = connector
-        self._df = None  # rebuild on next access
         return self
 
-    def use_default_table(self, name: str) -> "Ledger":
+    def use_default_table(self, name: str = "events") -> "Ledger":
         self.table_name = name
-        self._df = None
         return self
 
     @property
-    def t(self) -> LedgerDF:
-        """Build a LedgerDF lazily with JSON strategy."""
-        if not self.connector:
-            raise ValueError("Connector not set")
-        if self._df is None:
-            self._df = LedgerDF(self.connector, self.table_name)
-        return self._df
+    def t(self) -> TableExpr:
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
+        return self.connector.table(self.table_name)
 
-    @property
-    def df(self) -> LedgerDF:
-        """Legacy alias for .t property. Use .t for consistency with ibis-framework."""
-        import warnings
+    def ensure(self) -> None:
+        """Ensure the ledger table exists with the standard schema."""
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
+        if self.table_name in self.connector.list_tables():
+            return
+        self.connector.create_table(self.table_name, schema=LEDGER_SCHEMA)
 
-        warnings.warn(
-            "ledger.df is deprecated. Use ledger.t for consistency with ibis-framework.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.t
-
-    # Internals ----------------------------------------------------------
-    def _now(self) -> str:
+    def insert(
+        self,
+        *,
+        payload_type: str,
+        payload: Mapping[str, Any],
+        labels: Mapping[str, Any] = {},
+    ) -> str:
+        """Insert a row into the ledger with auto-generated uuid and ts."""
+        import uuid as uuidlib
         from datetime import datetime, timezone
 
-        return datetime.now(timezone.utc).isoformat()
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
 
-    def _normalize(self, e: Mapping[str, Any]) -> Dict[str, Any]:
-        """Normalize a user event to the base row shape. No dtype decisions here."""
-        import uuid as _uuid
+        row_id = str(uuidlib.uuid4())
+        ts = datetime.now(timezone.utc)
 
-        ts = e.get("ts") or self._now()
-        return {
-            "uuid": e.get("uuid") or _uuid.uuid4().hex,
+        row = {
+            "uuid": row_id,
             "ts": ts,
-            "payload_type": e.get("payload_type", "json"),
-            "labels": dict(e.get("labels") or {}),
-            "payload": dict(e.get("payload") or {}),
+            "payload_type": payload_type,
+            "payload": dict(payload),
+            "labels": dict(labels),
         }
-
-    # Write API ----------------------------------------------------------
-    def ensure(self) -> None:
-        """Ensure base (and typed) tables exist per the active strategy."""
-        self.t.ensure()
-
-    def insert_event(
-        self,
-        *,
-        payload_type: str = "json",
-        payload: Mapping[str, Any] | None = None,
-        labels: Mapping[str, Any] | None = None,
-        ts: Optional[str] = None,
-        uuid: Optional[str] = None,
-    ) -> str:
-        row = self._normalize(
-            {
-                "uuid": uuid,
-                "ts": ts,
-                "payload_type": payload_type,
-                "payload": payload or {},
-                "labels": labels or {},
-            }
-        )
-        self.ensure()
-        self.t.append_rows([row])
-        return str(row["uuid"])
-
-    def insert_events(self, events: List[Mapping[str, Any]]) -> Dict[str, Any]:
-        rows = [self._normalize(e) for e in events]
-        self.ensure()
-        self.t.append_rows(rows)
-        return {
-            "inserted": len(rows),
-            "failed": 0,
-            "errors": [],
-            "uuids": [r["uuid"] for r in rows],
-        }
-
-    def save_to_sqlite(
-        self,
-        *,
-        mode: Literal["append", "replace", "upsert"] = "append",
-        records: Optional[Iterable[Mapping[str, Any]]] = None,
-        match_keys: Optional[List[str]] = None,
-        dest_connector: Optional[ibis.BaseBackend] = None,
-        dest_table_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Save the current view (or provided records) into a destination.
-
-        If dest_* are omitted, saves back into this ledger.
-        We do not choose types here; we only hand rows to the destination DF/strategy.
-        """
-        # Materialize source rows
-        if records is None:
-            cur = self.t.execute()
-            recs = cur.to_dict("records") if hasattr(cur, "to_dict") else list(cur)
-        else:
-            recs = list(records)
-        rows = [self._normalize(r) for r in recs]
-
-        # Destination selection
-        if dest_connector or dest_table_name:
-            dest_con = dest_connector or self.connector
-            if not dest_con:
-                raise ValueError("Destination connector not set")
-            dest_tbl = dest_table_name or self.table_name
-            dest_df = LedgerDF(dest_con, dest_tbl)
-            dest_df.ensure()
-            target = dest_df
-        else:
-            self.ensure()
-            target = self.t
-
-        # Execute write
-        if mode == "append":
-            target.append_rows(rows)
-            return {"written": len(rows), "replaced": 0, "upserted": 0, "errors": []}
-        if mode == "replace":
-            prev = target.replace_all(rows)
-            return {"written": len(rows), "replaced": prev, "upserted": 0, "errors": []}
-        if mode == "upsert":
-            keys = match_keys or ["uuid"]  # reserved for future smarter policies
-            _ = keys  # keep signature stable; implementation is naive by uuid
-            res = target.upsert_rows(rows, keys)
-            return {
-                "written": len(rows),
-                "replaced": 0,
-                "upserted": res.get("inserted", 0) + res.get("updated", 0),
-                "errors": [],
-            }
-        raise ValueError("mode must be append|replace|upsert")
+        self.connector.insert(self.table_name, [row])
+        return row_id

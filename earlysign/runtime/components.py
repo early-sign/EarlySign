@@ -174,7 +174,7 @@ class PersistentExperiment(ABC):
         design_payload = self.get_design_payload()
         design_payload["created_at"] = datetime.now(timezone.utc).isoformat()
 
-        self._ledger.insert_event(
+        self._ledger.insert(
             payload_type="ExperimentDesign",
             payload=design_payload,
             labels={
@@ -272,7 +272,7 @@ class ObservationRecorder:
             if "group" in obs_payload:
                 labels["group"] = obs_payload["group"]
 
-            getattr(self, "_ledger").insert_event(
+            getattr(self, "_ledger").insert(
                 payload_type=payload_type, payload=obs_payload, labels=labels
             )
 
@@ -381,7 +381,7 @@ class SignalTracker:
             **metadata,
         }
 
-        getattr(self, "_ledger").insert_event(
+        getattr(self, "_ledger").insert(
             payload_type=f"{signal_type.title()}Signal",
             payload=payload,
             labels={
