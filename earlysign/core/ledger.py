@@ -2,25 +2,22 @@
 High level Ledger facade over LedgerDF.
 
 - Keeps a *thin* surface and delegates all query ops to Ibis via LedgerDF.
-- Default persistence is JsonStrategy; can be switched to TypedStrategy.
-- Handlers (LedgerDataHandler) define typed payloads; in TypedStrategy we
-  materialize them and auto-join so that JSON access pattern stays identical.
+- Uses JsonStrategy for persistence with JSON payload and labels columns.
+- JSON access patterns: L.t.payload["key"].cast("type")
 
 Doctests include:
-  * Unit-level: handler creation, basic write paths
-  * End-to-end usage example mirroring your workflow expectations
+  * Unit-level: basic write paths and JSON access
+  * End-to-end usage example mirroring workflow expectations
 
 >>> import ibis, duckdb  # noqa: F401
 >>> from typing import TypedDict
->>> from earlysign.core.ledger_df import (
-...     LEDGER_SCHEMA, LedgerDF, LedgerDataHandler, JsonStrategy, TypedStrategy
-... )
+>>> from earlysign.core.ledger_df import LEDGER_SCHEMA, LedgerDF
 
-# --- Basic JSON-mode roundtrip (no typed tables) ----------------------
+# --- Basic JSON-mode roundtrip ----------------------------------------
 >>> con = ibis.duckdb.connect(":memory:")
 >>> _ = con.create_table("events", schema=LEDGER_SCHEMA)
 >>> L = Ledger().set_connector(con).use_default_table("events")
->>> L.ensure()  # JsonStrategy by default
+>>> L.ensure()
 >>> _ = L.insert_events([
 ...   dict(payload={"nA": 100, "mA": 38, "nB": 120, "mB": 51}, labels={"kind":"observation","batch":1}),
 ...   dict(payload={"nA":  80, "mA": 22, "nB":  90, "mB": 30}, labels={"kind":"observation","batch":2}),
@@ -40,30 +37,6 @@ Doctests include:
 ... )
 >>> set({"uuid","nA","mA","nB","mB"}) <= set(obs.columns)
 True
-
-# --- Typed handler registration + switch to TypedStrategy --------------
->>> class TwoPropObsBatch(TypedDict):
-...     nA: int; nB: int; mA: int; mB: int
-...
->>> handler = LedgerDataHandler.from_typeddict("TwoPropObsBatch", TwoPropObsBatch)
->>> _ = L.register_handler(handler)
->>> _ = L.set_strategy(TypedStrategy())
->>> L.ensure()  # creates typed table alongside base
->>> _ = L.insert_event(
-...     payload_type="TwoPropObsBatch",
-...     payload={"nA":150,"mA":60,"nB":140,"mB":48},
-...     labels={"kind":"observation","batch":3}
-... )
-
-# JSON access keeps working the same way (joined or JSON)
->>> q2 = (
-...   L.t
-...     .filter(L.t.payload_type == "TwoPropObsBatch")
-...     .select(n_treat=L.t.payload["nA"].cast("int64"))
-... )
->>> rows = q2.execute().to_dict("records")
->>> rows[0]["n_treat"]
-150
 
 # --- Minimal "compat" scenario (namespaces & arbitrary labels) --------
 >>> from enum import Enum
@@ -105,21 +78,15 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Literal
 import ibis
 from ibis.expr.types import Table as TableExpr
 
-from earlysign.core.ledger_df import (
-    LEDGER_SCHEMA,
-    LedgerDF,
-    LedgerDataHandler,
-    JsonStrategy,
-    TypedStrategy,
-)
+from earlysign.core.ledger_df import LEDGER_SCHEMA, LedgerDF
 
 
 @dataclass
 class Ledger:
     """High-level convenience API over LedgerDF.
 
-    - Keeps default JsonStrategy until caller switches.
-    - Delegates all read/query operations to Ibis via `df` (LedgerDF).
+    - Uses JSON-based persistence for all operations.
+    - Delegates all read/query operations to Ibis via `t` (LedgerDF).
     - Provides light write/save helpers.
     """
 
@@ -140,12 +107,11 @@ class Ledger:
 
     @property
     def t(self) -> LedgerDF:
-        """Build a LedgerDF lazily; default JsonStrategy unless changed later."""
+        """Build a LedgerDF lazily with JSON strategy."""
         if not self.connector:
             raise ValueError("Connector not set")
         if self._df is None:
             self._df = LedgerDF(self.connector, self.table_name)
-            self._df.set_strategy(JsonStrategy())
         return self._df
 
     @property
@@ -159,20 +125,6 @@ class Ledger:
             stacklevel=2,
         )
         return self.t
-
-    # Strategy / handler configuration ----------------------------------
-    def set_strategy(self, strategy: Any) -> "Ledger":
-        self.t.set_strategy(strategy)
-        return self
-
-    def register_handler(self, handler: LedgerDataHandler) -> "Ledger":
-        self.t.register_handler(handler)
-        return self
-
-    def set_handlers(self, handlers: Mapping[str, LedgerDataHandler]) -> "Ledger":
-        for h in handlers.values():
-            self.register_handler(h)
-        return self
 
     # Internals ----------------------------------------------------------
     def _now(self) -> str:
@@ -231,14 +183,13 @@ class Ledger:
             "uuids": [r["uuid"] for r in rows],
         }
 
-    def save(
+    def save_to_sqlite(
         self,
-        records: Optional[Iterable[Mapping[str, Any]]] | None = None,
         *,
         mode: Literal["append", "replace", "upsert"] = "append",
+        records: Optional[Iterable[Mapping[str, Any]]] = None,
         match_keys: Optional[List[str]] = None,
         dest_connector: Optional[ibis.BaseBackend] = None,
-        dest_strategy: Optional[Any] = None,
         dest_table_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Save the current view (or provided records) into a destination.
@@ -255,22 +206,12 @@ class Ledger:
         rows = [self._normalize(r) for r in recs]
 
         # Destination selection
-        if dest_connector or dest_table_name or dest_strategy:
+        if dest_connector or dest_table_name:
             dest_con = dest_connector or self.connector
             if not dest_con:
                 raise ValueError("Destination connector not set")
             dest_tbl = dest_table_name or self.table_name
             dest_df = LedgerDF(dest_con, dest_tbl)
-            if dest_strategy is not None:
-                dest_df.set_strategy(dest_strategy)
-            else:
-                # Mirror current style (typed or json) without guessing types
-                if isinstance(self.t._strategy, TypedStrategy):
-                    dest_df.set_strategy(TypedStrategy())
-                else:
-                    dest_df.set_strategy(JsonStrategy())
-            for h in self.t._handlers.values():
-                dest_df.register_handler(h)
             dest_df.ensure()
             target = dest_df
         else:
