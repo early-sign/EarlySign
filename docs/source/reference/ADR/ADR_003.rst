@@ -1,0 +1,61 @@
+.. ADR-003: Event-Sourcing Pattern
+.. :Date: 2025-09-19
+
+=====================================================
+ADR-003: Event-Sourcing Pattern
+=====================================================
+
+**Status**: `Proposed` | **`Accepted`** | `Deprecated` | `Superseded`
+
+📋 Context
+-----------
+
+EarlySign statistical analysis requires reproducible, auditable computation across distributed processes. The system must support:
+
+* **Reproducibility**: Statistical procedures must be re-executable and yield consistent results
+* **Auditability**: Complete trace of observations, computations, and decisions
+* **Distributed execution**: Stateless processes operating on shared event history
+* **Schema evolution**: Flexible metadata and labeling as statistical methods evolve
+
+Event-sourcing provides an append-only ledger where all state changes are recorded as immutable events, enabling reconstruction of system state at any point in time.
+
+**Label consistency challenges:**
+* Manual namespace management leads to inconsistent event categorization
+* Ad-hoc labeling creates difficulties in querying and aggregating related events
+* Schema extensions require careful coordination to maintain backward compatibility
+
+💡 Decision
+------------
+
+**Adopt event-sourcing with standardized label conventions for consistent metadata management.**
+
+**Event-sourcing implementation:**
+* All state changes recorded as immutable events in append-only ledger
+* System state reconstructed by replaying event history
+* Stateless computational processes with all state persisted in ledger
+
+**Reserved labels (labels reserved keys):**
+* **namespace** (required): Event logical space (e.g., "design"|"obs"|"stats"|"signals"|"ops")
+* **experiment_id**: Experiment scope. Auto-applied hierarchically via `HandleRegistry.bind(experiment_id=...)`
+* **tag**: System or version branching (optional)
+* **Recommended**: project, env, user, group, etc.
+
+
+✨ Consequences
+-----------------
+
+**Positive:**
+* ✅ **Reproducibility**: Complete event history enables exact reconstruction of any analysis state
+* ✅ **Auditability**: Full trace of computational decisions and intermediate results
+* ✅ **Consistency**: Reserved label conventions prevent namespace collisions and categorization errors
+* ✅ **Schema flexibility**: Label conventions support evolution while maintaining query compatibility
+* ✅ **Distributed processing**: Stateless processes can operate independently using shared event history
+
+**Negative:**
+* ⛔ **Storage overhead**: Event-sourcing requires more storage than state-based approaches
+* ⛔ **Query complexity**: Historical reconstruction may require complex event replay logic
+* ⛔ **Label discipline**: Reserved label conventions require developer awareness and compliance
+
+**Neutral:**
+* Event immutability trades update flexibility for consistency guarantees
+* Label standardization constrains naming freedom but improves system coherence
