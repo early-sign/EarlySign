@@ -26,7 +26,7 @@ class InformationTime(LedgerOperator):
     current_look: int = 1
 
     def run(self) -> None:
-        # n_total を取る（latest の binomial counts）
+        # Get n_total (from the latest binomial counts)
         t = self.counts.latest()
         q = t.select(
             nA=t.payload["nA"].cast("int64"),
@@ -41,7 +41,7 @@ class InformationTime(LedgerOperator):
             info = min(1.0, n_total / self.max_sample_size)
         else:
             if not self.planned_fractions:
-                # デフォルトは均等割（総 4 ルック仮定の例）
+                # Default to equal fractions (example: 4 looks total)
                 self.planned_fractions = [(i + 1) / 4 for i in range(4)]
             idx = min(max(self.current_look - 1, 0), len(self.planned_fractions) - 1)
             info = float(self.planned_fractions[idx])
@@ -72,7 +72,7 @@ class GSTBoundary(LedgerOperator):
             return
 
         if self.style == "obf":
-            # O'Brien–Fleming (Lan-DeMets近似)
+            # O'Brien–Fleming (Lan-DeMets approximation)
             z_alpha_2 = norm.ppf(1 - self.alpha / 2)
             alpha_t = 2 * (1 - norm.cdf(z_alpha_2 / sqrt(info)))
         else:
@@ -100,7 +100,7 @@ class Decision(LedgerOperator):
     out: DecisionSignalRecord
 
     def run(self) -> None:
-        # 3 依存を読む
+        # Read the three dependencies
         wdf = (
             self.wald.latest()
             .select(wald_z=self.wald.t.payload["wald_z"].cast("float64"))

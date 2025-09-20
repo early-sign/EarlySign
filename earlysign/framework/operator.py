@@ -9,12 +9,12 @@ class LedgerOperator:
     """
     __init__(scoped, **inputs):
       - scoped: Ledger
-      - inputs: attached LedgerRecord(s) or必要な依存
+      - inputs: attached LedgerRecord(s) or required dependencies
     Subclass must override:
       - derived_records() -> Dict[str, LedgerRecord]  # unattached outputs
-      - run() -> dict                                 # 引数なし。self.outputs[...] を使って insert する
+      - run() -> dict                                 # no args; use self.outputs[...] to insert
     Note:
-      - 出力は self.outputs にのみ格納する（属性は生やさない）
+      - Store outputs only in self.outputs (do not add attributes)
     """
 
     def __init__(self, scoped: Ledger, **inputs: Any):

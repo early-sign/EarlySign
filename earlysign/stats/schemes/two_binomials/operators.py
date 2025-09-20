@@ -17,7 +17,7 @@ class WaldZStatistic(LedgerOperator):
     out: WaldZStatisticRecord
 
     def run(self) -> None:
-        # 直近の集計行（nA,mA,nB,mB）を読む
+        # Read the most recent aggregated row (nA, mA, nB, mB)
         t = self.counts.latest()
         q = t.select(
             nA=t.payload["nA"].cast("int64"),
@@ -43,7 +43,7 @@ class WaldZStatistic(LedgerOperator):
             return
         z = (pA - pB) / se
 
-        # out に 1 行書く
+        # Write a single row to out
         self.out.insert(
             wald_z=float(z),
             pA=float(pA),
