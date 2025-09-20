@@ -1,14 +1,14 @@
 from dataclasses import dataclass
-from typing import Dict, Any
-from earlysign.framework.record import LedgerRecord
-from earlysign.framework.scoped import ScopedLedger
+from typing import Dict, Any, Mapping
+from earlysign.core.ledger import Ledger
+from earlysign.framework.records import LedgerRecord
 
 
 @dataclass
 class LedgerOperator:
     """
     __init__(scoped, **inputs):
-      - scoped: ScopedLedger
+      - scoped: Ledger
       - inputs: attached LedgerRecord(s) or必要な依存
     Subclass must override:
       - derived_records() -> Dict[str, LedgerRecord]  # unattached outputs
@@ -17,7 +17,7 @@ class LedgerOperator:
       - 出力は self.outputs にのみ格納する（属性は生やさない）
     """
 
-    def __init__(self, scoped: ScopedLedger, **inputs: Any):
+    def __init__(self, scoped: Ledger, **inputs: Any):
         self.scoped = scoped
         for k, v in inputs.items():
             setattr(self, k, v)
@@ -27,11 +27,11 @@ class LedgerOperator:
             outs[name] = rec.attach(scoped)
         self._outputs = outs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
+    def derived_records(self) -> Mapping[str, LedgerRecord]:
         return {}
 
     @property
-    def outputs(self) -> Dict[str, LedgerRecord]:
+    def outputs(self) -> Mapping[str, LedgerRecord]:
         return self._outputs
 
     def run(self) -> Any:

@@ -6,7 +6,7 @@ Doctests
 # -- JSON strategy: payload/labels access behaves like Ibis JSON column --
 >>> from earlysign.core.ledger import Ledger
 >>> con = ibis.duckdb.connect(":memory:")
->>> ledger = Ledger(connector=con, table_name="events")
+>>> ledger = Ledger(con, "events")
 >>> ledger.ensure()  # should be a no-op since table exists
 
 # Empty select should still compile and execute

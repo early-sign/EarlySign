@@ -38,3 +38,7 @@ check:
 		mise exec python@$$version -- make lint-type-test; \
 	done
 	make docs-build
+
+check-lite:
+	mise exec python -- make lint-type-test
+	make docs-build
