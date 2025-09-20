@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Protocol
+from typing import Any, Mapping, Optional, Protocol, Self
 from ibis.expr.types import Table as TableExpr
 from earlysign.core.ledger import Ledger
 
@@ -52,7 +52,7 @@ class LedgerRecord:
     payload_type: str = field(init=False, default="")
     ledger: Optional[Ledger] = field(default=None, init=False, repr=False)
 
-    def attach(self, ledger: Ledger) -> "LedgerRecord":
+    def attach(self, ledger: Ledger) -> Self:
         self.ledger = ledger
         return self
 

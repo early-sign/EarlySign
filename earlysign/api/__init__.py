@@ -12,20 +12,6 @@ The API is designed to be:
 - **Discoverable**: Clear naming that maps to common experimental scenarios
 - **Consistent**: Uniform interface patterns across different methods
 
-Examples
---------
->>> # A/B Testing with interim analysis
->>> from earlysign.api.ab_test import interim_analysis
->>> experiment = interim_analysis("checkout_test", alpha=0.05, looks=4)
->>>
->>> # Guardrail monitoring
->>> from earlysign.api.ab_test import guardrail_monitoring
->>> monitor = guardrail_monitoring("conversion_safety", sensitivity="balanced")
->>>
->>> # Continuous monitoring
->>> from earlysign.api.ab_test import continuous_monitoring
->>> tracker = continuous_monitoring("feature_impact", baseline_assumption="no_effect")
-
 Unified Interface
 -----------------
 All A/B testing functionality is consolidated in `earlysign.api.ab_test`:
