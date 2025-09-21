@@ -28,8 +28,10 @@ from earlysign.stats.common.anytime_valid.ville import (
     VilleDecision,
 )
 
+from earlysign.reporting.bridge import ReportingBridgeMixin
 
-class SafeTestingTwoProportions(TemplateBase):
+
+class SafeTestingTwoProportions(ReportingBridgeMixin, TemplateBase):
     """
     Anytime-Valid A/B test for binary outcomes (A vs B) via Ville's inequality.
 

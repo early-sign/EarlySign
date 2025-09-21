@@ -1,64 +1,80 @@
-# """
-# Doctests for earlysign.framework integration.
+"""
+Doctests for earlysign.framework integration (current API).
 
-# Covers the flow:
-#   Ledger.ensure() → Ledger.bind() → Records → Operators → Derived Records.
+Covers the flow:
+  Ledger.ensure() → Ledger.bind() → Records → Operators → Derived Records.
 
-# Steps:
-#   1. Insert binomial observation snapshots.
-#   2. Compute Wald Z statistic via operator.
-#   3. Compute information time.
-#   4. Gate decision using GST-like boundary.
+Steps:
+  1. Insert binomial observation snapshots (two-proportions scheme).
+  2. Compute Wald Z statistic via operator.
+  3. Compute information time (counts-based: n_total & N_max).
+  4. Compute GS boundary from design and make a decision.
 
-# >>> import ibis, duckdb
-# >>> from earlysign.core.ledger import Ledger
-# >>> from earlysign.stats.schemes.two_binomials.records import BinomialCountsRecord, WaldZStatisticRecord
-# >>> from earlysign.stats.schemes.two_binomials.operators import WaldZStatistic
-# >>> from earlysign.stats.common.group_sequential.records import InformationTimeRecord, GroupSequentialBoundaryRecord, GroupSequentialDecisionSignalRecord
-# >>> from earlysign.stats.common.group_sequential.info_time import InformationTime
-# >>> from earlysign.stats.common.group_sequential.decision import Decision
+>>> import ibis
+>>> from earlysign.core.ledger import Ledger
+>>> from earlysign.stats.schemes.two_proportions.records import (
+...     BinomialCountsRecord, WaldZStatisticRecord
+... )
+>>> from earlysign.stats.schemes.two_proportions.operators import WaldZStatistic
+>>> from earlysign.stats.schemes.two_proportions.group_sequential import GSDecisionFromWaldZ
+>>> from earlysign.stats.common.group_sequential.records import (
+...     InformationTimeRecord, GroupSequentialDesignRecord,
+...     GroupSequentialBoundaryRecord, GroupSequentialDecisionSignalRecord
+... )
+>>> from earlysign.stats.common.group_sequential.info_time import InformationTime
+>>> from earlysign.stats.common.group_sequential.design import (
+...     GroupSequentialDesign, BoundaryFromDesign
+... )
 
-# # --- Setup in-memory ledger ---------------------------------------------------
-# >>> con = ibis.duckdb.connect(":memory:")
-# >>> ledger = Ledger(con, "events")
-# >>> ledger.ensure()
-# >>> scoped = ledger.bind(experiment_id="exp_demo")
+# --- Setup in-memory ledger ---------------------------------------------------
+>>> con = ibis.duckdb.connect(":memory:")
+>>> ledger = Ledger(con, "events")
+>>> ledger.ensure()
+>>> scoped = ledger.bind(experiment_id="exp_demo")
 
-# # --- Step 1. Insert binomial observation snapshots ----------------------------
-# >>> counts = BinomialCountsRecord(id="counts1").attach(scoped)
-# >>> _ = counts.insert(nA=100, mA=38, nB=120, mB=51)
-# >>> _ = counts.insert(nA=150, mA=60, nB=140, mB=48)
+# --- Step 1. Insert binomial observation snapshots ----------------------------
+>>> counts = BinomialCountsRecord(id="counts1").attach(scoped)
+>>> _ = counts.insert({"nA": 100, "mA": 38, "nB": 120, "mB": 51})
+>>> _ = counts.insert({"nA": 150, "mA": 60, "nB": 140, "mB": 48})
 
-# # --- Step 2. Compute Wald Z statistic -----------------------------------------
-# >>> wald_rec = WaldZStatisticRecord(id="wald1").attach(scoped)
-# >>> wald = WaldZStatistic(counts=counts, out=wald_rec)
-# >>> _ = wald.run()
+# --- Step 2. Compute Wald Z statistic -----------------------------------------
+# Operator signature in the new framework takes the scoped ledger and out_id.
+>>> _ = WaldZStatistic(scoped, counts=counts, out_id="wald1", pooled=True).run()
 
-# # --- Step 3. Compute information time -----------------------------------------
-# >>> info_rec = InformationTimeRecord(id="info1").attach(scoped)
-# >>> info = InformationTime(counts=counts, out=info_rec)
-# >>> _ = info.run()
+# --- Step 3. Compute information time (counts-based) --------------------------
+# Latest total sample size n_total must be paired with N_max.
+>>> cdf = counts.latest().select(
+...     nA=counts.t.payload["nA"].cast("int64"),
+...     nB=counts.t.payload["nB"].cast("int64"),
+... ).execute()
+>>> n_total = int(cdf.iloc[0]["nA"]) + int(cdf.iloc[0]["nB"])
+>>> _ = InformationTime(scoped, out_id="info1", n_total=n_total, N_max=300).run()
 
-# # --- Step 4. Gate decision using GST-like boundary ----------------------------
-# >>> bound_rec = GSTBoundaryRecord(id="bound1").attach(scoped)
-# >>> bound = GSTBoundary(info=info_rec, out=bound_rec)
-# >>> _ = bound.run()
+# --- Step 4. GS design → boundary → decision ---------------------------------
+>>> design_payload = {
+...     "alpha": 0.05, "tails": 2, "scale": "z",
+...     "efficacy": {"style": "alpha_spending", "family": "obf"},
+...     "futility": {"mode": "symmetric"},
+... }
+>>> _ = GroupSequentialDesign(scoped, out_id="design1", design=design_payload).run()
+>>> _ = BoundaryFromDesign(
+...         scoped,
+...         design=GroupSequentialDesignRecord(id="design1").attach(scoped),
+...         info=InformationTimeRecord(id="info1").attach(scoped),
+...         out_id="bound1",
+...     ).run()
+>>> _ = GSDecisionFromWaldZ(
+...         scoped,
+...         wald=WaldZStatisticRecord(id="wald1").attach(scoped),
+...         boundary=GroupSequentialBoundaryRecord(id="bound1").attach(scoped),
+...         info=InformationTimeRecord(id="info1").attach(scoped),
+...         out_id="dec1",
+...         value_scale="z",
+...     ).run()
 
-# >>> dec_rec  = DecisionSignalRecord(id="dec1").attach(scoped)
-# >>> decision = Decision(wald=wald_rec, info=info_rec, bound=bound_rec, out=dec_rec)
-# >>> _ = decision.run()
-
-# # --- Inspect ledger contents --------------------------------------------------
-# >>> scoped.t.order_by(scoped.t.ts)["payload_type"].execute().to_list()
-# ['BinomCounts', 'BinomCounts', 'WaldZ', 'InfoTime', 'GSTBoundary', 'DecisionSignal']
-
-# # --- Inspect final decision ---------------------------------------------------
-# >>> t = dec_rec.latest()
-# >>> t.select(
-# ...     signal=t.payload["signal"].cast("string"),
-# ...     wald_z=t.payload["wald_z"].cast("float64"),
-# ...     info_time=t.payload["info_time"].cast("float64"),
-# ... ).execute()
-#   signal   wald_z  info_time
-# 0  ...      ...       ...
-# """
+# --- Inspect final decision ---------------------------------------------------
+>>> dec = GroupSequentialDecisionSignalRecord(id="dec1").attach(scoped)
+>>> df = dec.latest().select(signal=dec.t.payload["signal"]).execute()
+>>> df["signal"].iloc[0] in ("continue", "stop_efficacy", "stop_futility")
+True
+"""

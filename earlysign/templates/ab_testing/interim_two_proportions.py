@@ -39,9 +39,10 @@ from earlysign.stats.common.group_sequential.design import (
     GroupSequentialDesign,
     BoundaryFromDesign,
 )
+from earlysign.reporting.bridge import ReportingBridgeMixin
 
 
-class InterimAnalysisTwoProportions(TemplateBase):
+class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
     """
     Group Sequential A/B test for binary outcomes (A vs B).
 

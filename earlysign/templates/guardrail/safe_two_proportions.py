@@ -13,8 +13,10 @@ from earlysign.templates.ab_testing.safe_two_proportions import (
     SafeTestingTwoProportions,
 )
 
+from earlysign.reporting.bridge import ReportingBridgeMixin
 
-class SafeTwoProportions(TemplateBase):
+
+class SafeTwoProportions(ReportingBridgeMixin, TemplateBase):
     """
     Guardrail facade that reuses SafeTestingTwoProportions under the hood.
 
