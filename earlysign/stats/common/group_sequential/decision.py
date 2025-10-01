@@ -84,7 +84,9 @@ def convert_scale(
     if not (0.0 <= t <= 1.0):
         raise ValueError("`info_time` must be in [0,1].")
     if fs not in ("z", "bm") or ts not in ("z", "bm"):
-        raise ValueError("`from_scale`/`to_scale` must be 'z' or 'bm'.")
+        raise ValueError(
+            f"`from_scale`/`to_scale` must be 'z' or 'bm'. Got: fs={fs}, ts={ts}"
+        )
     if fs == ts:
         return float(value)
     if fs == "z" and ts == "bm":
