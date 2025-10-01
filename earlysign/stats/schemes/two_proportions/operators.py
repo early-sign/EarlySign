@@ -83,24 +83,14 @@ class WaldZStatistic(LedgerOperator):
 
         cdf = (
             counts.latest()
-            .select(
-                nA=counts.t.payload["nA"].cast("int64"),
-                mA=counts.t.payload["mA"].cast("int64"),
-                nB=counts.t.payload["nB"].cast("int64"),
-                mB=counts.t.payload["mB"].cast("int64"),
-                look=counts.t.payload["look"].cast("int64"),
-            )
-            .execute()
+            .execute().iloc[0]
         )
-        if len(cdf) == 0:
-            return
-
-        nA, mA, nB, mB = map(int, cdf.iloc[0][["nA", "mA", "nB", "mB"]])
+        nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
         z = _wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=pooled)
 
         payload = {"wald_z": float(z)}
         try:
-            payload["look"] = int(cdf.iloc[0]["look"])
+            payload["look"] = int(cdf["look"])
         except Exception:
             pass
         out.insert(payload)
@@ -121,24 +111,15 @@ class ScoreZStatistic(LedgerOperator):
 
         cdf = (
             counts.latest()
-            .select(
-                nA=counts.t.payload["nA"].cast("int64"),
-                mA=counts.t.payload["mA"].cast("int64"),
-                nB=counts.t.payload["nB"].cast("int64"),
-                mB=counts.t.payload["mB"].cast("int64"),
-                look=counts.t.payload["look"].cast("int64"),
-            )
-            .execute()
+            .execute().iloc[0]
         )
-        if len(cdf) == 0:
-            return
 
-        nA, mA, nB, mB = map(int, cdf.iloc[0][["nA", "mA", "nB", "mB"]])
+        nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
         z = _score_z(nA=nA, mA=mA, nB=nB, mB=mB)
 
         payload = {"score_z": float(z)}
         try:
-            payload["look"] = int(cdf.iloc[0]["look"])
+            payload["look"] = int(cdf["look"])
         except Exception:
             pass
         out.insert(payload)

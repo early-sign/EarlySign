@@ -75,32 +75,16 @@ class GSDecisionFromWaldZ(LedgerOperator):
         value_scale = str(getattr(self, "value_scale")).lower()
 
         # 1) read latest Wald Z
-        wdf = wald.latest().select(z=wald.t.payload["wald_z"].cast("float64")).execute()
-        if len(wdf) == 0:
-            return
-        z_raw = float(wdf.iloc[0]["z"])
+        z_raw = float(wald.latest().execute().iloc[0]["wald_z"])
 
         # 2) read latest boundary
-        bdf = (
-            boundary.latest()
-            .select(
-                upper=boundary.t.payload["upper"].cast("float64"),
-                lower=boundary.t.payload["lower"].cast("float64"),
-                scale=boundary.t.payload["scale"],
-                info_time=boundary.t.payload["info_time"].cast("float64"),
-            )
-            .execute()
-        )
-        if len(bdf) == 0:
-            return
-        upper = float(bdf.iloc[0]["upper"])
-        lower = float(bdf.iloc[0]["lower"])
-        bscale = str(bdf.iloc[0]["scale"])
-        t = (
-            float(bdf.iloc[0]["info_time"])
-            if not math.isnan(bdf.iloc[0]["info_time"])
-            else None
-        )
+        bdf = boundary.latest().execute().iloc[0]
+        if math.isnan(bdf["info_time"]):
+            raise ValueError("Info time cannot be nan.")
+        upper = float(bdf["upper"])
+        lower = float(bdf["lower"])
+        bscale = str(bdf["scale"])
+        t = float(bdf["info_time"])
 
         # If boundary lacks info_time, try provided info record
         if (t is None or not (0.0 <= t <= 1.0)) and getattr(

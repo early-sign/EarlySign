@@ -59,9 +59,26 @@ from earlysign.stats.common.group_sequential.significance_level import (
 
 
 class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
-    """Record type for Group Sequential Design payloads."""
+    """Design record for Group Sequential Testing.
+
+    Payload example:
+        {
+            "alpha": 0.05,
+            "tails": 2,
+            "scale": "z",
+            "efficacy": {"style": "alpha_spending", "family": "obf", "alpha_levels": [ ... ]},
+            "futility": {"mode": "symmetric"}  # or {"mode": "none"} / {"mode": "binding", ...}
+        }
+    """
 
     payload_type: str = "GroupSequential/Design"
+    schema = {
+        "alpha": float,
+        "tails": int,
+        "scale": str,
+        "efficacy": dict,
+        "futility": dict,
+    }
 
 
 def _get_alpha_level_for_look(

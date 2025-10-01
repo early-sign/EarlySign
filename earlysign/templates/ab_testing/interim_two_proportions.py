@@ -58,6 +58,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
     ...                  futility={"mode": "symmetric"})
     >>> t.set_info_plan(kind="counts", N_max=220)
     >>> t.add_observations(nA=100, mA=40, nB=120, mB=55, look=1)
+    >>>
     >>> res = t.analyze()
     """
 
@@ -285,20 +286,9 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
             GroupSequentialBoundaryRecord(id=ids["boundary"])
             .attach(self.scoped)
             .latest()
-            .select(
-                upper=GroupSequentialBoundaryRecord(id=ids["boundary"])
-                .attach(self.scoped)
-                .t.payload["upper"]
-                .cast("float64"),
-                lower=GroupSequentialBoundaryRecord(id=ids["boundary"])
-                .attach(self.scoped)
-                .t.payload["lower"]
-                .cast("float64"),
-                scale=GroupSequentialBoundaryRecord(id=ids["boundary"])
-                .attach(self.scoped)
-                .t.payload["scale"],
-            )
+            .select("upper", "lower", "scale")
             .execute()
+            .iloc[0]
         )
         sdf = (
             WaldZStatisticRecord(id=ids["wald"])
@@ -358,12 +348,11 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         stopped = signal in ("stop_efficacy", "stop_futility")
 
         summary: Dict[str, Any] = {"signal": signal, "reason": reason}
-        if len(ddf) > 0:
-            summary["boundary"] = {
-                "upper": float(ddf.iloc[0]["upper"]),
-                "lower": float(ddf.iloc[0]["lower"]),
-                "scale": str(ddf.iloc[0]["scale"]),
-            }
+        summary["boundary"] = {
+            "upper": float(ddf["upper"]),
+            "lower": float(ddf["lower"]),
+            "scale": str(ddf["scale"]),
+        }
         if len(sdf) > 0:
             summary["wald_z"] = float(sdf.iloc[0]["wz"])
 
