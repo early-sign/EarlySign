@@ -42,3 +42,35 @@ If you want to compile the documentation locally, run
 ```sh
 $ make docs-serve
 ```
+
+## Development Toolkit
+
+All the following checks can be run by the following command:
+```sh
+$ make check-lite
+```
+
+This uses one of the supported Python versions.
+
+For a full check using all supported Python versions,
+```sh
+$ make check
+```
+
+We prefer to set the configs for the following in `pyproject.toml`.
+
+### Formatters: black, isort, autopep8
+We use the following tools for code formatting:
+- **black**: The standard auto-formatter for the project. Run with `make format`.
+- **isort**: Automatically sorts import statements.
+- **autopep8**: Automatically fixes code to comply with PEP8.
+All of these are executed together via `make format`.
+
+### Type Checkers: mypy
+Type checking is performed using **mypy**.
+Run `make check` to execute type checks.
+
+### Tests: pytest, doctest
+Tests are run using **pytest** and **doctest**.
+All tests are executed with `make check`.
+Pytest is parametrized to run across multiple Python versions.
