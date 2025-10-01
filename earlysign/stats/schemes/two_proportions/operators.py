@@ -81,10 +81,7 @@ class WaldZStatistic(LedgerOperator):
         out = self.outputs["wald"]
         pooled = bool(getattr(self, "pooled", True))
 
-        cdf = (
-            counts.latest()
-            .execute().iloc[0]
-        )
+        cdf = counts.latest().execute().iloc[0]
         nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
         z = _wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=pooled)
 
@@ -109,10 +106,7 @@ class ScoreZStatistic(LedgerOperator):
         counts = self.counts
         out = self.outputs["score"]
 
-        cdf = (
-            counts.latest()
-            .execute().iloc[0]
-        )
+        cdf = counts.latest().execute().iloc[0]
 
         nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
         z = _score_z(nA=nA, mA=mA, nB=nB, mB=mB)
