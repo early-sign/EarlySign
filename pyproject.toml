@@ -69,12 +69,14 @@ disallow_untyped_decorators = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 exclude = [
-    "earlysign/api/.*"
+    "earlysign/api/.*",
+    "earlysign/tests/.*",
 ]
 
 [tool.pytest.ini_options]
 # --nb-test-files is run the notebooks that do not follow the test naming convention: `test_*.ipynb`.
-addopts = "--import-mode=importlib --doctest-modules --pyargs -v --nb-test-files"
+# --pdbcls=pudb.debugger:Debugger is used with optional `--pdb` or `--trace` so as to activate the pudb on post-mortem. Normally, these switches are not used. Use these switches when you write your own test and run pytest to debug.
+addopts = "--import-mode=importlib --doctest-modules --pyargs -v --nb-test-files --pdbcls=pudb.debugger:Debugger"
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 testpaths = ["earlysign", "docs/source"]
 norecursedirs = ["docs/_build"]
