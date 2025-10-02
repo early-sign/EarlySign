@@ -1,24 +1,23 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from typing import (
     Any,
-    Union,
+    Dict,
     Mapping,
     Optional,
     Protocol,
     Self,
-    overload,
-    Dict,
     Tuple,
     TypeAlias,
+    Union,
     cast,
+    overload,
 )
-from ibis.expr.types import Table as TableExpr
-from earlysign.core.ledger import Ledger
-from earlysign.util.pydantic_ibis import explode_json_with_pydantic
+
 import pydantic
+from ibis.expr.types import Table as TableExpr
 from pydantic.fields import FieldInfo
 
+from earlysign.core.ledger import Ledger
+from earlysign.util.pydantic_ibis import explode_json_with_pydantic
 
 PydanticField: TypeAlias = Union[
     type | str,  # e.g., "int" or int

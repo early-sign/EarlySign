@@ -21,15 +21,15 @@ Operators
 """
 
 import math
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Dict, Tuple
 
 from scipy.special import betaln
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
 from earlysign.stats.common.anytime_valid.records import EProcessRecord
+from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
 
 
 def mixture_e_two_proportions(

@@ -59,12 +59,19 @@ $ make check
 
 We prefer to set the configs for the following in `pyproject.toml`.
 
-### Formatters: black, isort, autopep8
-We use the following tools for code formatting:
+### Formatters / Linters: black, isort, ruff
+We use the following tools for formatting and lint-based automatic fixes:
 - **black**: The standard auto-formatter for the project. Run with `make format`.
-- **isort**: Automatically sorts import statements.
-- **autopep8**: Automatically fixes code to comply with PEP8.
-All of these are executed together via `make format`.
+- **isort**: Automatically sorts import statements (configured to follow Black's style).
+- **ruff**: A fast linter with automatic-fix capabilities (`ruff --fix`). Use ruff to remove unused imports and apply lightweight lint-based fixes before running Black.
+
+Typical ordering when formatting the repository (what `make format` performs):
+
+1. `isort` — sort and group `import` statements (applies to `earlysign/` only).
+2. `ruff --fix` — remove unused imports and apply quick lint fixes.
+3. `black` — final deterministic formatting pass.
+
+This order avoids conflicts between tools and ensures a consistent, reproducible code style.
 
 ### Type Checkers: mypy
 Type checking is performed using **mypy**.

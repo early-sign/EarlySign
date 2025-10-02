@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Dict, Any, Mapping
+from typing import Any, Dict, Mapping
+
 from earlysign.core.ledger import Ledger
 from earlysign.framework.records import LedgerRecord
 

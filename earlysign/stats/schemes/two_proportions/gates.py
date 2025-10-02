@@ -7,10 +7,9 @@ Currently provides:
 
 from typing import Dict
 
-from earlysign.core.ledger import Ledger
+from earlysign.framework.gate import GateDecisionRecord
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
-from earlysign.framework.gate import GateDecisionRecord
 from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
 
 

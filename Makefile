@@ -14,6 +14,12 @@ test:
 
 format:
 	# Format code using one Python version
+	# Sort imports, fix lint, and then run Black for final opinionated formatting
+	poetry run isort earlysign
+	# ruff: apply safe fixes and also enable unsafe fixes to remove leftover
+	# unused assignments/variables when desired. This can change code; run in
+	# a branch and run tests after.
+	poetry run ruff check --fix --unsafe-fixes earlysign
 	poetry run black .
 
 docs-build:
@@ -27,6 +33,8 @@ docs-serve:
 
 # Combined lint, type check, and test command
 lint-type-test:
+	poetry run ruff check earlysign
+	poetry run isort --check-only earlysign
 	poetry run black --check .
 	poetry run mypy -p earlysign
 	poetry run pytest

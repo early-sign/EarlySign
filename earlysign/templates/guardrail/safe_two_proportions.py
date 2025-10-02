@@ -5,15 +5,13 @@ This is a convenience wrapper over the ABTesting safe pipeline, but emits
 "alert"/"ok" style signals for monitoring use-cases.
 """
 
-from typing import Optional, Tuple
+from typing import Tuple
 
-from earlysign.core.ledger import Ledger
-from earlysign.framework.templates import TemplateBase, AnalysisResult
+from earlysign.framework.templates import AnalysisResult, TemplateBase
+from earlysign.reporting.bridge import ReportingBridgeMixin
 from earlysign.templates.ab_testing.safe_two_proportions import (
     SafeTestingTwoProportions,
 )
-
-from earlysign.reporting.bridge import ReportingBridgeMixin
 
 
 class SafeTwoProportions(ReportingBridgeMixin, TemplateBase):

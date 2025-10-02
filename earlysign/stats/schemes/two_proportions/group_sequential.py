@@ -14,17 +14,17 @@ It does **not** compute boundaries nor statistics by itself; those remain modula
 """
 
 import math
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
+from earlysign.stats.common.group_sequential.decision import _decide, convert_scale
 from earlysign.stats.common.group_sequential.records import (
-    InformationTimeRecord,
     GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
+    InformationTimeRecord,
 )
-from earlysign.stats.common.group_sequential.decision import convert_scale, _decide
 from earlysign.stats.schemes.two_proportions.records import (
     WaldZStatisticRecord,
 )

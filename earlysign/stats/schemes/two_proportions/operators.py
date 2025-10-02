@@ -7,13 +7,13 @@ Two-proportions scheme operator(s).
 
 from math import sqrt
 from typing import Dict
-from earlysign.core.ledger import Ledger
+
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
-    WaldZStatisticRecord,
     ScoreZStatisticRecord,
+    WaldZStatisticRecord,
 )
 
 

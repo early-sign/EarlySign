@@ -3,7 +3,8 @@ Operators for the "one-mean (Gaussian)" scheme.
 """
 
 import math
-from typing import Optional, Dict
+from typing import Dict
+
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord

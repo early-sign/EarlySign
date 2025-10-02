@@ -12,17 +12,16 @@ futility_mode: "none" | "fixed"
   - "fixed": stop_futility if E <= futility_tau (0 < tau < 1 suggested)
 """
 
-from typing import Optional, Dict, Mapping
+from typing import Dict, Mapping, Optional
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
-
 from earlysign.stats.common.anytime_valid.records import (
     EProcessRecord,
-    VilleThresholdRecord,
     SafeDecisionRecord,
     SafeDesignRecord,
+    VilleThresholdRecord,
 )
 
 

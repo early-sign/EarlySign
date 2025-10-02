@@ -37,21 +37,20 @@ If top-level {"style":..., "family":..., "alpha_levels":...} is given,
 it is interpreted as efficacy.* .
 """
 
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord, QueryMixin
-
-from earlysign.stats.common.group_sequential.records import (
-    InformationTimeRecord,
-    GroupSequentialBoundaryRecord,
-)
 from earlysign.stats.common.group_sequential.alpha_spending import (
+    cumulative_to_nominal_z,
     obf_spending,
     pocock_spending,
-    cumulative_to_nominal_z,
     z_to_brownian,
+)
+from earlysign.stats.common.group_sequential.records import (
+    GroupSequentialBoundaryRecord,
+    InformationTimeRecord,
 )
 from earlysign.stats.common.group_sequential.significance_level import (
     level_to_nominal_z,

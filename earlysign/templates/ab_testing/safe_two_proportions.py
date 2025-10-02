@@ -7,28 +7,25 @@ counts -> e-process -> ville-threshold -> decision
 (optional gate may be applied before the test)
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 
-from earlysign.core.ledger import Ledger
-from earlysign.framework.templates import TemplateBase, AnalysisResult
 from earlysign.framework.gate import GateDecisionRecord
-from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
-from earlysign.stats.schemes.two_proportions.gates import GateMinTotalSamples
-
+from earlysign.framework.templates import AnalysisResult, TemplateBase
+from earlysign.reporting.bridge import ReportingBridgeMixin
 from earlysign.stats.common.anytime_valid.records import (
     EProcessRecord,
-    VilleThresholdRecord,
     SafeDecisionRecord,
+    VilleThresholdRecord,
+)
+from earlysign.stats.common.anytime_valid.ville import (
+    VilleDecision,
+    VilleThreshold,
 )
 from earlysign.stats.schemes.two_proportions.anytime_valid import (
     MixtureEProcessTwoProportions,
 )
-from earlysign.stats.common.anytime_valid.ville import (
-    VilleThreshold,
-    VilleDecision,
-)
-
-from earlysign.reporting.bridge import ReportingBridgeMixin
+from earlysign.stats.schemes.two_proportions.gates import GateMinTotalSamples
+from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
 
 
 class SafeTestingTwoProportions(ReportingBridgeMixin, TemplateBase):

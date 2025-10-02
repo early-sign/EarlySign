@@ -34,15 +34,15 @@ Output
 """
 
 import math
-from typing import Literal, Optional, Tuple, Dict
+from typing import Dict, Literal, Optional, Tuple
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.records import (
-    InformationTimeRecord,
     GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
+    InformationTimeRecord,
 )
 
 

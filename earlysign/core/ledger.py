@@ -66,15 +66,15 @@ False
 {'experiment_id': 'exp1', 'env': 'prod'}
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, Mapping, Optional, Union, Pattern
 import re
 import uuid as uuidlib
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, Mapping, Pattern, Union
 
 import ibis
-import ibis.expr.schema as sch
 import ibis.expr.datatypes as dt
+import ibis.expr.schema as sch
 from ibis.expr.types import Table as TableExpr
 
 

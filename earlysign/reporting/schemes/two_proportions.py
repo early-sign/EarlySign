@@ -15,32 +15,30 @@ Reporter class:
 from typing import Any, Dict, Literal, Optional, Union
 
 import ibis
-import pandas as pd
 from matplotlib.figure import Figure
 
 from earlysign.core.ledger import Ledger
 from earlysign.reporting.reportkit import (
-    to_pandas_tables,
-    compose_markdown,
-    to_sql_dict,
-    plot_tidy,
     ReporterBase,
+    compose_markdown,
+    plot_tidy,
+    to_pandas_tables,
+    to_sql_dict,
+)
+from earlysign.stats.common.anytime_valid.records import (
+    EProcessRecord,
+    SafeDecisionRecord,
+    SafeDesignRecord,
+)
+from earlysign.stats.common.group_sequential.records import (
+    GroupSequentialBoundaryRecord,
+    GroupSequentialDecisionSignalRecord,
+    InformationTimeRecord,
 )
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
     WaldZStatisticRecord,
 )
-from earlysign.stats.common.group_sequential.records import (
-    InformationTimeRecord,
-    GroupSequentialBoundaryRecord,
-    GroupSequentialDecisionSignalRecord,
-)
-from earlysign.stats.common.anytime_valid.records import (
-    EProcessRecord,
-    SafeDesignRecord,
-    SafeDecisionRecord,
-)
-
 
 # ----------------------------- helpers (counts) ----------------------------- #
 

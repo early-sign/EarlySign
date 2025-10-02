@@ -5,8 +5,6 @@ This module defines minimal, scheme-specific record types that other operators
 (estimators, group-sequential, anytime-valid) can read/write.
 """
 
-from typing import Any, Dict
-import pydantic
 from earlysign.framework.records import LedgerRecord, QueryMixin
 
 

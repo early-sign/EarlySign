@@ -3,10 +3,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Iterator, Union, get_args, get_origin
 
-import ibis
 import ibis.expr.datatypes as dt
 from ibis.expr.types import Column, Table
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel
 
 # --- Type Mapping Definition ---
 PY_TO_IBIS_TYPE: dict[type, dt.DataType] = {
@@ -33,7 +32,8 @@ def explode_json_with_pydantic(
     Examples:
     ---------
     >>> import pandas as pd
-    >>>
+    >>> import ibis
+    >>> from pydantic import create_model
     >>> con = ibis.connect("duckdb://:memory:")
     >>>
     >>> t = con.sql(
@@ -99,6 +99,7 @@ def _iter_scalar_paths(
 
     Examples:
     ---------
+    >>> from pydantic import create_model
     >>> InnerModel = create_model("InnerModel", z=(float, ...), scale=(str, ...))
     >>> PayloadModel = create_model(
     ...     "PayloadModel",

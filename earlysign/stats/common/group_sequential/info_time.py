@@ -11,13 +11,12 @@ Each operator writes an InformationTimeRecord that downstream GS components use.
 - InformationTimeFromFisher  : t = clip(fisher_now / fisher_max)          # explicit Fisher information
 """
 
-from typing import Dict, List, Optional, Mapping, Union
+from typing import Dict, List, Mapping, Optional, Union
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.records import InformationTimeRecord
-
 
 # ---------------- helpers (each function has its own doctest) ----------------
 

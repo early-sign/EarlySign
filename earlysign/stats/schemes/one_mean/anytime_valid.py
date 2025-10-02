@@ -23,15 +23,15 @@ Operators
 """
 
 import math
-from typing import Tuple, Dict, Union, Any
+from typing import Any, Dict
 
 from scipy.stats import norm
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.schemes.one_mean.records import OneMeanSummaryRecord
 from earlysign.stats.common.anytime_valid.records import EProcessRecord
+from earlysign.stats.schemes.one_mean.records import OneMeanSummaryRecord
 
 
 def mixture_e_one_mean_known_var(

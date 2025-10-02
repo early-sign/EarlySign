@@ -44,6 +44,8 @@ babel = "^2.17.0"
 sphinx-autoapi = "^3.6.0"
 ibis-framework = {extras = ["duckdb", "polars"], version = "^10.8.0"}
 pytest-notebook = "^0.10.0"
+isort = "^6.1.0"
+ruff = "^0.12.0"
 
 [tool.poetry.group.ci.dependencies]
 pytest = "^8.4.1"
@@ -55,6 +57,19 @@ target-version = ["py311", "py312", "py313"]
 exclude = '''
 /(\.|venv|\.venv|\.git|\.mypy_cache|\.pytest_cache|\.tox|build|dist|\.poetry|docs/_build)/
 '''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["earlysign"]
+src_paths = ["earlysign"]
+include_trailing_comma = true
+combine_as_imports = true
+multi_line_output = 3
+
+[tool.ruff]
+line-length = 88
+exclude = ["docs/_build", ".venv", ".git"]
 
 [tool.mypy]
 python_version = "3.11"  # Base version for compatibility

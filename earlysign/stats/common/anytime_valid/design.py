@@ -2,12 +2,10 @@
 Design operators for Anytime-Valid (Safe) testing.
 """
 
-from typing import Mapping, Any, Optional, Dict
+from typing import Any, Dict, Mapping, Optional
 
-from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
-
 from earlysign.stats.common.anytime_valid.records import SafeDesignRecord
 
 

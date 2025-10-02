@@ -39,7 +39,9 @@ True
 """
 
 from typing import Any, Dict, Optional, Union
+
 from matplotlib.figure import Figure
+
 from earlysign.reporting.reportkit import ReporterBase
 
 

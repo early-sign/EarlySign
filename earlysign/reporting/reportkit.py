@@ -12,10 +12,9 @@ Design
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib.figure import Figure
-
 
 # ----------------------------- markdown helpers ----------------------------- #
 

@@ -41,7 +41,7 @@ Quick example
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 from earlysign.core.ledger import Ledger
 

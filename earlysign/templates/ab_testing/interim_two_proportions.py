@@ -10,36 +10,34 @@ This template is a thin facade that composes scheme-agnostic GS blocks with
 two-proportions statistics. It keeps the ledger as the source of truth.
 """
 
-from typing import Any, Dict, Optional, Union, Mapping, List
+from typing import Any, Dict, List, Mapping, Optional, Union
 
-from earlysign.core.ledger import Ledger
-from earlysign.framework.templates import TemplateBase, AnalysisResult
 from earlysign.framework.gate import GateDecisionRecord
+from earlysign.framework.templates import AnalysisResult, TemplateBase
+from earlysign.reporting.bridge import ReportingBridgeMixin
+from earlysign.stats.common.group_sequential.design import (
+    BoundaryFromDesign,
+    GroupSequentialDesign,
+    GroupSequentialDesignRecord,
+)
+from earlysign.stats.common.group_sequential.info_time import (
+    InformationTime,
+    InformationTimeFromFisher,
+    InformationTimeFromRatio,
+    InformationTimeFromSD,
+    InformationTimeFromVariance,
+)
+from earlysign.stats.common.group_sequential.records import (
+    GroupSequentialBoundaryRecord,
+    InformationTimeRecord,
+)
+from earlysign.stats.schemes.two_proportions.gates import GateMinTotalSamples
+from earlysign.stats.schemes.two_proportions.group_sequential import GSDecisionFromWaldZ
+from earlysign.stats.schemes.two_proportions.operators import WaldZStatistic
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
     WaldZStatisticRecord,
 )
-from earlysign.stats.schemes.two_proportions.operators import WaldZStatistic
-from earlysign.stats.schemes.two_proportions.group_sequential import GSDecisionFromWaldZ
-from earlysign.stats.schemes.two_proportions.gates import GateMinTotalSamples
-
-from earlysign.stats.common.group_sequential.records import (
-    InformationTimeRecord,
-    GroupSequentialBoundaryRecord,
-)
-from earlysign.stats.common.group_sequential.info_time import (
-    InformationTime,
-    InformationTimeFromRatio,
-    InformationTimeFromVariance,
-    InformationTimeFromSD,
-    InformationTimeFromFisher,
-)
-from earlysign.stats.common.group_sequential.design import (
-    GroupSequentialDesignRecord,
-    GroupSequentialDesign,
-    BoundaryFromDesign,
-)
-from earlysign.reporting.bridge import ReportingBridgeMixin
 
 
 class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
@@ -279,8 +277,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         ).run()
 
         # Compose result
-        drec = GroupSequentialBoundaryRecord(id=ids["boundary"]).attach(self.scoped)
-        dec = GateDecisionRecord  # only for type hints
+        GroupSequentialBoundaryRecord(id=ids["boundary"]).attach(self.scoped)
 
         ddf = (
             GroupSequentialBoundaryRecord(id=ids["boundary"])
@@ -302,14 +299,14 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
             )
             .execute()
         )
-        qdf = (
+        (
             GroupSequentialBoundaryRecord(id=ids["boundary"])
             .attach(self.scoped)  # decision record lives elsewhere, so fetch directly
             .latest()
             .execute()
         )
         # decision row
-        decdf = (
+        (
             GroupSequentialBoundaryRecord(id=ids["boundary"])
             .attach(self.scoped)
             .latest()
