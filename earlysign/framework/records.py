@@ -36,9 +36,7 @@ class _LedgerRW(Protocol):
     def t(self) -> TableExpr: ...
 
     @property
-    def pydantic_model(self) -> type[pydantic.BaseModel]: ...
-
-    def _explode_with_pydantic(self, t: TableExpr) -> TableExpr: ...
+    def schema_pydantic_model(self) -> type[pydantic.BaseModel]: ...
 
 
 class QueryMixin:
@@ -49,32 +47,48 @@ class QueryMixin:
       - property `t: TableExpr`.
     """
 
-    def _explode_with_pydantic(self: _LedgerRW, t: TableExpr) -> TableExpr:
-        return explode_json_with_pydantic(t, self.pydantic_model)
-
     def latest(self: _LedgerRW, explode: bool = True) -> TableExpr:
         t = self.t
         t = t.order_by(t.ts.desc()).limit(1)
         if not explode:
             return t
         else:
-            return self._explode_with_pydantic(t)
+            return explode_json_with_pydantic(t, self.schema_pydantic_model)
 
-    def order_by_ts(self: _LedgerRW, ascending: bool = True) -> TableExpr:
+    def order_by_ts(
+        self: _LedgerRW, ascending: bool = True, explode: bool = True
+    ) -> TableExpr:
         t = self.t
         keys = (t.ts.asc(), t.uuid.asc()) if ascending else (t.ts.desc(), t.uuid.desc())
-        return t.order_by(*keys)
+        t = t.order_by(*keys)
+        if not explode:
+            return t
+        else:
+            return explode_json_with_pydantic(t, self.schema_pydantic_model)
 
-    def since(self: _LedgerRW, ts: Any) -> TableExpr:
+    def since(self: _LedgerRW, ts: Any, explode: bool = True) -> TableExpr:
         t = self.t
-        return t.filter(t.ts >= ts)
+        t = t.filter(t.ts >= ts)
+        if not explode:
+            return t
+        else:
+            return explode_json_with_pydantic(t, self.schema_pydantic_model)
 
     def between(
-        self: _LedgerRW, start: Any, end: Any, *, include_end: bool = False
+        self: _LedgerRW,
+        start: Any,
+        end: Any,
+        *,
+        include_end: bool = False,
+        explode: bool = True,
     ) -> TableExpr:
         t = self.t
         expr = t.filter(t.ts >= start)
-        return expr.filter(t.ts <= end) if include_end else expr.filter(t.ts < end)
+        t = expr.filter(t.ts <= end) if include_end else expr.filter(t.ts < end)
+        if not explode:
+            return t
+        else:
+            return explode_json_with_pydantic(t, self.schema_pydantic_model)
 
 
 class LedgerRecord:
@@ -117,7 +131,7 @@ class LedgerRecord:
         return self
 
     @property
-    def pydantic_model(self) -> type[pydantic.BaseModel]:
+    def schema_pydantic_model(self) -> type[pydantic.BaseModel]:
         """Create Pydantic model from schema class attribute."""
         return pydantic.create_model(
             self.payload_type, **cast(Dict[str, Any], self.schema)
@@ -143,8 +157,6 @@ class LedgerRecord:
     def insert(
         self, *, labels: Optional[Mapping[str, Any]] = ..., **payload: Any
     ) -> None: ...
-
-    # ------------------------------------------------------------------------
 
     def insert(self, *args: Any, **kwargs: Any) -> None:
         """
