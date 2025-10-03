@@ -12,8 +12,9 @@ Design
 Table contract
 --------------
 Base table has columns:
-  - uuid: string
-  - ts: timestamp (UTC)
+  - uuid: string (auto-generated)
+  - ts: timestamp (UTC) (auto-generated)
+  - pkg_version: string (auto-generated)
   - payload_type: string
   - payload: json
   - labels: json
