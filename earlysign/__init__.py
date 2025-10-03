@@ -27,3 +27,8 @@ Example
 >>> assert hasattr(earlysign, "core")
 >>> assert hasattr(earlysign, "stats")
 """
+
+# Expose package version at the package level (PEP-396 style)
+from .__version__ import __version__, __version_tuple__  # re-export for convenience
+
+__all__ = ["__version__", "__version_tuple__"]

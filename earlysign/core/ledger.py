@@ -77,6 +77,8 @@ import ibis.expr.datatypes as dt
 import ibis.expr.schema as sch
 from ibis.expr.types import Table as TableExpr
 
+from earlysign import __version__
+
 
 @dataclass(frozen=True)
 class Ledger:
@@ -112,6 +114,7 @@ class Ledger:
                 ts=dt.timestamp(
                     timezone="UTC"
                 ),  # ISO8601 string to avoid tz/precision drift across backends
+                pkg_version=dt.string,
                 payload_type=dt.string,
                 payload=dt.json,
                 labels=dt.json,
@@ -201,6 +204,7 @@ class Ledger:
         row = {
             "uuid": uuidlib.uuid4().hex,
             "ts": datetime.now(timezone.utc),
+            "pkg_version": f"earlysign=={__version__}",
             "payload_type": payload_type,
             "payload": dict(payload),
             "labels": labels if labels else None,
