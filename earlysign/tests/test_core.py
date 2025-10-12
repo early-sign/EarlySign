@@ -42,6 +42,7 @@ True
 DatabaseTable: events
   uuid         string
   ts           timestamp('UTC', 6)
+  pkg_version  string
   payload_type string
   payload      json
   labels       json
