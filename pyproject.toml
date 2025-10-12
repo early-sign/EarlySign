@@ -71,6 +71,10 @@ multi_line_output = 3
 line-length = 88
 exclude = ["docs/_build", ".venv", ".git"]
 
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "TID"]
+ignore = ["E501"]
+
 [tool.mypy]
 python_version = "3.11"  # Base version for compatibility
 ignore_missing_imports = true
