@@ -8,13 +8,63 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize, minimize_scalar
 
-from earlysign.stats.design.config import DesignSpec
-from earlysign.stats.design.lab import DesignLab
-from earlysign.stats.design.types import InformationSpacing
+from earlysign.stats.design.gst.common.config import DesignSpec
+from earlysign.stats.design.gst.common.lab import DesignLab
+from earlysign.stats.design.gst.common.types import InformationSpacing
 
 
 class DesignObjective(ABC):
-    """Abstract base class representing design objectives."""
+    """Abstract base class for group sequential design optimization objectives.
+
+    This class defines the interface for optimization objectives used in
+    sequential trial design. Concrete implementations specify what aspect
+    of the design to optimize (e.g., minimize sample size, maximize power).
+
+    The optimization framework follows a common pattern:
+    1. Evaluate the objective function for a given design
+    2. Apply constraints (max sample size, target power, etc.)
+    3. Use penalty functions to handle constraint violations
+    4. Return a single scalar value to minimize
+
+    All objectives are formulated as minimization problems. For maximization
+    objectives (e.g., maximize power), return the negative value.
+
+    Attributes
+    ----------
+    None (defined by subclasses)
+
+    Methods
+    -------
+    evaluate(spec, lab) -> float
+        Compute the objective function value for a design specification.
+        Lower values are better. Constraint violations should return
+        large penalty values.
+
+    get_constraints(spec) -> Dict[str, Any]
+        Return the constraints applied to this objective as a dictionary.
+        Used for reporting and validation purposes.
+
+    Examples
+    --------
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.lab import DesignLab
+    >>>
+    >>> # Define a custom objective
+    >>> class CustomObjective(DesignObjective):
+    ...     def evaluate(self, spec, lab):
+    ...         lab.compute_boundaries()
+    ...         lab.run_simulations()
+    ...         return lab.simulation_results["expected_sample_size"]
+    ...     def get_constraints(self, spec):
+    ...         return {}
+
+    See Also
+    --------
+    MinimizeASN : Minimize expected sample size
+    MaximizePower : Maximize statistical power
+    BalancedDesign : Balance multiple objectives
+    DesignOptimizer : Optimization engine
+    """
 
     @abstractmethod
     def evaluate(self, spec: DesignSpec, lab: DesignLab) -> float:
@@ -43,14 +93,65 @@ class DesignObjective(ABC):
 
 
 class MinimizeASN(DesignObjective):
-    """Minimize ASN (Average Sample Number / Expected sample size).
+    """Minimize expected sample size (ASN - Average Sample Number).
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
+    This objective function minimizes the expected sample size under the
+    alternative hypothesis while ensuring that:
+    1. Statistical power meets or exceeds the target
+    2. Maximum sample size does not exceed the specified limit
+
+    Constraint violations are handled with penalty functions that return
+    large values, guiding the optimizer away from infeasible regions.
+
+    Parameters
+    ----------
+    max_n : int
+        Maximum allowable sample size at the final analysis.
+        Designs exceeding this will incur penalties.
+    target_power : float, default=0.90
+        Minimum required statistical power (probability of rejecting
+        null when alternative is true). Must be in (0, 1).
+
+    Attributes
+    ----------
+    max_n : int
+        Maximum sample size constraint
+    target_power : float
+        Minimum power constraint
+
+    Methods
+    -------
+    evaluate(spec, lab) -> float
+        Compute expected sample size with penalties for constraint violations.
+    get_constraints(spec) -> Dict[str, Any]
+        Return {'max_n': int, 'target_power': float}
+
+    Examples
+    --------
     >>> objective = MinimizeASN(max_n=3000, target_power=0.90)
     >>> objective.max_n
     3000
     >>> objective.target_power
     0.9
+
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.lab import DesignLab
+    >>> spec = ProportionsDesignSpec()
+    >>> lab = DesignLab(spec)
+    >>> value = objective.evaluate(spec, lab)  # Returns ASN or penalty
+
+    Notes
+    -----
+    The penalty structure:
+    - Power < target: penalty = max_n * 10 + (target_power - power) * 10000
+    - Sample > max_n: penalty = max_n * 10 + (sample - max_n) * 100
+    - Other errors: penalty = max_n * 100
+
+    See Also
+    --------
+    MaximizePower : Alternative objective focusing on power
+    BalancedDesign : Multi-objective optimization
+    DesignOptimizer : Optimization engine
     """
 
     def __init__(self, max_n: int, target_power: float = 0.90):
@@ -86,12 +187,59 @@ class MinimizeASN(DesignObjective):
 
 
 class MaximizePower(DesignObjective):
-    """Maximize power with fixed sample size.
+    """Maximize statistical power subject to maximum sample size constraint.
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
+    This objective function maximizes the probability of rejecting the null
+    hypothesis when the alternative is true, while ensuring the maximum
+    sample size does not exceed a specified limit.
+
+    Since the optimization framework minimizes objectives, this returns
+    the negative power value.
+
+    Parameters
+    ----------
+    max_n : int
+        Maximum allowable sample size at the final analysis.
+        Designs exceeding this will incur penalties (return 1.0).
+
+    Attributes
+    ----------
+    max_n : int
+        Maximum sample size constraint
+
+    Methods
+    -------
+    evaluate(spec, lab) -> float
+        Returns -power (negative for minimization). Returns 1.0 penalty
+        if max_sample_size > max_n or if computation fails.
+    get_constraints(spec) -> Dict[str, Any]
+        Return {'max_n': int}
+
+    Examples
+    --------
     >>> objective = MaximizePower(max_n=3000)
     >>> objective.max_n
     3000
+
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.lab import DesignLab
+    >>> spec = ProportionsDesignSpec()
+    >>> lab = DesignLab(spec)
+    >>> neg_power = objective.evaluate(spec, lab)  # Returns -power or 1.0
+
+    Notes
+    -----
+    The returned value is -power because scipy.optimize.minimize() minimizes
+    objectives. To maximize power, we minimize -power.
+
+    Constraint violations (max_sample_size > max_n) return 1.0, which is
+    worse than any feasible solution (power ∈ [0, 1] → -power ∈ [-1, 0]).
+
+    See Also
+    --------
+    MinimizeASN : Alternative objective focusing on sample size
+    BalancedDesign : Multi-objective optimization
+    DesignOptimizer : Optimization engine
     """
 
     def __init__(self, max_n: int):
@@ -119,13 +267,86 @@ class MaximizePower(DesignObjective):
 
 
 class BalancedDesign(DesignObjective):
-    """Optimize balance between power and sample size.
+    """Multi-objective optimization balancing power and sample size efficiency.
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
+    This objective function creates a weighted composite score that balances
+    statistical power against expected sample size. It allows flexible
+    trade-offs through configurable weights and target values.
+
+    The composite score measures:
+    1. Power deficit: (target_power - actual_power)² weighted by power_weight
+    2. Sample size ratio: (ASN / target_n) weighted by sample_weight
+
+    This formulation allows users to specify their priorities:
+    - Higher power_weight → prioritize achieving target power
+    - Higher sample_weight → prioritize reducing sample size
+    - Equal weights → balanced optimization
+
+    Parameters
+    ----------
+    power_weight : float, default=1.0
+        Relative importance of power deficit in composite score.
+        Larger values prioritize achieving target_power.
+    sample_weight : float, default=1.0
+        Relative importance of sample size in composite score.
+        Larger values prioritize reducing expected sample size.
+    target_power : float, default=0.90
+        Target statistical power. Power deficit is measured relative
+        to this value. Must be in (0, 1).
+    target_n : int, default=3000
+        Reference sample size for normalization. Sample size cost is
+        expressed as ASN / target_n.
+
+    Attributes
+    ----------
+    power_weight : float
+        Weight for power component
+    sample_weight : float
+        Weight for sample size component
+    target_power : float
+        Target power level
+    target_n : int
+        Reference sample size
+
+    Methods
+    -------
+    evaluate(spec, lab) -> float
+        Compute weighted composite score:
+        power_weight * (target_power - power)² + sample_weight * (ASN / target_n)
+    get_constraints(spec) -> Dict[str, Any]
+        Return all parameter values as constraints dict
+
+    Examples
+    --------
+    >>> # Equal weighting
     >>> objective = BalancedDesign(power_weight=1.0, sample_weight=1.0,
     ...                           target_power=0.90, target_n=3000)
     >>> objective.target_power
     0.9
+
+    >>> # Prioritize power
+    >>> objective_power = BalancedDesign(power_weight=10.0, sample_weight=1.0,
+    ...                                 target_power=0.90, target_n=3000)
+
+    >>> # Prioritize efficiency
+    >>> objective_eff = BalancedDesign(power_weight=1.0, sample_weight=10.0,
+    ...                               target_power=0.80, target_n=3000)
+
+    Notes
+    -----
+    The composite score does not use hard constraints or penalties.
+    Instead, it smoothly trades off power and sample size according to
+    the specified weights. This can result in designs that:
+    - Slightly undershoot target_power if sample size benefits are large
+    - Use more samples than optimal ASN if power gains are significant
+
+    For hard constraints, use MinimizeASN or MaximizePower instead.
+
+    See Also
+    --------
+    MinimizeASN : Hard power constraint with ASN minimization
+    MaximizePower : Hard sample size constraint with power maximization
+    DesignOptimizer : Optimization engine
     """
 
     def __init__(
@@ -173,7 +394,7 @@ class BalancedDesign(DesignObjective):
 class DesignOptimizer:
     """Design optimization engine.
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
     >>> objective = MinimizeASN(max_n=3000)
     >>> optimizer = DesignOptimizer(spec, objective)

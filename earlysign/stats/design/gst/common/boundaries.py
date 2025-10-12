@@ -5,20 +5,81 @@ from typing import Any, Dict, Optional
 import numpy as np
 from scipy.stats import norm
 
-from earlysign.stats.design.config import DesignSpec
-from earlysign.stats.design.types import SpendingFunction
+from earlysign.stats.design.gst.common.config import DesignSpec
+from earlysign.stats.design.gst.common.types import SpendingFunction
 
 
 class BoundaryCalculator:
-    """Calculate critical boundary values for sequential designs.
+    """Calculate critical boundary values for group sequential trial designs.
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
+    This class implements the alpha spending function approach for sequential
+    testing, which allows flexible timing of interim analyses while maintaining
+    overall Type I error control. It supports multiple spending functions:
+
+    - **O'Brien-Fleming**: Conservative early, liberal late (default choice)
+    - **Pocock**: Uniform spending across analyses
+    - **HSD** (Hwang-Shih-DeCani): Flexible family with shape parameter gamma
+
+    The calculator computes Z-statistic thresholds at each analysis that
+    correspond to the cumulative alpha spent up to that point. Both efficacy
+    boundaries (for detecting positive effects) and futility boundaries
+    (for early stopping under the null) are supported.
+
+    Methods
+    -------
+    spending_function(func, t, alpha, gamma=-4.0) -> np.ndarray
+        Compute cumulative alpha spending at information times using
+        specified spending function. Returns cumulative alpha spent
+        at each time point in t.
+
+    critical_values(spec) -> Dict[str, Any]
+        Calculate complete boundary specification including efficacy
+        and optional futility boundaries. Returns dictionary with
+        info_times, cumulative_alpha, z_efficacy, and z_futility.
+
+    Examples
+    --------
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
     >>> boundaries = BoundaryCalculator.critical_values(spec)
     >>> 'z_efficacy' in boundaries
     True
-    >>> len(boundaries['info_times'])
+    >>> len(boundaries['info_times'])  # 3 analyses by default
     3
+
+    >>> # Check cumulative alpha spending (two-sided test: 0.05 total, 0.025 per side)
+    >>> bool(0.04 < boundaries['cumulative_alpha'][-1] < 0.06)
+    True
+
+    >>> # Different spending functions
+    >>> from earlysign.stats.design.gst.common.types import SpendingFunction
+    >>> spec.boundary.spending_function = SpendingFunction.POCOCK
+    >>> boundaries_pocock = BoundaryCalculator.critical_values(spec)
+
+    Notes
+    -----
+    The implementation uses the Lan-DeMets approach, where alpha spending
+    depends only on the fraction of information observed (information time),
+    not on the actual calendar time or sample size. This provides flexibility
+    in study conduct.
+
+    Information time t ∈ (0, 1] represents the fraction of planned information
+    accrued. For example, t=0.5 means halfway to the maximum sample size.
+
+    See Also
+    --------
+    DesignSpec : Specifies alpha, spending function, and analysis timing
+    SpendingFunction : Enum of available spending function types
+    DesignLab : Orchestrator that uses BoundaryCalculator
+    SimulationEngine : Evaluates operating characteristics with these boundaries
+
+    References
+    ----------
+    .. [1] Lan, K. K. G., & DeMets, D. L. (1983). "Discrete sequential boundaries
+           for clinical trials". Biometrika, 70(3), 659-663.
+    .. [2] Hwang, I. K., Shih, W. J., & De Cani, J. S. (1990). "Group sequential
+           designs using a family of type I error probability spending functions".
+           Statistics in Medicine, 9(12), 1439-1445.
     """
 
     @staticmethod
@@ -80,7 +141,7 @@ class BoundaryCalculator:
                 - z_efficacy: Efficacy Z-value thresholds
                 - z_futility: Futility Z-value thresholds (if enabled)
 
-        >>> from earlysign.stats.design.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
         >>> spec = ProportionsDesignSpec()
         >>> spec.sequential.n_analyses = 2
         >>> boundaries = BoundaryCalculator.critical_values(spec)

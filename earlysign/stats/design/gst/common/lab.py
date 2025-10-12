@@ -6,38 +6,87 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
-from earlysign.stats.design.boundaries import BoundaryCalculator
-from earlysign.stats.design.config import (
+from earlysign.stats.design.gst.common.boundaries import BoundaryCalculator
+from earlysign.stats.design.gst.common.config import (
     DesignSpec,
     MeansDesignSpec,
     ProportionsDesignSpec,
     TimeToEventDesignSpec,
 )
-from earlysign.stats.design.effects import (
+from earlysign.stats.design.gst.common.effects import (
     EffectCalculator,
     MeansEffectCalculator,
     ProportionsEffectCalculator,
     TimeToEventEffectCalculator,
 )
-from earlysign.stats.design.simulation import SimulationEngine
+from earlysign.stats.design.gst.common.simulation import SimulationEngine
 
 
 class DesignLab:
-    """Main orchestrator for sequential design planning.
+    """Main orchestrator for group sequential trial design planning and analysis.
 
-    Provides a unified interface for:
-    - Configuring sequential designs
-    - Computing boundaries
-    - Running simulations
-    - Generating reports
+    DesignLab provides a unified interface for the complete workflow of sequential
+    trial design, including boundary computation, power simulation, and result
+    visualization. It acts as the central coordinator for all design-related
+    computations.
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
-    >>> spec = ProportionsDesignSpec()
-    >>> lab = DesignLab(spec)
-    >>> _ = lab.compute_boundaries()
-    >>> summary = lab.get_summary()
-    >>> 'Analysis' in summary.columns
-    True
+    Parameters
+    ----------
+    spec : DesignSpec
+        Design specification object containing all trial design parameters
+
+    Attributes
+    ----------
+    spec : DesignSpec
+        The design specification being analyzed
+    boundaries : Optional[Dict[str, Any]]
+        Computed boundary values (set after compute_boundaries())
+    simulation_results : Optional[Dict[str, Any]]
+        Simulation results (set after run_simulations())
+
+    Methods
+    -------
+    compute_boundaries()
+        Compute critical boundary values for efficacy and futility
+    run_simulations()
+        Run Monte Carlo simulations to estimate power and operating characteristics
+    get_summary()
+        Get summary table of design characteristics
+    get_power_summary()
+        Get power analysis results
+    plot_boundaries()
+        Generate boundary plot visualization
+
+    Examples
+    --------
+    Basic usage with two-sample proportions test::
+
+        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+        >>> spec = ProportionsDesignSpec()
+        >>> lab = DesignLab(spec)
+        >>> _ = lab.compute_boundaries()
+        >>> summary = lab.get_summary()
+        >>> 'Analysis' in summary.columns
+        True
+
+    Complete workflow with power simulation::
+
+        >>> spec = ProportionsDesignSpec()
+        >>> spec.test.alpha = 0.025
+        >>> spec.test.power = 0.90
+        >>> spec.sequential.n_analyses = 3
+        >>> lab = DesignLab(spec)
+        >>> result = lab.compute_boundaries()
+        >>> result.spec.sequential.n_analyses
+        3
+        >>> result = lab.run_simulations()
+        >>> power_summary = lab.get_power_summary()
+
+    See Also
+    --------
+    BoundaryCalculator : Boundary value computation
+    SimulationEngine : Power simulation engine
+    DesignSpec : Design specification classes
     """
 
     def __init__(self, spec: DesignSpec):

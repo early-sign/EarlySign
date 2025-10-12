@@ -4,25 +4,92 @@ from typing import Any, Dict
 
 import numpy as np
 
-from earlysign.stats.design.config import DesignSpec
-from earlysign.stats.design.effects import EffectCalculator
+from earlysign.stats.design.gst.common.config import DesignSpec
+from earlysign.stats.design.gst.common.effects import EffectCalculator
 
 
 class SimulationEngine:
-    """Run simulations to estimate power and operating characteristics.
+    """Monte Carlo simulation engine for group sequential trial operating characteristics.
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
-    >>> from earlysign.stats.design.boundaries import BoundaryCalculator
-    >>> from earlysign.stats.design.effects import ProportionsEffectCalculator
+    This class estimates the statistical properties of a group sequential design
+    through simulation under specified hypotheses. It generates thousands of
+    synthetic trial trajectories following Brownian motion with drift, applies
+    the sequential decision rules at each analysis, and aggregates outcomes.
+
+    Key operating characteristics computed:
+    - **Power**: Probability of rejecting H0 when alternative is true
+    - **Type I error**: Probability of false positive (when simulating under H0)
+    - **Expected sample size (ASN)**: Average sample size across trials
+    - **Stopping probabilities**: Distribution of when trials stop
+    - **Rejection patterns**: Whether stopped for efficacy, futility, or completed
+
+    The simulation uses the canonical joint distribution of Z-statistics at
+    sequential analyses, which follow multivariate normal with known covariance
+    structure determined by information times.
+
+    Methods
+    -------
+    simulate_trial(spec, boundaries, effect_calc, rng) -> Dict[str, Any]
+        Simulate one complete trial trajectory. Returns dictionary with
+        Z statistics, stopping time, reason, and rejection decision.
+
+    run_simulations(spec, boundaries, effect_calc) -> Dict[str, Any]
+        Run n_sims independent trials and aggregate results. Returns
+        comprehensive operating characteristics including power, ASN,
+        stopping probabilities, and empirical distributions.
+
+    Examples
+    --------
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.boundaries import BoundaryCalculator
+    >>> from earlysign.stats.design.gst.common.effects import ProportionsEffectCalculator
+    >>>
     >>> spec = ProportionsDesignSpec()
-    >>> spec.simulation.n_sims = 100  # Small for testing
+    >>> spec.simulation.n_sims = 1000  # Use more for production
     >>> boundaries = BoundaryCalculator.critical_values(spec)
     >>> calc = ProportionsEffectCalculator()
     >>> results = SimulationEngine.run_simulations(spec, boundaries, calc)
-    >>> 'power' in results
-    True
+    >>>
+    >>> # Check power
     >>> 0 <= results['power'] <= 1
     True
+    >>>
+    >>> # Expected sample size
+    >>> bool(results['expected_sample_size'] > 0)
+    True
+    >>>
+    >>> # Stopping distribution sums to n_sims
+    >>> sum(results['stop_distribution'].values()) == spec.simulation.n_sims
+    True
+
+    Notes
+    -----
+    The simulation assumes:
+    1. Independent increments of the Z-process (valid under large samples)
+    2. Known information times (deterministic accrual)
+    3. Continuous monitoring approximation (analysis times are fixed)
+
+    For two-proportion tests, the standardized effect is:
+        θ = (p_treatment - p_control) / SE(p_treatment - p_control)
+
+    The Z-statistic at information time t follows:
+        Z_t ~ N(θ * sqrt(I_t), 1) under H1
+    where I_t is information accrued by time t.
+
+    See Also
+    --------
+    BoundaryCalculator : Computes critical values for boundaries
+    EffectCalculator : Computes standardized effects for test types
+    DesignLab : Orchestrator combining boundaries and simulation
+    DesignSpec : Specifies simulation parameters (n_sims, seed, etc.)
+
+    References
+    ----------
+    .. [1] Jennison, C., & Turnbull, B. W. (1999). Group Sequential Methods
+           with Applications to Clinical Trials. Chapman and Hall/CRC.
+    .. [2] Proschan, M. A., Lan, K. K. G., & Wittes, J. T. (2006).
+           Statistical Monitoring of Clinical Trials: A Unified Approach.
+           Springer.
     """
 
     @staticmethod

@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 
-from earlysign.stats.design.types import (
+from earlysign.stats.design.gst.common.types import (
     InformationSpacing,
     SpendingFunction,
     TestType,
@@ -262,22 +262,55 @@ class MeansSampleSize:
 class DesignSpec:
     """Hierarchical design specification for sequential trials.
 
-    Organized hierarchical structure:
-    - test: Test configuration (type, significance level, power)
-    - sequential: Sequential design configuration (# analyses, information times)
-    - allocation: Sample allocation configuration
-    - boundary: Boundary configuration (efficacy and futility)
-    - simulation: Simulation configuration
-    - display: Display configuration
-    - effect: Effect size specification (test-type specific)
-    - sample_size: Sample size specification (test-type specific)
+    This is the base class for all sequential trial design specifications,
+    providing a structured way to organize design parameters.
 
+    Attributes
+    ----------
+    test : TestConfig
+        Test configuration including type, significance level (alpha), and power
+    sequential : SequentialConfig
+        Sequential design configuration specifying number of analyses and
+        information times
+    allocation : AllocationConfig
+        Sample allocation configuration for treatment/control ratio
+    boundary : BoundaryConfig
+        Boundary configuration for efficacy and futility stopping rules
+    simulation : SimulationConfig
+        Simulation parameters including seed and number of simulations
+    display : DisplayConfig
+        Display and formatting configuration for output
+    effect : Any
+        Test-type specific effect size specification (set in subclasses)
+    sample_size : Any
+        Test-type specific sample size specification (set in subclasses)
+
+    Hierarchical Structure
+    ----------------------
+    DesignSpec
+    ├── test: TestConfig            # Test settings (alpha, power, test type)
+    ├── sequential: SequentialConfig  # Sequential settings (n_analyses, timing)
+    ├── allocation: AllocationConfig  # Sample allocation ratio
+    ├── boundary: BoundaryConfig      # Stopping boundaries
+    ├── simulation: SimulationConfig  # Simulation settings
+    ├── display: DisplayConfig        # Output formatting
+    ├── effect: [Test-specific]       # Effect size parameters
+    └── sample_size: [Test-specific]  # Sample size parameters
+
+    Examples
+    --------
     >>> spec = DesignSpec()
     >>> spec.test.alpha
     0.025
     >>> times = spec.resolved_info_times()
     >>> len(times)
     3
+
+    Notes
+    -----
+    This base class should not be instantiated directly. Use test-specific
+    subclasses such as ProportionsDesignSpec, TimeToEventDesignSpec, or
+    MeansDesignSpec.
     """
 
     test: TestConfig = field(default_factory=TestConfig)

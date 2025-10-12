@@ -5,7 +5,7 @@ from typing import Dict
 
 import numpy as np
 
-from earlysign.stats.design.config import (
+from earlysign.stats.design.gst.common.config import (
     DesignSpec,
     MeansDesignSpec,
     ProportionsDesignSpec,
@@ -14,7 +14,55 @@ from earlysign.stats.design.config import (
 
 
 class EffectCalculator(ABC):
-    """Abstract base class for effect size calculations."""
+    """Abstract base class for test-specific effect size and sample size calculations.
+
+    Different statistical tests (two proportions, two means, time-to-event)
+    require different formulations for:
+    1. Standardized effect size (drift parameter for Brownian motion)
+    2. Sample size at each analysis (may vary by allocation ratio)
+    3. Information accrual (may be based on events rather than sample size)
+
+    This protocol defines the interface that all test-specific calculators
+    must implement. Concrete implementations handle the mathematical details
+    for each test type.
+
+    Methods
+    -------
+    standardized_effect(spec, info_time) -> float
+        Compute the standardized effect (drift) at a given information time.
+        This determines the mean of the Z-statistic under the alternative
+        hypothesis. For example, for two proportions:
+            drift = (p_treatment - p_control) / SE(p_treatment - p_control)
+
+    sample_sizes(spec) -> Dict[str, np.ndarray]
+        Compute sample sizes at each planned analysis. Returns dictionary
+        with keys like 'n_control', 'n_treatment', 'n_total', containing
+        arrays of length n_analyses.
+
+    Examples
+    --------
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> spec = ProportionsDesignSpec()
+    >>>
+    >>> # Concrete implementation for proportions
+    >>> from earlysign.stats.design.gst.common.effects import ProportionsEffectCalculator
+    >>> calc = ProportionsEffectCalculator()
+    >>> effect = calc.standardized_effect(spec, info_time=1.0)
+    >>> effect > 0  # Positive effect
+    True
+    >>>
+    >>> sizes = calc.sample_sizes(spec)
+    >>> 'n_total' in sizes
+    True
+
+    See Also
+    --------
+    ProportionsEffectCalculator : For two-proportion tests
+    MeansEffectCalculator : For two-sample t-tests
+    TimeToEventEffectCalculator : For survival analysis
+    SimulationEngine : Uses standardized_effect for drift
+    DesignLab : Orchestrates effect calculations
+    """
 
     @abstractmethod
     def standardized_effect(self, spec: DesignSpec, info_time: float) -> float:
@@ -43,17 +91,60 @@ class EffectCalculator(ABC):
 
 
 class ProportionsEffectCalculator(EffectCalculator):
-    """Effect size calculator for two proportions.
+    """Effect size and sample size calculations for two-proportion tests.
 
-    >>> from earlysign.stats.design.config import ProportionsDesignSpec
+    This calculator implements the standard formulas for comparing two
+    binomial proportions using a Z-test with pooled variance estimate.
+    It handles unequal allocation ratios and computes the standardized
+    effect (drift) for use in power calculations and simulations.
+
+    The standardized effect is:
+        δ = (p_treatment - p_control) / SE_pooled
+
+    where SE_pooled uses the pooled proportion under H0:
+        p_pooled = (p_control + p_treatment) / 2
+        SE_pooled = sqrt(p_pooled * (1 - p_pooled) * (1/n_control + 1/n_treatment))
+
+    Methods
+    -------
+    standardized_effect(spec, info_time) -> float
+        Compute standardized difference at information time.
+    sample_sizes(spec) -> Dict[str, np.ndarray]
+        Compute n_control, n_treatment, n_total at each analysis.
+
+    Examples
+    --------
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
+    >>> spec.effect.p_control = 0.10
+    >>> spec.effect.delta = 0.05  # 5% absolute increase
+    >>>
     >>> calc = ProportionsEffectCalculator()
     >>> effect = calc.standardized_effect(spec, 1.0)
     >>> effect > 0  # Positive effect
     True
+    >>>
     >>> sizes = calc.sample_sizes(spec)
     >>> 'n_total' in sizes
     True
+    >>> len(sizes['n_total'])  # One value per analysis
+    3
+
+    Notes
+    -----
+    The pooled variance estimator is used for consistency with the null
+    distribution in group sequential testing. This differs from the
+    unpooled estimator sometimes used in fixed-sample tests.
+
+    Information accrual is proportional to sample size for proportion tests,
+    so information time directly corresponds to the fraction of planned
+    sample accumulated.
+
+    See Also
+    --------
+    ProportionsDesignSpec : Specifies proportions effect parameters
+    MeansEffectCalculator : Similar calculator for continuous outcomes
+    SimulationEngine : Uses standardized_effect for power simulation
     """
 
     def standardized_effect(self, spec: DesignSpec, info_time: float) -> float:
@@ -119,7 +210,7 @@ class ProportionsEffectCalculator(EffectCalculator):
 class TimeToEventEffectCalculator(EffectCalculator):
     """Effect size calculator for time-to-event.
 
-    >>> from earlysign.stats.design.config import TimeToEventDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import TimeToEventDesignSpec
     >>> spec = TimeToEventDesignSpec()
     >>> calc = TimeToEventEffectCalculator()
     >>> effect = calc.standardized_effect(spec, 1.0)
@@ -188,7 +279,7 @@ class TimeToEventEffectCalculator(EffectCalculator):
 class MeansEffectCalculator(EffectCalculator):
     """Effect size calculator for two means.
 
-    >>> from earlysign.stats.design.config import MeansDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import MeansDesignSpec
     >>> spec = MeansDesignSpec()
     >>> calc = MeansEffectCalculator()
     >>> effect = calc.standardized_effect(spec, 1.0)
