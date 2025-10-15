@@ -3,25 +3,24 @@ from typing import Any, Dict
 
 import ibis
 from ibis import BaseBackend
+from matplotlib.figure import Figure
 
 from earlysign.core.ledger import Ledger
-from earlysign.stats.common.group_sequential.records import GroupSequentialDecisionSignalRecord
+from earlysign.reporting.group_sequential import plot_design_boundaries
 from earlysign.stats.common.group_sequential.design import (
     BoundaryFromDesign,
     GroupSequentialDesignRecord,
+    resolve_boundary_from_design,
 )
-from earlysign.stats.common.group_sequential.info_time import (
-    InformationTime,
-)
+from earlysign.stats.common.group_sequential.info_time import InformationTime
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
+    GroupSequentialDecisionSignalRecord,
 )
 from earlysign.stats.schemes.two_proportions.group_sequential import (
     GSDecisionFromWaldZ,
 )
-from earlysign.stats.schemes.two_proportions.operators import (
-    WaldZStatistic,
-)
+from earlysign.stats.schemes.two_proportions.operators import WaldZStatistic
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
     WaldZStatisticRecord,
@@ -74,29 +73,35 @@ class BinomialABTest:
         design.insert(payload)
 
     def update(self, payload: Dict[str, Any]) -> None:
+        ## Record observation
         obs = BinomialCountsRecord("observation").attach(self.ledger)
         obs.insert(**payload)
 
+        ## Compute statistic
         stat = WaldZStatistic(self.ledger, counts=obs, pooled=True, out_id="statistic")
         stat.run()
 
         stat_record: WaldZStatisticRecord = stat.outputs["wald"]  # type: ignore
 
+        ## Read design info
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
         max_n = design.latest()["max_n"].execute().iloc[0]
 
+        ## Compute information time
         info_op = InformationTime(
             self.ledger, out_id="info_time", counts=obs, max_n=max_n
         )
         info_op.run()
         info = info_op.outputs["info"]
 
+        ## Compute boundary of this run
         boundary_op = BoundaryFromDesign(
             self.ledger, design=design, info=info, out_id="boundary"
         )
         boundary_op.run()
         boundary: GroupSequentialBoundaryRecord = boundary_op.outputs["boundary"]  # type: ignore
 
+        ## Record the decision
         decision_op = GSDecisionFromWaldZ(
             self.ledger, wald=stat_record, boundary=boundary, out_id="decision"
         )
@@ -108,3 +113,30 @@ class BinomialABTest:
             return State(stop_recommended=True)
         else:
             return State(stop_recommended=False)
+
+    def plot_design(self, n_points: int = 50) -> Figure:
+        """Plot the group sequential design boundaries.
+
+        Parameters
+        ----------
+        n_points : int, optional
+            Number of information time points to evaluate boundaries at, by default 50
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
+        """
+        # Read design from ledger
+        design_record = GroupSequentialDesignRecord("design").attach(self.ledger)
+        ddf = design_record.latest().select(design=design_record.t.payload).execute()
+        if len(ddf) == 0:
+            raise ValueError("No design found in ledger. Call set_design() first.")
+        design_payload = ddf.iloc[0]["design"]
+
+        # Delegate to reporting module
+        return plot_design_boundaries(
+            design_payload=design_payload,
+            resolve_boundary_func=resolve_boundary_from_design,
+            n_points=n_points,
+        )
