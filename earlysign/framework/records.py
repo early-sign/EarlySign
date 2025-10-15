@@ -47,6 +47,14 @@ class QueryMixin:
       - property `t: TableExpr`.
     """
 
+    def all(self: _LedgerRW, explode: bool = True) -> TableExpr:
+        """Return all records, optionally with payload exploded."""
+        t = self.t
+        if not explode:
+            return t
+        else:
+            return explode_json_with_pydantic(t, self.schema_pydantic_model)
+
     def latest(self: _LedgerRW, explode: bool = True) -> TableExpr:
         t = self.t
         t = t.order_by(t.ts.desc()).limit(1)

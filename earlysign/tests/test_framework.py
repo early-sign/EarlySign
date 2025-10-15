@@ -7,7 +7,7 @@ Covers the flow:
 Steps:
   1. Insert binomial observation snapshots (two-proportions scheme).
   2. Compute Wald Z statistic via operator.
-  3. Compute information time (counts-based: n_total & N_max).
+  3. Compute information time (counts-based: n_total & max_n).
   4. Compute GS boundary from design and make a decision.
 
 >>> import ibis
@@ -42,13 +42,8 @@ Steps:
 >>> _ = WaldZStatistic(scoped, counts=counts, out_id="wald1", pooled=True).run()
 
 # --- Step 3. Compute information time (counts-based) --------------------------
-# Latest total sample size n_total must be paired with N_max.
->>> cdf = counts.latest().select(
-...     nA=counts.t.payload["nA"].cast("int64"),
-...     nB=counts.t.payload["nB"].cast("int64"),
-... ).execute()
->>> n_total = int(cdf.iloc[0]["nA"]) + int(cdf.iloc[0]["nB"])
->>> _ = InformationTime(scoped, out_id="info1", n_total=n_total, N_max=300).run()
+# InformationTime now takes counts record and max_n directly.
+>>> _ = InformationTime(scoped, out_id="info1", counts=counts, max_n=300).run()
 
 # --- Step 4. GS design → boundary → decision ---------------------------------
 >>> design_payload = {

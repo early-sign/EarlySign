@@ -54,7 +54,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
     >>> t.setup(ledger.bind(experiment_id="exp1"))
     >>> t.design_interim(alpha=0.05, tails=2, style="alpha_spending", family="obf", scale="z",
     ...                  futility={"mode": "symmetric"})
-    >>> t.set_info_plan(kind="counts", N_max=220)
+    >>> t.set_info_plan(kind="counts", max_n=220)
     >>> t.add_observations(nA=100, mA=40, nB=120, mB=55, look=1)
     >>>
     >>> res = t.analyze()
@@ -75,7 +75,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         self.registry["ids"] = ids
         # defaults: users can override via design_interim / set_info_plan / set_gate
         self.registry["params"] = {
-            "info_plan": {"kind": "counts", "N_max": None, "planned_fractions": None},
+            "info_plan": {"kind": "counts", "max_n": None, "planned_fractions": None},
             "gate": {"enabled": False, "min_total": 0},
         }
         self.registry["design"] = {}
@@ -124,7 +124,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
 
         Options
         -------
-        kind="counts": needs N_max=int or planned_fractions
+        kind="counts": needs max_n=int
         kind="ratio" : info_now, info_max
         kind="variance": var_now, var_target
         kind="sd": sd_now, sd_target
@@ -189,32 +189,17 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         info_plan = params["info_plan"]
         kind = info_plan.get("kind", "counts")
         if kind == "counts":
-            # Read the latest (nA, nB) to compute n_total
             counts_rec = BinomialCountsRecord(id=ids["counts"]).attach(self.scoped)
-            cdf = (
-                counts_rec.latest()
-                .select(
-                    nA=counts_rec.t.payload["nA"].cast("int64"),
-                    nB=counts_rec.t.payload["nB"].cast("int64"),
+            max_n = info_plan.get("max_n")
+            if max_n is None:
+                raise ValueError(
+                    "max_n must be provided in info_plan for kind='counts'"
                 )
-                .execute()
-            )
-            if len(cdf) == 0:
-                return AnalysisResult(
-                    signal="continue",
-                    reason="no_counts",
-                    stopped=False,
-                    summary={},
-                    raw={},
-                )
-            n_total = int(cdf.iloc[0]["nA"]) + int(cdf.iloc[0]["nB"])
             InformationTime(
                 self.scoped,
                 out_id=ids["info"],
-                n_total=n_total,
-                N_max=info_plan.get("N_max"),
-                current_look=None,
-                planned_fractions=info_plan.get("planned_fractions"),
+                counts=counts_rec,
+                max_n=max_n,
             ).run()
         elif kind == "ratio":
             InformationTimeFromRatio(

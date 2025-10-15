@@ -77,6 +77,7 @@ class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
         "scale": str,
         "efficacy": dict,
         "futility": dict,
+        "max_n": int,
     }
 
 
