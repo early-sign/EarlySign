@@ -58,7 +58,7 @@ Design Optimization::
     from earlysign.stats.design.gst.common.optimization import DesignOptimizer, MinimizeASN
 
     spec = ProportionsDesignSpec()
-    objective = MinimizeASN(max_n=3000, target_power=0.90)
+    objective = MinimizeASN(planned_max_n=3000, target_power=0.90)
     optimizer = DesignOptimizer(spec, objective)
     optimal_spec = optimizer.optimize_comprehensive()
 

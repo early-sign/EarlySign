@@ -66,7 +66,7 @@ class BinomialABTest:
         Parameters
         ----------
         payload : Dict[str, Any]
-            Design configuration including 'max_n' for maximum sample size,
+            Design configuration including 'planned_max_n' for maximum sample size,
             along with other design parameters (alpha, tails, scale, efficacy, futility).
         """
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
@@ -85,11 +85,11 @@ class BinomialABTest:
 
         ## Read design info
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
-        max_n = design.latest()["max_n"].execute().iloc[0]
+        planned_max_n = design.latest()["planned_max_n"].execute().iloc[0]
 
         ## Compute information time
         info_op = InformationTime(
-            self.ledger, out_id="info_time", counts=obs, max_n=max_n
+            self.ledger, out_id="info_time", counts=obs, planned_max_n=planned_max_n
         )
         info_op.run()
         info = info_op.outputs["info"]

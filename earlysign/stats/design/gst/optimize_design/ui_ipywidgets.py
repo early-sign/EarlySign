@@ -258,10 +258,10 @@ class OptimizeDesignDesigner:
         criterion = self.w_optimize_criterion.value
         if criterion == "minimize_asn":
             objective_inst: DesignObjective = MinimizeASN(
-                max_n=10000, target_power=self.w_power.value
+                planned_max_n=10000, target_power=self.w_power.value
             )
         elif criterion == "maximize_power":
-            objective_inst = MaximizePower(max_n=10000)
+            objective_inst = MaximizePower(planned_max_n=10000)
         else:
             objective_inst = BalancedDesign()
 

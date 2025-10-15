@@ -4,7 +4,7 @@ Information-time operators (scheme-agnostic).
 This module provides multiple estimators of "information time" t in [0, 1].
 Each operator writes an InformationTimeRecord that downstream GS components use.
 
-- InformationTime            : t = clip(n_total / max_n) or planned_fractions[look]
+- InformationTime            : t = clip(n_total / planned_max_n) or planned_fractions[look]
 - InformationTimeFromRatio   : t = clip(info_now / info_max)              # Fisher info, precision, etc.
 - InformationTimeFromVariance: t = clip(var_target / var_now)             # information ∝ 1/variance
 - InformationTimeFromSD      : t = clip((sd_target**2) / (sd_now**2))     # SD-based variant
@@ -40,7 +40,7 @@ def _clip01(x: float) -> float:
 
 def compute_information_time(
     n_total: Optional[int] = None,
-    max_n: Optional[int] = None,
+    planned_max_n: Optional[int] = None,
     *,
     current_look: Optional[int] = None,
     planned_fractions: Optional[Union[Mapping[int, float], List[float]]] = None,
@@ -50,7 +50,7 @@ def compute_information_time(
 
     Examples
     --------
-    >>> compute_information_time(n_total=100, max_n=400)
+    >>> compute_information_time(n_total=100, planned_max_n=400)
     0.25
     >>> compute_information_time(current_look=2, planned_fractions={1:0.25, 2:0.5, 3:0.75})
     0.5
@@ -73,13 +73,13 @@ def compute_information_time(
             )
         return _clip01(planned_fractions[idx])
 
-    if n_total is None or max_n is None:
+    if n_total is None or planned_max_n is None:
         raise ValueError(
-            "Provide either (n_total, max_n) or (current_look, planned_fractions)."
+            "Provide either (n_total, planned_max_n) or (current_look, planned_fractions)."
         )
-    if max_n <= 0:
-        raise ValueError("`max_n` must be positive.")
-    return _clip01(float(n_total) / float(max_n))
+    if planned_max_n <= 0:
+        raise ValueError("`planned_max_n` must be positive.")
+    return _clip01(float(n_total) / float(planned_max_n))
 
 
 def compute_information_time_from_ratio(info_now: float, info_max: float) -> float:
@@ -151,7 +151,7 @@ class InformationTime(LedgerOperator):
         ID of the InformationTimeRecord to create (in derived_records()).
     counts : BinomialCountsRecord
         Record containing the binomial counts (nA, mA, nB, mB).
-    max_n : int
+    planned_max_n : int
         Maximum total sample size for information fraction calculation.
     """
 
@@ -161,13 +161,13 @@ class InformationTime(LedgerOperator):
         *,
         out_id: str,
         counts: BinomialCountsRecord,
-        max_n: int,
+        planned_max_n: int,
     ):
         super().__init__(
             scoped,
             out_id=out_id,
             counts=counts,
-            max_n=max_n,
+            planned_max_n=planned_max_n,
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
@@ -176,7 +176,7 @@ class InformationTime(LedgerOperator):
     def run(self) -> None:
         out = self.outputs["info"]
         counts = getattr(self, "counts")
-        max_n = getattr(self, "max_n")
+        planned_max_n = getattr(self, "planned_max_n")
 
         # Read the latest counts from the record
         cdf = counts.latest().execute()
@@ -192,7 +192,7 @@ class InformationTime(LedgerOperator):
         n_total = int(latest["nA"]) + int(latest["nB"])
 
         # Calculate information time
-        t = compute_information_time(n_total=n_total, max_n=max_n)
+        t = compute_information_time(n_total=n_total, planned_max_n=planned_max_n)
 
         payload = {"info_time": float(t)}
         if "look" in latest and latest["look"] is not None:

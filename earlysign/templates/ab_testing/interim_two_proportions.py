@@ -54,7 +54,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
     >>> t.setup(ledger.bind(experiment_id="exp1"))
     >>> t.design_interim(alpha=0.05, tails=2, style="alpha_spending", family="obf", scale="z",
     ...                  futility={"mode": "symmetric"})
-    >>> t.set_info_plan(kind="counts", max_n=220)
+    >>> t.set_info_plan(kind="counts", planned_max_n=220)
     >>> t.add_observations(nA=100, mA=40, nB=120, mB=55, look=1)
     >>>
     >>> res = t.analyze()
@@ -75,7 +75,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         self.registry["ids"] = ids
         # defaults: users can override via design_interim / set_info_plan / set_gate
         self.registry["params"] = {
-            "info_plan": {"kind": "counts", "max_n": None, "planned_fractions": None},
+            "info_plan": {"kind": "counts", "planned_max_n": None, "planned_fractions": None},
             "gate": {"enabled": False, "min_total": 0},
         }
         self.registry["design"] = {}
@@ -124,7 +124,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
 
         Options
         -------
-        kind="counts": needs max_n=int
+        kind="counts": needs planned_max_n=int
         kind="ratio" : info_now, info_max
         kind="variance": var_now, var_target
         kind="sd": sd_now, sd_target
@@ -190,16 +190,16 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         kind = info_plan.get("kind", "counts")
         if kind == "counts":
             counts_rec = BinomialCountsRecord(id=ids["counts"]).attach(self.scoped)
-            max_n = info_plan.get("max_n")
-            if max_n is None:
+            planned_max_n = info_plan.get("planned_max_n")
+            if planned_max_n is None:
                 raise ValueError(
-                    "max_n must be provided in info_plan for kind='counts'"
+                    "planned_max_n must be provided in info_plan for kind='counts'"
                 )
             InformationTime(
                 self.scoped,
                 out_id=ids["info"],
                 counts=counts_rec,
-                max_n=max_n,
+                planned_max_n=planned_max_n,
             ).run()
         elif kind == "ratio":
             InformationTimeFromRatio(

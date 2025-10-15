@@ -105,7 +105,7 @@ class MinimizeASN(DesignObjective):
 
     Parameters
     ----------
-    max_n : int
+    planned_max_n : int
         Maximum allowable sample size at the final analysis.
         Designs exceeding this will incur penalties.
     target_power : float, default=0.90
@@ -114,7 +114,7 @@ class MinimizeASN(DesignObjective):
 
     Attributes
     ----------
-    max_n : int
+    planned_max_n : int
         Maximum sample size constraint
     target_power : float
         Minimum power constraint
@@ -124,12 +124,12 @@ class MinimizeASN(DesignObjective):
     evaluate(spec, lab) -> float
         Compute expected sample size with penalties for constraint violations.
     get_constraints(spec) -> Dict[str, Any]
-        Return {'max_n': int, 'target_power': float}
+        Return {'planned_max_n': int, 'target_power': float}
 
     Examples
     --------
-    >>> objective = MinimizeASN(max_n=3000, target_power=0.90)
-    >>> objective.max_n
+    >>> objective = MinimizeASN(planned_max_n=3000, target_power=0.90)
+    >>> objective.planned_max_n
     3000
     >>> objective.target_power
     0.9
@@ -143,9 +143,9 @@ class MinimizeASN(DesignObjective):
     Notes
     -----
     The penalty structure:
-    - Power < target: penalty = max_n * 10 + (target_power - power) * 10000
-    - Sample > max_n: penalty = max_n * 10 + (sample - max_n) * 100
-    - Other errors: penalty = max_n * 100
+    - Power < target: penalty = planned_max_n * 10 + (target_power - power) * 10000
+    - Sample > planned_max_n: penalty = planned_max_n * 10 + (sample - planned_max_n) * 100
+    - Other errors: penalty = planned_max_n * 100
 
     See Also
     --------
@@ -154,8 +154,8 @@ class MinimizeASN(DesignObjective):
     DesignOptimizer : Optimization engine
     """
 
-    def __init__(self, max_n: int, target_power: float = 0.90):
-        self.max_n = max_n
+    def __init__(self, planned_max_n: int, target_power: float = 0.90):
+        self.planned_max_n = planned_max_n
         self.target_power = target_power
 
     def evaluate(self, spec: DesignSpec, lab: DesignLab) -> float:
@@ -170,20 +170,20 @@ class MinimizeASN(DesignObjective):
             power = lab.simulation_results["power"]
             if power < self.target_power:
                 # Penalty for insufficient power
-                return float(self.max_n * 10 + (self.target_power - power) * 10000)
+                return float(self.planned_max_n * 10 + (self.target_power - power) * 10000)
 
             # Check maximum sample size constraint
             max_sample = lab.simulation_results["max_sample_size"]
-            if max_sample > self.max_n:
-                return float(self.max_n * 10 + (max_sample - self.max_n) * 100)
+            if max_sample > self.planned_max_n:
+                return float(self.planned_max_n * 10 + (max_sample - self.planned_max_n) * 100)
 
             # Return ASN
             return float(lab.simulation_results["expected_sample_size"])
         except Exception:
-            return self.max_n * 100
+            return self.planned_max_n * 100
 
     def get_constraints(self, spec: DesignSpec) -> Dict[str, Any]:
-        return {"max_n": self.max_n, "target_power": self.target_power}
+        return {"planned_max_n": self.planned_max_n, "target_power": self.target_power}
 
 
 class MaximizePower(DesignObjective):
@@ -198,27 +198,27 @@ class MaximizePower(DesignObjective):
 
     Parameters
     ----------
-    max_n : int
+    planned_max_n : int
         Maximum allowable sample size at the final analysis.
         Designs exceeding this will incur penalties (return 1.0).
 
     Attributes
     ----------
-    max_n : int
+    planned_max_n : int
         Maximum sample size constraint
 
     Methods
     -------
     evaluate(spec, lab) -> float
         Returns -power (negative for minimization). Returns 1.0 penalty
-        if max_sample_size > max_n or if computation fails.
+        if max_sample_size > planned_max_n or if computation fails.
     get_constraints(spec) -> Dict[str, Any]
-        Return {'max_n': int}
+        Return {'planned_max_n': int}
 
     Examples
     --------
-    >>> objective = MaximizePower(max_n=3000)
-    >>> objective.max_n
+    >>> objective = MaximizePower(planned_max_n=3000)
+    >>> objective.planned_max_n
     3000
 
     >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
@@ -232,7 +232,7 @@ class MaximizePower(DesignObjective):
     The returned value is -power because scipy.optimize.minimize() minimizes
     objectives. To maximize power, we minimize -power.
 
-    Constraint violations (max_sample_size > max_n) return 1.0, which is
+    Constraint violations (max_sample_size > planned_max_n) return 1.0, which is
     worse than any feasible solution (power ∈ [0, 1] → -power ∈ [-1, 0]).
 
     See Also
@@ -242,8 +242,8 @@ class MaximizePower(DesignObjective):
     DesignOptimizer : Optimization engine
     """
 
-    def __init__(self, max_n: int):
-        self.max_n = max_n
+    def __init__(self, planned_max_n: int):
+        self.planned_max_n = planned_max_n
 
     def evaluate(self, spec: DesignSpec, lab: DesignLab) -> float:
         """Compute power (return negative value to convert maximization to minimization)."""
@@ -254,7 +254,7 @@ class MaximizePower(DesignObjective):
             assert lab.simulation_results is not None
 
             max_sample = lab.simulation_results["max_sample_size"]
-            if max_sample > self.max_n:
+            if max_sample > self.planned_max_n:
                 return 1.0  # Penalty
 
             power = lab.simulation_results["power"]
@@ -263,7 +263,7 @@ class MaximizePower(DesignObjective):
             return 1.0
 
     def get_constraints(self, spec: DesignSpec) -> Dict[str, Any]:
-        return {"max_n": self.max_n}
+        return {"planned_max_n": self.planned_max_n}
 
 
 class BalancedDesign(DesignObjective):
@@ -396,7 +396,7 @@ class DesignOptimizer:
 
     >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
-    >>> objective = MinimizeASN(max_n=3000)
+    >>> objective = MinimizeASN(planned_max_n=3000)
     >>> optimizer = DesignOptimizer(spec, objective)
     >>> optimizer.base_spec.test.alpha
     0.025
