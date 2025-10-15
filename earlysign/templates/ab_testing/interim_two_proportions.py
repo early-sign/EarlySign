@@ -75,7 +75,11 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         self.registry["ids"] = ids
         # defaults: users can override via design_interim / set_info_plan / set_gate
         self.registry["params"] = {
-            "info_plan": {"kind": "counts", "planned_max_n": None, "planned_fractions": None},
+            "info_plan": {
+                "kind": "counts",
+                "planned_max_n": None,
+                "planned_fractions": None,
+            },
             "gate": {"enabled": False, "min_total": 0},
         }
         self.registry["design"] = {}

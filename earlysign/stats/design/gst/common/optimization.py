@@ -170,12 +170,16 @@ class MinimizeASN(DesignObjective):
             power = lab.simulation_results["power"]
             if power < self.target_power:
                 # Penalty for insufficient power
-                return float(self.planned_max_n * 10 + (self.target_power - power) * 10000)
+                return float(
+                    self.planned_max_n * 10 + (self.target_power - power) * 10000
+                )
 
             # Check maximum sample size constraint
             max_sample = lab.simulation_results["max_sample_size"]
             if max_sample > self.planned_max_n:
-                return float(self.planned_max_n * 10 + (max_sample - self.planned_max_n) * 100)
+                return float(
+                    self.planned_max_n * 10 + (max_sample - self.planned_max_n) * 100
+                )
 
             # Return ASN
             return float(lab.simulation_results["expected_sample_size"])

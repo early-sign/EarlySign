@@ -222,7 +222,8 @@ class OptimizeASNDesigner:
     def run_optimization(self, ui: Any) -> None:
         # Set up optimizer and run information time optimization
         objective: DesignObjective = MinimizeASN(
-            planned_max_n=self.w_max_n_total.value, target_power=self.w_target_power.value
+            planned_max_n=self.w_max_n_total.value,
+            target_power=self.w_target_power.value,
         )
         ui.optimizer = DesignOptimizer(ui.spec, objective)
 
