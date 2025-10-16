@@ -9,7 +9,7 @@ from earlysign.framework.records import LedgerRecord, QueryMixin
 
 
 class BinomialCountsRecord(LedgerRecord, QueryMixin):
-    """Counts snapshot for two proportions (A vs B). See module docstring for schema."""
+    """Newly arrived counts for two proportions (A vs B)."""
 
     payload_type = "TwoProportions/Counts"
     schema = {
@@ -17,7 +17,21 @@ class BinomialCountsRecord(LedgerRecord, QueryMixin):
         "mA": (int, ...),  # successes in A
         "nB": (int, ...),  # trials in B
         "mB": (int, ...),  # successes in B
-        "look": (int, ...),  # optional: interim look index
+    }
+
+
+class BinomialCountsSnapshotRecord(LedgerRecord, QueryMixin):
+    """Cumulative counts snapshot for two proportions (A vs B).
+
+    This records the cumulative totals up to this point in time.
+    """
+
+    payload_type = "TwoProportions/CountsSnapshot"
+    schema = {
+        "nA": (int, ...),  # cumulative trials in A
+        "mA": (int, ...),  # cumulative successes in A
+        "nB": (int, ...),  # cumulative trials in B
+        "mB": (int, ...),  # cumulative successes in B
     }
 
 
@@ -27,7 +41,6 @@ class WaldZStatisticRecord(LedgerRecord, QueryMixin):
     payload_type = "TwoProportions/WaldZ"
     schema = {
         "wald_z": (float, ...),
-        "look": (int, ...),
     }
 
 
@@ -37,5 +50,4 @@ class ScoreZStatisticRecord(LedgerRecord, QueryMixin):
     payload_type = "TwoProportions/ScoreZ"
     schema = {
         "score_z": (float, ...),
-        "look": (int, ...),
     }

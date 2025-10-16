@@ -17,7 +17,10 @@ from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.records import InformationTimeRecord
-from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
+from earlysign.stats.schemes.two_proportions.records import (
+    BinomialCountsRecord,
+    BinomialCountsSnapshotRecord,
+)
 
 # ---------------- helpers (each function has its own doctest) ----------------
 
@@ -149,8 +152,9 @@ class InformationTime(LedgerOperator):
     ----------------------------------------------
     out_id : str
         ID of the InformationTimeRecord to create (in derived_records()).
-    counts : BinomialCountsRecord
-        Record containing the binomial counts (nA, mA, nB, mB).
+    cum_counts : BinomialCountsRecord | BinomialCountsSnapshotRecord
+        Record containing the cumulative binomial counts (nA, mA, nB, mB).
+        Typically uses BinomialCountsSnapshotRecord for cumulative counts.
     planned_max_n : int
         Maximum total sample size for information fraction calculation.
     """
@@ -160,13 +164,13 @@ class InformationTime(LedgerOperator):
         scoped: Ledger,
         *,
         out_id: str,
-        counts: BinomialCountsRecord,
+        cum_counts: Union[BinomialCountsRecord, BinomialCountsSnapshotRecord],
         planned_max_n: int,
     ):
         super().__init__(
             scoped,
             out_id=out_id,
-            counts=counts,
+            cum_counts=cum_counts,
             planned_max_n=planned_max_n,
         )
 
@@ -175,14 +179,14 @@ class InformationTime(LedgerOperator):
 
     def run(self) -> None:
         out = self.outputs["info"]
-        counts = getattr(self, "counts")
+        cum_counts = getattr(self, "cum_counts")
         planned_max_n = getattr(self, "planned_max_n")
 
         # Read the latest counts from the record
-        cdf = counts.latest().execute()
+        cdf = cum_counts.latest().execute()
         if len(cdf) == 0:
             raise ValueError(
-                "No counts data available in the provided BinomialCountsRecord."
+                "No counts data available in the provided BinomialCountsSnapshotRecord."
             )
 
         # Get the most recent row
@@ -195,8 +199,6 @@ class InformationTime(LedgerOperator):
         t = compute_information_time(n_total=n_total, planned_max_n=planned_max_n)
 
         payload = {"info_time": float(t)}
-        if "look" in latest and latest["look"] is not None:
-            payload["look"] = int(latest["look"])
         out.insert(payload)
 
 

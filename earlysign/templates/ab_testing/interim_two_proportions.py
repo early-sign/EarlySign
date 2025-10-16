@@ -202,7 +202,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
             InformationTime(
                 self.scoped,
                 out_id=ids["info"],
-                counts=counts_rec,
+                cum_counts=counts_rec,
                 planned_max_n=planned_max_n,
             ).run()
         elif kind == "ratio":
@@ -248,7 +248,7 @@ class InterimAnalysisTwoProportions(ReportingBridgeMixin, TemplateBase):
         # Statistic
         WaldZStatistic(
             self.scoped,
-            counts=BinomialCountsRecord(id=ids["counts"]).attach(self.scoped),
+            cum_counts=BinomialCountsRecord(id=ids["counts"]).attach(self.scoped),
             out_id=ids["wald"],
             pooled=True,
         ).run()

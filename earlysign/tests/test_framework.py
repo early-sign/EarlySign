@@ -39,11 +39,11 @@ Steps:
 
 # --- Step 2. Compute Wald Z statistic -----------------------------------------
 # Operator signature in the new framework takes the scoped ledger and out_id.
->>> _ = WaldZStatistic(scoped, counts=counts, out_id="wald1", pooled=True).run()
+>>> _ = WaldZStatistic(scoped, cum_counts=counts, out_id="wald1", pooled=True).run()
 
 # --- Step 3. Compute information time (counts-based) --------------------------
-# InformationTime now takes counts record and planned_max_n directly.
->>> _ = InformationTime(scoped, out_id="info1", counts=counts, planned_max_n=300).run()
+# InformationTime now takes cum_counts record and planned_max_n directly.
+>>> _ = InformationTime(scoped, out_id="info1", cum_counts=counts, planned_max_n=300).run()
 
 # --- Step 4. GS design → boundary → decision ---------------------------------
 >>> design_payload = {

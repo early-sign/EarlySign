@@ -20,9 +20,13 @@ from earlysign.stats.common.group_sequential.records import (
 from earlysign.stats.schemes.two_proportions.group_sequential import (
     GSDecisionFromWaldZ,
 )
-from earlysign.stats.schemes.two_proportions.operators import WaldZStatistic
+from earlysign.stats.schemes.two_proportions.operators import (
+    BinomialCountsSnapshot,
+    WaldZStatistic,
+)
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
+    BinomialCountsSnapshotRecord,
     WaldZStatisticRecord,
 )
 
@@ -73,12 +77,19 @@ class BinomialABTest:
         design.insert(payload)
 
     def update(self, payload: Dict[str, Any]) -> None:
-        ## Record observation
+        ## Record incremental observation (delta)
         obs = BinomialCountsRecord("observation").attach(self.ledger)
         obs.insert(**payload)
 
-        ## Compute statistic
-        stat = WaldZStatistic(self.ledger, counts=obs, pooled=True, out_id="statistic")
+        ## Compute cumulative snapshot
+        snapshot_op = BinomialCountsSnapshot(self.ledger, obs=obs, out_id="snapshot")
+        snapshot_op.run()
+        snapshot_rec: BinomialCountsSnapshotRecord = snapshot_op.outputs["snapshot"]  # type: ignore
+
+        ## Compute statistic (using snapshot)
+        stat = WaldZStatistic(
+            self.ledger, cum_counts=snapshot_rec, pooled=True, out_id="statistic"
+        )
         stat.run()
 
         stat_record: WaldZStatisticRecord = stat.outputs["wald"]  # type: ignore
@@ -89,7 +100,10 @@ class BinomialABTest:
 
         ## Compute information time
         info_op = InformationTime(
-            self.ledger, out_id="info_time", counts=obs, planned_max_n=planned_max_n
+            self.ledger,
+            out_id="info_time",
+            cum_counts=snapshot_rec,
+            planned_max_n=planned_max_n,
         )
         info_op.run()
         info = info_op.outputs["info"]

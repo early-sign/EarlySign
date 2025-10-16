@@ -12,15 +12,14 @@ from earlysign.framework.records import LedgerRecord, QueryMixin
 class InformationTimeRecord(LedgerRecord, QueryMixin):
     """
     Information time snapshots (scheme-agnostic).
-    Stores information time t in [0, 1] and optional look index.
+    Stores information time t in [0, 1].
     Example payload:
-      {"info_time": 0.5, "look": 2}
+      {"info_time": 0.5}
     """
 
     payload_type: str = "GroupSequential/InfoTime"
     schema = {
         "info_time": float,
-        "look": int,
     }
 
 
