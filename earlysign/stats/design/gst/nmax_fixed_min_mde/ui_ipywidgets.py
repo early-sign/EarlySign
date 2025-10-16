@@ -145,39 +145,14 @@ class NMaxFixedMinMDEDesigner:
         # Observer for futility dropdown to enable/disable threshold
         self.w_futility.observe(self._on_futility_change, "value")
 
-        # Own action buttons
-        self.btn_search_mde = widgets.Button(
-            description="🔍 Search Min MDE",
-            button_style="success",
-            tooltip="Find minimum detectable effect given N_max",
-            layout=widgets.Layout(width="200px"),
-        )
-        self.btn_simulate = widgets.Button(
-            description="🎲 Run Simulation",
-            button_style="info",
-            tooltip="Run power simulation",
-            layout=widgets.Layout(width="200px"),
-        )
-
-        # Mode-owned result areas and tabs
-        self.out_summary = widgets.Output()
-        self.out_plot = widgets.Output()
-        self.out_power = widgets.Output()
-        self.out_search = widgets.Output()
-        self.tabs = widgets.Tab()
-        self.tabs.children = [
-            self.out_summary,
-            self.out_plot,
-            self.out_power,
-            self.out_search,
-        ]
-        self.tabs.set_title(0, "📊 Summary")
-        self.tabs.set_title(1, "📈 Boundaries")
-        self.tabs.set_title(2, "⚡ Power")
-        self.tabs.set_title(3, "🔍 MDE Search")
+        # Mode-owned result area (single output, no tabs)
+        self.out_results = widgets.Output()
 
         # Store the found MDE
         self._found_mde: float | None = None
+
+        # Flag to prevent recursive updates
+        self._updating = False
 
     def _on_futility_change(self, change: dict[str, Any]) -> None:
         """Enable/disable futility threshold based on futility type."""
@@ -185,42 +160,28 @@ class NMaxFixedMinMDEDesigner:
         self.w_futility_threshold.disabled = futility_type == "none"
 
     def build_panel(self, ui: Any) -> widgets.Widget:
-        def on_search_mde(_btn: Any) -> None:
-            self.update_spec(ui.spec, ui)
-            with self.out_search:
-                clear_output(wait=True)
-                display(HTML("<h3>🔍 Searching for Minimum MDE...</h3>"))
+        # Auto-update function triggered by parameter changes
+        def on_parameter_change(change: Any) -> None:
+            if self._updating:
+                return
+            self._updating = True
             try:
-                self._run_mde_search(ui)
-            except Exception as e:
-                with self.out_search:
-                    clear_output(wait=True)
-                    display(
-                        HTML(
-                            f"<p style='color: red;'><b>Search Error:</b> {str(e)}</p>"
-                        )
-                    )
+                self._auto_update_results(ui)
+            finally:
+                self._updating = False
 
-        def on_simulate(_btn: Any) -> None:
-            try:
-                if getattr(ui.lab, "boundaries", None) is None:
-                    ui.lab.compute_boundaries()
-                with self.out_power:
-                    clear_output(wait=True)
-                    display(HTML("<h3>🎲 Running Simulation...</h3>"))
-                ui.lab.run_simulations()
-                self._display_power_results(ui)
-            except Exception as e:
-                with self.out_power:
-                    clear_output(wait=True)
-                    display(
-                        HTML(
-                            f"<p style='color: red;'><b>Simulation Error:</b> {str(e)}</p>"
-                        )
-                    )
-
-        self.btn_search_mde.on_click(on_search_mde)
-        self.btn_simulate.on_click(on_simulate)
+        # Attach observers to all relevant widgets for auto-update
+        self.w_alpha.observe(on_parameter_change, "value")
+        self.w_power.observe(on_parameter_change, "value")
+        self.w_p_control.observe(on_parameter_change, "value")
+        self.w_n_max.observe(on_parameter_change, "value")
+        self.w_n_analyses.observe(on_parameter_change, "value")
+        self.w_spending_func.observe(on_parameter_change, "value")
+        self.w_info_spacing.observe(on_parameter_change, "value")
+        self.w_futility.observe(on_parameter_change, "value")
+        self.w_futility_threshold.observe(on_parameter_change, "value")
+        self.w_mde_search_min.observe(on_parameter_change, "value")
+        self.w_mde_search_max.observe(on_parameter_change, "value")
 
         common_box = widgets.VBox(
             [
@@ -244,27 +205,21 @@ class NMaxFixedMinMDEDesigner:
 
         constraint_box = widgets.VBox(
             [
-                widgets.HTML("<h4>Constraints</h4>"),
+                widgets.HTML("<h4>Constraints & Search Range</h4>"),
                 self.w_n_max,
-                widgets.HTML("<h4>Search Range</h4>"),
                 self.w_mde_search_min,
                 self.w_mde_search_max,
             ]
         )
 
-        action_box = widgets.VBox(
+        results_box = widgets.VBox(
             [
-                widgets.HTML("<h4>Actions</h4>"),
-                widgets.HBox(
-                    [self.btn_search_mde, self.btn_simulate],
-                    layout=widgets.Layout(justify_content="flex-start"),
-                ),
                 widgets.HTML("<h4>Results</h4>"),
-                self.tabs,
+                self.out_results,
             ]
         )
 
-        return widgets.VBox(
+        panel = widgets.VBox(
             [
                 common_box,
                 widgets.HTML("<hr>"),
@@ -272,9 +227,27 @@ class NMaxFixedMinMDEDesigner:
                 widgets.HTML("<hr>"),
                 constraint_box,
                 widgets.HTML("<hr>"),
-                action_box,
+                results_box,
             ]
         )
+
+        # Trigger initial computation
+        self._auto_update_results(ui)
+
+        return panel
+
+    def _auto_update_results(self, ui: Any) -> None:
+        """Auto-update results when parameters change."""
+        with self.out_results:
+            clear_output(wait=True)
+            display(HTML("<h3>🔍 Searching for Minimum MDE...</h3>"))
+        try:
+            self.update_spec(ui.spec, ui)
+            self._run_mde_search(ui)
+        except Exception as e:
+            with self.out_results:
+                clear_output(wait=True)
+                display(HTML(f"<p style='color: red;'><b>Error:</b> {str(e)}</p>"))
 
     def get_description_widget(self) -> widgets.Widget:
         return widgets.HTML(
@@ -326,7 +299,7 @@ class NMaxFixedMinMDEDesigner:
         mde_low = mde_min
         mde_high = mde_max
 
-        with self.out_search:
+        with self.out_results:
             clear_output(wait=True)
             display(HTML("<h3>🔍 MDE Search Progress</h3>"))
             progress = widgets.FloatProgress(
@@ -431,7 +404,7 @@ class NMaxFixedMinMDEDesigner:
         self._found_mde = best_mde
 
         # Display results
-        with self.out_search:
+        with self.out_results:
             if best_mde is not None and best_design is not None:
                 # Update ui.lab with best design
                 ui.lab = best_design
@@ -471,7 +444,7 @@ class NMaxFixedMinMDEDesigner:
                     )
                 )
 
-                # Display design summary
+                # Display design summary and plot
                 self._display_results(ui)
             else:
                 clear_output(wait=True)
@@ -495,38 +468,16 @@ class NMaxFixedMinMDEDesigner:
                 )
 
     def _display_results(self, ui: Any) -> None:
-        """Display design results in summary and plot tabs."""
-        with self.out_summary:
-            clear_output(wait=True)
-            display(HTML("<h3>Design Summary</h3>"))
-            if self._found_mde is not None:
-                display(
-                    HTML(
-                        f"<p><b>Minimum Detectable Effect (MDE★):</b> {self._found_mde:.5f}</p>"
-                    )
-                )
-            display(ui.lab.get_summary())
+        """Display design results (summary and boundaries plot)."""
+        # Display design summary
+        display(HTML("<hr><h3>📊 Design Summary</h3>"))
+        display(ui.lab.get_summary())
 
-        with self.out_plot:
-            clear_output(wait=True)
-            fig = ui.lab.plot_boundaries()
-            display(fig)
-            plt.close(fig)
-
-    def _display_power_results(self, ui: Any) -> None:
-        """Display power simulation results."""
-        with self.out_power:
-            clear_output(wait=True)
-            display(HTML("<h3>Power Analysis Results</h3>"))
-            if self._found_mde is not None:
-                display(HTML(f"<p><b>Design MDE:</b> {self._found_mde:.5f}</p><hr>"))
-            power_summary = ui.lab.get_power_summary()
-            html = "<table style='width:100%; border-collapse: collapse; margin-top: 10px;'>"
-            for key, value in power_summary.items():
-                html += f"<tr><td style='padding: 8px; border: 1px solid #ddd; background-color: #f0f0f0;'><b>{key}</b></td>"
-                html += f"<td style='padding: 8px; border: 1px solid #ddd;'>{value}</td></tr>"
-            html += "</table>"
-            display(HTML(html))
+        # Display boundaries plot
+        display(HTML("<hr><h3>📈 Boundaries Plot</h3>"))
+        fig = ui.lab.plot_boundaries()
+        display(fig)
+        plt.close(fig)
 
     def save_common_from(self, ui: Any) -> None:
         """No-op; common parameters are owned by this designer's widgets."""

@@ -74,65 +74,25 @@ class FixedPowerDesigner:
             style={"description_width": "120px"},
         )
 
-        # Own action buttons
-        self.btn_compute = widgets.Button(
-            description="🔧 Compute Design",
-            button_style="primary",
-            tooltip="Compute required N",
-        )
-        self.btn_simulate = widgets.Button(
-            description="🎲 Run Simulation",
-            button_style="info",
-            tooltip="Run power simulation",
-        )
+        # Single output widget for all results (no tabs or buttons)
+        self.out_results = widgets.Output()
 
-        # Mode-owned result areas and tabs
-        self.out_summary = widgets.Output()
-        self.out_plot = widgets.Output()
-        self.out_power = widgets.Output()
-        self.out_opt = widgets.Output()
-        self.tabs = widgets.Tab()
-        self.tabs.children = [
-            self.out_summary,
-            self.out_plot,
-            self.out_power,
-            self.out_opt,
-        ]
-        self.tabs.set_title(0, "📊 Summary")
-        self.tabs.set_title(1, "📈 Boundaries")
-        self.tabs.set_title(2, "⚡ Power")
-        self.tabs.set_title(3, "🎯 Optimization")
+        # Flag to prevent recursive updates
+        self._updating = False
 
     def build_panel(self, ui: Any) -> widgets.Widget:
-        def on_compute(_btn: Any) -> None:
-            self.update_spec(ui.spec, ui)
-            with self.out_summary:
-                clear_output(wait=True)
-                display(HTML("<h3>⏳ Computing...</h3>"))
-            ui.lab = DesignLab(ui.spec)
-            ui.lab.compute_boundaries()
-            self._display_results(ui)
+        # Auto-update handler for parameter changes
+        def on_parameter_change(_change: Any) -> None:
+            if not self._updating:
+                self._auto_update_results(ui)
 
-        def on_simulate(_btn: Any) -> None:
-            try:
-                if getattr(ui.lab, "boundaries", None) is None:
-                    ui.lab.compute_boundaries()
-                with self.out_power:
-                    clear_output(wait=True)
-                    display(HTML("<h3>🎲 Running Simulation...</h3>"))
-                ui.lab.run_simulations()
-                self._display_power_results(ui)
-            except Exception as e:
-                with self.out_power:
-                    clear_output(wait=True)
-                    display(
-                        HTML(
-                            f"<p style='color: red;'><b>Simulation Error:</b> {str(e)}</p>"
-                        )
-                    )
-
-        self.btn_compute.on_click(on_compute)
-        self.btn_simulate.on_click(on_simulate)
+        # Attach observers to all parameter widgets
+        self.w_alpha.observe(on_parameter_change, names="value")
+        self.w_n_analyses.observe(on_parameter_change, names="value")
+        self.w_spending_func.observe(on_parameter_change, names="value")
+        self.w_p_control.observe(on_parameter_change, names="value")
+        self.w_effect_size.observe(on_parameter_change, names="value")
+        self.w_target_power.observe(on_parameter_change, names="value")
 
         common_box = widgets.VBox(
             [
@@ -149,16 +109,46 @@ class FixedPowerDesigner:
             [
                 widgets.HTML("<h4>Fixed Power Parameters</h4>"),
                 self.w_target_power,
-                widgets.HBox(
-                    [self.btn_compute, self.btn_simulate],
-                    layout=widgets.Layout(justify_content="flex-start"),
-                ),
                 widgets.HTML("<h4>Results</h4>"),
-                self.tabs,
+                self.out_results,
             ]
         )
 
-        return widgets.VBox([common_box, widgets.HTML("<hr>"), fixed_box])
+        panel = widgets.VBox([common_box, widgets.HTML("<hr>"), fixed_box])
+
+        # Trigger initial computation
+        self._auto_update_results(ui)
+
+        return panel
+
+    def _auto_update_results(self, ui: Any) -> None:
+        """Automatically update results when parameters change."""
+        if self._updating:
+            return
+
+        self._updating = True
+        try:
+            with self.out_results:
+                clear_output(wait=True)
+                display(HTML("<h3>⏳ Computing design and running simulation...</h3>"))
+
+            # Update spec and compute boundaries
+            self.update_spec(ui.spec, ui)
+            ui.lab = DesignLab(ui.spec)
+            ui.lab.compute_boundaries()
+
+            # Run simulation
+            ui.lab.run_simulations()
+
+            # Display results
+            self._display_results(ui)
+
+        except Exception as e:
+            with self.out_results:
+                clear_output(wait=True)
+                display(HTML(f"<p style='color: red;'><b>Error:</b> {str(e)}</p>"))
+        finally:
+            self._updating = False
 
     def get_description_widget(self) -> widgets.Widget:
         return widgets.HTML(
@@ -199,20 +189,22 @@ class FixedPowerDesigner:
 
     # Results helpers for FixedPower
     def _display_results(self, ui: Any) -> None:
-        with self.out_summary:
+        """Display design summary, boundaries plot, and power results inline."""
+        with self.out_results:
             clear_output(wait=True)
-            display(HTML("<h3>Design Summary</h3>"))
+
+            # Design Summary
+            display(HTML("<h3>📊 Design Summary</h3>"))
             display(ui.lab.get_summary())
-        with self.out_plot:
-            clear_output(wait=True)
+
+            # Boundaries Plot
+            display(HTML("<h3 style='margin-top: 20px;'>📈 Boundaries</h3>"))
             fig = ui.lab.plot_boundaries()
             display(fig)
             plt.close(fig)
 
-    def _display_power_results(self, ui: Any) -> None:
-        with self.out_power:
-            clear_output(wait=True)
-            display(HTML("<h3>Power Analysis Results</h3>"))
+            # Power Analysis Results
+            display(HTML("<h3 style='margin-top: 20px;'>⚡ Power Analysis</h3>"))
             power_summary = ui.lab.get_power_summary()
             html = "<table style='width:100%; border-collapse: collapse; margin-top: 10px;'>"
             for key, value in power_summary.items():

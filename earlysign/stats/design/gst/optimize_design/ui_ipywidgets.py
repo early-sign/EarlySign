@@ -124,72 +124,30 @@ class OptimizeDesignDesigner:
             style={"description_width": "120px"},
         )
 
-        # Own action buttons
-        self.btn_optimize = widgets.Button(
-            description="🎯 Run Optimization",
-            button_style="success",
-            tooltip="Run design optimization",
-        )
-        self.btn_simulate = widgets.Button(
-            description="🎲 Run Simulation",
-            button_style="info",
-            tooltip="Run power simulation",
-        )
+        # Single output widget for all results (no tabs or buttons)
+        self.out_results = widgets.Output()
 
-        # Mode-owned result areas and tabs
-        self.out_summary = widgets.Output()
-        self.out_plot = widgets.Output()
-        self.out_power = widgets.Output()
-        self.out_opt = widgets.Output()
-        self.tabs = widgets.Tab()
-        self.tabs.children = [
-            self.out_summary,
-            self.out_plot,
-            self.out_power,
-            self.out_opt,
-        ]
-        self.tabs.set_title(0, "📊 Summary")
-        self.tabs.set_title(1, "📈 Boundaries")
-        self.tabs.set_title(2, "⚡ Power")
-        self.tabs.set_title(3, "🎯 Optimization")
+        # Flag to prevent recursive updates
+        self._updating = False
 
     def build_panel(self, ui: Any) -> widgets.Widget:
-        def on_optimize(_btn: Any) -> None:
-            self.update_spec(ui.spec, ui)
-            with self.out_opt:
-                clear_output(wait=True)
-                display(HTML("<h3>🎯 Running Optimization...</h3>"))
-            try:
-                self.run_optimization(ui)
-            except Exception as e:
-                with self.out_opt:
-                    clear_output(wait=True)
-                    display(
-                        HTML(
-                            f"<p style='color: red;'><b>Optimization Error:</b> {str(e)}</p>"
-                        )
-                    )
+        # Auto-update handler for parameter changes
+        def on_parameter_change(_change: Any) -> None:
+            if not self._updating:
+                self._auto_update_results(ui)
 
-        def on_simulate(_btn: Any) -> None:
-            try:
-                if getattr(ui.lab, "boundaries", None) is None:
-                    ui.lab.compute_boundaries()
-                with self.out_power:
-                    clear_output(wait=True)
-                    display(HTML("<h3>🎲 Running Simulation...</h3>"))
-                ui.lab.run_simulations()
-                self._display_power_results(ui)
-            except Exception as e:
-                with self.out_power:
-                    clear_output(wait=True)
-                    display(
-                        HTML(
-                            f"<p style='color: red;'><b>Simulation Error:</b> {str(e)}</p>"
-                        )
-                    )
-
-        self.btn_optimize.on_click(on_optimize)
-        self.btn_simulate.on_click(on_simulate)
+        # Attach observers to all parameter widgets
+        self.w_alpha.observe(on_parameter_change, names="value")
+        self.w_power.observe(on_parameter_change, names="value")
+        self.w_n_analyses.observe(on_parameter_change, names="value")
+        self.w_spending_func.observe(on_parameter_change, names="value")
+        self.w_p_control.observe(on_parameter_change, names="value")
+        self.w_effect_size.observe(on_parameter_change, names="value")
+        self.w_alpha_range_min.observe(on_parameter_change, names="value")
+        self.w_alpha_range_max.observe(on_parameter_change, names="value")
+        self.w_k_range_min.observe(on_parameter_change, names="value")
+        self.w_k_range_max.observe(on_parameter_change, names="value")
+        self.w_optimize_criterion.observe(on_parameter_change, names="value")
 
         common_box = widgets.VBox(
             [
@@ -209,16 +167,41 @@ class OptimizeDesignDesigner:
                 widgets.HBox([self.w_alpha_range_min, self.w_alpha_range_max]),
                 widgets.HBox([self.w_k_range_min, self.w_k_range_max]),
                 self.w_optimize_criterion,
-                widgets.HBox(
-                    [self.btn_optimize, self.btn_simulate],
-                    layout=widgets.Layout(justify_content="flex-start"),
-                ),
                 widgets.HTML("<h4>Results</h4>"),
-                self.tabs,
+                self.out_results,
             ]
         )
 
-        return widgets.VBox([common_box, widgets.HTML("<hr>"), opt_box])
+        panel = widgets.VBox([common_box, widgets.HTML("<hr>"), opt_box])
+
+        # Trigger initial optimization
+        self._auto_update_results(ui)
+
+        return panel
+
+    def _auto_update_results(self, ui: Any) -> None:
+        """Automatically update results when parameters change."""
+        if self._updating:
+            return
+
+        self._updating = True
+        try:
+            with self.out_results:
+                clear_output(wait=True)
+                display(
+                    HTML("<h3>🎯 Running design optimization and simulation...</h3>")
+                )
+
+            # Run optimization
+            self.update_spec(ui.spec, ui)
+            self.run_optimization(ui)
+
+        except Exception as e:
+            with self.out_results:
+                clear_output(wait=True)
+                display(HTML(f"<p style='color: red;'><b>Error:</b> {str(e)}</p>"))
+        finally:
+            self._updating = False
 
     def get_description_widget(self) -> widgets.Widget:
         return widgets.HTML(
@@ -278,20 +261,32 @@ class OptimizeDesignDesigner:
         self._display_results(ui)
 
     def _display_results(self, ui: Any) -> None:
-        with self.out_summary:
+        """Display optimization results, design summary, boundaries plot, and power results inline."""
+        with self.out_results:
             clear_output(wait=True)
-            display(HTML("<h3>Design Summary</h3>"))
+
+            # Optimization Results
+            display(HTML("<h3>🎯 Optimization Results</h3>"))
+            if ui.spec.sequential.info_times is not None:
+                optimal_times = np.array(ui.spec.sequential.info_times)
+                display(
+                    HTML(
+                        f"<p><b>Optimal Information Times:</b> {', '.join([f'{t:.3f}' for t in optimal_times])}</p>"
+                    )
+                )
+
+            # Design Summary
+            display(HTML("<h3 style='margin-top: 20px;'>📊 Design Summary</h3>"))
             display(ui.lab.get_summary())
-        with self.out_plot:
-            clear_output(wait=True)
+
+            # Boundaries Plot
+            display(HTML("<h3 style='margin-top: 20px;'>📈 Boundaries</h3>"))
             fig = ui.lab.plot_boundaries()
             display(fig)
             plt.close(fig)
 
-    def _display_power_results(self, ui: Any) -> None:
-        with self.out_power:
-            clear_output(wait=True)
-            display(HTML("<h3>Power Analysis Results</h3>"))
+            # Power Analysis Results
+            display(HTML("<h3 style='margin-top: 20px;'>⚡ Power Analysis</h3>"))
             power_summary = ui.lab.get_power_summary()
             html = "<table style='width:100%; border-collapse: collapse; margin-top: 10px;'>"
             for key, value in power_summary.items():
@@ -301,14 +296,8 @@ class OptimizeDesignDesigner:
             display(HTML(html))
 
     def _display_optimization_results(self, optimal_times: np.ndarray) -> None:
-        with self.out_opt:
-            clear_output(wait=True)
-            display(HTML("<h3>Optimization Results</h3>"))
-            display(
-                HTML(
-                    f"<p><b>Optimal Information Times:</b> {', '.join([f'{t:.3f}' for t in optimal_times])}</p>"
-                )
-            )
+        """Display optimization results - now integrated into _display_results."""
+        pass
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize widget values to dictionary."""
