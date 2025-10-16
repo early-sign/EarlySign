@@ -58,6 +58,7 @@ class DesignMode(str, Enum):
     'fixed_timing'
     """
 
+    NMAX_FIXED_MIN_MDE = "nmax_fixed_min_mde"
     FIXED_TIMING = "fixed_timing"
     OPTIMIZE_ASN = "optimize_asn"
     OPTIMIZE_DESIGN = "optimize_design"

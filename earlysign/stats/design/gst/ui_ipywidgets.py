@@ -25,6 +25,9 @@ from earlysign.stats.design.gst.fixed_power.ui_ipywidgets import (
 from earlysign.stats.design.gst.fixed_timing.ui_ipywidgets import (
     FixedTimingDesigner,
 )
+from earlysign.stats.design.gst.nmax_fixed_min_mde.ui_ipywidgets import (
+    NMaxFixedMinMDEDesigner,
+)
 from earlysign.stats.design.gst.optimize_asn.ui_ipywidgets import (
     OptimizeASNDesigner,
 )
@@ -125,19 +128,38 @@ class GSTDesignUI:
     --------
     >>> ui = GSTDesignUI()  # doctest: +SKIP
     >>> ui.display()  # doctest: +SKIP
+
+    Notes
+    -----
+    By default, GSTDesignUI uses a singleton pattern to ensure only one instance
+    exists. To create multiple independent instances (e.g., for side-by-side comparison),
+    pass `allow_multiple=True`:
+
+    >>> ui1 = GSTDesignUI(allow_multiple=True)  # doctest: +SKIP
+    >>> ui2 = GSTDesignUI(allow_multiple=True)  # doctest: +SKIP
     """
 
     _singleton_instance: Optional["GSTDesignUI"] = None
 
     def __new__(cls, *args: Any, **kwargs: Any) -> "GSTDesignUI":
-        """Ensure only one instance exists in the notebook."""
+        """Ensure only one instance exists in the notebook unless allow_multiple=True."""
+        # Check if allow_multiple is True
+        allow_multiple = kwargs.get("allow_multiple", False)
+
+        if allow_multiple:
+            # Create a new instance without singleton
+            return super().__new__(cls)
+
+        # Use singleton pattern
         if cls._singleton_instance is not None:
             return cls._singleton_instance
         instance = super().__new__(cls)
         cls._singleton_instance = instance
         return instance
 
-    def __init__(self, initial_spec: Optional[DesignSpec] = None):
+    def __init__(
+        self, initial_spec: Optional[DesignSpec] = None, allow_multiple: bool = False
+    ):
         """
         Initialize the UI.
 
@@ -145,15 +167,21 @@ class GSTDesignUI:
         ----------
         initial_spec : DesignSpec, optional
             Initial design specification. Defaults to ProportionsDesignSpec.
+        allow_multiple : bool, optional
+            If True, allow multiple independent UI instances. If False (default),
+            use singleton pattern. Default is False.
         """
-        if hasattr(self, "_initialized") and self._initialized:
+        # For singleton instances, skip re-initialization
+        if not allow_multiple and hasattr(self, "_initialized") and self._initialized:
             return
+
+        # Mark as initialized
         self._initialized: bool = True
 
         self.spec = initial_spec or ProportionsDesignSpec()
         self.lab = DesignLab(self.spec)
         self.optimizer: Optional[DesignOptimizer] = None
-        self.current_mode = DesignMode.FIXED_TIMING
+        self.current_mode = DesignMode.NMAX_FIXED_MIN_MDE
 
         # Initialize widgets and controllers
         self._create_widgets()
@@ -170,6 +198,7 @@ class GSTDesignUI:
         # ========== Mode Selection ==========
         self.w_mode = widgets.Dropdown(
             options=[
+                ("N-Max Fixed → Find Min MDE", DesignMode.NMAX_FIXED_MIN_MDE.value),
                 ("Fixed Timing → Compute Boundaries", DesignMode.FIXED_TIMING.value),
                 ("Fixed Max N → Optimize ASN", DesignMode.OPTIMIZE_ASN.value),
                 (
@@ -178,7 +207,7 @@ class GSTDesignUI:
                 ),
                 ("Fixed Power → Compute Required N", DesignMode.FIXED_POWER.value),
             ],
-            value=DesignMode.FIXED_TIMING.value,
+            value=DesignMode.NMAX_FIXED_MIN_MDE.value,
             description="Design Mode:",
             style={"description_width": "120px"},
             layout=widgets.Layout(width="600px"),
@@ -190,6 +219,7 @@ class GSTDesignUI:
     def _init_mode_controllers(self) -> None:
         """Create per-mode controllers and initialize their saved common state."""
         self._controllers: dict[DesignMode, ModeController] = {
+            DesignMode.NMAX_FIXED_MIN_MDE: NMaxFixedMinMDEDesigner(),
             DesignMode.FIXED_TIMING: FixedTimingDesigner(),
             DesignMode.OPTIMIZE_ASN: OptimizeASNDesigner(),
             DesignMode.OPTIMIZE_DESIGN: OptimizeDesignDesigner(),
@@ -379,11 +409,12 @@ class GSTDesignUI:
         if "current_mode" in state:
             try:
                 saved_mode = DesignMode(state["current_mode"])
-                if saved_mode != self.current_mode:
-                    self.w_mode.value = saved_mode.value
-                    self.current_mode = saved_mode
-                    controller = self._controllers[self.current_mode]
-                    self._render_mode_specific(controller)
+                # Always update the mode and re-render, even if it's the same mode
+                # This ensures the UI reflects the restored controller state
+                self.current_mode = saved_mode
+                self.w_mode.value = saved_mode.value
+                controller = self._controllers[self.current_mode]
+                self._render_mode_specific(controller)
             except (ValueError, KeyError):
                 # Keep current mode if saved mode is unknown
                 pass
