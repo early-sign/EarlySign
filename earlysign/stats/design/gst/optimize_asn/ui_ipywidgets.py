@@ -272,3 +272,32 @@ class OptimizeASNDesigner:
                     f"<p><b>Optimal Information Times:</b> {', '.join([f'{t:.3f}' for t in optimal_times])}</p>"
                 )
             )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize widget values to dictionary."""
+        return {
+            "alpha": self.w_alpha.value,
+            "n_analyses": self.w_n_analyses.value,
+            "spending_func": self.w_spending_func.value,
+            "p_control": self.w_p_control.value,
+            "effect_size": self.w_effect_size.value,
+            "max_n_total": self.w_max_n_total.value,
+            "target_power": self.w_target_power.value,
+        }
+
+    def from_dict(self, data: dict[str, Any]) -> None:
+        """Restore widget values from dictionary."""
+        if "alpha" in data:
+            self.w_alpha.value = data["alpha"]
+        if "n_analyses" in data:
+            self.w_n_analyses.value = data["n_analyses"]
+        if "spending_func" in data:
+            self.w_spending_func.value = data["spending_func"]
+        if "p_control" in data:
+            self.w_p_control.value = data["p_control"]
+        if "effect_size" in data:
+            self.w_effect_size.value = data["effect_size"]
+        if "max_n_total" in data:
+            self.w_max_n_total.value = data["max_n_total"]
+        if "target_power" in data:
+            self.w_target_power.value = data["target_power"]

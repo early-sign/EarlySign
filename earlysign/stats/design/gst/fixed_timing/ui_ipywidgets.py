@@ -293,3 +293,35 @@ class FixedTimingDesigner:
     def run_optimization(self, ui: Any) -> None:
         # Not applicable for this mode
         return
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize widget values to dictionary."""
+        return {
+            "alpha": self.w_alpha.value,
+            "power": self.w_power.value,
+            "n_analyses": self.w_n_analyses.value,
+            "spending_func": self.w_spending_func.value,
+            "p_control": self.w_p_control.value,
+            "effect_size": self.w_effect_size.value,
+            "info_times_text": self.w_info_times_text.value,
+            "n_per_analysis": self.w_n_per_analysis.value,
+        }
+
+    def from_dict(self, data: dict[str, Any]) -> None:
+        """Restore widget values from dictionary."""
+        if "alpha" in data:
+            self.w_alpha.value = data["alpha"]
+        if "power" in data:
+            self.w_power.value = data["power"]
+        if "n_analyses" in data:
+            self.w_n_analyses.value = data["n_analyses"]
+        if "spending_func" in data:
+            self.w_spending_func.value = data["spending_func"]
+        if "p_control" in data:
+            self.w_p_control.value = data["p_control"]
+        if "effect_size" in data:
+            self.w_effect_size.value = data["effect_size"]
+        if "info_times_text" in data:
+            self.w_info_times_text.value = data["info_times_text"]
+        if "n_per_analysis" in data:
+            self.w_n_per_analysis.value = data["n_per_analysis"]

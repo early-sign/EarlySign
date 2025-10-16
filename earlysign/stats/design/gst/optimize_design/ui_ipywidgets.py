@@ -309,3 +309,44 @@ class OptimizeDesignDesigner:
                     f"<p><b>Optimal Information Times:</b> {', '.join([f'{t:.3f}' for t in optimal_times])}</p>"
                 )
             )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize widget values to dictionary."""
+        return {
+            "alpha": self.w_alpha.value,
+            "power": self.w_power.value,
+            "n_analyses": self.w_n_analyses.value,
+            "spending_func": self.w_spending_func.value,
+            "p_control": self.w_p_control.value,
+            "effect_size": self.w_effect_size.value,
+            "alpha_range_min": self.w_alpha_range_min.value,
+            "alpha_range_max": self.w_alpha_range_max.value,
+            "k_range_min": self.w_k_range_min.value,
+            "k_range_max": self.w_k_range_max.value,
+            "optimize_criterion": self.w_optimize_criterion.value,
+        }
+
+    def from_dict(self, data: dict[str, Any]) -> None:
+        """Restore widget values from dictionary."""
+        if "alpha" in data:
+            self.w_alpha.value = data["alpha"]
+        if "power" in data:
+            self.w_power.value = data["power"]
+        if "n_analyses" in data:
+            self.w_n_analyses.value = data["n_analyses"]
+        if "spending_func" in data:
+            self.w_spending_func.value = data["spending_func"]
+        if "p_control" in data:
+            self.w_p_control.value = data["p_control"]
+        if "effect_size" in data:
+            self.w_effect_size.value = data["effect_size"]
+        if "alpha_range_min" in data:
+            self.w_alpha_range_min.value = data["alpha_range_min"]
+        if "alpha_range_max" in data:
+            self.w_alpha_range_max.value = data["alpha_range_max"]
+        if "k_range_min" in data:
+            self.w_k_range_min.value = data["k_range_min"]
+        if "k_range_max" in data:
+            self.w_k_range_max.value = data["k_range_max"]
+        if "optimize_criterion" in data:
+            self.w_optimize_criterion.value = data["optimize_criterion"]

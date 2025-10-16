@@ -5,6 +5,7 @@ This module provides an interactive Jupyter widget-based UI for exploring
 and optimizing group sequential trial designs.
 """
 
+import json
 from typing import Any, Optional, Protocol
 
 import ipywidgets as widgets
@@ -78,6 +79,31 @@ class ModeController(Protocol):
     def run_optimization(self, ui: "GSTDesignUI") -> None:  # optional
         """Execute mode-specific optimization flow if the panel has such action."""
 
+        ...
+
+    # ---- State serialization ----
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize controller's widget values to a dictionary.
+
+        Returns
+        -------
+        dict
+            Dictionary containing all widget values for this controller.
+        """
+        ...
+
+    def from_dict(self, data: dict[str, Any]) -> None:
+        """Restore controller's widget values from a dictionary.
+
+        Uses a best-effort approach: loads available fields and ignores
+        missing or unknown fields. This ensures compatibility across versions.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary containing widget values to restore. Missing fields
+            are left at their current (default) values.
+        """
         ...
 
 
@@ -264,3 +290,107 @@ class GSTDesignUI:
         self._last_displayed_widget: Any = self.main_layout
         clear_output(wait=True)
         display(self.main_layout)
+
+    def to_json(self) -> str:
+        """
+        Serialize current UI state to JSON string.
+
+        This method captures the current state of all widget values across all modes,
+        allowing the design configuration to be saved and restored later.
+
+        Returns
+        -------
+        str
+            JSON string representation of the UI state.
+
+        Examples
+        --------
+        >>> ui = GSTDesignUI()  # doctest: +SKIP
+        >>> json_str = ui.to_json()  # Get JSON string  # doctest: +SKIP
+        >>> # Save to file if needed
+        >>> with open("config.json", "w") as f:  # doctest: +SKIP
+        ...     f.write(json_str)  # doctest: +SKIP
+        """
+        state = {
+            "version": "1.0",
+            "current_mode": self.current_mode.value,
+            "controllers": {
+                mode.value: controller.to_dict()
+                for mode, controller in self._controllers.items()
+            },
+        }
+
+        return json.dumps(state, indent=2)
+
+    def from_json(self, json_str: str) -> None:
+        """
+        Restore UI state from JSON string with best-effort loading.
+
+        This method uses a best-effort approach: it loads all available fields from
+        the saved configuration and leaves missing fields at their default values.
+        This ensures forward and backward compatibility across versions.
+
+        Parameters
+        ----------
+        json_str : str
+            JSON string containing the saved state.
+
+        Raises
+        ------
+        json.JSONDecodeError
+            If the input is not valid JSON.
+
+        Notes
+        -----
+        The version field is informational only. The method will attempt to load
+        any JSON configuration regardless of version, loading available fields
+        and ignoring missing or unknown fields.
+
+        Examples
+        --------
+        >>> ui = GSTDesignUI()  # doctest: +SKIP
+        >>> json_str = ui.to_json()  # doctest: +SKIP
+        >>> ui.from_json(json_str)  # Restore state  # doctest: +SKIP
+        >>> # Or load from file
+        >>> with open("config.json", "r") as f:  # doctest: +SKIP
+        ...     ui.from_json(f.read())  # doctest: +SKIP
+        >>> # Even old versions will load successfully
+        >>> old_json = '{"version": "0.9", "controllers": {...}}'  # doctest: +SKIP
+        >>> ui.from_json(old_json)  # Works! Loads available fields  # doctest: +SKIP
+        """
+        state = json.loads(json_str)
+
+        # Version is informational only - we use best-effort loading
+        # so any version can be loaded as long as the structure is valid
+
+        # Restore each controller's state (best-effort)
+        controllers_data = state.get("controllers", {})
+        for mode_value, controller_data in controllers_data.items():
+            try:
+                mode = DesignMode(mode_value)
+                if mode in self._controllers:
+                    # Controller's from_dict also uses best-effort approach
+                    self._controllers[mode].from_dict(controller_data)
+            except (ValueError, KeyError):
+                # Skip unknown modes (forward compatibility)
+                pass
+
+        # Switch to the saved current mode if it exists
+        if "current_mode" in state:
+            try:
+                saved_mode = DesignMode(state["current_mode"])
+                if saved_mode != self.current_mode:
+                    self.w_mode.value = saved_mode.value
+                    self.current_mode = saved_mode
+                    controller = self._controllers[self.current_mode]
+                    self._render_mode_specific(controller)
+            except (ValueError, KeyError):
+                # Keep current mode if saved mode is unknown
+                pass
+
+        # Update the design with the restored values
+        try:
+            self._update_design()
+        except Exception:
+            # If design update fails, continue - UI is still usable
+            pass
