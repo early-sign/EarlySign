@@ -210,6 +210,16 @@ class OptimizeASNDesigner:
         ui.spec.sequential.info_times = optimal_times.tolist()
         ui.spec.sequential.info_spacing = InformationSpacing.CUSTOM
 
+        # Set n_per_analysis based on max_n_total constraint
+        # max_n_total is the TOTAL across both groups, so divide by 2 for per-group
+        # Then divide by n_analyses to get n_per_analysis
+        if isinstance(ui.spec, ProportionsDesignSpec):
+            # max_n_total / 2 (for per-group) / n_analyses (for per-analysis)
+            n_per_group_total = self.w_max_n_total.value // 2
+            ui.spec.sample_size.n_per_analysis = (
+                n_per_group_total // ui.spec.sequential.n_analyses
+            )
+
         ui.lab = DesignLab(ui.spec)
         ui.lab.compute_boundaries()
         ui.lab.run_simulations()
