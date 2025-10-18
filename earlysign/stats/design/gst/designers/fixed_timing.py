@@ -5,7 +5,7 @@ This module provides an interactive Jupyter widget-based UI for the Fixed Timing
 design mode in group sequential trials.
 """
 
-from typing import Any, Protocol
+from typing import Any
 
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
@@ -18,49 +18,6 @@ from earlysign.stats.design.gst.common.types import (
     InformationSpacing,
     SpendingFunction,
 )
-
-
-class ModeDesigner(Protocol):
-    """Protocol for per-mode modular designers.
-
-    Each designer owns its mode-specific widgets and a copy of common values
-    so switching modes preserves per-mode configurations.
-    """
-
-    mode: DesignMode
-
-    # ---- Widget lifecycle ----
-    def build_panel(self, ui: Any) -> widgets.Widget:
-        """Return a container widget that renders full mode UI (controls+actions).
-
-        Widgets should be created in the designer's constructor so their
-        values persist across mode switches. Action buttons must be owned by
-        this designer and bind their handlers internally.
-        """
-        ...
-
-    def get_description_widget(self) -> widgets.Widget:
-        """Return a rich description widget to render under the mode selector."""
-        ...
-
-    # ---- State sync for common values ----
-    def save_common_from(self, ui: Any) -> None:
-        """Save current common widget values from the main UI into this designer."""
-        ...
-
-    def load_common_into(self, ui: Any) -> None:
-        """Load this designer's saved common values into the main UI widgets."""
-        ...
-
-    # ---- Spec update hooks ----
-    def update_spec(self, spec: DesignSpec, ui: Any) -> None:
-        """Write both common and mode-specific values into the given DesignSpec."""
-        ...
-
-    # ---- Optional actions (owned internally by panel) ----
-    def run_optimization(self, ui: Any) -> None:  # optional
-        """Execute mode-specific optimization flow if the panel has such action."""
-        ...
 
 
 class FixedTimingDesigner:

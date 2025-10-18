@@ -19,21 +19,13 @@ from earlysign.stats.design.gst.common.optimization import (
 from earlysign.stats.design.gst.common.types import (
     DesignMode,
 )
-from earlysign.stats.design.gst.fixed_power.ui_ipywidgets import (
-    FixedPowerDesigner,
-)
-from earlysign.stats.design.gst.fixed_timing.ui_ipywidgets import (
-    FixedTimingDesigner,
-)
-from earlysign.stats.design.gst.nmax_fixed_min_mde.ui_ipywidgets import (
+from earlysign.stats.design.gst.designers.fixed_power import FixedPowerDesigner
+from earlysign.stats.design.gst.designers.fixed_timing import FixedTimingDesigner
+from earlysign.stats.design.gst.designers.nmax_fixed_min_mde import (
     NMaxFixedMinMDEDesigner,
 )
-from earlysign.stats.design.gst.optimize_asn.ui_ipywidgets import (
-    OptimizeASNDesigner,
-)
-from earlysign.stats.design.gst.optimize_design.ui_ipywidgets import (
-    OptimizeDesignDesigner,
-)
+from earlysign.stats.design.gst.designers.optimize_asn import OptimizeASNDesigner
+from earlysign.stats.design.gst.designers.optimize_design import OptimizeDesignDesigner
 
 
 class ModeController(Protocol):
@@ -131,35 +123,13 @@ class GSTDesignUI:
 
     Notes
     -----
-    By default, GSTDesignUI uses a singleton pattern to ensure only one instance
-    exists. To create multiple independent instances (e.g., for side-by-side comparison),
-    pass `allow_multiple=True`:
+    Multiple independent instances can be created for side-by-side comparison:
 
-    >>> ui1 = GSTDesignUI(allow_multiple=True)  # doctest: +SKIP
-    >>> ui2 = GSTDesignUI(allow_multiple=True)  # doctest: +SKIP
+    >>> ui1 = GSTDesignUI()  # doctest: +SKIP
+    >>> ui2 = GSTDesignUI()  # doctest: +SKIP
     """
 
-    _singleton_instance: Optional["GSTDesignUI"] = None
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> "GSTDesignUI":
-        """Ensure only one instance exists in the notebook unless allow_multiple=True."""
-        # Check if allow_multiple is True
-        allow_multiple = kwargs.get("allow_multiple", False)
-
-        if allow_multiple:
-            # Create a new instance without singleton
-            return super().__new__(cls)
-
-        # Use singleton pattern
-        if cls._singleton_instance is not None:
-            return cls._singleton_instance
-        instance = super().__new__(cls)
-        cls._singleton_instance = instance
-        return instance
-
-    def __init__(
-        self, initial_spec: Optional[DesignSpec] = None, allow_multiple: bool = False
-    ):
+    def __init__(self, initial_spec: Optional[DesignSpec] = None):
         """
         Initialize the UI.
 
@@ -167,16 +137,7 @@ class GSTDesignUI:
         ----------
         initial_spec : DesignSpec, optional
             Initial design specification. Defaults to ProportionsDesignSpec.
-        allow_multiple : bool, optional
-            If True, allow multiple independent UI instances. If False (default),
-            use singleton pattern. Default is False.
         """
-        # For singleton instances, skip re-initialization
-        if not allow_multiple and hasattr(self, "_initialized") and self._initialized:
-            return
-
-        # Mark as initialized
-        self._initialized: bool = True
 
         self.spec = initial_spec or ProportionsDesignSpec()
         self.lab = DesignLab(self.spec)
