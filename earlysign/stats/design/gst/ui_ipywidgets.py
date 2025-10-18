@@ -53,26 +53,9 @@ class ModeController(Protocol):
 
         ...
 
-    # ---- State sync for common values ----
-    def save_common_from(self, ui: "GSTDesignUI") -> None:
-        """Save current common widget values from the main UI into this controller."""
-
-        ...
-
-    def load_common_into(self, ui: "GSTDesignUI") -> None:
-        """Load this controller's saved common values into the main UI widgets."""
-
-        ...
-
     # ---- Spec update hooks ----
     def update_spec(self, spec: DesignSpec, ui: "GSTDesignUI") -> None:
         """Write both common and mode-specific values into the given DesignSpec."""
-
-        ...
-
-    # ---- Optional actions (owned internally by panel) ----
-    def run_optimization(self, ui: "GSTDesignUI") -> None:  # optional
-        """Execute mode-specific optimization flow if the panel has such action."""
 
         ...
 

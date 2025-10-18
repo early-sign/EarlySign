@@ -104,6 +104,8 @@ nb_diff_ignore = [
   "/cells/*/outputs",
   "/cells/*/execution_count",
   "/metadata/language_info",
+  "/cells/*/outputs/*/*/*/state", # IPyWidgets
+  "/metadata/widgets", # the collective ipywidget states of the notebook
 ]
 
 #==== CI ====#
