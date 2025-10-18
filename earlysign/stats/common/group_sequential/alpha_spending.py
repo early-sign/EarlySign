@@ -115,6 +115,44 @@ def cumulative_to_nominal_z(
         raise ValueError("`tails` must be 1 or 2.")
 
 
+def hsd_spending(t: float, alpha: float, gamma: float = -4.0) -> float:
+    """
+    Hwang-Shih-DeCani (HSD) cumulative spending α(t).
+
+    This is a flexible family of spending functions parameterized by gamma:
+    - gamma = 0: Linear spending
+    - gamma < 0: O'Brien-Fleming-like (conservative early)
+    - gamma > 0: Pocock-like (more uniform)
+
+    Parameters
+    ----------
+    t : float in [0,1]
+        Information time.
+    alpha : float in (0,1)
+        Overall type-I error.
+    gamma : float
+        Shape parameter.
+
+    Examples
+    --------
+    >>> round(hsd_spending(t=0.5, alpha=0.05, gamma=-4.0), 6)  # doctest: +ELLIPSIS
+    0.00...
+    >>> round(hsd_spending(t=1.0, alpha=0.05, gamma=-4.0), 6)
+    0.05
+    """
+    if not (0.0 <= t <= 1.0):
+        raise ValueError("`t` must be in [0, 1].")
+    if not (0.0 < alpha < 1.0):
+        raise ValueError("`alpha` must be in (0, 1).")
+
+    if abs(gamma) < 1e-12:
+        # Linear spending when gamma ≈ 0
+        return float(alpha * t)
+
+    # HSD formula
+    return float(alpha * (1.0 - math.exp(-gamma * t)) / (1.0 - math.exp(-gamma)))
+
+
 def z_to_brownian(z: float, t: float) -> float:
     """
     Convert a Z-scale boundary to Brownian scale: B(t) = Z * sqrt(t).

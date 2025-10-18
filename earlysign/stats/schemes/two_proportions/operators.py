@@ -5,67 +5,17 @@ Two-proportions scheme operator(s).
 - ScoreZStatistic : Z for (pB - pA) using pooled variance under H0 (score test)
 """
 
-from math import sqrt
 from typing import Dict, Union
 
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
+from earlysign.stats.common.two_proportions import compute_wald_z
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
     ScoreZStatisticRecord,
     WaldZStatisticRecord,
 )
-
-
-def _phat(n: int, m: int) -> float:
-    """
-    Compute m/n with input validation.
-
-    Examples
-    --------
-    >>> round(_phat(4, 1), 3)
-    0.25
-    """
-    if n <= 0:
-        raise ValueError("n must be positive.")
-    if not (0 <= m <= n):
-        raise ValueError("m must be in [0, n].")
-    return float(m) / float(n)
-
-
-def _wald_z(nA: int, mA: int, nB: int, mB: int, pooled: bool) -> float:
-    """
-    Wald Z for (pB - pA).
-
-    Examples
-    --------
-    >>> round(_wald_z(100, 40, 100, 55, True), 3)
-    2.124
-    """
-    pA = _phat(nA, mA)
-    pB = _phat(nB, mB)
-    diff = pB - pA
-    if pooled:
-        p_pool = (mA + mB) / float(nA + nB)
-        var = p_pool * (1.0 - p_pool) * (1.0 / nA + 1.0 / nB)
-    else:
-        var = pA * (1.0 - pA) / nA + pB * (1.0 - pB) / nB
-    if var <= 0.0:
-        return float("inf") if diff > 0 else float("-inf") if diff < 0 else 0.0
-    return diff / sqrt(var)
-
-
-def _score_z(nA: int, mA: int, nB: int, mB: int) -> float:
-    """
-    Score test Z for (pB - pA), using pooled variance under H0.
-
-    Examples
-    --------
-    >>> round(_score_z(100, 40, 100, 55), 3)
-    2.124
-    """
-    return _wald_z(nA, mA, nB, mB, pooled=True)
 
 
 class BinomialCountsSnapshot(LedgerOperator):
@@ -133,7 +83,7 @@ class WaldZStatistic(LedgerOperator):
 
         cdf = cum_counts.latest().execute().iloc[0]
         nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
-        z = _wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=pooled)
+        z = compute_wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=pooled)
 
         payload = {"wald_z": float(z)}
         out.insert(payload)
@@ -159,7 +109,8 @@ class ScoreZStatistic(LedgerOperator):
         cdf = cum_counts.latest().execute().iloc[0]
 
         nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
-        z = _score_z(nA=nA, mA=mA, nB=nB, mB=mB)
+        # Score Z is equivalent to Wald Z with pooled variance
+        z = compute_wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=True)
 
         payload = {"score_z": float(z)}
         out.insert(payload)

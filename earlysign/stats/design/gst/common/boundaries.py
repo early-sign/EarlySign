@@ -5,6 +5,11 @@ from typing import Any, Dict, Optional
 import numpy as np
 from scipy.stats import norm
 
+from earlysign.stats.common.group_sequential.alpha_spending import (
+    hsd_spending,
+    obf_spending,
+    pocock_spending,
+)
 from earlysign.stats.design.gst.common.config import DesignSpec
 from earlysign.stats.design.gst.common.types import SpendingFunction
 
@@ -48,7 +53,7 @@ class BoundaryCalculator:
     3
 
     >>> # Check cumulative alpha spending (two-sided test: 0.05 total, 0.025 per side)
-    >>> bool(0.04 < boundaries['cumulative_alpha'][-1] < 0.06)
+    >>> bool(0.024 < boundaries['cumulative_alpha'][-1] < 0.026)
     True
 
     >>> # Different spending functions
@@ -83,51 +88,6 @@ class BoundaryCalculator:
     """
 
     @staticmethod
-    def spending_function(
-        func: SpendingFunction, t: np.ndarray, alpha: float, gamma: float = -4.0
-    ) -> np.ndarray:
-        """Calculate cumulative alpha spending at information times.
-
-        Args:
-            func: Spending function type
-            t: Information times in (0, 1]
-            alpha: Total alpha to spend
-            gamma: HSD gamma parameter (only used for HSD function)
-
-        Returns:
-            Cumulative alpha spent at each information time
-
-        Raises:
-            ValueError: If spending function is unknown
-
-        >>> t = np.array([0.5, 1.0])
-        >>> spent = BoundaryCalculator.spending_function(
-        ...     SpendingFunction.OBRIEN_FLEMING, t, 0.025
-        ... )
-        >>> len(spent)
-        2
-        >>> bool(0.04 < spent[-1] < 0.06)  # OBF spends more at final analysis
-        True
-        """
-        if func == SpendingFunction.OBRIEN_FLEMING:
-            # Lan-DeMets O'Brien-Fleming approximation
-            z_alpha = norm.ppf(1 - alpha)
-            result: np.ndarray = 2 * (1 - norm.cdf(z_alpha / np.sqrt(t)))
-            return result
-        elif func == SpendingFunction.POCOCK:
-            # Pocock-like spending
-            result = alpha * np.log(1 + (np.e - 1) * t)
-            return result
-        elif func == SpendingFunction.HSD:
-            # Hwang-Shih-DeCani
-            if abs(gamma) < 1e-12:
-                return alpha * t
-            result = alpha * (1 - np.exp(-gamma * t)) / (1 - np.exp(-gamma))
-            return result
-        else:
-            raise ValueError(f"Unknown spending function: {func}")
-
-    @staticmethod
     def critical_values(spec: DesignSpec) -> Dict[str, Any]:
         """Calculate critical values for efficacy and futility bounds.
 
@@ -155,9 +115,27 @@ class BoundaryCalculator:
         alpha_total = (
             spec.test.alpha if spec.test.sided == "one" else spec.test.alpha / 2.0
         )
-        cumulative_alpha = BoundaryCalculator.spending_function(
-            spec.boundary.spending_function, t, alpha_total, spec.boundary.hsd_gamma
-        )
+
+        # Use common alpha spending functions
+        if spec.boundary.spending_function == SpendingFunction.OBRIEN_FLEMING:
+            cumulative_alpha = np.array(
+                [
+                    obf_spending(
+                        ti, alpha_total, tails=1 if spec.test.sided == "one" else 2
+                    )
+                    for ti in t
+                ]
+            )
+        elif spec.boundary.spending_function == SpendingFunction.POCOCK:
+            cumulative_alpha = np.array([pocock_spending(ti, alpha_total) for ti in t])
+        elif spec.boundary.spending_function == SpendingFunction.HSD:
+            cumulative_alpha = np.array(
+                [hsd_spending(ti, alpha_total, spec.boundary.hsd_gamma) for ti in t]
+            )
+        else:
+            raise ValueError(
+                f"Unknown spending function: {spec.boundary.spending_function}"
+            )
 
         # Incremental alpha at each analysis
         alpha_increments = np.diff(np.concatenate([[0.0], cumulative_alpha]))
@@ -174,9 +152,28 @@ class BoundaryCalculator:
             elif spec.boundary.futility_spending is not None:
                 # Spending function based futility
                 beta = 1 - spec.test.power
-                cumulative_beta = BoundaryCalculator.spending_function(
-                    spec.boundary.futility_spending, t, beta, spec.boundary.hsd_gamma
-                )
+
+                # Use common alpha spending functions for futility
+                if spec.boundary.futility_spending == SpendingFunction.OBRIEN_FLEMING:
+                    cumulative_beta = np.array(
+                        [
+                            obf_spending(
+                                ti, beta, tails=1 if spec.test.sided == "one" else 2
+                            )
+                            for ti in t
+                        ]
+                    )
+                elif spec.boundary.futility_spending == SpendingFunction.POCOCK:
+                    cumulative_beta = np.array([pocock_spending(ti, beta) for ti in t])
+                elif spec.boundary.futility_spending == SpendingFunction.HSD:
+                    cumulative_beta = np.array(
+                        [hsd_spending(ti, beta, spec.boundary.hsd_gamma) for ti in t]
+                    )
+                else:
+                    raise ValueError(
+                        f"Unknown futility spending function: {spec.boundary.futility_spending}"
+                    )
+
                 beta_increments = np.diff(np.concatenate([[0.0], cumulative_beta]))
                 z_futility = norm.ppf(beta_increments)
             else:

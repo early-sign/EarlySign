@@ -5,6 +5,12 @@ from typing import Dict
 
 import numpy as np
 
+from earlysign.stats.common.two_means import (
+    compute_standard_error as compute_se_means,
+)
+from earlysign.stats.common.two_proportions import (
+    compute_standard_error as compute_se_proportions,
+)
 from earlysign.stats.design.gst.common.config import (
     DesignSpec,
     MeansDesignSpec,
@@ -162,9 +168,6 @@ class ProportionsEffectCalculator(EffectCalculator):
         p_A = spec.effect.p_control
         p_B = spec.effect.get_treatment_proportion()
 
-        # Pooled proportion under H0
-        p_pooled = (p_A + p_B) / 2.0
-
         # Sample sizes at this information time
         n_total_A = spec.sample_size.n_per_analysis * spec.sequential.n_analyses
         n_A = int(n_total_A * info_time)
@@ -173,8 +176,11 @@ class ProportionsEffectCalculator(EffectCalculator):
         if n_A == 0 or n_B == 0:
             return 0.0
 
-        # Standard error
-        se = np.sqrt(p_pooled * (1 - p_pooled) * (1 / n_A + 1 / n_B))
+        # Use pooled proportion for H0
+        p_pooled = (p_A + p_B) / 2.0
+
+        # Use common standard error calculation
+        se = compute_se_proportions(n_A, n_B, p_pooled, p_pooled, pooled=True)
 
         if se == 0:
             return 0.0
@@ -318,8 +324,8 @@ class MeansEffectCalculator(EffectCalculator):
         if n_A == 0 or n_B == 0:
             return 0.0
 
-        # Standard error
-        se = sigma * np.sqrt(1 / n_A + 1 / n_B)
+        # Use common standard error calculation
+        se = compute_se_means(n_A, n_B, sigma, pooled=True)
 
         if se == 0:
             return 0.0
