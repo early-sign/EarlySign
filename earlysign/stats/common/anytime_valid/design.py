@@ -2,7 +2,7 @@
 Design operators for Anytime-Valid (Safe) testing.
 """
 
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Optional
 
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
@@ -30,7 +30,7 @@ class SafeDesign(LedgerOperator):
     alpha: float
     futility: Optional[Dict[str, Any]]
 
-    def derived_records(self) -> Mapping[str, LedgerRecord]:
+    def derived_records(self) -> dict[str, LedgerRecord]:
         return {"design": SafeDesignRecord(id=self.out_id)}
 
     def run(self) -> None:

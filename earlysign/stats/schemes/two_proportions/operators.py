@@ -5,9 +5,10 @@ Two-proportions scheme operator(s).
 - ScoreZStatistic : Z for (pB - pA) using pooled variance under H0 (score test)
 """
 
-from typing import Dict, Union
+from dataclasses import dataclass
+from typing import Union
 
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.two_proportions import compute_wald_z
 from earlysign.stats.schemes.two_proportions.records import (
@@ -29,14 +30,21 @@ class BinomialCountsSnapshot(LedgerOperator):
     obs: BinomialCountsRecord
     out_id: str
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        """Outputs for this operator."""
+
+        snapshot: BinomialCountsSnapshotRecord
+
+    # Type annotation for outputs - enables type inference!
+    outputs: Outputs
+
+    def derived_records(self) -> dict[str, LedgerRecord]:
         return {"snapshot": BinomialCountsSnapshotRecord(id=self.out_id)}
 
     def run(self) -> None:
         obs_rec = self.obs
-        snapshot_rec: BinomialCountsSnapshotRecord = self.outputs["snapshot"]  # type: ignore
-
-        # Read the latest incremental observation
+        snapshot_rec = self.outputs.snapshot
         latest_obs = obs_rec.latest().execute().iloc[0]
         delta_nA = int(latest_obs["nA"])
         delta_mA = int(latest_obs["mA"])
@@ -75,12 +83,21 @@ class WaldZStatistic(LedgerOperator):
     pooled: bool
     out_id: str
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        """Outputs for this operator."""
+
+        wald: WaldZStatisticRecord
+
+    # Type annotation for outputs - enables type inference!
+    outputs: Outputs
+
+    def derived_records(self) -> dict[str, LedgerRecord]:
         return {"wald": WaldZStatisticRecord(id=self.out_id)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts
-        out = self.outputs["wald"]
+        out = self.outputs.wald
         pooled = bool(getattr(self, "pooled", True))
 
         cdf = cum_counts.latest().execute().iloc[0]
@@ -101,12 +118,21 @@ class ScoreZStatistic(LedgerOperator):
     cum_counts: Union[BinomialCountsRecord, BinomialCountsSnapshotRecord]
     out_id: str
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        """Outputs for this operator."""
+
+        score: ScoreZStatisticRecord
+
+    # Type annotation for outputs - enables type inference!
+    outputs: Outputs
+
+    def derived_records(self) -> dict[str, LedgerRecord]:
         return {"score": ScoreZStatisticRecord(id=self.out_id)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts
-        out = self.outputs["score"]
+        out = self.outputs.score
 
         cdf = cum_counts.latest().execute().iloc[0]
 

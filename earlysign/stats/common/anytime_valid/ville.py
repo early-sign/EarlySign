@@ -12,7 +12,7 @@ futility_mode: "none" | "fixed"
   - "fixed": stop_futility if E <= futility_tau (0 < tau < 1 suggested)
 """
 
-from typing import Dict, Mapping, Optional
+from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
@@ -85,7 +85,7 @@ class VilleDecision(LedgerOperator):
     futility_mode: str
     futility_tau: Optional[float]
 
-    def derived_records(self) -> Mapping[str, LedgerRecord]:
+    def derived_records(self) -> dict[str, LedgerRecord]:
         return {"decision": SafeDecisionRecord(id=self.out_id)}
 
     def run(self) -> None:
