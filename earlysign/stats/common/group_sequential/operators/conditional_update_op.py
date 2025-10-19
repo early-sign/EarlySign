@@ -68,6 +68,8 @@ class ConditionalPowerCalculation(LedgerOperator):
     >>> # op.run()  # Would compute CP and write to ledger
     """
 
+    out_id: str
+
     def __init__(
         self,
         scoped: Ledger,
@@ -92,7 +94,7 @@ class ConditionalPowerCalculation(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"cp": ConditionalPowerRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"cp": ConditionalPowerRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["cp"]
@@ -186,6 +188,8 @@ class PromisingZoneDecision(LedgerOperator):
     >>> # op.run()  # Would compute decision and write to ledger
     """
 
+    out_id: str
+
     def __init__(
         self,
         scoped: Ledger,
@@ -214,7 +218,7 @@ class PromisingZoneDecision(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": DesignUpdateDecisionRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"decision": DesignUpdateDecisionRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["decision"]
@@ -304,6 +308,8 @@ class UpdateRemainingBoundaries(LedgerOperator):
     >>> # op.run()  # Would compute updated boundaries and write to ledger
     """
 
+    out_id: str
+
     def __init__(
         self,
         scoped: Ledger,
@@ -328,7 +334,7 @@ class UpdateRemainingBoundaries(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"updated_boundaries": UpdatedBoundariesRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"updated_boundaries": UpdatedBoundariesRecord(id=self.out_id)}
 
     def run(self) -> None:
         import numpy as np

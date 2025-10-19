@@ -43,6 +43,9 @@ class ZMeanKnownVar(LedgerOperator):
     sigma2  : float                   # known variance
     """
 
+    out_id: str
+    summary: OneMeanSummaryRecord
+
     def __init__(
         self,
         scoped: Ledger,
@@ -54,11 +57,11 @@ class ZMeanKnownVar(LedgerOperator):
         super().__init__(scoped, summary=summary, out_id=out_id, sigma2=sigma2)
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"z": ZMeanKnownVarRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"z": ZMeanKnownVarRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["z"]
-        summary: OneMeanSummaryRecord = self.summary  # type: ignore[attr-defined]
+        summary: OneMeanSummaryRecord = self.summary
         sigma2 = float(getattr(self, "sigma2"))
 
         sdf = (

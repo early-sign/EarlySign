@@ -52,6 +52,8 @@ class InformationTime(LedgerOperator):
     >>> op.run()
     """
 
+    out_id: str
+
     def __init__(
         self,
         scoped: Ledger,
@@ -68,7 +70,7 @@ class InformationTime(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["info"]
@@ -92,6 +94,8 @@ class InformationTime(LedgerOperator):
 class InformationTimeFromRatio(LedgerOperator):
     """Insert t = info_now / info_max."""
 
+    out_id: str
+
     def __init__(
         self,
         scoped: Ledger,
@@ -106,7 +110,7 @@ class InformationTimeFromRatio(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["info"]
@@ -123,6 +127,8 @@ class InformationTimeFromRatio(LedgerOperator):
 class InformationTimeFromVariance(LedgerOperator):
     """Insert t = var_target / var_now."""
 
+    out_id: str
+
     def __init__(
         self,
         scoped: Ledger,
@@ -137,7 +143,7 @@ class InformationTimeFromVariance(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["info"]
@@ -154,6 +160,8 @@ class InformationTimeFromVariance(LedgerOperator):
 class InformationTimeFromSD(LedgerOperator):
     """Insert t = (sd_target^2) / (sd_now^2)."""
 
+    out_id: str
+
     def __init__(
         self,
         scoped: Ledger,
@@ -168,7 +176,7 @@ class InformationTimeFromSD(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["info"]
@@ -184,6 +192,8 @@ class InformationTimeFromSD(LedgerOperator):
 
 class InformationTimeFromFisher(LedgerOperator):
     """Insert t = fisher_now / fisher_max."""
+
+    out_id: str
 
     def __init__(
         self,
@@ -203,7 +213,7 @@ class InformationTimeFromFisher(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["info"]

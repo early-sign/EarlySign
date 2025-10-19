@@ -26,11 +26,12 @@ class SafeDesign(LedgerOperator):
     futility: {"mode": "fixed", "tau": 0.1}
     """
 
+    out_id: str
     alpha: float
     futility: Optional[Dict[str, Any]]
 
     def derived_records(self) -> Mapping[str, LedgerRecord]:
-        return {"design": SafeDesignRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"design": SafeDesignRecord(id=self.out_id)}
 
     def run(self) -> None:
         payload: Dict[str, Any] = {"alpha": float(self.alpha)}

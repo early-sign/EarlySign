@@ -95,6 +95,10 @@ class GSDecision(LedgerOperator):
     >>> op.run()
     """
 
+    out_id: str
+    boundary: GroupSequentialBoundaryRecord
+    info: Optional[InformationTimeRecord]
+
     def __init__(
         self,
         scoped: Ledger,
@@ -115,11 +119,11 @@ class GSDecision(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["decision"]
-        boundary = self.boundary  # type: ignore[attr-defined]
+        boundary = self.boundary
         value_in = float(getattr(self, "value"))
         value_scale = str(getattr(self, "value_scale")).lower()
 
@@ -144,14 +148,15 @@ class GSDecision(LedgerOperator):
 
         # Fall back to info record if needed
         if t is None and getattr(self, "info", None) is not None:
-            info = self.info  # type: ignore[attr-defined]
-            idf = (
-                info.latest()
-                .select(info_time=info.t.payload["info_time"].cast("float64"))
-                .execute()
-            )
-            if len(idf) > 0:
-                t = float(idf.iloc[0]["info_time"])
+            info = self.info
+            if info is not None:
+                idf = (
+                    info.latest()
+                    .select(info_time=info.t.payload["info_time"].cast("float64"))
+                    .execute()
+                )
+                if len(idf) > 0:
+                    t = float(idf.iloc[0]["info_time"])
 
         # Convert value to boundary scale using essentials
         if value_scale != bscale:
@@ -223,6 +228,10 @@ class GSDecisionFromWaldZ(LedgerOperator):
     >>> op.run()
     """
 
+    out_id: str
+    wald: LedgerRecord
+    boundary: GroupSequentialBoundaryRecord
+
     def __init__(
         self,
         scoped: Ledger,
@@ -234,14 +243,14 @@ class GSDecisionFromWaldZ(LedgerOperator):
         super().__init__(scoped, wald=wald, boundary=boundary, out_id=out_id)
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
 
     def run(self) -> None:
-        wald = self.wald  # type: ignore[attr-defined]
-        boundary = self.boundary  # type: ignore[attr-defined]
+        wald = self.wald
+        boundary = self.boundary
 
         # Read latest Wald Z
-        wdf = wald.latest().select(z=wald.t.payload["z"].cast("float64")).execute()
+        wdf = wald.latest().select(z=wald.t.payload["z"].cast("float64")).execute()  # type: ignore[attr-defined]
         if len(wdf) == 0:
             return
         z_val = float(wdf.iloc[0]["z"])
@@ -250,7 +259,7 @@ class GSDecisionFromWaldZ(LedgerOperator):
         gs_decision = GSDecision(
             self.scoped,
             boundary=boundary,
-            out_id=self.out_id,  # type: ignore[attr-defined]
+            out_id=self.out_id,
             value=z_val,
             value_scale="z",
         )

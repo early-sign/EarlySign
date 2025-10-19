@@ -55,6 +55,11 @@ class GSDecisionFromWaldZ(LedgerOperator):
         Used for scale conversion if needed (e.g., boundary on "bm" scale).
     """
 
+    out_id: str
+    wald: WaldZStatisticRecord
+    boundary: GroupSequentialBoundaryRecord
+    info: Optional[InformationTimeRecord]
+
     def __init__(
         self,
         scoped: Ledger,
@@ -75,12 +80,12 @@ class GSDecisionFromWaldZ(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["decision"]
-        wald: WaldZStatisticRecord = self.wald  # type: ignore[attr-defined]
-        boundary: GroupSequentialBoundaryRecord = self.boundary  # type: ignore[attr-defined]
+        wald: WaldZStatisticRecord = self.wald
+        boundary: GroupSequentialBoundaryRecord = self.boundary
         value_scale = str(getattr(self, "value_scale")).lower()
 
         # 1) read latest Wald Z
@@ -99,14 +104,15 @@ class GSDecisionFromWaldZ(LedgerOperator):
         if (t is None or not (0.0 <= t <= 1.0)) and getattr(
             self, "info", None
         ) is not None:
-            info: InformationTimeRecord = self.info  # type: ignore[attr-defined]
-            idf = (
-                info.latest()
-                .select(info_time=info.t.payload["info_time"].cast("float64"))
-                .execute()
-            )
-            if len(idf) > 0:
-                t = float(idf.iloc[0]["info_time"])
+            info = self.info
+            if info is not None:
+                idf = (
+                    info.latest()
+                    .select(info_time=info.t.payload["info_time"].cast("float64"))
+                    .execute()
+                )
+                if len(idf) > 0:
+                    t = float(idf.iloc[0]["info_time"])
 
         if (value_scale != bscale) and (t is None):
             raise ValueError(

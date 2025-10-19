@@ -113,6 +113,9 @@ def mixture_e_two_proportions_skew(
 class MixtureEProcessTwoProportions(LedgerOperator):
     """Insert symmetric-alt mixture e-process row for two-proportions."""
 
+    out_id: str
+    counts: BinomialCountsRecord
+
     def __init__(
         self,
         scoped: Ledger,
@@ -131,11 +134,11 @@ class MixtureEProcessTwoProportions(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["eproc"]
-        counts: BinomialCountsRecord = self.counts  # type: ignore[attr-defined]
+        counts: BinomialCountsRecord = self.counts
         prior_null = tuple(getattr(self, "prior_null"))
         prior_alt = tuple(getattr(self, "prior_alt"))
 
@@ -171,6 +174,9 @@ class MixtureEProcessTwoProportions(LedgerOperator):
 class MixtureEProcessTwoProportionsSkew(LedgerOperator):
     """Insert skewed-alt mixture e-process row for two-proportions."""
 
+    out_id: str
+    counts: BinomialCountsRecord
+
     def __init__(
         self,
         scoped: Ledger,
@@ -191,11 +197,11 @@ class MixtureEProcessTwoProportionsSkew(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["eproc"]
-        counts: BinomialCountsRecord = self.counts  # type: ignore[attr-defined]
+        counts: BinomialCountsRecord = self.counts
         prior_null = tuple(getattr(self, "prior_null"))
         prior_alt_A = tuple(getattr(self, "prior_alt_A"))
         prior_alt_B = tuple(getattr(self, "prior_alt_B"))

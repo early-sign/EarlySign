@@ -27,9 +27,10 @@ class BinomialCountsSnapshot(LedgerOperator):
     """
 
     obs: BinomialCountsRecord
+    out_id: str
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"snapshot": BinomialCountsSnapshotRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"snapshot": BinomialCountsSnapshotRecord(id=self.out_id)}
 
     def run(self) -> None:
         obs_rec = self.obs
@@ -72,9 +73,10 @@ class WaldZStatistic(LedgerOperator):
 
     cum_counts: Union[BinomialCountsRecord, BinomialCountsSnapshotRecord]
     pooled: bool
+    out_id: str
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"wald": WaldZStatisticRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"wald": WaldZStatisticRecord(id=self.out_id)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts

@@ -49,11 +49,13 @@ class VilleThreshold(LedgerOperator):
     alpha  : float in (0,1)
     """
 
+    out_id: str
+
     def __init__(self, scoped: Ledger, *, out_id: str, alpha: float):
         super().__init__(scoped, out_id=out_id, alpha=alpha)
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"threshold": VilleThresholdRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"threshold": VilleThresholdRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["threshold"]

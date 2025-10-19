@@ -36,11 +36,12 @@ class GateMinTotalSamples(LedgerOperator):
     >>> gate.run()
     """
 
+    out_id: str
     counts: BinomialCountsRecord
     min_total: int
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"gate": GateDecisionRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"gate": GateDecisionRecord(id=self.out_id)}
 
     def run(self) -> None:
         counts = self.counts

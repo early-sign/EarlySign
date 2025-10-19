@@ -46,11 +46,13 @@ class GroupSequentialDesign(LedgerOperator):
     >>> op.run()
     """
 
+    out_id: str
+
     def __init__(self, scoped: Ledger, *, out_id: str, design: Dict[str, Any]):
         super().__init__(scoped, out_id=out_id, design=design)
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"design": GroupSequentialDesignRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"design": GroupSequentialDesignRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["design"]

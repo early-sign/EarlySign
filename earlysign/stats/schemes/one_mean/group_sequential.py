@@ -46,6 +46,11 @@ class GSDecisionFromZMean(LedgerOperator):
     info : InformationTimeRecord = None
     """
 
+    out_id: str
+    zstat: ZMeanKnownVarRecord
+    boundary: GroupSequentialBoundaryRecord
+    info: Optional[InformationTimeRecord]
+
     def __init__(
         self,
         scoped: Ledger,
@@ -66,12 +71,12 @@ class GSDecisionFromZMean(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["decision"]
-        zrec: ZMeanKnownVarRecord = self.zstat  # type: ignore[attr-defined]
-        boundary: GroupSequentialBoundaryRecord = self.boundary  # type: ignore[attr-defined]
+        zrec: ZMeanKnownVarRecord = self.zstat
+        boundary: GroupSequentialBoundaryRecord = self.boundary
         value_scale = str(getattr(self, "value_scale")).lower()
 
         zdf = zrec.latest().select(z=zrec.t.payload["z"].cast("float64")).execute()
@@ -107,14 +112,15 @@ class GSDecisionFromZMean(LedgerOperator):
         ):
             raise ValueError("Information time required to convert scales but missing.")
         if (t is None) and getattr(self, "info", None) is not None:
-            info: InformationTimeRecord = self.info  # type: ignore[attr-defined]
-            idf = (
-                info.latest()
-                .select(info_time=info.t.payload["info_time"].cast("float64"))
-                .execute()
-            )
-            if len(idf) > 0:
-                t = float(idf.iloc[0]["info_time"])
+            info = self.info
+            if info is not None:
+                idf = (
+                    info.latest()
+                    .select(info_time=info.t.payload["info_time"].cast("float64"))
+                    .execute()
+                )
+                if len(idf) > 0:
+                    t = float(idf.iloc[0]["info_time"])
 
         v = convert_scale(
             z_raw, from_scale=value_scale, to_scale=bscale, info_time=(t or 0.0)

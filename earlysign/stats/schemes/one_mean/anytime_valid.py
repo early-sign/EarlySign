@@ -93,6 +93,9 @@ def one_sided_mixture_e_one_mean_known_var(
 class MixtureEProcessOneMeanKnownVar(LedgerOperator):
     """Insert symmetric-alt mixture e-process row for one-mean."""
 
+    out_id: str
+    summary: OneMeanSummaryRecord
+
     def __init__(
         self,
         scoped: Ledger,
@@ -107,11 +110,11 @@ class MixtureEProcessOneMeanKnownVar(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["eproc"]
-        summary: OneMeanSummaryRecord = self.summary  # type: ignore[attr-defined]
+        summary: OneMeanSummaryRecord = self.summary
         sigma2 = float(getattr(self, "sigma2"))
         tau2 = float(getattr(self, "tau2"))
 
@@ -142,6 +145,9 @@ class MixtureEProcessOneMeanKnownVar(LedgerOperator):
 class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOperator):
     """Insert one-sided-alt mixture e-process row for one-mean."""
 
+    out_id: str
+    summary: OneMeanSummaryRecord
+
     def __init__(
         self,
         scoped: Ledger,
@@ -156,11 +162,11 @@ class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(id=self.out_id)}  # type: ignore[attr-defined]
+        return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs["eproc"]
-        summary: OneMeanSummaryRecord = self.summary  # type: ignore[attr-defined]
+        summary: OneMeanSummaryRecord = self.summary
         sigma2 = float(getattr(self, "sigma2"))
         tau2 = float(getattr(self, "tau2"))
 
