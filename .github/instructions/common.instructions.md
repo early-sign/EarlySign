@@ -3,10 +3,15 @@ applyTo: "**"
 ---
 
 # TL;DR
+- Language
+  - In the code and comments, stick to English even if the conversation in the chat is in some other language. Proactively translate into English if you find other languages in the code (with the exception being in the internationalized versions of the docs).
 - Toolkit
-  - `make format` to auto-format code, and then `make check` to run all sanity checks (lints, tests, and type checks). Therefore, you want to run `make format && make check` for every set of edits you make.
+  - `make format` to auto-format code, and then `make check-lite` to run all sanity checks (lints, tests, and type checks). Therefore, you want to run `make format && make check-lite` for every set of edits you make.
   - We use `poetry` to manage dependencies. So you need to use `poetry run python` when you run Python commands.
 - Main architectural decisions:
+  - `__init__.py` purpose: Designed for documentation generation and namespace structure
+    - ❌ **DO NOT** use for access restriction or selective imports
+    - ✅ **DO** provide namespace-level docstrings with doctests
   - `event-sourcing` to accommodate existing complex sequential procedures and ones that we are yet to see. We call the event-source a `ledger`.
     - For example, we separate the statistic calculation and the criteria to turn the statsitical value into signals or decisions. We can pass the values and other info via writing to and reading from the ledger.
     - Multiple ledger operators (e.g., observation, statistic, criteria, signal, other kinds of messages) are coordinated to form a statsitical method.
@@ -17,7 +22,7 @@ applyTo: "**"
 - This repository uses `make` to organize workspace tasks. For the details, see the Makefile.
 - We use `poetry`. So the commands usually need to be run as `poetry run python ...` etc.
 - At the end of the edits, make sure to run `make format` to ensure the code is compliant to the formatting standards of this repository.
-- Also run `make check` occasionally to make sure the code passes the tests and lint checks.
+- Also run `make check-lite` occasionally to make sure the code passes the tests and lint checks.
 - Whenever you are adding a dependency, use `poetry add`. Do not try to specify versions unless that is absolutely necessary, so that poetry can do the version resolution for you. Do not write them directly edit `pyproject.toml` for this purpose.
     - You can edit `pyproject.toml` after adding the packages for formatting purposes.
 

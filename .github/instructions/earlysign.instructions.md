@@ -28,7 +28,6 @@ applyTo: "earlysign/**"
 - **`__init__.py` purpose**: Designed for documentation generation and namespace structure
   - ❌ **DO NOT** use for access restriction or selective imports
   - ✅ **DO** provide namespace-level docstrings with doctests
-  - ✅ **DO** organize public API exports clearly
 - **Direct access**: Components should be accessible via absolute paths regardless of `__init__.py`
 
 ### Code Quality
