@@ -23,12 +23,13 @@ Operators
 """
 
 import math
+from dataclasses import dataclass
 from typing import Any, Dict
 
 from scipy.stats import norm
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.anytime_valid.records import EProcessRecord
 from earlysign.stats.schemes.one_mean.records import OneMeanSummaryRecord
@@ -96,6 +97,12 @@ class MixtureEProcessOneMeanKnownVar(LedgerOperator):
     out_id: str
     summary: OneMeanSummaryRecord
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        eproc: EProcessRecord
+
+    outputs: Outputs
+
     def __init__(
         self,
         scoped: Ledger,
@@ -113,7 +120,7 @@ class MixtureEProcessOneMeanKnownVar(LedgerOperator):
         return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["eproc"]
+        out = self.outputs.eproc
         summary: OneMeanSummaryRecord = self.summary
         sigma2 = float(getattr(self, "sigma2"))
         tau2 = float(getattr(self, "tau2"))
@@ -148,6 +155,12 @@ class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOperator):
     out_id: str
     summary: OneMeanSummaryRecord
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        eproc: EProcessRecord
+
+    outputs: Outputs
+
     def __init__(
         self,
         scoped: Ledger,
@@ -165,7 +178,7 @@ class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOperator):
         return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["eproc"]
+        out = self.outputs.eproc
         summary: OneMeanSummaryRecord = self.summary
         sigma2 = float(getattr(self, "sigma2"))
         tau2 = float(getattr(self, "tau2"))

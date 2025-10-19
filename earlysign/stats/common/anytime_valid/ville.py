@@ -12,10 +12,11 @@ futility_mode: "none" | "fixed"
   - "fixed": stop_futility if E <= futility_tau (0 < tau < 1 suggested)
 """
 
+from dataclasses import dataclass
 from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.anytime_valid.records import (
     EProcessRecord,
@@ -51,6 +52,12 @@ class VilleThreshold(LedgerOperator):
 
     out_id: str
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        threshold: VilleThresholdRecord
+
+    outputs: Outputs
+
     def __init__(self, scoped: Ledger, *, out_id: str, alpha: float):
         super().__init__(scoped, out_id=out_id, alpha=alpha)
 
@@ -58,7 +65,7 @@ class VilleThreshold(LedgerOperator):
         return {"threshold": VilleThresholdRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["threshold"]
+        out = self.outputs.threshold
         alpha = float(getattr(self, "alpha"))
         thr = ville_threshold(alpha)
         out.insert({"alpha": alpha, "threshold": float(thr)})
@@ -85,11 +92,17 @@ class VilleDecision(LedgerOperator):
     futility_mode: str
     futility_tau: Optional[float]
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        decision: SafeDecisionRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> dict[str, LedgerRecord]:
         return {"decision": SafeDecisionRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["decision"]
+        out = self.outputs.decision
 
         eproc: EProcessRecord = getattr(self, "eproc")
         alpha = getattr(self, "alpha", None)

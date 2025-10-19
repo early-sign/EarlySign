@@ -4,9 +4,10 @@ Boundary operator for group sequential testing.
 Reads Design and InfoTime records, computes boundaries using essentials functions.
 """
 
+from dataclasses import dataclass
 from typing import Dict, Optional
 
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.essentials.boundaries import (
     resolve_boundary_from_design,
@@ -81,13 +82,19 @@ class BoundaryFromDesign(LedgerOperator):
     out_id: str
     look: Optional[int]
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        boundary: GroupSequentialBoundaryRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> Dict[str, LedgerRecord]:
         return {"boundary": GroupSequentialBoundaryRecord(id=self.out_id)}
 
     def run(self) -> None:
         design_rec = self.design
         info_rec = self.info
-        out = self.outputs["boundary"]
+        out = self.outputs.boundary
         look = getattr(self, "look", None)
 
         # Read latest design

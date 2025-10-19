@@ -31,7 +31,6 @@ from earlysign.stats.schemes.two_proportions.operators import (
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
-    WaldZStatisticRecord,
 )
 
 
@@ -88,7 +87,7 @@ class BinomialABTest:
         ## Compute cumulative snapshot
         snapshot_op = BinomialCountsSnapshot(self.ledger, obs=obs, out_id="snapshot")
         snapshot_op.run()
-        snapshot_rec: BinomialCountsSnapshotRecord = snapshot_op.outputs["snapshot"]  # type: ignore
+        snapshot_rec: BinomialCountsSnapshotRecord = snapshot_op.outputs.snapshot
 
         ## Compute statistic (using snapshot)
         stat = WaldZStatistic(
@@ -96,7 +95,7 @@ class BinomialABTest:
         )
         stat.run()
 
-        stat_record: WaldZStatisticRecord = stat.outputs["wald"]  # type: ignore
+        stat_record = stat.outputs.wald
 
         ## Read design info
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
@@ -110,14 +109,14 @@ class BinomialABTest:
             planned_max_n=planned_max_n,
         )
         info_op.run()
-        info = info_op.outputs["info"]
+        info = info_op.outputs.info
 
         ## Compute boundary of this run
         boundary_op = BoundaryFromDesign(
             self.ledger, design=design, info=info, out_id="boundary"
         )
         boundary_op.run()
-        boundary: GroupSequentialBoundaryRecord = boundary_op.outputs["boundary"]  # type: ignore
+        boundary: GroupSequentialBoundaryRecord = boundary_op.outputs.boundary
 
         ## Record the decision
         decision_op = GSDecisionFromWaldZ(

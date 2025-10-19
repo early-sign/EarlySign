@@ -3,10 +3,11 @@ Operators for the "one-mean (Gaussian)" scheme.
 """
 
 import math
+from dataclasses import dataclass
 from typing import Dict
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.schemes.one_mean.records import (
     OneMeanSummaryRecord,
@@ -56,11 +57,17 @@ class ZMeanKnownVar(LedgerOperator):
     ):
         super().__init__(scoped, summary=summary, out_id=out_id, sigma2=sigma2)
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        z: ZMeanKnownVarRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> Dict[str, LedgerRecord]:
         return {"z": ZMeanKnownVarRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["z"]
+        out = self.outputs.z
         summary: OneMeanSummaryRecord = self.summary
         sigma2 = float(getattr(self, "sigma2"))
 

@@ -14,10 +14,11 @@ It does **not** compute boundaries nor statistics by itself; those remain modula
 """
 
 import math
+from dataclasses import dataclass
 from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.essentials.conversions import convert_scale
 from earlysign.stats.common.group_sequential.records import (
@@ -79,11 +80,17 @@ class GSDecisionFromWaldZ(LedgerOperator):
             info=info,
         )
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        decision: GroupSequentialDecisionSignalRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> Dict[str, LedgerRecord]:
         return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["decision"]
+        out = self.outputs.decision
         wald: WaldZStatisticRecord = self.wald
         boundary: GroupSequentialBoundaryRecord = self.boundary
         value_scale = str(getattr(self, "value_scale")).lower()

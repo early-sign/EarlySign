@@ -5,10 +5,11 @@ Currently provides:
 - GateMinTotalSamples : open the gate only if (nA + nB) >= min_total
 """
 
+from dataclasses import dataclass
 from typing import Dict
 
 from earlysign.framework.gate import GateDecisionRecord
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
 
@@ -40,12 +41,18 @@ class GateMinTotalSamples(LedgerOperator):
     counts: BinomialCountsRecord
     min_total: int
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        gate: GateDecisionRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> Dict[str, LedgerRecord]:
         return {"gate": GateDecisionRecord(id=self.out_id)}
 
     def run(self) -> None:
         counts = self.counts
-        out = self.outputs["gate"]
+        out = self.outputs.gate
         min_total = int(getattr(self, "min_total"))
 
         cdf = (

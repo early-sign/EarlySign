@@ -21,12 +21,13 @@ Operators
 """
 
 import math
+from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
 from scipy.special import betaln
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.anytime_valid.records import EProcessRecord
 from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
@@ -116,6 +117,12 @@ class MixtureEProcessTwoProportions(LedgerOperator):
     out_id: str
     counts: BinomialCountsRecord
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        eproc: EProcessRecord
+
+    outputs: Outputs
+
     def __init__(
         self,
         scoped: Ledger,
@@ -137,7 +144,7 @@ class MixtureEProcessTwoProportions(LedgerOperator):
         return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["eproc"]
+        out = self.outputs.eproc
         counts: BinomialCountsRecord = self.counts
         prior_null = tuple(getattr(self, "prior_null"))
         prior_alt = tuple(getattr(self, "prior_alt"))
@@ -177,6 +184,12 @@ class MixtureEProcessTwoProportionsSkew(LedgerOperator):
     out_id: str
     counts: BinomialCountsRecord
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        eproc: EProcessRecord
+
+    outputs: Outputs
+
     def __init__(
         self,
         scoped: Ledger,
@@ -200,7 +213,7 @@ class MixtureEProcessTwoProportionsSkew(LedgerOperator):
         return {"eproc": EProcessRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["eproc"]
+        out = self.outputs.eproc
         counts: BinomialCountsRecord = self.counts
         prior_null = tuple(getattr(self, "prior_null"))
         prior_alt_A = tuple(getattr(self, "prior_alt_A"))

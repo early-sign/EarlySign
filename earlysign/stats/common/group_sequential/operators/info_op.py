@@ -4,10 +4,11 @@ Information time operators for group sequential testing.
 Wraps information time calculation functions with Ledger operations.
 """
 
+from dataclasses import dataclass
 from typing import Dict, Optional, Union
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.essentials.information import (
     info_time_from_fisher,
@@ -54,6 +55,12 @@ class InformationTime(LedgerOperator):
 
     out_id: str
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        info: InformationTimeRecord
+
+    outputs: Outputs
+
     def __init__(
         self,
         scoped: Ledger,
@@ -73,7 +80,7 @@ class InformationTime(LedgerOperator):
         return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["info"]
+        out = self.outputs.info
         cum_counts = getattr(self, "cum_counts")
         planned_max_n = getattr(self, "planned_max_n")
 
@@ -96,6 +103,12 @@ class InformationTimeFromRatio(LedgerOperator):
 
     out_id: str
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        info: InformationTimeRecord
+
+    outputs: Outputs
+
     def __init__(
         self,
         scoped: Ledger,
@@ -113,7 +126,7 @@ class InformationTimeFromRatio(LedgerOperator):
         return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["info"]
+        out = self.outputs.info
         t = info_time_from_ratio(
             info_now=float(getattr(self, "info_now")),
             info_max=float(getattr(self, "info_max")),
@@ -128,6 +141,12 @@ class InformationTimeFromVariance(LedgerOperator):
     """Insert t = var_target / var_now."""
 
     out_id: str
+
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        info: InformationTimeRecord
+
+    outputs: Outputs
 
     def __init__(
         self,
@@ -146,7 +165,7 @@ class InformationTimeFromVariance(LedgerOperator):
         return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["info"]
+        out = self.outputs.info
         t = info_time_from_variance(
             var_now=float(getattr(self, "var_now")),
             var_target=float(getattr(self, "var_target")),
@@ -161,6 +180,12 @@ class InformationTimeFromSD(LedgerOperator):
     """Insert t = (sd_target^2) / (sd_now^2)."""
 
     out_id: str
+
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        info: InformationTimeRecord
+
+    outputs: Outputs
 
     def __init__(
         self,
@@ -179,7 +204,7 @@ class InformationTimeFromSD(LedgerOperator):
         return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["info"]
+        out = self.outputs.info
         t = info_time_from_sd(
             sd_now=float(getattr(self, "sd_now")),
             sd_target=float(getattr(self, "sd_target")),
@@ -194,6 +219,12 @@ class InformationTimeFromFisher(LedgerOperator):
     """Insert t = fisher_now / fisher_max."""
 
     out_id: str
+
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        info: InformationTimeRecord
+
+    outputs: Outputs
 
     def __init__(
         self,
@@ -216,7 +247,7 @@ class InformationTimeFromFisher(LedgerOperator):
         return {"info": InformationTimeRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["info"]
+        out = self.outputs.info
         t = info_time_from_fisher(
             fisher_now=float(getattr(self, "fisher_now")),
             fisher_max=float(getattr(self, "fisher_max")),

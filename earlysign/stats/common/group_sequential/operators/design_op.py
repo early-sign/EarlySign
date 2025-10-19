@@ -4,10 +4,11 @@ Design operator for group sequential testing.
 Wraps design validation and storage in the Ledger.
 """
 
+from dataclasses import dataclass
 from typing import Any, Dict
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.essentials.design_schema import (
     validate_design_payload,
@@ -48,6 +49,12 @@ class GroupSequentialDesign(LedgerOperator):
 
     out_id: str
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        design: GroupSequentialDesignRecord
+
+    outputs: Outputs
+
     def __init__(self, scoped: Ledger, *, out_id: str, design: Dict[str, Any]):
         super().__init__(scoped, out_id=out_id, design=design)
 
@@ -55,7 +62,7 @@ class GroupSequentialDesign(LedgerOperator):
         return {"design": GroupSequentialDesignRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["design"]
+        out = self.outputs.design
         design = dict(getattr(self, "design"))
 
         # Validate design using essentials

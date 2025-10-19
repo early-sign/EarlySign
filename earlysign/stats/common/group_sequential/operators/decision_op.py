@@ -133,7 +133,7 @@ class GSDecision(LedgerOperator):
         return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["decision"]
+        out = self.outputs.decision
         boundary = self.boundary
         value_in = float(getattr(self, "value"))
         value_scale = str(getattr(self, "value_scale")).lower()

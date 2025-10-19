@@ -5,10 +5,11 @@ Implements promising-zone adaptive designs where trial design is modified
 based on interim analysis results and conditional power calculations.
 """
 
+from dataclasses import dataclass
 from typing import Dict
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.essentials.conditional_update import (
     conditional_power,
@@ -93,11 +94,17 @@ class ConditionalPowerCalculation(LedgerOperator):
             variance=variance,
         )
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        cp: ConditionalPowerRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> Dict[str, LedgerRecord]:
         return {"cp": ConditionalPowerRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["cp"]
+        out = self.outputs.cp
 
         # Read observed Z-statistic from ledger
         # Query the scoped table for the record with the specified ID
@@ -217,11 +224,17 @@ class PromisingZoneDecision(LedgerOperator):
             cp_threshold=cp_threshold,
         )
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        decision: DesignUpdateDecisionRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> Dict[str, LedgerRecord]:
         return {"decision": DesignUpdateDecisionRecord(id=self.out_id)}
 
     def run(self) -> None:
-        out = self.outputs["decision"]
+        out = self.outputs.decision
 
         # Read observed Z-statistic from ledger
         obs_id = str(getattr(self, "observed_z_id"))
@@ -333,6 +346,12 @@ class UpdateRemainingBoundaries(LedgerOperator):
             binding_mode=binding_mode,
         )
 
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        updated_boundaries: UpdatedBoundariesRecord
+
+    outputs: Outputs
+
     def derived_records(self) -> Dict[str, LedgerRecord]:
         return {"updated_boundaries": UpdatedBoundariesRecord(id=self.out_id)}
 
@@ -343,7 +362,7 @@ class UpdateRemainingBoundaries(LedgerOperator):
             BindingMode,
         )
 
-        out = self.outputs["updated_boundaries"]
+        out = self.outputs.updated_boundaries
 
         # Convert binding_mode string to enum
         binding_mode_enum = (
