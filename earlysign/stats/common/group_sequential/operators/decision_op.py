@@ -4,10 +4,11 @@ Decision operators for group sequential testing.
 Compares statistics against boundaries and emits stop/continue signals.
 """
 
+from dataclasses import dataclass
 from typing import Dict, Literal, Optional, Tuple
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator
+from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.group_sequential.essentials.conversions import convert_scale
 from earlysign.stats.common.group_sequential.records import (
@@ -15,6 +16,7 @@ from earlysign.stats.common.group_sequential.records import (
     GroupSequentialDecisionSignalRecord,
     InformationTimeRecord,
 )
+from earlysign.stats.schemes.two_proportions.records import WaldZStatisticRecord
 
 
 def _decide(
@@ -98,6 +100,15 @@ class GSDecision(LedgerOperator):
     out_id: str
     boundary: GroupSequentialBoundaryRecord
     info: Optional[InformationTimeRecord]
+
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        """Outputs for this operator."""
+
+        decision: GroupSequentialDecisionSignalRecord
+
+    # Type annotation for outputs - enables type inference!
+    outputs: Outputs
 
     def __init__(
         self,
@@ -214,7 +225,6 @@ class GSDecisionFromWaldZ(LedgerOperator):
     --------
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.stats.schemes.two_proportions.records import WaldZStatisticRecord
     >>> from earlysign.stats.common.group_sequential.records import GroupSequentialBoundaryRecord
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events")
@@ -229,14 +239,23 @@ class GSDecisionFromWaldZ(LedgerOperator):
     """
 
     out_id: str
-    wald: LedgerRecord
+    wald: WaldZStatisticRecord
     boundary: GroupSequentialBoundaryRecord
+
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        """Outputs for this operator."""
+
+        decision: GroupSequentialDecisionSignalRecord
+
+    # Type annotation for outputs - enables type inference!
+    outputs: Outputs
 
     def __init__(
         self,
         scoped: Ledger,
         *,
-        wald: LedgerRecord,
+        wald: WaldZStatisticRecord,
         boundary: GroupSequentialBoundaryRecord,
         out_id: str,
     ):
@@ -250,10 +269,10 @@ class GSDecisionFromWaldZ(LedgerOperator):
         boundary = self.boundary
 
         # Read latest Wald Z
-        wdf = wald.latest().select(z=wald.t.payload["z"].cast("float64")).execute()  # type: ignore[attr-defined]
+        wdf = wald.latest().select("wald_z").execute()
         if len(wdf) == 0:
             return
-        z_val = float(wdf.iloc[0]["z"])
+        z_val = float(wdf.iloc[0]["wald_z"])
 
         # Delegate to GSDecision
         gs_decision = GSDecision(
