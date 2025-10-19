@@ -211,3 +211,10 @@ class Ledger:
             "labels": labels if labels else None,
         }
         self.connector.insert(self.table_name, [row])
+
+    # --------- utility ----------
+    def show(self, all: bool = False) -> Any:
+        if all:
+            return self.t.execute()
+        else:
+            return self.t.drop("uuid", "ts").execute()
