@@ -18,7 +18,6 @@ from earlysign.stats.common.group_sequential.operators.info_op import (
     InformationTime,
 )
 from earlysign.stats.common.group_sequential.records import (
-    GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
     GroupSequentialDesignRecord,
 )
@@ -31,7 +30,6 @@ from earlysign.stats.schemes.two_proportions.operators import (
 )
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
-    BinomialCountsSnapshotRecord,
 )
 
 
@@ -44,9 +42,9 @@ class BinomialABTest(tpl.TemplateBase):
     """
     Example:
     >>> import ibis
-    >>> BinomialABTest(ibis.connect("duckdb://:memory:"), "my_exp")  # doctest: +ELLIPSIS
+    >>> BinomialABTest(ibis.connect("duckdb://:memory:"), "my_exp")
     <earlysign.api.ab_tests.BinomialABTest object at 0x...>
-    >>> BinomialABTest("duckdb://:memory:", "my_exp")  # doctest: +ELLIPSIS
+    >>> BinomialABTest("duckdb://:memory:", "my_exp")
     <earlysign.api.ab_tests.BinomialABTest object at 0x...>
     """
 
@@ -88,15 +86,14 @@ class BinomialABTest(tpl.TemplateBase):
         ## Compute cumulative snapshot
         snapshot_op = BinomialCountsSnapshot(self.ledger, obs=obs, out_id="snapshot")
         snapshot_op.run()
-        snapshot_rec: BinomialCountsSnapshotRecord = snapshot_op.outputs.snapshot
+        snapshot_record = snapshot_op.outputs.snapshot
 
         ## Compute statistic (using snapshot)
-        stat = WaldZStatistic(
-            self.ledger, cum_counts=snapshot_rec, pooled=True, out_id="statistic"
+        stat_op = WaldZStatistic(
+            self.ledger, cum_counts=snapshot_record, pooled=True, out_id="statistic"
         )
-        stat.run()
-
-        stat_record = stat.outputs.wald
+        stat_op.run()
+        stat_record = stat_op.outputs.wald
 
         ## Read design info
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
@@ -106,28 +103,30 @@ class BinomialABTest(tpl.TemplateBase):
         info_op = InformationTime(
             self.ledger,
             out_id="info_time",
-            cum_counts=snapshot_rec,
+            cum_counts=snapshot_record,
             planned_max_n=planned_max_n,
         )
         info_op.run()
-        info = info_op.outputs.info
+        info_record = info_op.outputs.info
 
         ## Compute boundary of this run
         boundary_op = BoundaryFromDesign(
-            self.ledger, design=design, info=info, out_id="boundary"
+            self.ledger, design=design, info=info_record, out_id="boundary"
         )
         boundary_op.run()
-        boundary: GroupSequentialBoundaryRecord = boundary_op.outputs.boundary
+        boundary_record = boundary_op.outputs.boundary
 
         ## Record the decision
         decision_op = GSDecisionFromWaldZ(
-            self.ledger, wald=stat_record, boundary=boundary, out_id="decision"
+            self.ledger, wald=stat_record, boundary=boundary_record, out_id="decision"
         )
         decision_op.run()
 
     def status(self) -> State:
-        decision = GroupSequentialDecisionSignalRecord("decision").attach(self.ledger)
-        if "stop" in decision.latest()["signal"].execute().iloc[0]:
+        decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
+            self.ledger
+        )
+        if "stop" in decision_record.latest()["signal"].execute().iloc[0]:
             return State(stop_recommended=True)
         else:
             return State(stop_recommended=False)
