@@ -21,9 +21,10 @@ Steps:
 ...     InformationTimeRecord, GroupSequentialDesignRecord,
 ...     GroupSequentialBoundaryRecord, GroupSequentialDecisionSignalRecord
 ... )
->>> from earlysign.stats.common.group_sequential.operators import (
-...     InformationTime, GroupSequentialDesign, BoundaryFromDesign
-... )
+>>> from earlysign.stats.common.group_sequential.operators.info_op import InformationTime
+>>> from earlysign.stats.common.group_sequential.operators.design_op import GroupSequentialDesign
+>>> from earlysign.stats.common.group_sequential.operators.boundary_op import BoundaryFromDesign
+
 
 # --- Setup in-memory ledger ---------------------------------------------------
 >>> con = ibis.duckdb.connect(":memory:")

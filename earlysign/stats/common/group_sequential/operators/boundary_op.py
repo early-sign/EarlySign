@@ -38,8 +38,11 @@ class BoundaryFromDesign(LedgerOperator):
     Examples
     --------
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.stats.common.group_sequential.operators import (
-    ...     GroupSequentialDesign, BoundaryFromDesign
+    >>> from earlysign.stats.common.group_sequential.operators.design_op import (
+    ...     GroupSequentialDesign
+    ... )
+    >>> from earlysign.stats.common.group_sequential.operators.boundary_op import (
+    ...     BoundaryFromDesign
     ... )
     >>> from earlysign.stats.common.group_sequential.records import (
     ...     GroupSequentialDesignRecord, InformationTimeRecord

@@ -25,46 +25,10 @@ DecisionOperators:
     GSDecision
     GSDecisionFromWaldZ
 
-Examples
---------
->>> import ibis
->>> from earlysign.core.ledger import Ledger
->>> from earlysign.stats.common.group_sequential.operators import InformationTime
->>> con = ibis.duckdb.connect(":memory:")
->>> ledger = Ledger(con, "events")
->>> ledger.ensure()
->>> # Use operators as before
+Usage
+-----
+Import operators directly:
+
+    from earlysign.stats.common.group_sequential.operators.info_op import InformationTime
+    from earlysign.stats.common.group_sequential.operators.design_op import GroupSequentialDesign
 """
-
-from earlysign.stats.common.group_sequential.operators.boundary_op import (
-    BoundaryFromDesign,
-)
-from earlysign.stats.common.group_sequential.operators.decision_op import (
-    GSDecision,
-    GSDecisionFromWaldZ,
-)
-from earlysign.stats.common.group_sequential.operators.design_op import (
-    GroupSequentialDesign,
-)
-from earlysign.stats.common.group_sequential.operators.info_op import (
-    InformationTime,
-    InformationTimeFromFisher,
-    InformationTimeFromRatio,
-    InformationTimeFromSD,
-    InformationTimeFromVariance,
-)
-
-__all__ = [
-    # Design operators
-    "GroupSequentialDesign",
-    "BoundaryFromDesign",
-    # Information time operators
-    "InformationTime",
-    "InformationTimeFromRatio",
-    "InformationTimeFromVariance",
-    "InformationTimeFromSD",
-    "InformationTimeFromFisher",
-    # Decision operators
-    "GSDecision",
-    "GSDecisionFromWaldZ",
-]

@@ -57,76 +57,191 @@ This is a classic and powerful method where you pre-define several points for "i
 
 #### Forward (spending-based):
 ```
-(α(t), β(t), H₀, BindingMode)
-  |> ChooseT.*                        : (…) → {tᵢ}
-  |> Design                           : (α(t), β(t), H₀, BindingMode, {tᵢ}) → {cᵢ}
-  |> Performance                      : ({tᵢ}, {cᵢ}, H₁) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
-  |> PowerCurve_GST                   : ({tᵢ}, {cᵢ}, H₁) → [δ ↦ Power(δ)]
-  |> Sensitivity                      : ({tᵢ}, {cᵢ}, H₀) → ({MDEᵢ})
+(α(t), β(t), H₀, BindingMode, ChooseT_params)
+  |> ChooseT.*
+     : (ChooseT_params) → {tᵢ}
+  |> Design
+     : (α(t), β(t), H₀, BindingMode, {tᵢ}) → {cᵢ}
+  |> Performance
+     : ({tᵢ}, {cᵢ}, H₁, δ₀) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
+  |> PowerCurve_GST
+     : ({tᵢ}, {cᵢ}, H₁) → [δ ↦ Power(δ)]
+  |> Sensitivity
+     : ({tᵢ}, {cᵢ}, H₀, target_power) → ({MDEᵢ})
 ```
 
 #### Inverse (power/MDE-based):
 ```
-({TargetPowerᵢ* | MDEᵢ*}, H₁)
-  |> InverseDesign                    : (…) → ({cᵢ}, {tᵢ})
-  |> FitSpending                      : ({cᵢ}, {tᵢ}) → (α̂(t), β̂(t))
-  |> Performance                      : ({tᵢ}, {cᵢ}, H₁) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
-  |> PowerCurve_GST                   : ({tᵢ}, {cᵢ}, H₁) → [δ ↦ Power(δ)]
-  |> Sensitivity                      : ({tᵢ}, {cᵢ}, H₀) → ({MDEᵢ})
+({TargetPowerᵢ* | MDEᵢ*}, H₀, H₁, δ₀)
+  |> InverseDesign
+     : ({TargetPowerᵢ* | MDEᵢ*}, H₀, H₁, δ₀) → ({cᵢ}, {tᵢ})
+  |> FitSpending
+     : ({cᵢ}, {tᵢ}, H₀) → (α̂(t), β̂(t))
+  |> Performance
+     : ({tᵢ}, {cᵢ}, H₁, δ₀) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
+  |> PowerCurve_GST
+     : ({tᵢ}, {cᵢ}, H₁) → [δ ↦ Power(δ)]
+  |> Sensitivity
+     : ({tᵢ}, {cᵢ}, H₀, target_power) → ({MDEᵢ})
 ```
 
 #### Optimization (spending and/or schedule):
 ```
-(H₀, H₁, Objective)
-  |> SpendingOptimization             : (…) → (α*(t), β*(t))
-  |> ScheduleOptimization             : (Objective, α*(t), β*(t), H₀, H₁) → {tᵢ*}
-  |> Design                           : (α*(t), β*(t), H₀, BindingMode, {tᵢ*}) → {cᵢ*}
-  |> Performance                      : ({tᵢ*}, {cᵢ*}, H₁) → ({Powerᵢ(δ₀)}, ASN)
-  |> PowerCurve_GST                   : ({tᵢ*}, {cᵢ*}, H₁) → [δ ↦ Power(δ)]
-  |> Sensitivity                      : ({tᵢ*}, {cᵢ*}, H₀) → ({MDEᵢ})
+(H₀, H₁, δ₀, target_power, max_N, Objective)
+  |> SpendingOptimization
+     : (H₀, H₁, δ₀, target_power, max_N, Objective) → (α*(t), β*(t))
+  |> ScheduleOptimization
+     : (α*(t), β*(t), H₀, H₁, δ₀, target_power, max_N, Objective) → {tᵢ*}
+  |> Design
+     : (α*(t), β*(t), H₀, BindingMode, {tᵢ*}) → {cᵢ*}
+  |> Performance
+     : ({tᵢ*}, {cᵢ*}, H₁, δ₀) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
+  |> PowerCurve_GST
+     : ({tᵢ*}, {cᵢ*}, H₁) → [δ ↦ Power(δ)]
+  |> Sensitivity
+     : ({tᵢ*}, {cᵢ*}, H₀, target_power) → ({MDEᵢ})
 ```
 
 ### 4) Use-case Scenarios (I/O annotated with PowerCurve)
 
 #### Digital A/B test (NonBinding; frequent peeks)
 ```
-(α(t), β(t), H₀)
-  |> ChooseT.FrequencyGuard
-     : (…) → {tᵢ}
+(α(t), β(t), H₀, n_analyses)
+  |> ChooseT.EquallySpaced
+     : (n_analyses) → {tᵢ}
   |> Design
-     : (…) → {cᵢ}
+     : (α(t), β(t), H₀, BindingMode=NonBinding, {tᵢ}) → {cᵢ}
   |> Performance
-     : (…) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
+     : ({tᵢ}, {cᵢ}, H₁, δ₀) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
   |> PowerCurve_GST
-     : (…) → [δ ↦ Power(δ)]
+     : ({tᵢ}, {cᵢ}, H₁) → [δ ↦ Power(δ)]
   |> Sensitivity
-     : (…) → ({MDEᵢ})
+     : ({tᵢ}, {cᵢ}, H₀, target_power) → ({MDEᵢ})
 ```
+```
+Given: (α, β, H₀, H₁(δ), peek_schedule)
+(α(t):=OBF, β(t), H₀)
+  |> ChooseT.UserProvided(peek_schedule)
+     : ({t_peek}) → {tᵢ}
+  |> Design
+     : (α(t), β(t), H₀, BindingMode.NON_BINDING, {tᵢ}) → {cᵢ}
+  |> Performance
+     : ({tᵢ}, {cᵢ}, H₁(δ)) → ({Powerᵢ(δ)}, ASN, TotalSN)
+  |> PowerCurve_GST
+     : ({tᵢ}, {cᵢ}, H₁) → [δ ↦ Power(δ)]
+  |> Sensitivity
+     : ({tᵢ}, {cᵢ}, H₀) → ({MDEᵢ})
+```
+**Note**: Use O'Brien-Fleming spending for conservative Type I error control. Frequent peeks are allowed since spending function guarantees α control regardless of peek frequency.
 
 #### Clinical Phase III (Binding; ethical early stop)
 ```
-(H₀, H₁, Objective:=min E_{H₁}[N_stop])
-  |> SpendingOptimization → (α*(t), β*(t))
-  |> ScheduleOptimization → {tᵢ*}
-  |> Design → {cᵢ*}
-  |> Performance → ({Powerᵢ(δ₀)}, ASN, TotalSN)
-  |> PowerCurve_GST → [δ ↦ Power(δ)]
-  |> Sensitivity → ({MDEᵢ})
+(H₀, H₁, δ₀, target_power, max_N, Objective:=min E_{H₁}[N_stop])
+  |> SpendingOptimization
+     : (H₀, H₁, δ₀, target_power, max_N, Objective) → (α*(t), β*(t))
+  |> ScheduleOptimization
+     : (α*(t), β*(t), H₀, H₁, δ₀, target_power, max_N, Objective) → {tᵢ*}
+  |> Design
+     : (α*(t), β*(t), H₀, BindingMode=Binding, {tᵢ*}) → {cᵢ*}
+  |> Performance
+     : ({tᵢ*}, {cᵢ*}, H₁, δ₀) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
+  |> PowerCurve_GST
+     : ({tᵢ*}, {cᵢ*}, H₁) → [δ ↦ Power(δ)]
+  |> Sensitivity
+     : ({tᵢ*}, {cᵢ*}, H₀, target_power) → ({MDEᵢ})
+```
+```
+Given: (α, β, H₀, H₁(δ₀), Objective:=min E_{H₁}[N_stop], N_max)
+(H₀, H₁(δ₀), Objective)
+  |> SpendingOptimization
+     : (α, β, {tᵢ}, δ₀, target_power, N_max) → γ*(α), γ*(β)
+  |> α*(t):=HSD(γ*(α)), β*(t):=HSD(γ*(β))
+  |> ScheduleOptimization
+     : (α*(t), β*(t), k, δ₀, target_power, N_max) → {tᵢ*}
+  |> Design
+     : (α*(t), β*(t), H₀, BindingMode.BINDING, {tᵢ*}) → {cᵢ*}
+  |> Performance
+     : ({tᵢ*}, {cᵢ*}, H₁(δ₀)) → ({Powerᵢ(δ₀)}, ASN, TotalSN)
+  |> PowerCurve_GST
+     : ({tᵢ*}, {cᵢ*}, H₁) → [δ ↦ Power(δ)]
+  |> Sensitivity
+     : ({tᵢ*}, {cᵢ*}, H₀) → ({MDEᵢ})
 ```
 
 #### Promising-zone adaptive re-estimation
 ```
+(α(t), β(t), H₀, {t_given})
+  |> ChooseT.UserProvided
+     : ({t_given}) → {tᵢ₀}
+  |> Design
+     : (α(t), β(t), H₀, BindingMode, {tᵢ₀}) → {cᵢ₀}
+Interim (at t_current):
+  ConditionalUpdate
+     : (observed_Z, t_current, {tᵢ₀}, {cᵢ₀}, α, assumed_δ) → ({cᵢ′}, {tᵢ′}, N′, decision)
+  Performance
+     : ({tᵢ′}, {cᵢ′}, H₁, δ₀) → ({Powerᵢ′(δ₀)}, ASN′)
+  PowerCurve_GST
+     : ({tᵢ′}, {cᵢ′}, H₁) → [δ ↦ Power′(δ)]
+  Sensitivity
+     : ({tᵢ′}, {cᵢ′}, H₀, target_power) → ({MDEᵢ′})
+```
+```
+Given: (α, β, H₀, {tᵢ₀}, CP_threshold)
+Setup:
 (α(t), β(t), H₀)
-  |> ChooseT.UserProvided → {tᵢ₀}
-  |> Design → {cᵢ₀}
-Interim:
-  ConditionalUpdate → ({cᵢ′}, {tᵢ′}, N′)
-  Performance → ({Powerᵢ′(δ₀)}, ASN′)
-  PowerCurve_GST → [δ ↦ Power′(δ)]
-  Sensitivity → ({MDEᵢ′})
+  |> ChooseT.UserProvided
+     : ({t_given}) → {tᵢ₀}
+  |> Design
+     : (α(t), β(t), H₀, BindingMode, {tᵢ₀}) → {cᵢ₀}
+
+Interim (at look j):
+(Z_observed, t_j, {tᵢ₀}, {cᵢ₀}, δ_assumed)
+  |> ConditionalUpdate.conditional_power
+     : (Z_j, t_j, t_final, c_final, δ) → CP
+  |> ConditionalUpdate.promising_zone_decision
+     : (Z_j, t_j, c_j^eff, c_j^fut, t_final, c_final, δ, CP_threshold) → decision
+  |> If decision="continue":
+       ConditionalUpdate.update_remaining_boundaries
+         : (t_j, {t_{j+1:K}}, α, γ, α_spent) → ({cᵢ′}, {tᵢ′})
+  |> Performance
+     : ({tᵢ′}, {cᵢ′}, H₁(δ)) → ({Powerᵢ′(δ)}, ASN′)
+  |> PowerCurve_GST
+     : ({tᵢ′}, {cᵢ′}, H₁) → [δ ↦ Power′(δ)]
+  |> Sensitivity
+     : ({tᵢ′}, {cᵢ′}, H₀) → ({MDEᵢ′})
 ```
 
-### 5) Power curve family
+### 5) Optimization: Objectives vs Constraints
+
+**Important distinction:**
+
+- **Optimization objectives** (what we minimize/maximize):
+  - `Objective := min E_{H₁}[N_stop]` (minimize expected sample size under H₁)
+  - `Objective := max Power(δ₀)` (maximize power at target effect size)
+
+- **Constraints** (what we must satisfy):
+  - `max_N`: Maximum allowable sample size (budget/resource constraint)
+  - `target_power`: Minimum required power (e.g., ≥ 0.90)
+  - `α`: Overall Type I error rate (must be ≤ α)
+  - `β`: Overall Type II error rate (must be ≤ β)
+
+**Common pattern:** N-constrained schedule optimization
+```
+Given: (α, β, H₀, H₁, δ₀, target_power, max_N)
+Objective: Minimize E_{H₁}[N_stop]
+Constraints: Power(δ₀) ≥ target_power, N_max ≤ max_N
+
+This is NOT "fixed N with MDE optimization" — MDE is a result metric, not the optimization target.
+The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_max constraint.
+```
+
+**Note on MDE:**
+- MDE (Minimum Detectable Effect) is computed AFTER design optimization as a sensitivity metric
+- It answers: "Given this design, what's the smallest effect we can detect with target_power?"
+- It is NOT an optimization parameter — we don't optimize γ or {tᵢ} to achieve specific MDE
+- Use `Sensitivity` function to compute MDE from finalized design: `({tᵢ}, {cᵢ}, H₀, target_power) → ({MDEᵢ})`
+
+### 6) Power curve family
 
 - `PowerCurve_Fixed`: (N, α, H₀, H₁) → [δ ↦ Power(δ)]
 - `PowerCurve_GST`: ({tᵢ}, {cᵢ}, H₁) → [δ ↦ Power(δ)]
@@ -134,9 +249,83 @@ Interim:
   - allows visualization of per-look accumulation of power
 - `MDEProfile`: ({tᵢ}, {cᵢ}, H₀) → [ t ↦ MDE(t) ]
 
-### 6) Quick chooser (scenario → pipeline core)
+### 7) Quick chooser (scenario → pipeline core)
 
-- **Clinical (Binding)**: SpendingOptimization → ScheduleOptimization → Design → Performance → PowerCurve_GST → Sensitivity
-- **A/B test (NonBinding)**: ChooseT.FrequencyGuard → Design → Performance → PowerCurve_GST → Sensitivity
-- **Early detection pattern**: InverseDesign → ImpliedSpending → Performance → PowerCurve_GST → Sensitivity
-- **Promising-zone adaptive**: Design({tᵢ₀}) → ConditionalUpdate → Performance → PowerCurve_GST → Sensitivity
+- **Digital A/B test**: ChooseT.UserProvided(peek_schedule) → Design(OBF, NonBinding) → Performance → PowerCurve_GST → Sensitivity
+- **Clinical (Binding)**: SpendingOptimization → ScheduleOptimization → Design(Binding) → Performance → PowerCurve_GST → Sensitivity
+- **N-constrained schedule optimization**: SpendingOptimization(max_N) → ScheduleOptimization(max_N, min ASN) → Design → Performance → Sensitivity
+- **Early detection pattern**: InverseDesign → FitSpending → Performance → PowerCurve_GST → Sensitivity
+- **Promising-zone adaptive**: Design({tᵢ₀}) → ConditionalUpdate(CP, decision) → Performance → PowerCurve_GST → Sensitivity
+
+---
+
+## Function Implementation Reference
+
+| Functional Design | EarlySign Implementation | Status |
+|-------------------|-------------------------|--------|
+| **Spending Functions** | | |
+| `obf_spending(t, α)` | `spending.obf_spending` | ✅ |
+| `pocock_spending(t, α)` | `spending.pocock_spending` | ✅ |
+| `hsd_spending(t, α, γ)` | `spending.hsd_spending` | ✅ |
+| `beta_obf_spending(t, β)` | `spending.beta_obf_spending` | ✅ |
+| `beta_pocock_spending(t, β)` | `spending.beta_pocock_spending` | ✅ |
+| `beta_hsd_spending(t, β, γ)` | `spending.beta_hsd_spending` | ✅ |
+| **Design & Boundaries** | | |
+| `Design` | `boundaries.resolve_boundary_from_design` | ✅ |
+| `Design` (batch) | `boundaries.compute_boundaries_at_times` | ✅ |
+| Efficacy boundary | `boundaries.efficacy_boundary_from_spending` | ✅ |
+| Futility boundary | `boundaries.futility_boundary_from_spending` | ✅ |
+| **Information Time** | | |
+| `ChooseT.UserProvided` | `information.choose_t_user_provided` | ✅ |
+| `ChooseT.EquallySpaced` | `information.choose_t_equally_spaced` | ✅ |
+| `info_time_from_sample_size` | `information.info_time_from_sample_size` | ✅ |
+| `info_time_from_ratio` | `information.info_time_from_ratio` | ✅ |
+| `info_time_from_variance` | `information.info_time_from_variance` | ✅ |
+| `info_time_from_sd` | `information.info_time_from_sd` | ✅ |
+| `info_time_from_fisher` | `information.info_time_from_fisher` | ✅ |
+| `ChooseT.CalendarDriven` | `calendar.choose_t_calendar_driven` | ✅ |
+| **Performance & Analysis** | | |
+| `Performance` | `performance.performance` | ✅ |
+| `PowerCurve_GST` | `performance.power_curve` | ✅ |
+| `Sensitivity` | `performance.sensitivity` | ✅ |
+| `FitSpending` | `fitting.fit_spending` | ✅ |
+| `InverseDesign` | `inverse_design.inverse_design_from_power` | ✅ |
+| `InverseDesign` (MDE) | `inverse_design.inverse_design_from_mde` | ✅ |
+| `InverseDesign` (sample size) | `inverse_design.optimize_sample_size_for_power` | ✅ |
+| **Scale Conversions** | | |
+| `cumulative_to_nominal_z` | `conversions.cumulative_to_nominal_z` | ✅ |
+| `level_to_nominal_z` | `conversions.level_to_nominal_z` | ✅ |
+| `z_to_brownian` | `conversions.z_to_brownian` | ✅ |
+| `brownian_to_z` | `conversions.brownian_to_z` | ✅ |
+| `convert_scale` | `conversions.convert_scale` | ✅ |
+| **Type Definitions** | | |
+| `BindingMode` | `design_schema.BindingMode` | ✅ |
+| `SpendingFamily` | `design_schema.SpendingFamily` | ✅ |
+| `BoundaryScale` | `design_schema.BoundaryScale` | ✅ |
+| `FutilityMode` | `design_schema.FutilityMode` | ✅ |
+| `DesignPayload` | `design_schema.DesignPayload` | ✅ |
+| **Ledger Operators** | | |
+| — | `operators.design_op.GroupSequentialDesign` | ✅ |
+| — | `operators.boundary_op.BoundaryFromDesign` | ✅ |
+| — | `operators.info_op.InformationTime` | ✅ |
+| — | `operators.decision_op.GSDecision` | ✅ |
+| — | `operators.decision_op.GSDecisionFromWaldZ` | ✅ |
+| **Advanced & Visualization** | | |
+| `InverseDesign` (power) | `inverse_design.inverse_design_from_power` | ✅ |
+| `InverseDesign` (MDE) | `inverse_design.inverse_design_from_mde` | ✅ |
+| `PowerSurface` | `visualization.power_surface` | ✅ |
+| `PowerSurface` (grid) | `visualization.power_surface_grid` | ✅ |
+| `MDEProfile` | `visualization.mde_profile` | ✅ |
+| `PowerContours` | `visualization.power_contours` | ✅ |
+| `SpendingOptimization` | `spending_optimization.optimize_spending_for_asn` | ✅ |
+|  | `spending_optimization.optimize_spending_for_power` | ✅ |
+| `ScheduleOptimization` | `schedule_optimization.optimize_schedule_for_asn` | ✅ |
+|  | `schedule_optimization.optimize_schedule_for_power` | ✅ |
+| `ConditionalUpdate` | `conditional_update.conditional_power` | ✅ |
+|  | `conditional_update.update_remaining_boundaries` | ✅ |
+|  | `conditional_update.promising_zone_decision` | ✅ |
+
+**Legend**: ✅ Implemented
+
+**Module locations**: All `essentials` functions are in `earlysign.stats.common.group_sequential.essentials.<module>`.
+All `operators` are in `earlysign.stats.common.group_sequential.operators.<module>`.

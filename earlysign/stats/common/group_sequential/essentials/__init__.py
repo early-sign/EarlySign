@@ -20,34 +20,18 @@ boundaries
 information
     Information time calculation functions (ChooseT.* functions)
 performance
-    Operating characteristics calculation (Performance function)
-sensitivity
-    Minimum detectable effect calculation (Sensitivity function)
-power_curves
-    Power curve and power surface functions
+    Operating characteristics (Performance, PowerCurve_GST, Sensitivity)
+fitting
+    Fit spending functions to boundaries (FitSpending)
 design_schema
     Type definitions and schema validation
 conversions
     Scale conversions and utility functions
 
-Examples
+See Also
 --------
->>> from earlysign.stats.common.group_sequential.essentials import spending
->>> alpha_spent = spending.obf_spending(t=0.5, alpha=0.05)
->>> round(alpha_spent, 6)
-0.005575
-
->>> from earlysign.stats.common.group_sequential.essentials import boundaries
->>> # Full functional design workflow coming soon
+For detailed examples, see the individual module docstrings:
+- spending.py: Alpha/beta spending function examples
+- performance.py: Power curve and operating characteristics examples
+- boundaries.py: Boundary calculation examples
 """
-
-# Submodules available for import:
-# - boundaries
-# - conversions
-# - design_schema
-# - information
-# - spending
-#
-# Users should import specific modules they need:
-# from earlysign.stats.common.group_sequential.essentials import spending
-# from earlysign.stats.common.group_sequential.essentials.boundaries import resolve_boundary_from_design

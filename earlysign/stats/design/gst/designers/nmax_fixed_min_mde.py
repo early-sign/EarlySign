@@ -2,7 +2,36 @@
 N-Max Fixed Min MDE Design Mode UI Module.
 
 This module provides an interactive Jupyter widget-based UI for finding the
-minimum detectable effect (MDE) given a maximum sample size constraint.
+minimum detectable effect (MDE) given a maximum sample size constraint (N_max).
+
+Design Philosophy
+-----------------
+This is NOT an MDE optimization problem. Rather, it is a **design feasibility
+analysis** under sample size constraints:
+
+1. **Fixed Constraints**: N_max (maximum sample size), α, β (power), k (# analyses)
+2. **Design Variables**: Information time schedule {t_i}, boundaries {c_i}
+3. **Objective**: Find minimum effect size δ such that:
+   - The optimal design (boundaries + schedule) achieves target power (1-β)
+   - Total sample size ≤ N_max
+
+The MDE is the **output metric** (sensitivity), not the optimization variable.
+The actual optimization occurs over the design space (schedule + boundaries)
+for each candidate effect size during binary search.
+
+Implementation
+--------------
+Uses binary search over effect sizes δ:
+- For each δ, computes optimal design with ScheduleOptimization + boundaries
+- Checks if achieved power ≥ target power AND max_N ≤ N_max
+- Narrows search range until minimum feasible δ is found
+
+Use Case
+--------
+"I have budget/time constraints limiting me to N_max total samples.
+Given α, power, and k analyses, what's the smallest effect I can detect?"
+
+Result: MDE★ = minimum δ where optimal design meets power target within N_max
 """
 
 from typing import Any
@@ -21,7 +50,30 @@ from earlysign.stats.design.gst.common.types import (
 
 
 class NMaxFixedMinMDEDesigner:
-    """Mode designer: N-Max Fixed → Find Minimum MDE."""
+    """
+    Mode designer: N-Max Fixed → Find Minimum MDE.
+
+    This mode finds the minimum detectable effect (MDE) that can be reliably
+    detected given a maximum sample size constraint. This is a **design feasibility
+    analysis**, not an MDE optimization problem.
+
+    Design Framework
+    ----------------
+    - **Fixed**: N_max, α, β (power target), k (# analyses)
+    - **Searched**: Effect size δ (binary search)
+    - **Optimized per δ**: Schedule {t_i}, boundaries {c_i}
+    - **Objective**: min δ such that optimal design achieves power with N ≤ N_max
+
+    The MDE is the **result** (sensitivity metric), not the variable being optimized.
+    For each candidate δ during search, the underlying optimization computes the
+    best schedule and boundaries to maximize power within constraints.
+
+    Returns
+    -------
+    - MDE★: Minimum effect size meeting power target within N_max
+    - Optimal boundaries {c_i} and schedule {t_i} for MDE★
+    - Power curve, ASN, early stopping probabilities
+    """
 
     mode = DesignMode.NMAX_FIXED_MIN_MDE
 
@@ -254,21 +306,39 @@ class NMaxFixedMinMDEDesigner:
             """
             <div style="padding: 10px; background-color: #f0f8ff; border-radius: 5px;">
               <b>🎯 N-Max Fixed → Find Minimum MDE</b><br><br>
-              <b>Purpose:</b> Given a maximum sample size constraint (N_max), find the smallest
-              effect size (MDE) that can be detected with the specified power (1-β).<br><br>
-              <b>Use Case:</b> You have budget/time constraints that limit your maximum sample size,
-              and you want to know what's the smallest effect you can reliably detect.<br><br>
+              <b>Purpose:</b> Find the smallest effect size (MDE★) detectable with specified
+              power (1-β) given a maximum sample size constraint (N_max).<br><br>
+
+              <b>Design Framework:</b><br>
+              This is NOT MDE optimization. Rather, it's a <b>design feasibility analysis</b>:<br>
+              <ol>
+                <li><b>Binary search</b> over effect sizes δ</li>
+                <li>For each δ: <b>Optimize</b> information schedule {tᵢ} and boundaries {cᵢ}</li>
+                <li>Check if power target met with total N ≤ N_max</li>
+                <li>Return minimum feasible δ as MDE★</li>
+              </ol>
+
+              MDE is the <b>output metric</b> (sensitivity), not the optimization variable.<br><br>
+
+              <b>Use Case:</b> Budget/time constraints limit your maximum sample size.
+              You want to know: "What's the smallest effect I can reliably detect?"<br><br>
+
               <b>Inputs:</b>
               <ul>
+                <li>N_max: Maximum total sample size (constraint)</li>
                 <li>α: One-sided significance level</li>
                 <li>Power (1-β): Target detection power</li>
-                <li>N_max: Maximum total sample size</li>
-                <li>Futility: Optional early stopping for futility (binding/non-binding)</li>
                 <li>k: Maximum number of interim analyses</li>
                 <li>Spending function: Alpha spending strategy</li>
+                <li>Search range: [MDE_min, MDE_max] for binary search</li>
               </ul>
-              <b>Outputs:</b> Minimum detectable effect (MDE★), boundaries, expected sample size (ASN),
-              and early stopping probabilities.
+
+              <b>Outputs:</b>
+              <ul>
+                <li>MDE★: Minimum detectable effect meeting power target</li>
+                <li>Optimal boundaries {cᵢ} and schedule {tᵢ}</li>
+                <li>Power curve, ASN, early stopping probabilities</li>
+              </ul>
             </div>
             """
         )
@@ -277,8 +347,42 @@ class NMaxFixedMinMDEDesigner:
         """
         Search for minimum MDE that achieves target power under N_max constraint.
 
-        This implements a binary search over effect sizes to find the minimum
-        effect that can be detected with the specified power.
+        Design Logic
+        ------------
+        This implements a **binary search over effect sizes** to find the minimum
+        detectable effect. For each candidate effect size δ during the search:
+
+        1. **Optimization**: Compute optimal information schedule {t_i} and
+           boundaries {c_i} that maximize power for this δ
+           - Uses underlying schedule optimization (if available)
+           - Or uses fixed equal spacing with optimal boundaries
+
+        2. **Feasibility Check**: Verify that:
+           - Achieved power ≥ target power (1-β)
+           - Total max sample size ≤ N_max
+
+        3. **Search Update**:
+           - If feasible: Can detect smaller effects → reduce search range
+           - If not feasible: Need larger effect → increase search range
+
+        The result MDE★ is the **minimum effect size** for which an optimal design
+        exists that meets the power target within the N_max constraint.
+
+        Note: MDE is NOT being optimized directly—it's the search variable.
+        The actual optimization occurs over the design space (schedule + boundaries)
+        for each candidate MDE during binary search.
+
+        Parameters
+        ----------
+        ui : Any
+            UI context with spec and lab.
+
+        Updates
+        -------
+        - self._found_mde : float
+            Minimum detectable effect that meets constraints
+        - ui.lab : DesignLab
+            Lab instance with optimal design for MDE★
         """
         # Get parameters
         n_max = self.w_n_max.value

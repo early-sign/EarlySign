@@ -28,8 +28,6 @@ Fisher information-based:
 Schedule choice (ChooseT.* functions):
     choose_t_user_provided(t_given) -> np.ndarray
     choose_t_equally_spaced(n_looks) -> np.ndarray
-    # choose_t_calendar_driven - TBD
-    # choose_t_frequency_guard - TBD
 
 Examples
 --------

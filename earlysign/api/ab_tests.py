@@ -10,8 +10,10 @@ from earlysign.reporting.group_sequential import plot_design_boundaries
 from earlysign.stats.common.group_sequential.essentials.boundaries import (
     resolve_boundary_from_design,
 )
-from earlysign.stats.common.group_sequential.operators import (
+from earlysign.stats.common.group_sequential.operators.boundary_op import (
     BoundaryFromDesign,
+)
+from earlysign.stats.common.group_sequential.operators.info_op import (
     InformationTime,
 )
 from earlysign.stats.common.group_sequential.records import (
