@@ -38,7 +38,7 @@ def plot_design_boundaries(
 
     Examples
     --------
-    >>> from earlysign.stats.common.group_sequential.design import resolve_boundary_from_design
+    >>> from earlysign.stats.common.group_sequential.essentials.boundaries import resolve_boundary_from_design
     >>> design = {
     ...     "alpha": 0.05, "tails": 2, "scale": "z",
     ...     "efficacy": {"style": "alpha_spending", "family": "obf"},
@@ -54,7 +54,7 @@ def plot_design_boundaries(
     # Calculate boundaries at each information time
     for t in info_times:
         upper, lower, scale = resolve_boundary_func(
-            design=design_payload, info_time=t, look=None
+            design_payload=design_payload, info_time=t, look=None
         )
         upper_bounds.append(upper)
         lower_bounds.append(lower)

@@ -7,15 +7,17 @@ from matplotlib.figure import Figure
 
 from earlysign.core.ledger import Ledger
 from earlysign.reporting.group_sequential import plot_design_boundaries
-from earlysign.stats.common.group_sequential.design import (
-    BoundaryFromDesign,
-    GroupSequentialDesignRecord,
+from earlysign.stats.common.group_sequential.essentials.boundaries import (
     resolve_boundary_from_design,
 )
-from earlysign.stats.common.group_sequential.info_time import InformationTime
+from earlysign.stats.common.group_sequential.operators import (
+    BoundaryFromDesign,
+    InformationTime,
+)
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
+    GroupSequentialDesignRecord,
 )
 from earlysign.stats.schemes.two_proportions.group_sequential import (
     GSDecisionFromWaldZ,

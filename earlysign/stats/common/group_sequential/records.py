@@ -13,7 +13,11 @@ class InformationTimeRecord(LedgerRecord, QueryMixin):
     """
     Information time snapshots (scheme-agnostic).
     Stores information time t in [0, 1].
-    Example payload:
+
+    Note: This record DOES NOT store look numbers. Look numbers are
+    contextual to the analysis and should be tracked separately.
+
+    Payload example:
       {"info_time": 0.5}
     """
 
@@ -23,67 +27,23 @@ class InformationTimeRecord(LedgerRecord, QueryMixin):
     }
 
 
-class GroupSequentialBoundaryRecord(LedgerRecord, QueryMixin):
-    """
-    Nominal Z boundaries resolved from a GS design.
-    Stores nominal Z boundaries (symmetric by default) resolved at a given
-    information time (and possibly look), plus design metadata.
-    Example payload:
-      {
-        "upper": 2.5,
-        "lower": -2.5,
-        "alpha": 0.05,
-        "style": "alpha_spending" | "significance_level",
-        "info_time": 0.5,
-        "look": 2   # optional
-      }
-    """
-
-    payload_type: str = "GroupSequential/Boundary"
-    schema = {
-        "upper": float,
-        "lower": float,
-        "alpha": float,
-        "style": str,
-        "info_time": float,
-        "look": int,
-        "scale": str,
-    }
-
-
-class GroupSequentialDecisionSignalRecord(LedgerRecord, QueryMixin):
-    """
-    Stop/continue signal produced by comparing a statistic to boundaries.
-    Stores a decision emitted by comparing a statistic (e.g., Wald Z)
-    against the boundaries.
-    Example payload:
-      {
-        "signal": "stop" | "continue",
-        "z": 2.34,
-        "info_time": 0.5   # optional passthrough from info record
-      }
-    """
-
-    payload_type: str = "GroupSequential/Decision"
-    schema = {
-        "signal": str,
-        "z": float,
-        "info_time": float,
-    }
-
-
 class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
-    """Design record for Group Sequential Testing.
+    """
+    Design record for Group Sequential Testing.
 
-    Payload example
-    ---------------
-    {
-      "alpha": 0.05,
-      "tails": 2,
-      "scale": "z",
-      "efficacy": {"style": "alpha_spending", "family": "obf", "alpha_levels": [ ... ]},
-      "futility": {"mode": "symmetric"}  # or {"mode": "none"} / {"mode": "binding", ...}
-    }
+    Stores the complete design specification including spending functions,
+    boundaries, and other configuration.
+
+    Payload example:
+      {
+        "alpha": 0.05,
+        "tails": 2,
+        "scale": "z",
+        "efficacy": {"style": "alpha_spending", "family": "obf"},
+        "futility": {"mode": "none"},
+        "binding_mode": "non_binding",
+        "planned_max_n": 1000
+      }
     """
 
     payload_type: str = "GroupSequential/Design"
@@ -93,4 +53,74 @@ class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
         "scale": str,
         "efficacy": dict,
         "futility": dict,
+        "binding_mode": str,  # optional
+        "planned_max_n": int,  # optional
+    }
+
+
+class GroupSequentialBoundaryRecord(LedgerRecord, QueryMixin):
+    """
+    Nominal boundaries resolved from a GS design.
+
+    Stores efficacy and futility boundaries resolved at a given
+    information time, plus design metadata.
+
+    Payload example:
+      {
+        "upper": 2.5,
+        "lower": -2.5,
+        "efficacy": {"upper": 2.5},
+        "futility": {"lower": -2.5, "binding": false, "mode": "none"},
+        "scale": "z",
+        "alpha": 0.05,
+        "tails": 2,
+        "info_time": 0.5,
+        "look": 2
+      }
+    """
+
+    payload_type: str = "GroupSequential/Boundary"
+    schema = {
+        "upper": float,
+        "lower": float,
+        "efficacy": dict,
+        "futility": dict,
+        "scale": str,
+        "alpha": float,
+        "tails": int,
+        "info_time": float,
+        "look": int,  # optional
+    }
+
+
+class GroupSequentialDecisionSignalRecord(LedgerRecord, QueryMixin):
+    """
+    Stop/continue signal produced by comparing a statistic to boundaries.
+
+    Stores a decision emitted by comparing a statistic (e.g., Wald Z)
+    against the boundaries.
+
+    Payload example:
+      {
+        "signal": "stop_efficacy" | "stop_futility" | "continue",
+        "reason": "efficacy" | "futility" | "none",
+        "value": 2.34,
+        "value_scale": "z",
+        "upper": 2.5,
+        "lower": -2.5,
+        "scale": "z",
+        "info_time": 0.5
+      }
+    """
+
+    payload_type: str = "GroupSequential/Decision"
+    schema = {
+        "signal": str,
+        "reason": str,
+        "value": float,
+        "value_scale": str,
+        "upper": float,
+        "lower": float,
+        "scale": str,
+        "info_time": float,  # optional
     }

@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 from scipy.stats import norm
 
-from earlysign.stats.common.group_sequential.alpha_spending import (
+from earlysign.stats.common.group_sequential.essentials.spending import (
     hsd_spending,
     obf_spending,
     pocock_spending,

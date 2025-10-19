@@ -15,13 +15,22 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.group_sequential.decision import _decide, convert_scale
+from earlysign.stats.common.group_sequential.essentials.conversions import convert_scale
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
     InformationTimeRecord,
 )
 from earlysign.stats.schemes.one_mean.records import ZMeanKnownVarRecord
+
+
+def _decide(value: float, upper: float, lower: float) -> tuple[str, str]:
+    """Compare value to (upper, lower) and return (signal, reason)."""
+    if value >= upper:
+        return "stop_efficacy", "efficacy"
+    if value <= lower:
+        return "stop_futility", "futility"
+    return "continue", "none"
 
 
 class GSDecisionFromZMean(LedgerOperator):

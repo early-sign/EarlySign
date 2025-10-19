@@ -15,12 +15,9 @@ from typing import Any, Dict, List, Mapping, Optional, Union
 from earlysign.framework.gate import GateDecisionRecord
 from earlysign.framework.templates import AnalysisResult, TemplateBase
 from earlysign.reporting.bridge import ReportingBridgeMixin
-from earlysign.stats.common.group_sequential.design import (
+from earlysign.stats.common.group_sequential.operators import (
     BoundaryFromDesign,
     GroupSequentialDesign,
-    GroupSequentialDesignRecord,
-)
-from earlysign.stats.common.group_sequential.info_time import (
     InformationTime,
     InformationTimeFromFisher,
     InformationTimeFromRatio,
@@ -29,6 +26,7 @@ from earlysign.stats.common.group_sequential.info_time import (
 )
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
+    GroupSequentialDesignRecord,
     InformationTimeRecord,
 )
 from earlysign.stats.schemes.two_proportions.gates import GateMinTotalSamples

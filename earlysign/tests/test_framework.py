@@ -21,9 +21,8 @@ Steps:
 ...     InformationTimeRecord, GroupSequentialDesignRecord,
 ...     GroupSequentialBoundaryRecord, GroupSequentialDecisionSignalRecord
 ... )
->>> from earlysign.stats.common.group_sequential.info_time import InformationTime
->>> from earlysign.stats.common.group_sequential.design import (
-...     GroupSequentialDesign, BoundaryFromDesign
+>>> from earlysign.stats.common.group_sequential.operators import (
+...     InformationTime, GroupSequentialDesign, BoundaryFromDesign
 ... )
 
 # --- Setup in-memory ledger ---------------------------------------------------
