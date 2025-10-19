@@ -6,6 +6,7 @@ from ibis import BaseBackend
 from matplotlib.figure import Figure
 
 from earlysign.core.ledger import Ledger
+from earlysign.framework import templates as tpl
 from earlysign.reporting.group_sequential import plot_design_boundaries
 from earlysign.stats.common.group_sequential.essentials.boundaries import (
     resolve_boundary_from_design,
@@ -39,7 +40,7 @@ class State:
     stop_recommended: bool = False
 
 
-class BinomialABTest:
+class BinomialABTest(tpl.TemplateBase):
     """
     Example:
     >>> import ibis

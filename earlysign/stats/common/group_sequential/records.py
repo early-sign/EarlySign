@@ -21,7 +21,6 @@ class InformationTimeRecord(LedgerRecord, QueryMixin):
       {"info_time": 0.5}
     """
 
-    payload_type: str = "GroupSequential/InfoTime"
     schema = {
         "info_time": float,
     }
@@ -46,7 +45,6 @@ class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
       }
     """
 
-    payload_type: str = "GroupSequential/Design"
     schema = {
         "alpha": float,
         "tails": int,
@@ -79,7 +77,6 @@ class GroupSequentialBoundaryRecord(LedgerRecord, QueryMixin):
       }
     """
 
-    payload_type: str = "GroupSequential/Boundary"
     schema = {
         "upper": float,
         "lower": float,
@@ -113,7 +110,6 @@ class GroupSequentialDecisionSignalRecord(LedgerRecord, QueryMixin):
       }
     """
 
-    payload_type: str = "GroupSequential/Decision"
     schema = {
         "signal": str,
         "reason": str,
@@ -143,7 +139,6 @@ class ConditionalPowerRecord(LedgerRecord, QueryMixin):
       }
     """
 
-    payload_type: str = "GroupSequential/ConditionalPower"
     schema = {
         "conditional_power": float,
         "observed_z": float,
@@ -171,7 +166,6 @@ class DesignUpdateDecisionRecord(LedgerRecord, QueryMixin):
       }
     """
 
-    payload_type: str = "GroupSequential/DesignUpdateDecision"
     schema = {
         "decision": str,
         "conditional_power": float,
@@ -199,7 +193,6 @@ class UpdatedBoundariesRecord(LedgerRecord, QueryMixin):
       }
     """
 
-    payload_type: str = "GroupSequential/UpdatedBoundaries"
     schema = {
         "remaining_info_times": list,
         "upper_bounds": list,

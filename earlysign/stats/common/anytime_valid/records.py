@@ -24,11 +24,11 @@ Doctest (structure only)
 ...     EProcessRecord, VilleThresholdRecord, SafeDecisionRecord
 ... )
 >>> EProcessRecord(id="e1").payload_type
-'AnytimeValid/EProcess'
+'stats.common.anytime_valid.records.EProcessRecord'
 >>> VilleThresholdRecord(id="v1").payload_type
-'AnytimeValid/VilleThreshold'
+'stats.common.anytime_valid.records.VilleThresholdRecord'
 >>> SafeDecisionRecord(id="d1").payload_type
-'AnytimeValid/Decision'
+'stats.common.anytime_valid.records.SafeDecisionRecord'
 """
 
 from earlysign.framework.records import LedgerRecord, QueryMixin
@@ -37,19 +37,19 @@ from earlysign.framework.records import LedgerRecord, QueryMixin
 class EProcessRecord(LedgerRecord, QueryMixin):
     """E-process snapshots for anytime-valid (safe) testing."""
 
-    payload_type: str = "AnytimeValid/EProcess"
+    pass
 
 
 class VilleThresholdRecord(LedgerRecord, QueryMixin):
     """Ville threshold rows: 1/alpha."""
 
-    payload_type: str = "AnytimeValid/VilleThreshold"
+    pass
 
 
 class SafeDecisionRecord(LedgerRecord, QueryMixin):
     """Decisions based on Ville's inequality (safe testing)."""
 
-    payload_type: str = "AnytimeValid/Decision"
+    pass
 
 
 class SafeDesignRecord(LedgerRecord, QueryMixin):
@@ -60,4 +60,4 @@ class SafeDesignRecord(LedgerRecord, QueryMixin):
     {"alpha": 0.05, "futility": {"mode": "fixed", "tau": 0.1}}
     """
 
-    payload_type: str = "AnytimeValid/SafeDesign"
+    pass

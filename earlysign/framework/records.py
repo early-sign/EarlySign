@@ -109,16 +109,14 @@ class LedgerRecord:
         - A type identifier (e.g., `int`, `"int"`)
         - A tuple of (type, default value) (e.g., `(int, 0)`)
         - A tuple of (type, `pydantic.fields.FieldInfo`)
-    - `payload_type` is set by subclasses as a class attribute
+    - `payload_type` is auto-generated from module path and class name.
     - `ledger` is attached via .attach(ledger)
 
     Subclasses should define as class attributes:
-    - `payload_type`: str - the payload type string
     - `schema`: Dict[str, PydanticField] - the schema definition
 
     Usage:
         class MyRecord(LedgerRecord, QueryMixin):
-            payload_type = "MySchema"
             schema = {
                 "field1": int,                    # simple type
                 "field2": (str, "default"),      # type with default
@@ -126,8 +124,6 @@ class LedgerRecord:
             }
     """
 
-    # These should be overridden in subclasses as class attributes
-    payload_type: str = ""
     schema: Dict[str, PydanticField] = {}
 
     def __init__(self, id: str):
@@ -137,6 +133,24 @@ class LedgerRecord:
     def attach(self, ledger: Ledger) -> Self:
         self.ledger = ledger
         return self
+
+    @property
+    def payload_type(self) -> str:
+        """
+        Auto-generated payload type from module path and class name.
+
+        Returns dot-separated module path and class name.
+        Example: earlysign.stats.common.anytime_valid.records.EProcessRecord
+                 -> stats.common.anytime_valid.records.EProcessRecord
+        """
+        module = self.__class__.__module__
+        cls_name = self.__class__.__name__
+
+        # Remove 'earlysign.' prefix if present
+        path = module.removeprefix("earlysign.")
+
+        # Return dot-separated path and class name
+        return f"{path}.{cls_name}"
 
     @property
     def schema_pydantic_model(self) -> type[pydantic.BaseModel]:
