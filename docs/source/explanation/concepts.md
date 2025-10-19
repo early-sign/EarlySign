@@ -136,6 +136,127 @@ Components coordinate through **event-driven messaging**:
 - **Error handling**: Captures failures as events for debugging and recovery
 - **Resource management**: Coordinates backend resources and manages computational state
 
+### 3.4 Custom Templates for Domain-Specific Workflows
+
+When you need a **custom combination** of parameters, effect size definitions, statistics, or stopping rules that isn't covered by the built-in templates, you can create your own **custom Template** by inheriting from the base class.
+
+**Why Create Custom Templates?**
+
+- **Domain-specific requirements**: Your field may have specialized effect size definitions (e.g., clinical meaningful difference, business impact metrics, survival hazards)
+- **Custom statistics**: You might need non-standard test statistics (e.g., rank-based tests, variance-weighted combinations, Bayesian posteriors)
+- **Specialized stopping rules**: Your experimental context may require unique stopping logic (e.g., regulatory constraints, multi-arm rules, futility boundaries with specific thresholds)
+- **Team standardization**: Encode your organization's experimental protocols into reusable, shareable templates
+
+**Benefits of Custom Templates:**
+
+1. **Portability**: Templates are self-contained files that can be shared across teams and projects
+2. **Reproducibility**: Complete experimental protocol is captured in code, ensuring consistent execution
+3. **Backend agnostic**: Same template works with DuckDB, Polars, or any other ibis-supported backend
+4. **Version control**: Templates can be versioned, reviewed, and stored in Git repositories
+5. **Auditability**: Template definitions are part of the event log, ensuring complete experimental traceability
+
+**Template Structure:**
+
+A custom template typically inherits from `ExperimentTemplate` and implements:
+
+```python
+from earlysign.templates.base import ExperimentTemplate
+
+class MyCustomTemplate(ExperimentTemplate):
+    """Custom template for domain-specific sequential testing."""
+
+    def setup(self, ledger, design_params):
+        """
+        Initialize experiment design and register to ledger.
+
+        - Define custom effect size parameterization
+        - Configure spending functions
+        - Set up domain-specific boundaries
+        """
+        pass
+
+    def step(self, ledger, observation_data):
+        """
+        Process one observation batch.
+
+        - Compute custom statistics
+        - Update decision criteria
+        - Emit signals based on custom stopping rules
+        """
+        pass
+
+    def analyze(self, ledger):
+        """
+        Generate analysis report from ledger events.
+
+        - Extract relevant events
+        - Compute summary statistics
+        - Generate visualizations
+        """
+        pass
+```
+
+**Example Use Case: Clinical Trial with Custom Endpoints**
+
+```python
+class ClinicalTrialWithQALY(ExperimentTemplate):
+    """
+    Sequential testing for quality-adjusted life years (QALY).
+
+    - Effect size: Mean QALY difference (clinical meaningful difference = 0.5)
+    - Statistic: Variance-stabilized z-score with time-to-event adjustment
+    - Stopping rule: Group sequential with binding futility for ethical early stop
+    """
+
+    def setup(self, ledger, alpha=0.025, beta=0.10, cmd=0.5):
+        # Register custom design with QALY-specific parameters
+        design = {
+            "effect_measure": "qaly_difference",
+            "clinically_meaningful_difference": cmd,
+            "alpha": alpha,
+            "beta": beta,
+            "spending_function": "obrien_fleming",
+            "binding_futility": True
+        }
+        ledger.write_event(namespace="design", kind="registered",
+                          payload_type="QALYDesign", payload=design)
+
+    def step(self, ledger, qaly_data):
+        # Compute variance-stabilized statistic
+        # Update group sequential boundaries
+        # Check stopping rules with ethical considerations
+        pass
+```
+
+**Sharing and Reusability:**
+
+Once created, your custom template becomes a **portable experimental protocol**:
+
+```python
+# Team member A creates template
+template = ClinicalTrialWithQALY()
+
+# Team member B uses same template on different backend
+import ibis
+conn_duckdb = ibis.connect("duckdb://data.db")
+conn_polars = ibis.polars.connect()
+
+# Same template, different backends
+ledger_duck = Ledger(conn_duckdb, "clinical_trial_001")
+ledger_polars = Ledger(conn_polars, "clinical_trial_002")
+
+template.setup(ledger_duck, alpha=0.025, beta=0.10, cmd=0.5)
+template.setup(ledger_polars, alpha=0.025, beta=0.10, cmd=0.5)
+```
+
+**Best Practices:**
+
+1. **Document thoroughly**: Include docstrings explaining the statistical rationale and domain assumptions
+2. **Validate inputs**: Check parameter constraints and raise informative errors
+3. **Use typed payloads**: Define clear payload schemas for your custom event types
+4. **Test across backends**: Verify your template works with multiple ibis backends
+5. **Version your templates**: Use semantic versioning for template definitions stored in the ledger
+
 ## 4. Event Store Implementation
 
 ### 4.1 Backend Agnosticism
