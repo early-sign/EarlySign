@@ -217,4 +217,4 @@ class Ledger:
         if all:
             return self.t.execute()
         else:
-            return self.t.drop("uuid", "ts").execute()
+            return self.t.order_by("ts").mutate(payload_type=self.t.payload_type.cast("string").split(".")[-1]).rename({"payload_name": "payload_type"}).drop("uuid", "ts", "pkg_version").execute()
