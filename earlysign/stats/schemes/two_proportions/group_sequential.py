@@ -113,11 +113,7 @@ class GSDecisionFromWaldZ(LedgerOperator):
         ) is not None:
             info = self.info
             if info is not None:
-                idf = (
-                    info.latest()
-                    .select(info_time=info.t.payload["info_time"].cast("float64"))
-                    .execute()
-                )
+                idf = info.latest().select("info_time").execute()
                 if len(idf) > 0:
                     t = float(idf.iloc[0]["info_time"])
 
