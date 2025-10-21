@@ -19,11 +19,12 @@ from pydantic.fields import FieldInfo
 from earlysign.core.ledger import Ledger
 from earlysign.util.pydantic_ibis import explode_json_with_pydantic
 
+PydanticType: TypeAlias = Any | str  # e.g., "int" or int
 PydanticField: TypeAlias = Union[
-    type | str,  # e.g., "int" or int
-    Tuple[type | str],  # e.g., ("int",) or (int,)
-    Tuple[type | str, Any],  # e.g., ("int", 0) or (int, 0)
-    Tuple[type | str, FieldInfo],  # e.g., ("int", Field(...)) or (int, Field(...))
+    PydanticType,  # e.g., "int" or int
+    Tuple[PydanticType],  # e.g., ("int",) or (int,)
+    Tuple[PydanticType, Any],  # e.g., ("int", 0) or (int, 0)
+    Tuple[PydanticType, FieldInfo],  # e.g., ("int", Field(...)) or (int, Field(...))
 ]
 
 
@@ -57,6 +58,18 @@ class QueryMixin:
 
     def latest(self: _LedgerRW, explode: bool = True) -> TableExpr:
         t = self.t
+        t = t.order_by(t.ts.desc()).limit(1)
+        if not explode:
+            return t
+        else:
+            return explode_json_with_pydantic(t, self.schema_pydantic_model)
+
+    def latest_before(
+        self: _LedgerRW, ts: Any, *, include_ts: bool = True, explode: bool = True
+    ) -> TableExpr:
+        """Return the latest record before (or at) the given timestamp."""
+        t = self.t
+        t = t.filter(t.ts <= ts) if include_ts else t.filter(t.ts < ts)
         t = t.order_by(t.ts.desc()).limit(1)
         if not explode:
             return t

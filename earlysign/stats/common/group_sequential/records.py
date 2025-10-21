@@ -41,7 +41,8 @@ class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
         "efficacy": {"style": "alpha_spending", "family": "obf"},
         "futility": {"mode": "none"},
         "binding_mode": "non_binding",
-        "planned_max_n": 1000
+        "planned_max_n": 1000,
+        "planned_info_times": [0.33, 0.67, 1.0]
       }
     """
 
@@ -51,8 +52,9 @@ class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
         "scale": str,
         "efficacy": dict,
         "futility": dict,
-        "binding_mode": str,  # optional
-        "planned_max_n": int,  # optional
+        "binding_mode": (str | None, None),
+        "planned_max_n": (int | None, None),
+        "planned_info_times": (list | None, None),
     }
 
 
@@ -86,7 +88,7 @@ class GroupSequentialBoundaryRecord(LedgerRecord, QueryMixin):
         "alpha": float,
         "tails": int,
         "info_time": float,
-        "look": int,  # optional
+        "look": (int | None, None),
     }
 
 
@@ -118,7 +120,7 @@ class GroupSequentialDecisionSignalRecord(LedgerRecord, QueryMixin):
         "upper": float,
         "lower": float,
         "scale": str,
-        "info_time": float,  # optional
+        "info_time": (float | None, None),
     }
 
 
