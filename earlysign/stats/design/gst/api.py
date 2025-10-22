@@ -46,7 +46,7 @@ from earlysign.stats.design.gst.common.config import (
     ProportionsDesignSpec,
 )
 from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.optimization import (
+from earlysign.stats.design.gst.common.optimization_adapter import (
     BalancedDesign,
     DesignObjective,
     DesignOptimizer,
@@ -521,5 +521,56 @@ class GSTDesign:
                 "mde": best_mde,
                 "iterations": iteration,
                 "n_max": n_max,
+            },
+        )
+
+    def optimize_expected_sample_size_with_n_analyses(
+        self,
+        *,
+        alpha: float = 0.025,
+        target_power: float = 0.90,
+        min_n_analyses: int = 2,
+        max_n_analyses: int,
+        spending_func: Literal["obrien_fleming", "pocock", "hsd"] = "obrien_fleming",
+        p_control: float = 0.10,
+        effect_size: float = 0.02,
+        max_n_total: int = 3000,
+        n_samples: int = 100,
+    ) -> DesignResult:
+        """Optimize both number of analyses and info times by random sampling.
+
+        Returns
+        -------
+        DesignResult
+            Design result with optimized n_analyses and info_times.
+        """
+        spec = ProportionsDesignSpec()
+        spec.test.alpha = alpha
+        spec.test.power = target_power
+        spec.boundary.spending_function = SpendingFunction(spending_func)
+        spec.effect.p_control = p_control
+        spec.effect.effect_size = effect_size
+
+        objective: DesignObjective = MinimizeASN(
+            planned_max_n=max_n_total,
+            target_power=target_power,
+        )
+        optimizer = DesignOptimizer(spec, objective)
+        n_analyses, info_times = optimizer.optimize_info_times_and_n_analyses(
+            max_k=max_n_analyses, min_k=min_n_analyses, n_samples=n_samples
+        )
+        spec.sequential.n_analyses = n_analyses
+        spec.sequential.info_times = info_times.tolist()
+        spec.sequential.info_spacing = InformationSpacing.CUSTOM
+        n_per_group_total = max_n_total // 2
+        spec.sample_size.n_per_analysis = n_per_group_total // n_analyses
+        lab = DesignLab(spec)
+        lab.compute_boundaries()
+        return DesignResult(
+            spec=spec,
+            lab=lab,
+            extra={
+                "optimal_info_times": info_times.tolist(),
+                "optimal_n_analyses": n_analyses,
             },
         )

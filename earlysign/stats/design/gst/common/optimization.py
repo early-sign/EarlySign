@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize, minimize_scalar
+from scipy.optimize import minimize_scalar
 
 from earlysign.stats.design.gst.common.config import DesignSpec
 from earlysign.stats.design.gst.common.lab import DesignLab
@@ -411,54 +411,73 @@ class DesignOptimizer:
         self.objective = objective
         self.optimization_history: list[Dict[str, Any]] = []
 
-    def optimize_info_times(self, n_analyses: int) -> np.ndarray:
-        """Optimize information times.
+    def optimize_info_times(self, n_analyses: int, n_samples: int = 100) -> np.ndarray:
+        """Random sampling on the simplex: pick the best info time split.
 
         Args:
             n_analyses: Number of analyses
+            n_samples: Number of random samples to try
 
         Returns:
-            Optimal information times
+            Optimal information times (monotonically increasing, last is 1.0)
         """
+        best_score = float("inf")
+        best_times: np.ndarray | None = None
+        for _ in range(n_samples):
+            # Dirichlet sampling for k positive segments summing to 1
+            s = np.random.dirichlet([1.0] * n_analyses)
+            info_times = np.cumsum(s)
+            # Ensure last is exactly 1.0
+            info_times[-1] = 1.0
 
-        def objective_func(x: np.ndarray) -> float:
-            """Objective function to optimize."""
-            # x is [t1, t2, ..., t_{k-1}] (last one fixed at 1.0)
-            info_times = np.append(x, 1.0)
-            info_times = np.sort(info_times)  # Ensure monotonic increase
-
-            # Update configuration
+            # Update config
             spec = self._clone_spec()
             spec.sequential.info_times = info_times.tolist()
             spec.sequential.info_spacing = InformationSpacing.CUSTOM
-
-            # Evaluate
             lab = DesignLab(spec)
             score = self.objective.evaluate(spec, lab)
+            if score < best_score:
+                best_score = score
+                best_times = info_times.copy()
 
-            self.optimization_history.append(
-                {"info_times": info_times.tolist(), "score": score}
-            )
+        assert best_times is not None, "No valid info times found"
+        return best_times
 
-            return score
+    def optimize_info_times_and_n_analyses(
+        self, max_k: int, min_k: int = 2, n_samples: int = 20
+    ) -> tuple[int, np.ndarray]:
+        """Randomly sample both number of analyses and info time splits, return best (n_analyses, info_times), with right-skewed splits (late looks).
 
-        # Initial guess: equal spacing
-        x0 = np.array([(i + 1) / n_analyses for i in range(n_analyses - 1)])
+        Args:
+            max_k: Maximum number of analyses (inclusive, required)
+            min_k: Minimum number of analyses (inclusive, default=2)
+            n_samples: Number of random splits per k
 
-        # Constraints: 0 < t1 < t2 < ... < t_{k-1} < 1
-        bounds = [(0.1, 0.99) for _ in range(n_analyses - 1)]
-
-        # Execute optimization
-        result = minimize(
-            objective_func,
-            x0,
-            method="L-BFGS-B",
-            bounds=bounds,
-            options={"maxiter": 50},
-        )
-
-        optimal_times = np.append(result.x, 1.0)
-        return np.sort(optimal_times)
+        Returns:
+            Tuple (best_n_analyses, best_info_times)
+        """
+        best_score = float("inf")
+        best_k: int | None = None
+        best_times: np.ndarray | None = None
+        for k in range(min_k, max_k + 1):
+            # Right-skewed Dirichlet: last segment has large alpha
+            dirichlet_alpha = [1.0] * (k - 1) + [2.0]
+            for _ in range(n_samples):
+                s = np.random.dirichlet(dirichlet_alpha)
+                info_times = np.cumsum(s)
+                info_times[-1] = 1.0
+                spec = self._clone_spec()
+                spec.sequential.n_analyses = k
+                spec.sequential.info_times = info_times.tolist()
+                spec.sequential.info_spacing = InformationSpacing.CUSTOM
+                lab = DesignLab(spec)
+                score = self.objective.evaluate(spec, lab)
+                if score < best_score:
+                    best_score = score
+                    best_k = k
+                    best_times = info_times.copy()
+        assert best_k is not None and best_times is not None, "No valid design found"
+        return best_k, best_times
 
     def optimize_n_analyses(self, min_k: int = 2, max_k: int = 10) -> int:
         """Search for optimal number of analyses.

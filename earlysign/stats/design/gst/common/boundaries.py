@@ -140,7 +140,10 @@ class BoundaryCalculator:
         # Incremental alpha at each analysis
         alpha_increments = np.diff(np.concatenate([[0.0], cumulative_alpha]))
 
-        # Critical Z-values (approximate, assuming independence)
+        # Critical Z-values
+        # Note: This uses a simple approximation. For exact boundaries accounting
+        # for correlation between analyses, numerical integration would be needed.
+        # The simulation engine will account for the correlation structure properly.
         z_efficacy = norm.ppf(1 - alpha_increments)
 
         # Futility bounds (if enabled)

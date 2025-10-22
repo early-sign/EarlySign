@@ -125,14 +125,23 @@ class SimulationEngine:
             if stopped:
                 Z[i] = Z[i - 1]  # Carry forward
             else:
-                # Drift under alternative
-                drift = effect_calc.standardized_effect(spec, t[i])
-                # Brownian motion increment
+                # CORRECTED: standardized_effect(t) returns E[Z(t)] = theta * sqrt(t)
+                # For Brownian motion with drift: Z(t) ~ N(theta * sqrt(t), sqrt(t))
+                # So we use standardized_effect directly as the mean
+                mean_at_t = effect_calc.standardized_effect(spec, t[i])
+
+                # Generate from joint distribution using incremental form
                 if i == 0:
-                    Z[i] = rng.normal(drift * np.sqrt(t[i]), np.sqrt(t[i]))
+                    # Z(t[0]) ~ N(theta * sqrt(t[0]), sqrt(t[0]))
+                    Z[i] = rng.normal(mean_at_t, np.sqrt(t[i]))
                 else:
+                    # Z(t[i]) | Z(t[i-1]) has conditional mean and variance
+                    # E[Z(t[i]) | Z(t[i-1])] = Z(t[i-1]) + theta * sqrt(t[i] - t[i-1])
+                    # Var[Z(t[i]) | Z(t[i-1])] = t[i] - t[i-1]
+                    mean_at_prev = effect_calc.standardized_effect(spec, t[i - 1])
+                    conditional_mean = Z[i - 1] + (mean_at_t - mean_at_prev)
                     dt = t[i] - t[i - 1]
-                    Z[i] = Z[i - 1] + rng.normal(drift * np.sqrt(dt), np.sqrt(dt))
+                    Z[i] = rng.normal(conditional_mean, np.sqrt(dt))
 
                 # Check boundaries
                 if Z[i] >= z_upper[i]:

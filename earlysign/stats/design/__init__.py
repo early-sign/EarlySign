@@ -55,7 +55,7 @@ Two-Sample Proportions Sequential Design::
 
 Design Optimization::
 
-    from earlysign.stats.design.gst.common.optimization import DesignOptimizer, MinimizeASN
+    from earlysign.stats.design.gst.common.optimization_adapter import DesignOptimizer, MinimizeASN
 
     spec = ProportionsDesignSpec()
     objective = MinimizeASN(planned_max_n=3000, target_power=0.90)
@@ -73,9 +73,9 @@ To add a new test type:
 
 To add a new optimization objective:
 
-Create a DesignObjective subclass in optimization.py::
+Create a DesignObjective subclass in optimization_adapter.py::
 
-    from earlysign.stats.design.gst.common.optimization import DesignObjective
+    from earlysign.stats.design.gst.common.optimization_adapter import DesignObjective
 
     class CustomObjective(DesignObjective):
         def evaluate(self, spec, lab):
