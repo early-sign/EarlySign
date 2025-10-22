@@ -275,3 +275,209 @@ class BinomialABTest(tpl.TemplateBase):
             resolve_boundary_func=resolve_boundary_from_design,
             n_points=n_points,
         )
+
+    def get_history(self) -> pd.DataFrame:
+        """Get complete history of the trial with all key metrics.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns: look, nA_cum, mA_cum, nB_cum, mB_cum,
+            pA, pB, diff, wald_z, info_time, signal
+
+        Examples
+        --------
+        >>> conn = ibis.connect("duckdb://:memory:")  # doctest: +SKIP
+        >>> test = BinomialABTest(conn, "exp1")  # doctest: +SKIP
+        ... # ... run experiment ...
+        >>> history = test.get_history()  # doctest: +SKIP
+        >>> print(history)  # doctest: +SKIP
+        """
+        # Get all records with exploded payloads as ibis expressions
+        snapshot_rec = BinomialCountsSnapshotRecord("snapshot").attach(self.ledger)
+        stat_rec = WaldZStatisticRecord("statistic").attach(self.ledger)
+        decision_rec = GroupSequentialDecisionSignalRecord("decision").attach(
+            self.ledger
+        )
+
+        # Use ibis to join the tables by timestamp and uuid
+        snapshots = snapshot_rec.order_by_ts(ascending=True, explode=True)
+        stats = stat_rec.order_by_ts(ascending=True, explode=True)
+        decisions = decision_rec.order_by_ts(ascending=True, explode=True)
+
+        # Join, compute, and select - all in one chain
+        # Note: Type ignores needed due to mypy not fully understanding ibis column operations
+        result = (
+            snapshots.inner_join(
+                stats, [snapshots.ts == stats.ts, snapshots.uuid == stats.uuid]
+            )
+            .inner_join(
+                decisions,
+                [snapshots.ts == decisions.ts, snapshots.uuid == decisions.uuid],
+            )
+            .select(
+                nA_cum=snapshots.nA,
+                mA_cum=snapshots.mA,
+                nB_cum=snapshots.nB,
+                mB_cum=snapshots.mB,
+                wald_z=stats.wald_z,
+                info_time=decisions.info_time,
+                signal=decisions.signal,
+                ts=snapshots.ts,
+            )
+            .order_by("ts")
+            .mutate(
+                pA=(lambda t: (t.mA_cum / t.nA_cum).fill_null(0.0)),  # type: ignore[operator]
+                pB=(lambda t: (t.mB_cum / t.nB_cum).fill_null(0.0)),  # type: ignore[operator]
+            )
+            .mutate(diff=lambda t: t.pB - t.pA)  # type: ignore[operator]
+            .mutate(look=ibis.row_number().over(order_by="ts"))
+            .select(
+                "look",
+                "nA_cum",
+                "mA_cum",
+                "nB_cum",
+                "mB_cum",
+                "pA",
+                "pB",
+                "diff",
+                "wald_z",
+                "info_time",
+                "signal",
+            )
+        )
+
+        df_result = result.execute()
+        return df_result if isinstance(df_result, pd.DataFrame) else pd.DataFrame()
+
+    def get_results(self) -> Dict[str, Any]:
+        """Get comprehensive summary of trial results.
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - design: Design parameters
+            - n_looks: Number of analyses conducted
+            - stopped: Whether trial stopped early
+            - final_signal: Final decision signal
+            - final_stats: Final cumulative statistics
+            - history: Full history DataFrame
+
+        Examples
+        --------
+        >>> conn = ibis.connect("duckdb://:memory:")  # doctest: +SKIP
+        >>> test = BinomialABTest(conn, "exp1")  # doctest: +SKIP
+        ... # ... run experiment ...
+        >>> results = test.get_results()  # doctest: +SKIP
+        >>> print(results['n_looks'])  # doctest: +SKIP
+        >>> print(results['final_signal'])  # doctest: +SKIP
+        """
+        # Get design
+        design_rec = GroupSequentialDesignRecord("design").attach(self.ledger)
+        design_df = design_rec.latest().execute()
+        design_payload = design_df.iloc[0]["payload"] if len(design_df) > 0 else {}
+
+        # Get history (this already does all the joining and computation)
+        history_df = self.get_history()
+
+        if len(history_df) == 0:
+            # No data yet
+            return {
+                "design": design_payload,
+                "n_looks": 0,
+                "stopped": False,
+                "final_signal": "unknown",
+                "final_stats": {
+                    "nA": 0,
+                    "mA": 0,
+                    "nB": 0,
+                    "mB": 0,
+                    "pA": 0.0,
+                    "pB": 0.0,
+                    "diff": 0.0,
+                    "wald_z": None,
+                },
+                "history": history_df,
+            }
+
+        # Extract final row (already computed in get_history)
+        final_row = history_df.iloc[-1]
+        stopped = "stop" in final_row["signal"]
+
+        return {
+            "design": design_payload,
+            "n_looks": len(history_df),
+            "stopped": stopped,
+            "final_signal": final_row["signal"],
+            "final_stats": {
+                "nA": int(final_row["nA_cum"]),
+                "mA": int(final_row["mA_cum"]),
+                "nB": int(final_row["nB_cum"]),
+                "mB": int(final_row["mB_cum"]),
+                "pA": float(final_row["pA"]),
+                "pB": float(final_row["pB"]),
+                "diff": float(final_row["diff"]),
+                "wald_z": (
+                    float(final_row["wald_z"])
+                    if final_row["wald_z"] is not None
+                    else None
+                ),
+            },
+            "history": history_df,
+        }
+
+    def print_results(self) -> None:
+        """Print formatted summary of trial results.
+
+        Examples
+        --------
+        >>> conn = ibis.connect("duckdb://:memory:")  # doctest: +SKIP
+        >>> test = BinomialABTest(conn, "exp1")  # doctest: +SKIP
+        ... # ... run experiment ...
+        >>> test.print_results()  # doctest: +SKIP
+        """
+        results = self.get_results()
+        stats = results["final_stats"]
+
+        # Build compact history text
+        history = results["history"]
+        history_lines = []
+        for _, row in history.iterrows():
+            history_lines.append(
+                f"\nLook {int(row['look'])} (Info time: {row['info_time']:.3f}):\n"
+                f"  Control:   {row['mA_cum']}/{row['nA_cum']} = {row['pA']:.3%}\n"
+                f"  Treatment: {row['mB_cum']}/{row['nB_cum']} = {row['pB']:.3%}\n"
+                f"  Z-stat:    {row['wald_z']:.4f}\n"
+                f"  Signal:    {row['signal']}"
+            )
+        history_text = "".join(history_lines)
+
+        wald_z_text = f"Wald Z:        {stats['wald_z']:.4f}" if stats["wald_z"] else ""
+
+        summary = f"""
+{'=' * 70}
+TRIAL RESULTS SUMMARY
+{'=' * 70}
+
+Experiment ID: {self.experiment_id}
+Number of analyses: {results['n_looks']}
+Stopped early: {'Yes' if results['stopped'] else 'No'}
+Final decision: {results['final_signal']}
+
+{'-' * 70}
+FINAL STATISTICS
+{'-' * 70}
+Control (A):   {stats['mA']}/{stats['nA']} = {stats['pA']:.3%}
+Treatment (B): {stats['mB']}/{stats['nB']} = {stats['pB']:.3%}
+Difference:    {stats['diff']:.3%}
+{wald_z_text}
+
+{'-' * 70}
+ANALYSIS HISTORY
+{'-' * 70}
+{history_text}
+
+{'=' * 70}
+"""
+        print(summary)
