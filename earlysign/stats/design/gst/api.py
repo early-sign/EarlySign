@@ -46,7 +46,7 @@ from earlysign.stats.design.gst.common.config import (
     ProportionsDesignSpec,
 )
 from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.optimization_adapter import (
+from earlysign.stats.design.gst.common.optimize_info_times import (
     BalancedDesign,
     DesignObjective,
     DesignOptimizer,
