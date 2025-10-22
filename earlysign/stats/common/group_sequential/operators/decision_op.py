@@ -230,7 +230,7 @@ class GSDecisionFromWaldZ(LedgerOperator):
     >>> ledger = Ledger(con, "events")
     >>> ledger.ensure()
     >>> wald_rec = WaldZStatisticRecord(id="wald1").attach(ledger)
-    >>> wald_rec.insert({"z": 3.0})
+    >>> wald_rec.insert({"wald_z": 3.0})
     >>> boundary = GroupSequentialBoundaryRecord(id="bound1").attach(ledger)
     >>> boundary.insert({"upper": 2.5, "lower": -2.5, "scale": "z",
     ...                  "info_time": 0.5, "alpha": 0.05, "tails": 2})

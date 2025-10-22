@@ -37,19 +37,33 @@ from earlysign.framework.records import LedgerRecord, QueryMixin
 class EProcessRecord(LedgerRecord, QueryMixin):
     """E-process snapshots for anytime-valid (safe) testing."""
 
-    pass
+    schema = {
+        "E": (float | None, None),
+        "logE": (float | None, None),
+        "look": (int | None, None),
+    }
 
 
 class VilleThresholdRecord(LedgerRecord, QueryMixin):
     """Ville threshold rows: 1/alpha."""
 
-    pass
+    schema = {
+        "alpha": (float | None, None),
+        "threshold": (float | None, None),
+    }
 
 
 class SafeDecisionRecord(LedgerRecord, QueryMixin):
     """Decisions based on Ville's inequality (safe testing)."""
 
-    pass
+    schema = {
+        "criterion": (str | None, None),
+        "signal": (str | None, None),
+        "E": (float | None, None),
+        "threshold": (float | None, None),
+        "alpha": (float | None, None),
+        "look": (int | None, None),
+    }
 
 
 class SafeDesignRecord(LedgerRecord, QueryMixin):
@@ -60,4 +74,7 @@ class SafeDesignRecord(LedgerRecord, QueryMixin):
     {"alpha": 0.05, "futility": {"mode": "fixed", "tau": 0.1}}
     """
 
-    pass
+    schema = {
+        "alpha": (float | None, None),
+        "futility": (dict | None, None),
+    }

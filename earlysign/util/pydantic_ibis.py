@@ -16,6 +16,8 @@ PY_TO_IBIS_TYPE: dict[type, dt.DataType] = {
     Decimal: dt.decimal,
     date: dt.date,
     datetime: dt.timestamp,
+    list: dt.json,  # Keep as JSON, do not unwrap
+    dict: dt.json,  # Keep as JSON, do not unwrap
 }
 
 
@@ -84,11 +86,20 @@ def explode_json_with_pydantic(
 
 
 def _json_get_typed(expr: Column, dotted_path: str, dtype: dt.DataType) -> Column:
-    """Builds an Ibis expression to extract a scalar value from a JSON column."""
+    """Builds an Ibis expression to extract a scalar value from a JSON column.
+
+    For JSON types (list, dict), returns the JSON value without unwrapping.
+    For scalar types, unwraps to the specified type.
+    """
     node = expr.cast("json")
     for part in dotted_path.split("."):
         node = node[part]
-    return node.unwrap_as(dtype)
+
+    # If the target type is JSON, don't unwrap - keep as JSON
+    if isinstance(dtype, type(dt.json)):
+        return node
+    else:
+        return node.unwrap_as(dtype)
 
 
 def _iter_scalar_paths(

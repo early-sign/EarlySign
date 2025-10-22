@@ -328,12 +328,11 @@ def validate_design_payload(payload: Dict[str, Any]) -> None:
         )
 
     # Validate binding_mode if present
-    if "binding_mode" in payload:
-        binding_mode = payload["binding_mode"]
-        if binding_mode not in ("binding", "non_binding"):
-            raise ValueError(
-                f"binding_mode must be 'binding' or 'non_binding', got {binding_mode}"
-            )
+    binding_mode = payload.get("binding_mode", "non_binding")
+    if binding_mode not in ("binding", "non_binding", None):
+        raise ValueError(
+            f"binding_mode must be 'binding' or 'non_binding', got {binding_mode}"
+        )
 
 
 # =============================================================================

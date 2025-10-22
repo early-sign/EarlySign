@@ -83,7 +83,7 @@ def interim_report(
     >>> # prepare minimal rows
     >>> BinomialCountsRecord(id="C").attach(scoped).insert(payload={"nA": 10, "mA": 3, "nB": 12, "mB": 5})
     >>> WaldZStatisticRecord(id="W").attach(scoped).insert(payload={"wald_z": 1.2})
-    >>> InformationTimeRecord(id="I").attach(scoped).insert(payload={"t": 0.4})
+    >>> InformationTimeRecord(id="I").attach(scoped).insert(payload={"info_time": 0.4})
     >>> GroupSequentialBoundaryRecord(id="B").attach(scoped).insert(payload={"upper": 2.0, "lower": -2.0, "scale": "z"})
     >>> GroupSequentialDecisionSignalRecord(id="D").attach(scoped).insert(payload={"signal": "continue", "reason": "start"})
     >>> out = interim_report(scoped, {"counts":"C","wald":"W","info":"I","boundary":"B","decision":"D"})
@@ -146,7 +146,7 @@ def interim_plotdata(
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo2"); scoped.ensure()
     >>> WaldZStatisticRecord(id="W2").attach(scoped).insert(payload={"wald_z": 1.5})
-    >>> GroupSequentialBoundaryRecord(id="B2").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z")
+    >>> GroupSequentialBoundaryRecord(id="B2").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z", alpha=0.05, tails=2, info_time=0.5)
     >>> out = interim_plotdata(scoped, {"wald":"W2","boundary":"B2"})
     >>> list(out.keys()) == ["wald_vs_boundary"]
     True
@@ -256,7 +256,7 @@ def interim_summary_sql(
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo4"); scoped.ensure()
     >>> # minimal rows
-    >>> InformationTimeRecord(id="I4").attach(scoped).insert(t=0.5)
+    >>> InformationTimeRecord(id="I4").attach(scoped).insert(info_time=0.5)
     >>> GroupSequentialBoundaryRecord(id="B4").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z")
     >>> WaldZStatisticRecord(id="W4").attach(scoped).insert(wald_z=1.7)
     >>> GroupSequentialDecisionSignalRecord(id="D4").attach(scoped).insert(signal="continue", reason="n/a")
@@ -280,7 +280,7 @@ def interim_summary_plot(
     >>> from earlysign.core.ledger import Ledger
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo5"); scoped.ensure()
-    >>> InformationTimeRecord(id="I5").attach(scoped).insert(t=0.4)
+    >>> InformationTimeRecord(id="I5").attach(scoped).insert(info_time=0.4)
     >>> GroupSequentialBoundaryRecord(id="B5").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z")
     >>> WaldZStatisticRecord(id="W5").attach(scoped).insert(wald_z=1.1)
     >>> GroupSequentialDecisionSignalRecord(id="D5").attach(scoped).insert(signal="continue", reason="n/a")

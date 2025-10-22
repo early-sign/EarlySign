@@ -178,6 +178,7 @@ class BinomialABTest(tpl.TemplateBase):
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
         design_latest = design.latest().execute()
         planned_max_n = int(design_latest["planned_max_n"].iloc[0])
+        planned_info_times: list[float] = design_latest["planned_info_times"].iloc[0]
 
         ## Compute information time
         info_op = InformationTime(
@@ -215,7 +216,6 @@ class BinomialABTest(tpl.TemplateBase):
             last_info_time_before_decision = 0.0
 
         # Trigger only if any planned look is newly due since last decision
-        planned_info_times: list[float] = design_latest["planned_info_times"].iloc[0]
         if not any(
             last_info_time_before_decision < planned_time <= current_info_time
             for planned_time in planned_info_times
@@ -242,7 +242,10 @@ class BinomialABTest(tpl.TemplateBase):
         decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
             self.ledger
         )
-        if "stop" in decision_record.latest()["signal"].execute().iloc[0]:
+        latest_decision = decision_record.latest().execute()
+        if len(latest_decision) == 0:
+            return State(stop_recommended=False)
+        if "stop" in latest_decision["signal"].iloc[0]:
             return State(stop_recommended=True)
         else:
             return State(stop_recommended=False)
@@ -262,14 +265,13 @@ class BinomialABTest(tpl.TemplateBase):
         """
         # Read design from ledger
         design_record = GroupSequentialDesignRecord("design").attach(self.ledger)
-        ddf = design_record.latest().select(design=design_record.t.payload).execute()
-        if len(ddf) == 0:
+        design = design_record.latest(explode=False).execute()
+        if len(design) == 0:
             raise ValueError("No design found in ledger. Call set_design() first.")
-        design_payload = ddf.iloc[0]["design"]
 
         # Delegate to reporting module
         return plot_design_boundaries(
-            design_payload=design_payload,
+            design_payload=design.iloc[0]["payload"],
             resolve_boundary_func=resolve_boundary_from_design,
             n_points=n_points,
         )

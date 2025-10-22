@@ -201,11 +201,12 @@ class LedgerRecord:
             rec.insert(payload={"a": 1, "b": 2})
             rec.insert(a=1, b=2)                # kwargs form
             rec.insert(a=1, b=2, labels={"foo": "bar"})
+        The input is casted to the schema defined as the property of the specific LedgerRecord subclass.
         """
         if self.ledger is None:
             raise RuntimeError("Record is not attached. Call .attach(ledger).")
 
-        # labels are extracted from kwargs (both in kwargs and Mapping cases）
+        # labels are extracted from kwargs (both in kwargs and Mapping cases)
         labels = kwargs.pop("labels", None) or {}
 
         if args:
@@ -217,10 +218,25 @@ class LedgerRecord:
             payload: Mapping[str, Any] = args[0]
         else:
             # kwargs-type args
-            payload = kwargs
+            # Support callers that pass the payload as a single keyword: insert(payload={...})
+            # If provided, merge the inner mapping with any other explicit kwargs so callers
+            # can do insert(payload={...}, extra_field=...)
+            if "payload" in kwargs and isinstance(kwargs["payload"], Mapping):
+                inner = dict(kwargs.pop("payload"))
+                # remaining kwargs (except labels which were popped) override inner
+                inner.update(kwargs)
+                payload = inner
+            else:
+                payload = kwargs
+
+        # Validate and fill defaults using Pydantic model
+        # model_validate() automatically handles validation, default filling, and extra field filtering
+        payload_with_defaults = self.schema_pydantic_model.model_validate(
+            payload
+        ).model_dump()
 
         self.ledger.insert(
             payload_type=self.payload_type,
-            payload=payload,
+            payload=payload_with_defaults,
             labels={**labels, "record_id": self.id},
         )

@@ -14,9 +14,6 @@ class InformationTimeRecord(LedgerRecord, QueryMixin):
     Information time snapshots (scheme-agnostic).
     Stores information time t in [0, 1].
 
-    Note: This record DOES NOT store look numbers. Look numbers are
-    contextual to the analysis and should be tracked separately.
-
     Payload example:
       {"info_time": 0.5}
     """
@@ -52,9 +49,9 @@ class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
         "scale": str,
         "efficacy": dict,
         "futility": dict,
-        "binding_mode": (str | None, None),
+        "binding_mode": (str | None, "non_binding"),
         "planned_max_n": (int | None, None),
-        "planned_info_times": (list | None, None),
+        "planned_info_times": (list, [1.0]),
     }
 
 
@@ -82,12 +79,12 @@ class GroupSequentialBoundaryRecord(LedgerRecord, QueryMixin):
     schema = {
         "upper": float,
         "lower": float,
-        "efficacy": dict,
-        "futility": dict,
+        "efficacy": (dict | None, None),
+        "futility": (dict | None, None),
         "scale": str,
-        "alpha": float,
-        "tails": int,
-        "info_time": float,
+        "alpha": (float | None, None),
+        "tails": (int | None, None),
+        "info_time": (float | None, None),
         "look": (int | None, None),
     }
 
@@ -115,11 +112,11 @@ class GroupSequentialDecisionSignalRecord(LedgerRecord, QueryMixin):
     schema = {
         "signal": str,
         "reason": str,
-        "value": float,
-        "value_scale": str,
-        "upper": float,
-        "lower": float,
-        "scale": str,
+        "value": (float | None, None),
+        "value_scale": (str | None, None),
+        "upper": (float | None, None),
+        "lower": (float | None, None),
+        "scale": (str | None, None),
         "info_time": (float | None, None),
     }
 
