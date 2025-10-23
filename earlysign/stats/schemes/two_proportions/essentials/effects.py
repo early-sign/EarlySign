@@ -190,11 +190,11 @@ class ProportionsEffectCalculator(EffectCalculator):
         >>> calc = ProportionsEffectCalculator()
         >>> sizes = calc.sample_sizes(spec)
         >>> sizes['n_control']
-        array([ 33, 66, 100])
+        array([100, 200, 300])
         >>> sizes['n_treatment']
-        array([ 33, 66, 100])
+        array([100, 200, 300])
         >>> sizes['info_fraction']
-        array([0.33, 0.67, 1.0])
+        array([0.33, 0.67, 1.  ])
 
         Notes
         -----
