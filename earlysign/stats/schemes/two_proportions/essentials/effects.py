@@ -194,7 +194,7 @@ class ProportionsEffectCalculator(EffectCalculator):
         >>> sizes['n_treatment']
         array([100, 200, 300])
         >>> sizes['info_fraction']
-        array([0.33, 0.67, 1.  ])
+        array([0.33333333, 0.66666667, 1.        ])
 
         Notes
         -----
