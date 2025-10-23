@@ -5,7 +5,7 @@ from typing import Any, Dict
 import numpy as np
 
 from earlysign.stats.design.gst.common.config import DesignSpec
-from earlysign.stats.design.gst.common.effects import EffectCalculator
+from earlysign.stats.schemes.base.effects import EffectCalculator
 
 
 class SimulationEngine:
@@ -42,7 +42,7 @@ class SimulationEngine:
     --------
     >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.boundaries import BoundaryCalculator
-    >>> from earlysign.stats.design.gst.common.effects import ProportionsEffectCalculator
+    >>> from earlysign.stats.schemes.two_proportions.essentials.effects import ProportionsEffectCalculator
     >>>
     >>> spec = ProportionsDesignSpec()
     >>> spec.simulation.n_sims = 1000  # Use more for production

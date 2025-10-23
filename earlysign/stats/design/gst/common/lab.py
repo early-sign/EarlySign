@@ -13,13 +13,15 @@ from earlysign.stats.design.gst.common.config import (
     ProportionsDesignSpec,
     TimeToEventDesignSpec,
 )
-from earlysign.stats.design.gst.common.effects import (
-    EffectCalculator,
-    MeansEffectCalculator,
-    ProportionsEffectCalculator,
+from earlysign.stats.design.gst.common.simulation import SimulationEngine
+from earlysign.stats.schemes.base.effects import EffectCalculator
+from earlysign.stats.schemes.survival.essentials.effects import (
     TimeToEventEffectCalculator,
 )
-from earlysign.stats.design.gst.common.simulation import SimulationEngine
+from earlysign.stats.schemes.two_means.essentials.effects import MeansEffectCalculator
+from earlysign.stats.schemes.two_proportions.essentials.effects import (
+    ProportionsEffectCalculator,
+)
 
 
 class DesignLab:
