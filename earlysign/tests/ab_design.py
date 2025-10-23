@@ -8,14 +8,16 @@ for different group sequential designs using the new scenario abstractions.
 import numpy as np
 import pytest
 
-from earlysign.stats.design.gst.scenarios import (
-    TwoProportionsCalculator,
-    run_scenario_a,
-    run_scenario_b,
-)
 from earlysign.stats.design.gst.common.visualization import (
     OCCurvePlotter,
     print_scenario_summary,
+)
+from earlysign.stats.design.gst.scenarios import (
+    run_scenario_a,
+    run_scenario_b,
+)
+from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
+    TwoProportionsCalculator,
 )
 
 # Fix random seed for reproducibility

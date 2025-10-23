@@ -10,8 +10,10 @@ Examples
 Basic GST operating characteristics with p0=0.2, effect_size=0.1:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.common.scenarios import (
-...     TwoProportionsCalculator,
+>>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
+...      TwoProportionsCalculator,
+... )
+>>> from earlysign.stats.design.gst.scenarios import (
 ...     run_scenario_a,
 ...     run_scenario_b,
 ... )
@@ -102,8 +104,10 @@ True
 Realistic CTR scenario with p0=0.005, p1=0.007:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.common.scenarios import (
-...     TwoProportionsCalculator,
+>>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
+...      TwoProportionsCalculator,
+... )
+>>> from earlysign.stats.design.gst.scenarios import (
 ...     run_scenario_a,
 ...     run_scenario_b,
 ... )
@@ -185,7 +189,9 @@ True
 Sample size calculation verification:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.common.scenarios import TwoProportionsCalculator
+>>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
+...      TwoProportionsCalculator,
+... )
 >>>
 >>> # Test various scenarios
 >>> calc_20 = TwoProportionsCalculator(p_control=0.2)
@@ -211,8 +217,10 @@ True
 Operating characteristics curve properties:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.common.scenarios import (
-...     TwoProportionsCalculator,
+>>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
+...      TwoProportionsCalculator,
+... )
+>>> from earlysign.stats.design.gst.scenarios import (
 ...     run_scenario_a,
 ... )
 >>> np.random.seed(42)
