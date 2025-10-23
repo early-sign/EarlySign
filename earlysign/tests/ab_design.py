@@ -8,7 +8,7 @@ for different group sequential designs using the new scenario abstractions.
 import numpy as np
 import pytest
 
-from earlysign.stats.design.gst.common.scenarios import (
+from earlysign.stats.design.gst.scenarios import (
     TwoProportionsCalculator,
     run_scenario_a,
     run_scenario_b,

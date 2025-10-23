@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 
-from earlysign.stats.design.gst.common.scenarios import (
+from earlysign.stats.design.gst.scenarios import (
     OCCurveResult,
     ScenarioAResult,
     ScenarioBResult,
