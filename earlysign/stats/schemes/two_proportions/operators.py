@@ -10,13 +10,13 @@ from typing import Union
 
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.two_proportions import compute_wald_z
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
     ScoreZStatisticRecord,
     WaldZStatisticRecord,
 )
+from earlysign.stats.schemes.two_proportions.util import compute_wald_z
 
 
 class BinomialCountsSnapshot(LedgerOperator):

@@ -5,17 +5,17 @@ from typing import Dict
 
 import numpy as np
 
-from earlysign.stats.common.two_means import (
-    compute_standard_error as compute_se_means,
-)
-from earlysign.stats.common.two_proportions import (
-    compute_standard_error as compute_se_proportions,
-)
 from earlysign.stats.design.gst.common.config import (
     DesignSpec,
     MeansDesignSpec,
     ProportionsDesignSpec,
     TimeToEventDesignSpec,
+)
+from earlysign.stats.schemes.two_means.util import (
+    compute_standard_error as compute_se_means,
+)
+from earlysign.stats.schemes.two_proportions.util import (
+    compute_standard_error as compute_se_proportions,
 )
 
 
