@@ -6,8 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 
-from earlysign.stats.design.gst.scenarios import (
+from earlysign.stats.design.gst.essentials.operating_characteristics import (
     OCCurveResult,
+)
+from earlysign.stats.design.gst.scenarios import (
     ScenarioAResult,
     ScenarioBResult,
 )

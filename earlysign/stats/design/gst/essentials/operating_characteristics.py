@@ -1,7 +1,7 @@
-"""Scenario patterns for GST design evaluation.
+"""Operating characteristics computation for GST designs.
 
-This module provides standardized scenario patterns for evaluating
-group sequential test designs across different effect sizes.
+This module provides standardized scenario patterns and OC curve computation
+for evaluating group sequential test designs across different effect sizes.
 """
 
 from dataclasses import dataclass
@@ -10,22 +10,129 @@ from typing import List
 import numpy as np
 
 from earlysign.stats.common.protocols import EffectSizeCalculator
-from earlysign.stats.design.gst.essentials.operating_characteristics import (
-    OCCurveResult,
-    OCSinglePointResult,
-    compute_oc_curve,
+from earlysign.stats.design.gst.common.lab import DesignLab
+from earlysign.stats.design.gst.schemes.two_proportions.config import (
+    ProportionsDesignSpec,
 )
 
-# Explicit re-exports so static checkers (mypy) see these as part of this module's public API
-__all__ = [
-    "OCSinglePointResult",
-    "OCCurveResult",
-    "compute_oc_curve",
-    "ScenarioAResult",
-    "ScenarioBResult",
-    "run_scenario_a",
-    "run_scenario_b",
-]
+
+@dataclass
+class OCSinglePointResult:
+    """Result of computing operating characteristics at a single effect size.
+
+    Attributes:
+        effect_size: Effect size evaluated
+        expected_sample_size: Expected sample size (ESS)
+        power: Statistical power
+        max_sample_size: Maximum sample size
+        stop_distribution: Distribution of stopping times (dict: analysis_idx -> count)
+    """
+
+    effect_size: float
+    expected_sample_size: float
+    power: float
+    max_sample_size: float
+    stop_distribution: dict[int, int]
+
+
+@dataclass
+class OCCurveResult:
+    """Result of computing operating characteristics across effect sizes.
+
+    Attributes:
+        effect_sizes: Array of effect sizes evaluated
+        results: List of OCSinglePointResult for each effect size
+        n_looks: Number of analyses
+        n_per_analysis: Sample size per analysis (per group)
+    """
+
+    effect_sizes: np.ndarray
+    results: List[OCSinglePointResult]
+    n_looks: int
+    n_per_analysis: int
+
+    @property
+    def ess_values(self) -> np.ndarray:
+        """Expected sample sizes across effect sizes."""
+        return np.array([r.expected_sample_size for r in self.results])
+
+    @property
+    def power_values(self) -> np.ndarray:
+        """Power values across effect sizes."""
+        return np.array([r.power for r in self.results])
+
+
+def compute_oc_curve(
+    calculator: EffectSizeCalculator,
+    effect_sizes: np.ndarray,
+    n_looks: int,
+    n_per_analysis: int,
+    alpha: float,
+    info_times: List[float] | None = None,
+) -> OCCurveResult:
+    """Compute operating characteristics curve across effect sizes.
+
+    Args:
+        calculator: Effect size calculator (determines test type)
+        effect_sizes: Array of effect sizes to evaluate
+        n_looks: Number of analyses
+        n_per_analysis: Sample size per analysis (per group)
+        alpha: Type I error rate
+        info_times: Information times (optional, defaults to equally spaced)
+
+    Returns:
+        OCCurveResult with operating characteristics
+    """
+    from earlysign.stats.design.gst.common.types import InformationSpacing
+
+    if info_times is None:
+        info_times = np.linspace(0, 1, n_looks + 1)[1:].tolist()
+
+    results = []
+
+    for effect_size in effect_sizes:
+        # Create design specification
+        spec = ProportionsDesignSpec()
+        spec.test.alpha = alpha
+        spec.sequential.n_analyses = n_looks
+        spec.sequential.info_times = info_times
+        spec.sequential.info_spacing = InformationSpacing.CUSTOM
+        spec.sample_size.n_per_analysis = n_per_analysis
+        spec.effect.p_control = calculator.get_null_value()
+        spec.effect.effect_size = effect_size
+
+        # Run design
+        lab = DesignLab(spec)
+        lab.compute_boundaries().run_simulations()
+
+        if lab.simulation_results:
+            result = OCSinglePointResult(
+                effect_size=effect_size,
+                expected_sample_size=lab.simulation_results["expected_sample_size"],
+                power=lab.simulation_results["power"],
+                max_sample_size=lab.simulation_results["max_sample_size"],
+                stop_distribution=lab.simulation_results.get("stop_distribution", {}),
+            )
+        else:
+            # Fallback if simulation fails
+            summary = lab.get_summary()
+            max_n = summary["N Control"].iloc[-1] * 2
+            result = OCSinglePointResult(
+                effect_size=effect_size,
+                expected_sample_size=max_n,
+                power=0.0,
+                max_sample_size=max_n,
+                stop_distribution={},
+            )
+
+        results.append(result)
+
+    return OCCurveResult(
+        effect_sizes=effect_sizes,
+        results=results,
+        n_looks=n_looks,
+        n_per_analysis=n_per_analysis,
+    )
 
 
 @dataclass
