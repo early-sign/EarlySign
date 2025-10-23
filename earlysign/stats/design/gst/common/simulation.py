@@ -40,7 +40,7 @@ class SimulationEngine:
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.boundaries import BoundaryCalculator
     >>> from earlysign.stats.schemes.two_proportions.essentials.effects import ProportionsEffectCalculator
     >>>

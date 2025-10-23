@@ -11,7 +11,7 @@ from typing import Any, Optional, Protocol
 import ipywidgets as widgets
 from IPython.display import clear_output, display
 
-from earlysign.stats.design.gst.common.config import DesignSpec, ProportionsDesignSpec
+from earlysign.stats.design.gst.common.config import DesignSpec
 from earlysign.stats.design.gst.common.lab import DesignLab
 from earlysign.stats.design.gst.common.optimize_info_times import (
     DesignOptimizer,
@@ -26,6 +26,9 @@ from earlysign.stats.design.gst.designers.nmax_fixed_min_mde import (
 )
 from earlysign.stats.design.gst.designers.optimize_asn import OptimizeASNDesigner
 from earlysign.stats.design.gst.designers.optimize_design import OptimizeDesignDesigner
+from earlysign.stats.design.gst.schemes.two_proportions.config import (
+    ProportionsDesignSpec,
+)
 
 
 class ModeController(Protocol):
@@ -121,7 +124,6 @@ class GSTDesignUI:
         initial_spec : DesignSpec, optional
             Initial design specification. Defaults to ProportionsDesignSpec.
         """
-
         self.spec = initial_spec or ProportionsDesignSpec()
         self.lab = DesignLab(self.spec)
         self.optimizer: Optional[DesignOptimizer] = None

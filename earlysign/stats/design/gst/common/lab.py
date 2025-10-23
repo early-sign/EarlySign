@@ -7,13 +7,13 @@ import numpy as np
 import pandas as pd
 
 from earlysign.stats.design.gst.common.boundaries import BoundaryCalculator
-from earlysign.stats.design.gst.common.config import (
-    DesignSpec,
-    MeansDesignSpec,
-    ProportionsDesignSpec,
-    TimeToEventDesignSpec,
-)
+from earlysign.stats.design.gst.common.config import DesignSpec
 from earlysign.stats.design.gst.common.simulation import SimulationEngine
+from earlysign.stats.design.gst.schemes.survival.config import TimeToEventDesignSpec
+from earlysign.stats.design.gst.schemes.two_means.config import MeansDesignSpec
+from earlysign.stats.design.gst.schemes.two_proportions.config import (
+    ProportionsDesignSpec,
+)
 from earlysign.stats.schemes.base.effects import EffectCalculator
 from earlysign.stats.schemes.survival.essentials.effects import (
     TimeToEventEffectCalculator,
@@ -63,7 +63,7 @@ class DesignLab:
     --------
     Basic usage with two-sample proportions test::
 
-        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
         >>> spec = ProportionsDesignSpec()
         >>> lab = DesignLab(spec)
         >>> _ = lab.compute_boundaries()

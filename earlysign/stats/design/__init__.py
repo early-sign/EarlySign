@@ -32,7 +32,7 @@ Basic Usage
 -----------
 Two-Sample Proportions Sequential Design::
 
-    from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     from earlysign.stats.design.gst.common.lab import DesignLab
 
     # Create design specification

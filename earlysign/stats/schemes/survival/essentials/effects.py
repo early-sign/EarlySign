@@ -8,7 +8,8 @@ from typing import Dict
 
 import numpy as np
 
-from earlysign.stats.design.gst.common.config import DesignSpec, TimeToEventDesignSpec
+from earlysign.stats.design.gst.common.config import DesignSpec
+from earlysign.stats.design.gst.schemes.survival.config import TimeToEventDesignSpec
 from earlysign.stats.schemes.base.effects import EffectCalculator
 
 
@@ -20,7 +21,7 @@ class TimeToEventEffectCalculator(EffectCalculator):
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.common.config import TimeToEventDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.survival.config import TimeToEventDesignSpec
     >>> spec = TimeToEventDesignSpec()
     >>> calc = TimeToEventEffectCalculator()
     >>> effect = calc.standardized_effect(spec, 1.0)

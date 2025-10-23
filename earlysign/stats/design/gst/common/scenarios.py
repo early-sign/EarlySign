@@ -9,8 +9,10 @@ from typing import List, Protocol
 
 import numpy as np
 
-from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
 from earlysign.stats.design.gst.common.lab import DesignLab
+from earlysign.stats.design.gst.schemes.two_proportions.config import (
+    ProportionsDesignSpec,
+)
 
 
 class EffectSizeCalculator(Protocol):

@@ -8,7 +8,10 @@ from typing import Dict
 
 import numpy as np
 
-from earlysign.stats.design.gst.common.config import DesignSpec, ProportionsDesignSpec
+from earlysign.stats.design.gst.common.config import DesignSpec
+from earlysign.stats.design.gst.schemes.two_proportions.config import (
+    ProportionsDesignSpec,
+)
 from earlysign.stats.schemes.base.effects import EffectCalculator
 from earlysign.stats.schemes.two_proportions.util import (
     compute_standard_error as compute_se_proportions,
@@ -41,7 +44,7 @@ class ProportionsEffectCalculator(EffectCalculator):
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
     >>> spec.effect.p_control = 0.10
     >>> spec.effect.delta = 0.05  # 5% absolute increase
@@ -104,7 +107,7 @@ class ProportionsEffectCalculator(EffectCalculator):
 
         Examples
         --------
-        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
         >>> spec = ProportionsDesignSpec()
         >>> spec.effect.p_control = 0.10
         >>> spec.effect.delta = 0.05
@@ -179,18 +182,18 @@ class ProportionsEffectCalculator(EffectCalculator):
 
         Examples
         --------
-        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
         >>> spec = ProportionsDesignSpec()
         >>> spec.sequential.n_analyses = 3
         >>> spec.allocation.alloc_ratio = 1.0  # Equal allocation
         >>> spec.sample_size.n_per_analysis = 100
         >>> calc = ProportionsEffectCalculator()
         >>> sizes = calc.sample_sizes(spec)
-        >>> sizes['n_control']  # doctest: +SKIP
+        >>> sizes['n_control']
         array([ 33, 66, 100])
-        >>> sizes['n_treatment']  # doctest: +SKIP
+        >>> sizes['n_treatment']
         array([ 33, 66, 100])
-        >>> sizes['info_fraction']  # doctest: +SKIP
+        >>> sizes['info_fraction']
         array([0.33, 0.67, 1.0])
 
         Notes

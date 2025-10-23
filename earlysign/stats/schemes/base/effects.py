@@ -50,7 +50,7 @@ class EffectCalculator(ABC):
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> from earlysign.stats.schemes.two_proportions.essentials.effects import (
     ...     ProportionsEffectCalculator
     ... )
@@ -119,7 +119,7 @@ class EffectCalculator(ABC):
 
         Examples
         --------
-        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
         >>> from earlysign.stats.schemes.two_proportions.essentials.effects import (
         ...     ProportionsEffectCalculator
         ... )
@@ -165,7 +165,7 @@ class EffectCalculator(ABC):
 
         Examples
         --------
-        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
         >>> from earlysign.stats.schemes.two_proportions.essentials.effects import (
         ...     ProportionsEffectCalculator
         ... )

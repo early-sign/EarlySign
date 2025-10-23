@@ -41,10 +41,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
-from earlysign.stats.design.gst.common.config import (
-    DesignSpec,
-    ProportionsDesignSpec,
-)
 from earlysign.stats.design.gst.common.lab import DesignLab
 from earlysign.stats.design.gst.common.optimize_info_times import (
     BalancedDesign,
@@ -53,9 +49,9 @@ from earlysign.stats.design.gst.common.optimize_info_times import (
     MaximizePower,
     MinimizeASN,
 )
-from earlysign.stats.design.gst.common.types import (
-    InformationSpacing,
-    SpendingFunction,
+from earlysign.stats.design.gst.common.types import InformationSpacing, SpendingFunction
+from earlysign.stats.design.gst.schemes.two_proportions.config import (
+    ProportionsDesignSpec,
 )
 
 
@@ -65,7 +61,7 @@ class DesignResult:
 
     Attributes
     ----------
-    spec : DesignSpec
+    spec : ProportionsDesignSpec
         The design specification used.
     lab : DesignLab
         The design lab with computed boundaries and simulation results.
@@ -73,7 +69,7 @@ class DesignResult:
         Additional metadata or results.
     """
 
-    spec: DesignSpec
+    spec: ProportionsDesignSpec
     lab: DesignLab
     extra: dict[str, Any]
 
@@ -236,37 +232,10 @@ class GSTDesign:
         finds the optimal information timing that minimizes the expected sample
         size under the alternative hypothesis.
 
-        Parameters
-        ----------
-        alpha : float, default=0.025
-            One-sided significance level.
-        target_power : float, default=0.90
-            Target power constraint.
-        n_analyses : int, default=3
-            Number of interim analyses.
-        spending_func : {"obrien_fleming", "pocock", "hsd"}, default="obrien_fleming"
-            Alpha spending function.
-        p_control : float, default=0.10
-            Control group proportion.
-        effect_size : float, default=0.02
-            Treatment effect (absolute difference).
-        max_n_total : int, default=3000
-            Maximum total sample size (both groups combined).
-
         Returns
         -------
         DesignResult
             Design result with optimized information times and boundaries.
-            The optimal times are stored in `spec.sequential.info_times`.
-
-        Examples
-        --------
-        >>> api = GSTDesign()  # doctest: +SKIP
-        >>> result = api.optimize_expected_sample_size(
-        ...     max_n_total=5000,
-        ...     target_power=0.90
-        ... )  # doctest: +SKIP
-        >>> print(result.spec.sequential.info_times)  # doctest: +SKIP
         """
         spec = ProportionsDesignSpec()
         spec.test.alpha = alpha
@@ -382,8 +351,10 @@ class GSTDesign:
         lab = DesignLab(optimized_spec)
         lab.compute_boundaries()
 
+        from typing import cast
+
         return DesignResult(
-            spec=optimized_spec,
+            spec=cast(ProportionsDesignSpec, optimized_spec),
             lab=lab,
             extra={
                 "criterion": criterion,

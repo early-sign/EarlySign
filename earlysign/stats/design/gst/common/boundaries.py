@@ -44,7 +44,7 @@ class BoundaryCalculator:
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
     >>> boundaries = BoundaryCalculator.critical_values(spec)
     >>> 'z_efficacy' in boundaries
@@ -101,7 +101,7 @@ class BoundaryCalculator:
                 - z_efficacy: Efficacy Z-value thresholds
                 - z_futility: Futility Z-value thresholds (if enabled)
 
-        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
         >>> spec = ProportionsDesignSpec()
         >>> spec.sequential.n_analyses = 2
         >>> boundaries = BoundaryCalculator.critical_values(spec)

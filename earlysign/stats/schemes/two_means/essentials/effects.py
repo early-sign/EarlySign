@@ -8,7 +8,8 @@ from typing import Dict
 
 import numpy as np
 
-from earlysign.stats.design.gst.common.config import DesignSpec, MeansDesignSpec
+from earlysign.stats.design.gst.common.config import DesignSpec
+from earlysign.stats.design.gst.schemes.two_means.config import MeansDesignSpec
 from earlysign.stats.schemes.base.effects import EffectCalculator
 from earlysign.stats.schemes.two_means.util import (
     compute_standard_error as compute_se_means,
@@ -40,7 +41,7 @@ class MeansEffectCalculator(EffectCalculator):
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.common.config import MeansDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_means.config import MeansDesignSpec
     >>> spec = MeansDesignSpec()
     >>> spec.effect.mean_control = 100.0
     >>> spec.effect.mean_treatment = 105.0  # 5 unit increase
@@ -112,7 +113,7 @@ class MeansEffectCalculator(EffectCalculator):
 
         Examples
         --------
-        >>> from earlysign.stats.design.gst.common.config import MeansDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_means.config import MeansDesignSpec
         >>> spec = MeansDesignSpec()
         >>> spec.effect.mean_control = 100.0
         >>> spec.effect.effect_size = 0.5  # Cohen's d = 0.5
@@ -189,18 +190,18 @@ class MeansEffectCalculator(EffectCalculator):
 
         Examples
         --------
-        >>> from earlysign.stats.design.gst.common.config import MeansDesignSpec
+        >>> from earlysign.stats.design.gst.schemes.two_means.config import MeansDesignSpec
         >>> spec = MeansDesignSpec()
         >>> spec.sequential.n_analyses = 3
         >>> spec.allocation.alloc_ratio = 1.0  # Equal allocation
         >>> spec.sample_size.n_per_analysis = 100
         >>> calc = MeansEffectCalculator()
         >>> sizes = calc.sample_sizes(spec)
-        >>> sizes['n_control']  # doctest: +SKIP
+        >>> sizes['n_control']
         array([ 33, 66, 100])
-        >>> sizes['n_treatment']  # doctest: +SKIP
+        >>> sizes['n_treatment']
         array([ 33, 66, 100])
-        >>> sizes['info_fraction']  # doctest: +SKIP
+        >>> sizes['info_fraction']
         array([0.33, 0.67, 1.0])
 
         Notes

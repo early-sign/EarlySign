@@ -2,7 +2,7 @@
 
 import copy
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import numpy as np
 import pandas as pd
@@ -46,7 +46,7 @@ class DesignObjective(ABC):
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.lab import DesignLab
     >>>
     >>> # Define a custom objective
@@ -134,7 +134,7 @@ class MinimizeASN(DesignObjective):
     >>> objective.target_power
     0.9
 
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.lab import DesignLab
     >>> spec = ProportionsDesignSpec()
     >>> lab = DesignLab(spec)
@@ -225,7 +225,7 @@ class MaximizePower(DesignObjective):
     >>> objective.planned_max_n
     3000
 
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.lab import DesignLab
     >>> spec = ProportionsDesignSpec()
     >>> lab = DesignLab(spec)
@@ -398,7 +398,7 @@ class BalancedDesign(DesignObjective):
 class DesignOptimizer:
     """Design optimization engine.
 
-    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
     >>> objective = MinimizeASN(planned_max_n=3000)
     >>> optimizer = DesignOptimizer(spec, objective)
@@ -523,11 +523,13 @@ class DesignOptimizer:
             lab = DesignLab(spec)
             return self.objective.evaluate(spec, lab)
 
+        from scipy.optimize import OptimizeResult
+
         result = minimize_scalar(
             objective_func, bounds=(min_alpha, max_alpha), method="bounded"
         )
-
-        return float(result.x)
+        # minimize_scalar returns OptimizeResult, which always has .x
+        return float(cast(OptimizeResult, result).x)
 
     def optimize_comprehensive(self) -> DesignSpec:
         """Comprehensive optimization.
@@ -556,5 +558,4 @@ class DesignOptimizer:
         """Return optimization history as DataFrame."""
         if not self.optimization_history:
             return pd.DataFrame()
-
         return pd.DataFrame(self.optimization_history)
