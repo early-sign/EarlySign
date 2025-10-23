@@ -88,7 +88,7 @@ class OCSinglePointResult:
     expected_sample_size: float
     power: float
     max_sample_size: float
-    stop_distribution: dict
+    stop_distribution: dict[int, int]
 
 
 @dataclass
@@ -201,7 +201,7 @@ class ScenarioAResult:
     """
 
     fixed_n: int
-    gst_results: dict
+    gst_results: dict[int, OCCurveResult]
 
 
 @dataclass
@@ -216,7 +216,7 @@ class ScenarioBResult:
 
     fixed_n: int
     target_power: float
-    gst_results: dict
+    gst_results: dict[int, OCCurveResult]
 
 
 def run_scenario_a(

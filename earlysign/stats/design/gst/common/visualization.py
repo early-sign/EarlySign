@@ -4,6 +4,7 @@ from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.axes import Axes
 
 from earlysign.stats.design.gst.common.scenarios import (
     OCCurveResult,
@@ -23,7 +24,7 @@ class OCCurvePlotter:
 
     def __init__(
         self,
-        figsize: tuple = (16, 6),
+        figsize: tuple[int, int] = (16, 6),
         colors: List[str] | None = None,
         linestyles: List[str] | None = None,
     ):
@@ -343,7 +344,7 @@ class OCCurvePlotter:
 
     def _plot_stop_distribution(
         self,
-        ax,
+        ax: Axes,
         oc_result: OCCurveResult,
         null_value: float,
         color: str,
