@@ -19,6 +19,9 @@ from earlysign.stats.design.gst.common.optimize_info_times import (
 from earlysign.stats.design.gst.common.types import (
     DesignMode,
 )
+from earlysign.stats.design.gst.schemes.two_proportions.config import (
+    ProportionsDesignSpec,
+)
 from earlysign.stats.design.gst.widgets.fixed_power import FixedPowerDesigner
 from earlysign.stats.design.gst.widgets.fixed_timing import FixedTimingDesigner
 from earlysign.stats.design.gst.widgets.nmax_fixed_min_mde import (
@@ -26,9 +29,6 @@ from earlysign.stats.design.gst.widgets.nmax_fixed_min_mde import (
 )
 from earlysign.stats.design.gst.widgets.optimize_asn import OptimizeASNDesigner
 from earlysign.stats.design.gst.widgets.optimize_design import OptimizeDesignDesigner
-from earlysign.stats.design.gst.schemes.two_proportions.config import (
-    ProportionsDesignSpec,
-)
 
 
 class ModeController(Protocol):
