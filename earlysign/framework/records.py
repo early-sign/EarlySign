@@ -17,7 +17,7 @@ from ibis.expr.types import Table as TableExpr
 from pydantic.fields import FieldInfo
 
 from earlysign.core.ledger import Ledger
-from earlysign.util.pydantic_ibis import explode_json_with_pydantic
+from earlysign.core.util.pydantic_ibis import explode_json_with_pydantic
 
 PydanticType: TypeAlias = Any | str  # e.g., "int" or int
 PydanticField: TypeAlias = Union[
