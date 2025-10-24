@@ -23,7 +23,7 @@ Key ideas
 
 Example
 -------
-Basic usage with an O'Brien–Fleming α-spending strategy:
+Basic usage with an O'Brien–Fleming spending strategy (new class-based API):
 
 >>> spending = OBFSpending(alpha=0.05, sided=2)
 >>> info = get_optimal_information_rates(
@@ -45,14 +45,20 @@ True
 True
 """
 
+from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Protocol, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Protocol, Tuple
 
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import expit, logit
 from scipy.stats import norm
+
+from earlysign.stats.essentials.methods.group_sequential.spending import (
+    OBFSpending,
+    PocockSpending,
+)
 
 # ======================================================================================
 #  Spending Strategy Interfaces
@@ -79,97 +85,16 @@ class SpendingStrategy(Protocol):
         computing the cumulative α(t) (e.g., using α/2 inside OBF).
     """
 
-    def cumulative_alpha(self, t: np.ndarray) -> np.ndarray: ...
+    def cumulative(self, t: np.ndarray) -> np.ndarray: ...
     def boundaries_from_stage_alpha(self, stage_alpha: np.ndarray) -> np.ndarray: ...
 
 
-# --------------------------------------------------------------------------------------
-#  Concrete Spending Strategies
-# --------------------------------------------------------------------------------------
-
-
-@dataclass
-class OBFSpending(SpendingStrategy):
-    """
-    Lan–DeMets O'Brien–Fleming spending strategy.
-
-    For two-sided tests we split α at the spending level as:
-        α(t) = 2 - 2 Φ(z_{α/2} / √t)
-    For one-sided tests:
-        α(t) = 1 - Φ(z_{α} / √t)
-
-    The "sided" parameter determines the quantile used in the above formula.
-    Boundary construction uses per-stage α_i via z = Φ^{-1}(1 - α_i).
-    """
-
-    alpha: float
-    sided: int  # 1 or 2
-
-    def cumulative_alpha(self, t: np.ndarray) -> np.ndarray:
-        t = np.maximum(t, 1e-12)
-        if self.sided == 2:
-            z = norm.ppf(1 - self.alpha / 2.0)
-            result: np.ndarray = 2 - 2 * norm.cdf(z / np.sqrt(t))
-            return result
-        else:
-            z = norm.ppf(1 - self.alpha)
-            result_one: np.ndarray = 1 - norm.cdf(z / np.sqrt(t))
-            return result_one
-
-    def boundaries_from_stage_alpha(self, stage_alpha: np.ndarray) -> np.ndarray:
-        # One-sided z-boundaries; "sided" already handled in cumulative spending.
-        a = np.clip(stage_alpha, 1e-16, 1 - 1e-16)
-        result: np.ndarray = norm.ppf(1 - a)
-        return result
-
-
-@dataclass
-class PocockSpending(SpendingStrategy):
-    """
-    Lan–DeMets Pocock-like spending strategy:
-
-        α(t) = α * log(1 + (e − 1) t)
-
-    Boundary construction uses per-stage α_i via z = Φ^{-1}(1 − α_i).
-    """
-
-    alpha: float
-
-    def cumulative_alpha(self, t: np.ndarray) -> np.ndarray:
-        result: np.ndarray = self.alpha * np.log1p((np.e - 1.0) * np.maximum(t, 0.0))
-        return result
-
-    def boundaries_from_stage_alpha(self, stage_alpha: np.ndarray) -> np.ndarray:
-        a = np.clip(stage_alpha, 1e-16, 1 - 1e-16)
-        result: np.ndarray = norm.ppf(1 - a)
-        return result
-
-
-@dataclass
-class HPSpending(SpendingStrategy):
-    """
-    Haybittle–Peto-style strategy by composition:
-
-    - Allocate α across looks using a base cumulative-spending strategy
-      (e.g., OBFSpending) to obtain per-stage α_i.
-    - Then apply a minimum interim |Z| floor (e.g., 3.0) when constructing
-      boundaries. The final look typically remains governed by the spending.
-
-    This reproduces the spirit of Haybittle–Peto: very stringent early looks,
-    while allowing conventional spending-based control overall.
-    """
-
-    base: SpendingStrategy
-    z_floor: float = 3.0  # minimum |Z| at interim (applied to all looks here)
-
-    def cumulative_alpha(self, t: np.ndarray) -> np.ndarray:
-        result: np.ndarray = self.base.cumulative_alpha(t)
-        return result
-
-    def boundaries_from_stage_alpha(self, stage_alpha: np.ndarray) -> np.ndarray:
-        z = self.base.boundaries_from_stage_alpha(stage_alpha)
-        result: np.ndarray = np.maximum(z, self.z_floor)
-        return result
+# The optimizer expects a SpendingStrategy with methods:
+#   - cumulative(t) -> np.ndarray
+#   - boundaries_from_stage_alpha(stage_alpha) -> np.ndarray
+# The concrete spending implementations imported above already satisfy this
+# interface (they expose `cumulative` and `boundaries_from_stage_alpha`), so
+# no adapter is necessary.
 
 
 # ======================================================================================
@@ -290,7 +215,7 @@ class NormalMeansTwoArmEngine:
 
     def _per_stage_alpha(self, t: np.ndarray) -> np.ndarray:
         """Compute per-stage α_i by differencing cumulative α(t) from the injected strategy."""
-        cum = self.spending.cumulative_alpha(t)
+        cum = self.spending.cumulative(t)
         inc = np.diff(np.concatenate([[0.0], cum]))
         inc = np.maximum(inc, self.min_stage_alpha)
         # Re-normalize to sum to α for numerical robustness (tiny rounding issues).
@@ -578,8 +503,6 @@ def get_design_characteristics(
 # ======================================================================================
 
 # Import types for adapter (avoiding circular imports by importing here)
-from abc import ABC, abstractmethod  # noqa: E402
-from typing import TYPE_CHECKING  # noqa: E402
 
 if TYPE_CHECKING:
     from earlysign.stats.design.gst.common.config import DesignSpec

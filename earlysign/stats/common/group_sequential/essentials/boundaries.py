@@ -19,7 +19,7 @@ Spending-based boundaries:
 
 Examples
 --------
->>> from earlysign.stats.common.group_sequential.essentials import boundaries, spending
+>>> from earlysign.stats.common.group_sequential.essentials import boundaries
 >>> import numpy as np
 >>>
 >>> # Define design
@@ -43,15 +43,29 @@ Examples
 2.772
 >>> lower
 -inf
+
+>>> # Alternatively, use the class-based spending helpers directly
+>>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
+>>> import numpy as np
+>>> s = OBFSpending(alpha=0.05, sided=2)
+>>> # alpha at 50% information (two-sided uses internal halving)
+>>> round(float(s.cumulative(np.array([0.5]))[0]), 6)
+0.005575
 """
 
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
 
-from earlysign.stats.common.group_sequential.essentials import conversions, spending
+from earlysign.stats.common.group_sequential.essentials import conversions
 from earlysign.stats.common.group_sequential.essentials.design_schema import (
     validate_design_payload,
+)
+from earlysign.stats.essentials.methods.group_sequential.spending import (
+    HSDSpending,
+    OBFSpending,
+    PocockSpending,
+    SpendingFunction,
 )
 
 # =============================================================================
@@ -239,7 +253,10 @@ def efficacy_boundary_from_spending(
 
     Examples
     --------
-    >>> alpha_fn = lambda t: spending.obf_spending(t, alpha=0.05)
+    >>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
+    >>> import numpy as np
+    >>> s = OBFSpending(alpha=0.05, sided=2)
+    >>> alpha_fn = lambda t: float(s.cumulative(np.array([t]))[0])
     >>> z = efficacy_boundary_from_spending(alpha_fn, info_time=0.5, tails=2)
     >>> round(z, 3)
     2.772
@@ -270,7 +287,10 @@ def futility_boundary_from_spending(
 
     Examples
     --------
-    >>> beta_fn = lambda t: spending.beta_obf_spending(t, beta=0.10)
+    >>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
+    >>> import numpy as np
+    >>> s_beta = OBFSpending(alpha=0.10, sided=1)
+    >>> beta_fn = lambda t: float(s_beta.cumulative(np.array([t]))[0])
     >>> z = futility_boundary_from_spending(beta_fn, info_time=0.5)
     >>> round(z, 3)
     -1.812
@@ -304,11 +324,22 @@ def _resolve_efficacy_upper_z(
         family = efficacy.get("family", "obf")
         gamma = efficacy.get("gamma", -4.0)
 
-        # Get spending function
-        alpha_fn = spending.get_alpha_spending_function(family, gamma=gamma)
+        # Instantiate class-based spending and compute cumulative
+        # Annotate `s` with the SpendingFunction protocol so different
+        # concrete spending implementations can be assigned without
+        # causing type-checker errors.
+        s: SpendingFunction
+        key = str(family).lower()
+        if key in ("obf", "obrien_fleming", "o'brien-fleming"):
+            s = OBFSpending(alpha=alpha, sided=tails)
+        elif key == "pocock":
+            s = PocockSpending(alpha=alpha)
+        elif key == "hsd":
+            s = HSDSpending(alpha=alpha, gamma=gamma)
+        else:
+            raise ValueError(f"Unknown spending family: {family}")
 
-        # Compute cumulative alpha spent at time t
-        alpha_spent = alpha_fn(t, alpha)
+        alpha_spent = float(s.cumulative(np.array([t]))[0])
 
         # Convert to Z boundary
         upper_z, _ = conversions.cumulative_to_nominal_z(alpha_spent, tails=tails)
@@ -375,16 +406,14 @@ def _resolve_futility_lower_z(
 
     elif mode == "beta_spending":
         # Beta spending function
-        family = futility.get("family", "obf")
-        gamma = futility.get("gamma", -4.0)
+        futility.get("family", "obf")
+        futility.get("gamma", -4.0)
         futility.get("beta", 0.10)  # Default power = 0.90
 
-        # Get beta spending function
-        spending.get_beta_spending_function(family, gamma=gamma)
-
-        # Compute cumulative beta spent (need info_time from context)
-        # This is a bit tricky - we'd need t from calling context
-        # For now, raise NotImplementedError
+        # Beta spending requires the information time to compute cumulative
+        # beta; this helper does not receive the info_time. Preserve the
+        # previous behavior and note that refactoring is needed to support
+        # beta_spending here (caller must supply info_time-aware logic).
         raise NotImplementedError("beta_spending futility mode needs refactoring")
 
     else:

@@ -133,4 +133,3 @@ def compute_oc_curve(
         n_looks=n_looks,
         n_per_analysis=n_per_analysis,
     )
-

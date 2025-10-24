@@ -5,11 +5,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 from scipy.stats import norm
 
-from earlysign.stats.common.group_sequential.essentials.spending import (
-    hsd_spending,
-    obf_spending,
-    pocock_spending,
-)
+import earlysign.stats.essentials.methods.group_sequential.spending as spending
 from earlysign.stats.design.gst.common.config import DesignSpec
 from earlysign.stats.design.gst.common.types import SpendingFunction
 
@@ -116,22 +112,21 @@ class BoundaryCalculator:
             spec.test.alpha if spec.test.sided == "one" else spec.test.alpha / 2.0
         )
 
-        # Use common alpha spending functions
+        # Use class-based spending strategies
+        # Annotate `s` with the SpendingFunction protocol to allow any
+        # concrete spending implementation (OBF, Pocock, HSD) without
+        # narrowing to a specific subclass which caused mypy errors.
+        s: spending.SpendingFunction
         if spec.boundary.spending_function == SpendingFunction.OBRIEN_FLEMING:
-            cumulative_alpha = np.array(
-                [
-                    obf_spending(
-                        ti, alpha_total, tails=1 if spec.test.sided == "one" else 2
-                    )
-                    for ti in t
-                ]
-            )
+            sided = 1 if spec.test.sided == "one" else 2
+            s = spending.OBFSpending(alpha=alpha_total, sided=sided)
+            cumulative_alpha = s.cumulative(t)
         elif spec.boundary.spending_function == SpendingFunction.POCOCK:
-            cumulative_alpha = np.array([pocock_spending(ti, alpha_total) for ti in t])
+            s = spending.PocockSpending(alpha=alpha_total)
+            cumulative_alpha = s.cumulative(t)
         elif spec.boundary.spending_function == SpendingFunction.HSD:
-            cumulative_alpha = np.array(
-                [hsd_spending(ti, alpha_total, spec.boundary.hsd_gamma) for ti in t]
-            )
+            s = spending.HSDSpending(alpha=alpha_total, gamma=spec.boundary.hsd_gamma)
+            cumulative_alpha = s.cumulative(t)
         else:
             raise ValueError(
                 f"Unknown spending function: {spec.boundary.spending_function}"
@@ -157,21 +152,21 @@ class BoundaryCalculator:
                 beta = 1 - spec.test.power
 
                 # Use common alpha spending functions for futility
+                # Annotate `s_beta` to the SpendingFunction protocol so different
+                # concrete implementations (OBF/Pocock/HSD) can be assigned.
+                s_beta: spending.SpendingFunction
                 if spec.boundary.futility_spending == SpendingFunction.OBRIEN_FLEMING:
-                    cumulative_beta = np.array(
-                        [
-                            obf_spending(
-                                ti, beta, tails=1 if spec.test.sided == "one" else 2
-                            )
-                            for ti in t
-                        ]
-                    )
+                    sided = 1 if spec.test.sided == "one" else 2
+                    s_beta = spending.OBFSpending(alpha=beta, sided=sided)
+                    cumulative_beta = s_beta.cumulative(t)
                 elif spec.boundary.futility_spending == SpendingFunction.POCOCK:
-                    cumulative_beta = np.array([pocock_spending(ti, beta) for ti in t])
+                    s_beta = spending.PocockSpending(alpha=beta)
+                    cumulative_beta = s_beta.cumulative(t)
                 elif spec.boundary.futility_spending == SpendingFunction.HSD:
-                    cumulative_beta = np.array(
-                        [hsd_spending(ti, beta, spec.boundary.hsd_gamma) for ti in t]
+                    s_beta = spending.HSDSpending(
+                        alpha=beta, gamma=spec.boundary.hsd_gamma
                     )
+                    cumulative_beta = s_beta.cumulative(t)
                 else:
                     raise ValueError(
                         f"Unknown futility spending function: {spec.boundary.futility_spending}"
