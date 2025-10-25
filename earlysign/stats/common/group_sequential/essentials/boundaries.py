@@ -74,7 +74,11 @@ from earlysign.stats.essentials.methods.group_sequential.spending import (
 
 
 def resolve_boundary_from_design(
-    *, design_payload: Mapping[str, Any], info_time: float, look: Optional[int] = None
+    *,
+    design: Optional[Mapping[str, Any]] = None,
+    design_payload: Optional[Mapping[str, Any]] = None,
+    info_time: float,
+    look: Optional[int] = None,
 ) -> Tuple[float, float, str]:
     """Compatibility wrapper that delegates to the canonical
     `earlysign.stats.essentials.methods.group_sequential.boundary.resolve_boundary`.
@@ -82,23 +86,31 @@ def resolve_boundary_from_design(
     This wrapper preserves the original function signature so callers in the
     codebase can be migrated incrementally while using the new implementation.
     """
-    # Delegate to new implementation which performs validation and conversion.
-    return boundary.resolve_boundary(
-        design_payload=design_payload, info_time=info_time, look=look
-    )
+    # Support legacy callers that pass the payload as `design_payload=` as
+    # well as newer callers that use `design=`. Prefer `design` when both
+    # are present.
+    cfg = design if design is not None else design_payload
+    if cfg is None:
+        raise TypeError("Either 'design' or 'design_payload' must be provided")
+
+    # Delegate to the canonical BoundaryCalculator implementation by
+    # constructing a calculator from the validated config and calling the
+    # instance method. This avoids module-level helper indirection.
+    calc = boundary.BoundaryCalculator(spec=cfg, process=None)
+    return calc.compute_boundary(info_time=info_time, look=look)
 
 
 def compute_boundaries_at_times(
-    design_payload: Mapping[str, Any], info_times: np.ndarray
+    design: Mapping[str, Any], info_times: np.ndarray
 ) -> Dict[str, Any]:
     """Compatibility wrapper that delegates to the canonical
     `earlysign.stats.essentials.methods.group_sequential.boundary.compute_boundaries`.
 
     Preserves the original return shape expected by callers.
     """
-    return boundary.compute_boundaries(
-        design_payload=design_payload, info_times=info_times
-    )
+    # Construct a calculator and compute boundaries directly.
+    calc = boundary.BoundaryCalculator(spec=design, process=None)
+    return calc.compute_boundaries(info_times=info_times)
 
 
 # =============================================================================

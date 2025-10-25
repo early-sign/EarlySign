@@ -55,13 +55,11 @@ from typing import Any, Dict, Optional, Tuple, cast
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize_scalar
 
-from earlysign.stats.common.group_sequential.essentials.boundaries import (
-    compute_boundaries_at_times,
-)
 from earlysign.stats.common.group_sequential.essentials.design_schema import (
     BindingMode,
 )
 from earlysign.stats.common.group_sequential.essentials.performance import performance
+from earlysign.stats.essentials.methods.group_sequential import boundary
 
 
 def _create_hsd_design_payload(
@@ -160,15 +158,18 @@ def evaluate_spending_design(
     have no tunable parameters (they are fixed forms).
     """
     # Create design payload with HSD spending
-    design_payload = _create_hsd_design_payload(alpha, alpha_gamma, binding_mode)
+    design = _create_hsd_design_payload(alpha, alpha_gamma, binding_mode)
 
     # Add beta spending if binding
     if binding_mode == BindingMode.BINDING:
-        design_payload["futility"]["family"] = "hsd"
-        design_payload["futility"]["gamma"] = beta_gamma
+        design["futility"]["family"] = "hsd"
+        design["futility"]["gamma"] = beta_gamma
 
-    # Compute boundaries at all information times
-    boundary_result = compute_boundaries_at_times(design_payload, info_times)
+    # Compute boundaries at all information times using canonical API by
+    # constructing the canonical BoundaryCalculator and calling the
+    # instance method `compute_boundaries`.
+    calc = boundary.BoundaryCalculator(spec=design, process=None)
+    boundary_result = calc.compute_boundaries(info_times=info_times)
 
     # Evaluate performance via simulation
     perf_result = performance(

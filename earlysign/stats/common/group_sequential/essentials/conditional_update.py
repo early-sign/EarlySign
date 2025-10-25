@@ -58,12 +58,10 @@ from typing import Any, Dict, Tuple
 import numpy as np
 from scipy import stats
 
-from earlysign.stats.common.group_sequential.essentials.boundaries import (
-    compute_boundaries_at_times,
-)
 from earlysign.stats.common.group_sequential.essentials.design_schema import (
     BindingMode,
 )
+from earlysign.stats.essentials.methods.group_sequential import boundary
 
 
 def conditional_power(
@@ -353,7 +351,7 @@ def update_remaining_boundaries(
 
     # Create design payload for remaining looks
     # We'll compute boundaries at remaining times using adjusted spending
-    design_payload = {
+    design = {
         "alpha": alpha,
         "tails": 2,
         "scale": "z",
@@ -361,8 +359,9 @@ def update_remaining_boundaries(
         "futility": {"mode": "none"},  # Simplified for now
     }
 
-    # Compute boundaries at remaining times
-    boundary_result = compute_boundaries_at_times(design_payload, remaining_info_times)
+    # Compute boundaries at remaining times using canonical BoundaryCalculator
+    calc = boundary.BoundaryCalculator(spec=design, process=None)
+    boundary_result = calc.compute_boundaries(info_times=remaining_info_times)
 
     # Note: This is a simplified implementation. A more sophisticated approach
     # would explicitly adjust for alpha already spent, potentially by:

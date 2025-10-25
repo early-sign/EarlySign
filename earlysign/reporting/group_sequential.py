@@ -13,7 +13,7 @@ from matplotlib.figure import Figure
 
 
 def plot_design_boundaries(
-    design_payload: Dict[str, Any],
+    design: Dict[str, Any],
     resolve_boundary_func: Any,
     n_points: int = 50,
 ) -> Figure:
@@ -54,7 +54,7 @@ def plot_design_boundaries(
     # Calculate boundaries at each information time
     for t in info_times:
         upper, lower, scale = resolve_boundary_func(
-            design_payload=design_payload, info_time=t, look=None
+            design=design, info_time=t, look=None
         )
         upper_bounds.append(upper)
         lower_bounds.append(lower)
@@ -91,7 +91,7 @@ def plot_design_boundaries(
 
     # Labels and title
     ax.set_xlabel("Information Fraction", fontsize=12)
-    scale = design_payload.get("scale", "z")
+    scale = design.get("scale", "z")
     if scale == "z":
         ax.set_ylabel("Z-statistic", fontsize=12)
     elif scale == "bm":
@@ -100,9 +100,9 @@ def plot_design_boundaries(
         ax.set_ylabel(f"Test Statistic ({scale})", fontsize=12)
 
     # Title with design details
-    design_payload.get("efficacy", {}).get("style", "unknown")
-    efficacy_family = design_payload.get("efficacy", {}).get("family", "")
-    alpha = design_payload.get("alpha", 0.05)
+    design.get("efficacy", {}).get("style", "unknown")
+    efficacy_family = design.get("efficacy", {}).get("family", "")
+    alpha = design.get("alpha", 0.05)
     title = f"Group Sequential Design (α={alpha}"
     if efficacy_family:
         title += f", {efficacy_family.upper()}"

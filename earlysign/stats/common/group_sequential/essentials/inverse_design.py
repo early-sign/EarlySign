@@ -42,10 +42,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from earlysign.stats.common.group_sequential.essentials import (
-    boundaries,
     information,
     performance,
 )
+from earlysign.stats.essentials.methods.group_sequential import boundary
 
 # =============================================================================
 # Type Aliases
@@ -171,10 +171,9 @@ def inverse_design_from_power(
         "futility": {"mode": "none"},  # Start with no futility
     }
 
-    # Compute boundaries
-    bounds_result = boundaries.compute_boundaries_at_times(
-        design_payload=design, info_times=info_times
-    )
+    # Compute boundaries using canonical BoundaryCalculator instance
+    calc = boundary.BoundaryCalculator(spec=design, process=None)
+    bounds_result = calc.compute_boundaries(info_times=info_times)
 
     upper_bounds = bounds_result["upper"]
     lower_bounds = bounds_result["lower"]

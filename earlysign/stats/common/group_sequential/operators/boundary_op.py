@@ -9,14 +9,12 @@ from typing import Dict, Optional
 
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.group_sequential.essentials.boundaries import (
-    resolve_boundary_from_design,
-)
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
     GroupSequentialDesignRecord,
     InformationTimeRecord,
 )
+from earlysign.stats.essentials.methods.group_sequential import boundary
 
 
 class BoundaryFromDesign(LedgerOperator):
@@ -113,10 +111,9 @@ class BoundaryFromDesign(LedgerOperator):
             return
         t = float(idf.iloc[0]["info_time"])
 
-        # Compute boundaries using essentials
-        up, lo, scale = resolve_boundary_from_design(
-            design_payload=design_payload, info_time=t, look=look
-        )
+        # Compute boundaries using the canonical BoundaryCalculator API
+        calc = boundary.BoundaryCalculator(spec=design_payload, process=None)
+        up, lo, scale = calc.compute_boundary(info_time=t, look=look)
 
         # Compose payload
         payload = {

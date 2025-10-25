@@ -271,7 +271,7 @@ class BinomialABTest(tpl.TemplateBase):
 
         # Delegate to reporting module
         return plot_design_boundaries(
-            design_payload=design.iloc[0]["payload"],
+            design=design.iloc[0]["payload"],
             resolve_boundary_func=resolve_boundary_from_design,
             n_points=n_points,
         )

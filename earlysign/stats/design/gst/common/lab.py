@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
-from earlysign.stats.design.gst.common.boundaries import BoundaryCalculator
+from earlysign.stats.design.gst.common.adapter import BoundaryCalculator
 from earlysign.stats.design.gst.common.config import DesignSpec
 from earlysign.stats.design.gst.common.simulation import SimulationEngine
 from earlysign.stats.design.gst.schemes.survival.config import TimeToEventDesignSpec
@@ -110,7 +110,9 @@ class DesignLab:
 
     def compute_boundaries(self) -> "DesignLab":
         """Compute critical boundaries."""
-        self.boundaries = BoundaryCalculator.critical_values(self.spec)
+        # Use design-layer adapter instance (new-init pattern)
+        adapter = BoundaryCalculator(self.spec)
+        self.boundaries = adapter.critical_values()
         return self
 
     def run_simulations(self) -> "DesignLab":
