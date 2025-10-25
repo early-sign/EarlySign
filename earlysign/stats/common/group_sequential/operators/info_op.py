@@ -10,14 +10,14 @@ from typing import Dict, Optional, Union
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.group_sequential.essentials.information import (
+from earlysign.stats.common.group_sequential.records import InformationTimeRecord
+from earlysign.stats.essentials.methods.group_sequential.info_time import (
     info_time_from_fisher,
     info_time_from_ratio,
     info_time_from_sample_size,
     info_time_from_sd,
     info_time_from_variance,
 )
-from earlysign.stats.common.group_sequential.records import InformationTimeRecord
 from earlysign.stats.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,

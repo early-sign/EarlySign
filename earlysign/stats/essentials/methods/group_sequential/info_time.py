@@ -48,7 +48,7 @@ Examples
 array([0.33, 0.67, 1.  ])
 """
 
-from typing import List, Mapping, Optional, Sequence, Union
+from typing import Sequence
 
 import numpy as np
 
@@ -375,52 +375,3 @@ def choose_t_equally_spaced(n_looks: int) -> np.ndarray:
         raise ValueError(f"n_looks must be at least 1, got {n_looks}")
 
     return np.linspace(1 / n_looks, 1.0, n_looks)
-
-
-# =============================================================================
-# Helper: Parse planned fractions
-# =============================================================================
-
-
-def _parse_planned_fractions(
-    current_look: int,
-    planned_fractions: Optional[Union[Mapping[int, float], List[float]]],
-) -> float:
-    """
-    Parse planned fractions from dict or list.
-
-    Helper function used by Ledger operators (not in public API).
-
-    Parameters
-    ----------
-    current_look : int
-        Current look number (1-indexed).
-    planned_fractions : dict or list, optional
-        Mapping from look number to information time, or list of times.
-
-    Returns
-    -------
-    float
-        Information time for current look.
-
-    Examples
-    --------
-    >>> _parse_planned_fractions(2, {1: 0.25, 2: 0.5, 3: 1.0})
-    0.5
-
-    >>> _parse_planned_fractions(2, [0.25, 0.5, 1.0])
-    0.5
-    """
-    if planned_fractions is None:
-        raise ValueError("planned_fractions cannot be None")
-
-    if isinstance(planned_fractions, dict):
-        if current_look not in planned_fractions:
-            raise KeyError(f"Look {current_look} not found in planned_fractions")
-        return clip01(planned_fractions[current_look])
-
-    # List/sequence
-    idx = current_look - 1
-    if idx < 0 or idx >= len(planned_fractions):
-        raise IndexError(f"Look {current_look} out of range for planned_fractions")
-    return clip01(planned_fractions[idx])

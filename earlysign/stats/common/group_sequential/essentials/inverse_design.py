@@ -42,7 +42,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from earlysign.stats.common.group_sequential.essentials import (
-    information,
     performance,
 )
 from earlysign.stats.essentials.methods.group_sequential import boundary
@@ -56,6 +55,38 @@ ArrayLike = Union[np.ndarray, List[float], Tuple[float, ...]]
 # =============================================================================
 # Inverse Design from Power Target
 # =============================================================================
+
+
+def choose_t_equally_spaced(n_looks: int) -> np.ndarray:
+    """
+    Create equally-spaced information times.
+
+    Generates n_looks equally spaced points from 1/n_looks to 1.0.
+
+    Parameters
+    ----------
+    n_looks : int
+        Number of planned analyses (looks).
+
+    Returns
+    -------
+    np.ndarray
+        Equally-spaced information times.
+
+    Examples
+    --------
+    >>> times = choose_t_equally_spaced(3)
+    >>> np.round(times, 3)
+    array([0.333, 0.667, 1.   ])
+
+    >>> times = choose_t_equally_spaced(4)
+    >>> np.round(times, 2)
+    array([0.25, 0.5 , 0.75, 1.  ])
+    """
+    if n_looks < 1:
+        raise ValueError(f"n_looks must be at least 1, got {n_looks}")
+
+    return np.linspace(1 / n_looks, 1.0, n_looks)
 
 
 def inverse_design_from_power(
@@ -157,7 +188,7 @@ def inverse_design_from_power(
 
     # Generate equally spaced information times as starting point
     if info_spacing == "equal":
-        info_times = information.choose_t_equally_spaced(n_looks=n_looks)
+        info_times = choose_t_equally_spaced(n_looks=n_looks)
     else:
         # Default fractions
         info_times = np.linspace(1.0 / n_looks, 1.0, n_looks)

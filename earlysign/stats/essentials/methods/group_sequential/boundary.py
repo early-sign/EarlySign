@@ -334,5 +334,3 @@ class BoundaryCalculator:
         if idx < 0 or idx >= len(alpha_levels):
             raise IndexError(f"Look {look} out of range for alpha_levels")
         return float(alpha_levels[idx])
-
-
