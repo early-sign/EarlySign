@@ -58,9 +58,9 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
 import numpy as np
 
 from earlysign.stats.common.group_sequential.essentials import conversions
-from earlysign.stats.common.group_sequential.essentials.design_schema import (
-    validate_design_payload,
-)
+
+# Delegate primary boundary computation to the new centralized implementation
+from earlysign.stats.essentials.methods.group_sequential import boundary
 from earlysign.stats.essentials.methods.group_sequential.spending import (
     HSDSpending,
     OBFSpending,
@@ -74,155 +74,31 @@ from earlysign.stats.essentials.methods.group_sequential.spending import (
 
 
 def resolve_boundary_from_design(
-    *,
-    design_payload: Mapping[str, Any],
-    info_time: float,
-    look: Optional[int] = None,
+    *, design_payload: Mapping[str, Any], info_time: float, look: Optional[int] = None
 ) -> Tuple[float, float, str]:
+    """Compatibility wrapper that delegates to the canonical
+    `earlysign.stats.essentials.methods.group_sequential.boundary.resolve_boundary`.
+
+    This wrapper preserves the original function signature so callers in the
+    codebase can be migrated incrementally while using the new implementation.
     """
-    Compute (upper, lower, scale) boundaries given a design and info_time.
-
-    This is the main interface for boundary calculation, matching the
-    functional design signature (simplified):
-        Design: (design_spec, t) → (upper, lower)
-
-    Parameters
-    ----------
-    design_payload : dict
-        Design specification with keys: alpha, tails, scale, efficacy, futility.
-    info_time : float
-        Information time in (0, 1].
-    look : int, optional
-        Look number (1-indexed). Required for significance_level style.
-
-    Returns
-    -------
-    upper : float
-        Upper (efficacy) boundary on the design's scale.
-    lower : float
-        Lower (futility) boundary on the design's scale.
-    scale : str
-        Scale of returned boundaries ("z" or "bm").
-
-    Examples
-    --------
-    >>> design = {
-    ...     "alpha": 0.05,
-    ...     "tails": 2,
-    ...     "scale": "z",
-    ...     "efficacy": {"style": "alpha_spending", "family": "obf"},
-    ...     "futility": {"mode": "none"},
-    ... }
-    >>> upper, lower, scale = resolve_boundary_from_design(
-    ...     design_payload=design, info_time=0.5, look=2
-    ... )
-    >>> scale
-    'z'
-    >>> round(upper, 3)
-    2.772
-    >>> lower
-    -inf
-
-    Notes
-    -----
-    The function handles:
-    - Alpha spending (obf, pocock, hsd) for efficacy boundaries
-    - Per-look significance levels for efficacy boundaries
-    - Futility boundaries (none, symmetric, fixed_z, beta_spending)
-    - Scale conversions (z ↔ bm)
-    """
-    t = float(info_time)
-    if not (0.0 <= t <= 1.0):
-        raise ValueError(f"info_time must be in [0, 1], got {t}")
-
-    # Validate payload
-    design = dict(design_payload)
-    validate_design_payload(design)
-
-    float(design["alpha"])
-    int(design["tails"])
-    scale = str(design["scale"])
-
-    # Compute efficacy (upper) boundary
-    upper_z = _resolve_efficacy_upper_z(design, t, look)
-
-    # Compute futility (lower) boundary
-    lower_z = _resolve_futility_lower_z(design, upper_z, look)
-
-    # Convert to target scale if needed
-    if scale == "bm":
-        upper = conversions.z_to_brownian(upper_z, t)
-        lower = (
-            conversions.z_to_brownian(lower_z, t) if np.isfinite(lower_z) else lower_z
-        )
-    else:  # scale == "z"
-        upper = upper_z
-        lower = lower_z
-
-    return upper, lower, scale
+    # Delegate to new implementation which performs validation and conversion.
+    return boundary.resolve_boundary(
+        design_payload=design_payload, info_time=info_time, look=look
+    )
 
 
 def compute_boundaries_at_times(
     design_payload: Mapping[str, Any], info_times: np.ndarray
 ) -> Dict[str, Any]:
+    """Compatibility wrapper that delegates to the canonical
+    `earlysign.stats.essentials.methods.group_sequential.boundary.compute_boundaries`.
+
+    Preserves the original return shape expected by callers.
     """
-    Compute boundaries at multiple information times.
-
-    Convenience function for batch boundary calculation.
-
-    Parameters
-    ----------
-    design_payload : dict
-        Design specification.
-    info_times : np.ndarray
-        Array of information times.
-
-    Returns
-    -------
-    dict
-        Dictionary with keys:
-        - info_times: np.ndarray
-        - upper: np.ndarray (efficacy boundaries)
-        - lower: np.ndarray (futility boundaries)
-        - scale: str
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> design = {
-    ...     "alpha": 0.05,
-    ...     "tails": 2,
-    ...     "scale": "z",
-    ...     "efficacy": {"style": "alpha_spending", "family": "obf"},
-    ...     "futility": {"mode": "none"},
-    ... }
-    >>> times = np.array([0.33, 0.67, 1.0])
-    >>> result = compute_boundaries_at_times(design, times)
-    >>> result["scale"]
-    'z'
-    >>> len(result["upper"])
-    3
-    """
-    n_looks = len(info_times)
-    upper_vals = np.zeros(n_looks)
-    lower_vals = np.zeros(n_looks)
-    scale = None
-
-    for i, t in enumerate(info_times):
-        upper, lower, sc = resolve_boundary_from_design(
-            design_payload=design_payload, info_time=t, look=i + 1
-        )
-        upper_vals[i] = upper
-        lower_vals[i] = lower
-        if scale is None:
-            scale = sc
-
-    return {
-        "info_times": info_times,
-        "upper": upper_vals,
-        "lower": lower_vals,
-        "scale": scale,
-    }
+    return boundary.compute_boundaries(
+        design_payload=design_payload, info_times=info_times
+    )
 
 
 # =============================================================================
