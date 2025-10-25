@@ -25,10 +25,6 @@ Variance-based:
 Fisher information-based:
     info_time_from_fisher(fisher_now, fisher_max) -> float
 
-Schedule choice (ChooseT.* functions):
-    choose_t_user_provided(t_given) -> np.ndarray
-    choose_t_equally_spaced(n_looks) -> np.ndarray
-
 Examples
 --------
 >>> # Sample-based information time
@@ -47,10 +43,6 @@ Examples
 >>> np.round(times, 2)
 array([0.33, 0.67, 1.  ])
 """
-
-from typing import Sequence
-
-import numpy as np
 
 from earlysign.stats.common.group_sequential.essentials.conversions import clip01
 
@@ -290,88 +282,3 @@ def info_time_from_fisher(fisher_now: float, fisher_max: float) -> float:
     0.25
     """
     return info_time_from_ratio(fisher_now, fisher_max)
-
-
-# =============================================================================
-# Schedule Choice Functions (ChooseT.*)
-# =============================================================================
-
-
-def choose_t_user_provided(t_given: Sequence[float]) -> np.ndarray:
-    """
-    Use user-provided information times (ChooseT.UserProvided).
-
-    Validates that times are:
-    - In [0, 1]
-    - Monotonically increasing
-    - End at 1.0
-
-    Parameters
-    ----------
-    t_given : sequence of float
-        User-specified information times.
-
-    Returns
-    -------
-    np.ndarray
-        Validated information times as array.
-
-    Examples
-    --------
-    >>> times = choose_t_user_provided([0.33, 0.67, 1.0])
-    >>> times
-    array([0.33, 0.67, 1.  ])
-
-    >>> # Non-monotonic raises error
-    >>> choose_t_user_provided([0.5, 0.3, 1.0])  # doctest: +SKIP
-    Traceback (most recent call last):
-        ...
-    ValueError: Information times must be monotonically increasing
-    """
-    t_array = np.asarray(t_given, dtype=float)
-
-    # Check range
-    if np.any(t_array < 0) or np.any(t_array > 1):
-        raise ValueError("All information times must be in [0, 1]")
-
-    # Check monotonic
-    if not np.all(np.diff(t_array) > 0):
-        raise ValueError("Information times must be monotonically increasing")
-
-    # Check ends at 1.0
-    if not np.isclose(t_array[-1], 1.0):
-        raise ValueError(f"Final information time must be 1.0, got {t_array[-1]}")
-
-    return t_array
-
-
-def choose_t_equally_spaced(n_looks: int) -> np.ndarray:
-    """
-    Create equally-spaced information times.
-
-    Generates n_looks equally spaced points from 1/n_looks to 1.0.
-
-    Parameters
-    ----------
-    n_looks : int
-        Number of planned analyses (looks).
-
-    Returns
-    -------
-    np.ndarray
-        Equally-spaced information times.
-
-    Examples
-    --------
-    >>> times = choose_t_equally_spaced(3)
-    >>> np.round(times, 3)
-    array([0.333, 0.667, 1.   ])
-
-    >>> times = choose_t_equally_spaced(4)
-    >>> np.round(times, 2)
-    array([0.25, 0.5 , 0.75, 1.  ])
-    """
-    if n_looks < 1:
-        raise ValueError(f"n_looks must be at least 1, got {n_looks}")
-
-    return np.linspace(1 / n_looks, 1.0, n_looks)
