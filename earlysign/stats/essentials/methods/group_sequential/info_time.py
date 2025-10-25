@@ -36,12 +36,6 @@ Examples
 >>> t = info_time_from_variance(var_now=0.04, var_target=0.01)
 >>> t
 0.25
-
->>> # Create equally-spaced schedule
->>> import numpy as np
->>> times = choose_t_equally_spaced(n_looks=3)
->>> np.round(times, 2)
-array([0.33, 0.67, 1.  ])
 """
 
 from earlysign.stats.common.group_sequential.essentials.conversions import clip01
