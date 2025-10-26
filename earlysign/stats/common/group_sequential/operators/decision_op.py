@@ -10,11 +10,13 @@ from typing import Dict, Literal, Optional, Tuple
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.group_sequential.essentials.conversions import convert_scale
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
     InformationTimeRecord,
+)
+from earlysign.stats.essentials.methods.group_sequential.boundary import (
+    convert_statistic_scale,
 )
 from earlysign.stats.schemes.two_proportions.records import WaldZStatisticRecord
 
@@ -175,7 +177,7 @@ class GSDecision(LedgerOperator):
                 raise ValueError(
                     "Information time required for scale conversion between z and bm"
                 )
-            v = convert_scale(
+            v = convert_statistic_scale(
                 value_in, from_scale=value_scale, to_scale=bscale, info_time=t
             )
         else:

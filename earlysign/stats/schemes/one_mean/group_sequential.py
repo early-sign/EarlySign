@@ -16,11 +16,13 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.group_sequential.essentials.conversions import convert_scale
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
     InformationTimeRecord,
+)
+from earlysign.stats.essentials.methods.group_sequential.boundary import (
+    convert_statistic_scale,
 )
 from earlysign.stats.schemes.one_mean.records import ZMeanKnownVarRecord
 
@@ -129,7 +131,7 @@ class GSDecisionFromZMean(LedgerOperator):
                 if len(idf) > 0:
                     t = float(idf.iloc[0]["info_time"])
 
-        v = convert_scale(
+        v = convert_statistic_scale(
             z_raw, from_scale=value_scale, to_scale=bscale, info_time=(t or 0.0)
         )
         signal, reason = _decide(v, upper=upper, lower=lower)

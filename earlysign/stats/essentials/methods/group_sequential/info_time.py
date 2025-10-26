@@ -38,7 +38,38 @@ Examples
 0.25
 """
 
-from earlysign.stats.common.group_sequential.essentials.conversions import clip01
+# ============================================================================
+# Helper functions
+# =============================================================================
+
+
+def clip01(x: float) -> float:
+    """
+    Helper function: clip a float into [0, 1].
+
+    Utility function for ensuring information times stay in valid range.
+
+    Parameters
+    ----------
+    x : float
+        Value to clip.
+
+    Returns
+    -------
+    float
+        Value clipped to [0, 1].
+
+    Examples
+    --------
+    >>> clip01(-0.1)
+    0.0
+    >>> clip01(0.5)
+    0.5
+    >>> clip01(1.5)
+    1.0
+    """
+    return max(0.0, min(1.0, float(x)))
+
 
 # =============================================================================
 # Core Information Time Calculations

@@ -271,8 +271,8 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 | `beta_pocock_spending(t, β)` | `spending.beta_pocock_spending` | ✅ |
 | `beta_hsd_spending(t, β, γ)` | `spending.beta_hsd_spending` | ✅ |
 | **Design & Boundaries** | | |
-| `Design` | `boundaries.resolve_boundary_from_design` | ✅ |
-| `Design` (batch) | `boundaries.compute_boundaries_at_times` | ✅ |
+| `Design` | `BoundaryCalculator.compute_boundary` | ✅ |
+| `Design` (batch) | `BoundaryCalculator.compute_boundaries` | ✅ |
 | Efficacy boundary | `boundaries.efficacy_boundary_from_spending` | ✅ |
 | Futility boundary | `boundaries.futility_boundary_from_spending` | ✅ |
 | **Information Time** | | |
@@ -293,11 +293,11 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 | `InverseDesign` (MDE) | `inverse_design.inverse_design_from_mde` | ✅ |
 | `InverseDesign` (sample size) | `inverse_design.optimize_sample_size_for_power` | ✅ |
 | **Scale Conversions** | | |
-| `cumulative_to_nominal_z` | `conversions.cumulative_to_nominal_z` | ✅ |
-| `level_to_nominal_z` | `conversions.level_to_nominal_z` | ✅ |
-| `z_to_brownian` | `conversions.z_to_brownian` | ✅ |
-| `brownian_to_z` | `conversions.brownian_to_z` | ✅ |
-| `convert_scale` | `conversions.convert_scale` | ✅ |
+| `cumulative_to_nominal_z` | `boundary.nominal_z_from_spent_alpha` | ✅ |
+| `level_to_nominal_z` | `boundary.nominal_z_from_level` | ✅ |
+| `z_to_brownian` | `boundary.z_to_brownian` | ✅ |
+| `brownian_to_z` | `boundary.brownian_to_z` | ✅ |
+| `convert_scale` | `boundary.convert_statistic_scale` | ✅ |
 | **Type Definitions** | | |
 | `BindingMode` | `design_schema.BindingMode` | ✅ |
 | `SpendingFamily` | `design_schema.SpendingFamily` | ✅ |

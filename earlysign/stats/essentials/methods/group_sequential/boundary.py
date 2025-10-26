@@ -13,39 +13,11 @@ Core notation used here
  - look := integer look index (1-based)
  - process := StochasticProcess primitive (e.g. Brownian motion)
 
-Core functions / roles (signatures)
- - BoundaryDesign: (alpha, tails, scale, efficacySpec, futilitySpec) -> spec
-         * Construct the immutable `BoundaryCalculatorSpec` describing the
-             design. This is the translation point from higher-level `Design`
-             payloads to the local spec object.
-
- - InstantiateProcess: (process_name | process_instance) -> process
-         * Return a `StochasticProcess` primitive that knows how to convert
-             between statistic scale (Z) and process scale (e.g. BM).
-
- - ComputeBoundary: (spec, t, look?) -> (upper: float, lower: float, scale: str)
-         * Core single-look computation. Mirrors `Design -> boundary` in
-             gst.md and is implemented by `BoundaryCalculator.compute_boundary`.
-
- - ComputeBoundaries: (spec, info_times: np.ndarray) ->
-         { info_times, upper: np.ndarray, lower: np.ndarray, scale }
-         * Vectorized convenience to compute boundaries for all planned looks.
-
- - EfficacyUpper: (spec, t, look?) -> upper_z
-         * Compute the nominal upper Z-level for a given information time.
-             Implemented as `_resolve_efficacy_upper_z` and uses spending
-             functions (OBF, Pocock, HSD) or explicit per-look alpha levels.
-
- - FutilityLower: (spec, upper_z, t, look?) -> lower_z
-         * Compute futility (lower) bound on Z-scale. Implemented as
-             `_resolve_futility_lower_z` and supports symmetric, fixed-z, and
-             beta-spending modes.
-
-Composability intent
- - The file intentionally separates the small, serializable spec objects
-     (`BoundaryCalculatorSpec`, `EfficacySpec`, `FutilitySpec`) from the
-     computational class `BoundaryCalculator`. That keeps ledger/storage
-     interactions simple and makes the calculator a pure computational
+    Composability intent
+     - The file intentionally separates the small, serializable spec objects
+         (`BoundaryCalculatorSpec`, `EfficacySpec`, `FutilitySpec`) from the
+         computational class `BoundaryCalculator`. That keeps ledger/storage
+         interactions simple and makes the calculator a pure computational
      operator that can be constructed, reused, or replaced.
 
 Protocol vs concrete implementation (brief)
@@ -65,19 +37,16 @@ are in English and the module is designed to be small and explicit.
 """
 
 from dataclasses import asdict, dataclass
+from math import sqrt
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
+from scipy.stats import norm
 
-from earlysign.stats.common.group_sequential.essentials import conversions
 from earlysign.stats.common.group_sequential.essentials.design_schema import (
     validate_design_payload,
 )
 from earlysign.stats.essentials.methods.group_sequential import spending as spending_mod
-from earlysign.stats.essentials.primitives.stochastic_processes import (
-    BrownianMotionProcess,
-    StochasticProcess,
-)
 
 # Essentials-level dataclasses for boundary configuration. Defined here per
 # request so the canonical BoundaryCalculator exposes its configuration type
@@ -130,14 +99,16 @@ class BoundaryCalculator:
     Parameters
     ----------
     process:
-        Stochastic process abstraction. Defaults to Brownian motion which
-        matches the existing codebase behavior.
+        Optional adapter providing custom scale conversions. Must expose a
+        ``stat_to_process(value: float, t: float) -> float`` method if
+        provided. When absent, canonical Brownian (Z → B(t)) conversions from
+        ``asymptotic_processes`` are used.
     """
 
     def __init__(
         self,
         spec: Union[Mapping[str, Any], "BoundaryCalculatorSpec"],
-        process: Optional[StochasticProcess] = None,
+        process: Optional[Any] = None,
     ) -> None:
         # Normalize and validate spec at construction time so the
         # calculator instance is bound to a specific spec.
@@ -149,8 +120,7 @@ class BoundaryCalculator:
 
         # store normalized spec on the instance
         self.spec: Mapping[str, Any] = spec_dict
-        # The process can still be overridden; if not provided default to BM.
-        self.process = process if process is not None else BrownianMotionProcess()
+        self.process = process
 
     # ---- Core single-time computation ---------------------------------
     def compute_boundary(
@@ -158,10 +128,10 @@ class BoundaryCalculator:
     ) -> Tuple[float, float, str]:
         """Compute (upper, lower, scale) for a single information time.
 
-        The function mirrors the previous `resolve_boundary_from_design`
-        semantics but is organized around the `BoundaryCalculator`'s
-        process abstraction. This method is the implementation of the
-        functional `ComputeBoundary` role described in the module docstring.
+        This method is the primary entry point for callers that instantiate
+        :class:`BoundaryCalculator`. It resolves efficacy and futility levels
+        on the requested output scale and mirrors the conceptual
+        ``Design → boundary`` step described in ``gst.md``.
         """
 
         t = float(info_time)
@@ -186,9 +156,9 @@ class BoundaryCalculator:
 
         # Convert to requested scale using the process
         if scale == "bm":
-            upper = self.process.stat_to_process(upper_z, t)
+            upper = self._stat_to_process_scale(upper_z, t)
             lower = (
-                self.process.stat_to_process(lower_z, t)
+                self._stat_to_process_scale(lower_z, t)
                 if np.isfinite(lower_z)
                 else lower_z
             )
@@ -254,7 +224,7 @@ class BoundaryCalculator:
                 raise ValueError(f"Unknown spending family: {family}")
 
             alpha_spent = float(s.cumulative(np.array([t]))[0])
-            upper_z, _ = conversions.cumulative_to_nominal_z(
+            upper_z, _ = nominal_z_from_spent_alpha(
                 alpha_spent, tails=int(spec["tails"])
             )
             return upper_z
@@ -266,7 +236,7 @@ class BoundaryCalculator:
             if alpha_levels is None:
                 raise ValueError("alpha_levels required for significance_level style")
             level = self._get_alpha_level_for_look(alpha_levels, look)
-            upper_z, _ = conversions.level_to_nominal_z(level, tails=int(spec["tails"]))
+            upper_z, _ = nominal_z_from_level(level, tails=int(spec["tails"]))
             return upper_z
 
         else:
@@ -319,7 +289,7 @@ class BoundaryCalculator:
                 raise ValueError(f"Unknown futility spending family: {family}")
 
             beta_spent = float(s_beta.cumulative(np.array([info_time]))[0])
-            z_one_sided, _ = conversions.cumulative_to_nominal_z(beta_spent, tails=1)
+            z_one_sided, _ = nominal_z_from_spent_alpha(beta_spent, tails=1)
             return -z_one_sided
 
         raise ValueError(f"Unknown futility mode: {mode}")
@@ -334,3 +304,77 @@ class BoundaryCalculator:
         if idx < 0 or idx >= len(alpha_levels):
             raise IndexError(f"Look {look} out of range for alpha_levels")
         return float(alpha_levels[idx])
+
+    def _stat_to_process_scale(self, value: float, info_time: float) -> float:
+        if self.process is not None and hasattr(self.process, "stat_to_process"):
+            return float(self.process.stat_to_process(value, info_time))
+        return convert_statistic_scale(
+            value,
+            from_scale="z",
+            to_scale="bm",
+            info_time=info_time,
+        )
+
+
+def nominal_z_from_spent_alpha(
+    spent_alpha: float, *, tails: int = 2
+) -> Tuple[float, float]:
+    """Return nominal Z boundaries corresponding to cumulative alpha spending."""
+
+    if spent_alpha < 0.0:
+        raise ValueError("spent_alpha must be non-negative.")
+    if spent_alpha == 0.0:
+        return float("inf"), float("-inf") if tails == 2 else float("-inf")
+    if tails == 2:
+        z = float(norm.isf(spent_alpha / 2.0))
+        return z, -z
+    if tails == 1:
+        z = float(norm.isf(spent_alpha))
+        return z, float("-inf")
+    raise ValueError(f"tails must be 1 or 2, got {tails}")
+
+
+def nominal_z_from_level(alpha_level: float, *, tails: int = 2) -> Tuple[float, float]:
+    """Return nominal Z boundaries from a per-look significance level."""
+
+    if not (0.0 < alpha_level < 1.0):
+        raise ValueError("alpha_level must lie in (0, 1).")
+    return nominal_z_from_spent_alpha(alpha_level, tails=tails)
+
+
+def z_to_brownian(z: float, t: float) -> float:
+    """Convert a Z-statistic to Brownian-motion scale."""
+
+    if not (0.0 <= t <= 1.0):
+        raise ValueError("t must be in [0, 1].")
+    return float(z) * sqrt(max(t, 0.0))
+
+
+def brownian_to_z(b: float, t: float) -> float:
+    """Convert a Brownian-motion value to Z-scale."""
+
+    if not (0.0 < t <= 1.0):
+        raise ValueError("t must be in (0, 1].")
+    return float(b) / sqrt(max(t, 1e-12))
+
+
+def convert_statistic_scale(
+    value: float, *, from_scale: str, to_scale: str, info_time: float
+) -> float:
+    """Convert between supported statistic scales."""
+
+    fs = from_scale.lower()
+    ts = to_scale.lower()
+    if fs not in {"z", "bm"}:
+        raise ValueError(f"Unsupported from_scale '{from_scale}'.")
+    if ts not in {"z", "bm"}:
+        raise ValueError(f"Unsupported to_scale '{to_scale}'.")
+    if not (0.0 <= info_time <= 1.0):
+        raise ValueError("info_time must be in [0, 1].")
+    if fs == ts:
+        return float(value)
+    if fs == "z" and ts == "bm":
+        return z_to_brownian(value, info_time)
+    if fs == "bm" and ts == "z":
+        return brownian_to_z(value, info_time)
+    return float(value)

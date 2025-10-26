@@ -20,11 +20,13 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.group_sequential.essentials.conversions import convert_scale
 from earlysign.stats.common.group_sequential.records import (
     GroupSequentialBoundaryRecord,
     GroupSequentialDecisionSignalRecord,
     InformationTimeRecord,
+)
+from earlysign.stats.essentials.methods.group_sequential.boundary import (
+    convert_statistic_scale,
 )
 from earlysign.stats.schemes.two_proportions.records import (
     WaldZStatisticRecord,
@@ -125,7 +127,7 @@ class GSDecisionFromWaldZ(LedgerOperator):
             )
 
         # 3) scale conversion as needed and decide
-        v = convert_scale(
+        v = convert_statistic_scale(
             z_raw, from_scale=value_scale, to_scale=bscale, info_time=(t or 0.0)
         )
         signal, reason = _decide(v, upper=upper, lower=lower)

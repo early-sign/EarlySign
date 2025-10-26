@@ -11,10 +11,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 
+from earlysign.stats.essentials.methods.group_sequential.boundary import (
+    BoundaryCalculator,
+)
+
 
 def plot_design_boundaries(
     design: Dict[str, Any],
-    resolve_boundary_func: Any,
     n_points: int = 50,
 ) -> Figure:
     """
@@ -22,12 +25,9 @@ def plot_design_boundaries(
 
     Parameters
     ----------
-    design_payload : Dict[str, Any]
+    design : Dict[str, Any]
         Design configuration dictionary containing alpha, tails, scale,
         efficacy, and futility specifications.
-    resolve_boundary_func : callable
-        Function to resolve boundaries from design, typically
-        `resolve_boundary_from_design` from the design module.
     n_points : int, optional
         Number of information time points to evaluate boundaries at, by default 50.
 
@@ -38,24 +38,23 @@ def plot_design_boundaries(
 
     Examples
     --------
-    >>> from earlysign.stats.common.group_sequential.essentials.boundaries import resolve_boundary_from_design
     >>> design = {
     ...     "alpha": 0.05, "tails": 2, "scale": "z",
     ...     "efficacy": {"style": "alpha_spending", "family": "obf"},
     ...     "futility": {"mode": "symmetric"}
     ... }
-    >>> fig = plot_design_boundaries(design, resolve_boundary_from_design)  # doctest: +SKIP
+    >>> fig = plot_design_boundaries(design)  # doctest: +SKIP
     """
     # Generate information time points
     info_times = np.linspace(0.01, 1.0, n_points)
     upper_bounds = []
     lower_bounds = []
 
+    calc = BoundaryCalculator(spec=design, process=None)
+
     # Calculate boundaries at each information time
     for t in info_times:
-        upper, lower, scale = resolve_boundary_func(
-            design=design, info_time=t, look=None
-        )
+        upper, lower, scale = calc.compute_boundary(info_time=float(t))
         upper_bounds.append(upper)
         lower_bounds.append(lower)
 

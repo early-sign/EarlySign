@@ -9,9 +9,6 @@ from matplotlib.figure import Figure
 from earlysign.core.ledger import Ledger
 from earlysign.framework import templates as tpl
 from earlysign.reporting.group_sequential import plot_design_boundaries
-from earlysign.stats.common.group_sequential.essentials.boundaries import (
-    resolve_boundary_from_design,
-)
 from earlysign.stats.common.group_sequential.operators.boundary_op import (
     BoundaryFromDesign,
 )
@@ -272,7 +269,6 @@ class BinomialABTest(tpl.TemplateBase):
         # Delegate to reporting module
         return plot_design_boundaries(
             design=design.iloc[0]["payload"],
-            resolve_boundary_func=resolve_boundary_from_design,
             n_points=n_points,
         )
 
