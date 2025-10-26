@@ -41,6 +41,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
+from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
 from earlysign.stats.design.gst.common.lab import DesignLab
 from earlysign.stats.design.gst.common.optimize_info_times import (
     BalancedDesign,
@@ -50,9 +51,6 @@ from earlysign.stats.design.gst.common.optimize_info_times import (
     MinimizeASN,
 )
 from earlysign.stats.design.gst.common.types import InformationSpacing, SpendingFunction
-from earlysign.stats.design.gst.schemes.two_proportions.config import (
-    ProportionsDesignSpec,
-)
 
 
 @dataclass

@@ -16,8 +16,8 @@ from earlysign.stats.design.gst.scenarios import (
     run_scenario_a,
     run_scenario_b,
 )
-from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
-    TwoProportionsCalculator,
+from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
+    TwoProportionsEffectSizeCalculator,
 )
 
 # Fix random seed for reproducibility
@@ -48,7 +48,7 @@ def test_gst_operating_characteristics(alpha, power, p0, effect_size_target):
     print(f"   Alpha:           {alpha:.3f}")
     print(f"   Power:           {power:.2f}")
 
-    calculator = TwoProportionsCalculator(p_control=p0)
+    calculator = TwoProportionsEffectSizeCalculator(p_control=p0)
 
     # Calculate fixed design sample size
     n_per_group = calculator.calculate_sample_size(effect_size_target, alpha, power)
@@ -153,7 +153,7 @@ def test_gst_operating_characteristics_realistic_ctr():
     print(f"   Alpha:               {alpha:.3f}")
     print(f"   Power:               {power:.2f}")
 
-    calculator = TwoProportionsCalculator(p_control=p0)
+    calculator = TwoProportionsEffectSizeCalculator(p_control=p0)
 
     # Calculate fixed design sample size
     n_per_group = calculator.calculate_sample_size(effect_size_target, alpha, power)

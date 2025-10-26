@@ -46,7 +46,7 @@ class DesignObjective(ABC):
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.lab import DesignLab
     >>>
     >>> # Define a custom objective
@@ -134,7 +134,7 @@ class MinimizeASN(DesignObjective):
     >>> objective.target_power
     0.9
 
-    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.lab import DesignLab
     >>> spec = ProportionsDesignSpec()
     >>> lab = DesignLab(spec)
@@ -225,7 +225,7 @@ class MaximizePower(DesignObjective):
     >>> objective.planned_max_n
     3000
 
-    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.lab import DesignLab
     >>> spec = ProportionsDesignSpec()
     >>> lab = DesignLab(spec)
@@ -398,7 +398,7 @@ class BalancedDesign(DesignObjective):
 class DesignOptimizer:
     """Design optimization engine.
 
-    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> spec = ProportionsDesignSpec()
     >>> objective = MinimizeASN(planned_max_n=3000)
     >>> optimizer = DesignOptimizer(spec, objective)

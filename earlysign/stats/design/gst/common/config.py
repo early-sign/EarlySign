@@ -13,6 +13,18 @@ from earlysign.stats.design.gst.common.types import (
     TestType,
     TimingType,
 )
+from earlysign.stats.essentials.schemes.survival import (
+    TimeToEventEffect,
+    TimeToEventSampleSize,
+)
+from earlysign.stats.essentials.schemes.two_means import (
+    MeansEffect,
+    MeansSampleSize,
+)
+from earlysign.stats.essentials.schemes.two_proportions import (
+    ProportionsEffect,
+    ProportionsSampleSize,
+)
 
 
 @dataclass
@@ -131,128 +143,6 @@ class DisplayConfig:
     digits: int = 4  # Significant figures
     ddigits: int = 2  # Decimal places
     tdigits: int = 1  # Time display precision
-
-
-# ========== Effect Specifications ==========
-
-
-@dataclass
-class ProportionsEffect:
-    """Effect specification for two-sample proportions test.
-
-    >>> effect = ProportionsEffect(p_control=0.10, effect_size=0.02)
-    >>> round(effect.get_treatment_proportion(), 10)
-    0.12
-    >>> effect_rel = ProportionsEffect(p_control=0.10, effect_size=0.2,
-    ...                                effect_type="relative")
-    >>> effect_rel.get_treatment_proportion()
-    0.12
-    """
-
-    p_control: float = 0.10
-    p_treatment: Optional[float] = None
-    effect_size: Optional[float] = 0.02
-    effect_type: Literal["absolute", "relative", "odds_ratio"] = "absolute"
-
-    def get_treatment_proportion(self) -> float:
-        """Calculate treatment proportion based on effect specification.
-
-        Returns:
-            Treatment group proportion
-
-        Raises:
-            ValueError: If effect_type is unknown or effect_size is None
-        """
-        if self.p_treatment is not None:
-            return self.p_treatment
-
-        if self.effect_size is None:
-            raise ValueError("effect_size must be specified when p_treatment is None")
-
-        if self.effect_type == "absolute":
-            return self.p_control + self.effect_size
-        elif self.effect_type == "relative":
-            return self.p_control * (1 + self.effect_size)
-        elif self.effect_type == "odds_ratio":
-            odds_control = self.p_control / (1 - self.p_control)
-            odds_treatment = odds_control * self.effect_size
-            return odds_treatment / (1 + odds_treatment)
-        else:
-            raise ValueError(f"Unknown effect_type: {self.effect_type}")
-
-
-@dataclass
-class TimeToEventEffect:
-    """Effect specification for time-to-event analysis.
-
-    >>> effect = TimeToEventEffect(hazard_ratio=0.7)
-    >>> effect.hazard_ratio
-    0.7
-    """
-
-    hazard_ratio: float = 0.6
-
-
-@dataclass
-class MeansEffect:
-    """Effect specification for two-sample means test.
-
-    >>> effect = MeansEffect(mean_control=10.0, effect_size=2.0, std_dev=5.0)
-    >>> effect.mean_control
-    10.0
-    >>> effect.std_dev
-    5.0
-    """
-
-    mean_control: float = 10.0
-    mean_treatment: Optional[float] = None
-    effect_size: Optional[float] = 2.0
-    std_dev: float = 5.0
-    pooled_std: bool = True
-
-
-# ========== Sample Size Specifications ==========
-
-
-@dataclass
-class ProportionsSampleSize:
-    """Sample size specification for proportions test.
-
-    >>> sample_size = ProportionsSampleSize(n_per_analysis=500)
-    >>> sample_size.n_per_analysis
-    500
-    """
-
-    n_per_analysis: int = 500  # Per group
-
-
-@dataclass
-class TimeToEventSampleSize:
-    """Sample size specification for time-to-event analysis.
-
-    >>> sample_size = TimeToEventSampleSize(total_events=171,
-    ...                                     total_sample_size=296)
-    >>> sample_size.total_events
-    171
-    """
-
-    total_events: int = 171
-    total_sample_size: int = 296
-    time_unit: Literal["days", "weeks", "months", "years"] = "months"
-    accrual_duration: Optional[float] = None
-    follow_up_duration: Optional[float] = None
-
-
-@dataclass
-class MeansSampleSize:
-    """Sample size specification for means test.
-
-    >>> sample_size = MeansSampleSize(n_per_analysis=100)
-    >>> sample_size.n_per_analysis
-    100
-    """
-
-    n_per_analysis: int = 100  # Per group
 
 
 # ========== Main Design Specifications ==========

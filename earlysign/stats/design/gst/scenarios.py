@@ -9,11 +9,11 @@ from typing import List
 
 import numpy as np
 
-from earlysign.stats.common.protocols import EffectSizeCalculator
 from earlysign.stats.design.gst.essentials.operating_characteristics import (
     OCCurveResult,
     compute_oc_curve,
 )
+from earlysign.stats.essentials.schemes.protocols import FixedDesignEffectCalculator
 
 
 @dataclass
@@ -45,7 +45,7 @@ class ScenarioBResult:
 
 
 def run_scenario_a(
-    calculator: EffectSizeCalculator,
+    calculator: FixedDesignEffectCalculator,
     target_effect: float,
     effect_sizes: np.ndarray,
     alpha: float,
@@ -59,7 +59,7 @@ def run_scenario_a(
     expected sample size can be reduced if the true effect is strong.
 
     Args:
-        calculator: Effect size calculator
+        calculator: Fixed-design effect size calculator
         target_effect: Target effect size for power calculation
         effect_sizes: Array of effect sizes to evaluate
         alpha: Type I error rate
@@ -106,7 +106,7 @@ def run_scenario_a(
 
 
 def run_scenario_b(
-    calculator: EffectSizeCalculator,
+    calculator: FixedDesignEffectCalculator,
     target_effect: float,
     effect_sizes: np.ndarray,
     alpha: float,
@@ -121,7 +121,7 @@ def run_scenario_b(
     through early stopping.
 
     Args:
-        calculator: Effect size calculator
+        calculator: Fixed-design effect size calculator
         target_effect: Target effect size for power calculation
         effect_sizes: Array of effect sizes to evaluate
         alpha: Type I error rate

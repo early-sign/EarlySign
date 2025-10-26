@@ -5,7 +5,7 @@ from typing import Any, Dict
 import numpy as np
 
 from earlysign.stats.design.gst.common.config import DesignSpec
-from earlysign.stats.schemes.base.effects import EffectCalculator
+from earlysign.stats.essentials.schemes.protocols import EffectSizeCalculator
 
 
 class SimulationEngine:
@@ -40,14 +40,14 @@ class SimulationEngine:
 
     Examples
     --------
-    >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
+    >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     >>> from earlysign.stats.design.gst.common.adapter import BoundaryCalculator
-    >>> from earlysign.stats.schemes.two_proportions.essentials.effects import ProportionsEffectCalculator
+    >>> from earlysign.stats.essentials.schemes.two_proportions.effect_size import TwoProportionsEffectSizeCalculator
     >>>
     >>> spec = ProportionsDesignSpec()
     >>> spec.simulation.n_sims = 1000  # Use more for production
     >>> boundaries = BoundaryCalculator.critical_values(spec)
-    >>> calc = ProportionsEffectCalculator()
+    >>> calc = TwoProportionsEffectSizeCalculator()
     >>> results = SimulationEngine.run_simulations(spec, boundaries, calc)
     >>>
     >>> # Check power
@@ -79,7 +79,7 @@ class SimulationEngine:
     See Also
     --------
     BoundaryCalculator : Computes critical values for boundaries
-    EffectCalculator : Computes standardized effects for test types
+    EffectSizeCalculator : Computes standardized effects for test types
     DesignLab : Orchestrator combining boundaries and simulation
     DesignSpec : Specifies simulation parameters (n_sims, seed, etc.)
 
@@ -96,7 +96,7 @@ class SimulationEngine:
     def simulate_trial(
         spec: DesignSpec,
         boundaries: Dict[str, Any],
-        effect_calc: EffectCalculator,
+        effect_calc: EffectSizeCalculator,
         rng: np.random.Generator,
     ) -> Dict[str, Any]:
         """Simulate a single trial.
@@ -118,6 +118,8 @@ class SimulationEngine:
         stopped = False
         stop_analysis = None
         stop_reason = None
+        allocation_ratio = spec.allocation.alloc_ratio
+        info_schedule = spec.resolved_info_times()
 
         # Generate Z-statistics trajectory
         Z = np.zeros(k)
@@ -128,7 +130,13 @@ class SimulationEngine:
                 # CORRECTED: standardized_effect(t) returns E[Z(t)] = theta * sqrt(t)
                 # For Brownian motion with drift: Z(t) ~ N(theta * sqrt(t), sqrt(t))
                 # So we use standardized_effect directly as the mean
-                mean_at_t = effect_calc.standardized_effect(spec, t[i])
+                mean_at_t = effect_calc.standardized_effect(
+                    spec.effect,
+                    t[i],
+                    sample_size=spec.sample_size,
+                    allocation_ratio=allocation_ratio,
+                    info_times=info_schedule,
+                )
 
                 # Generate from joint distribution using incremental form
                 if i == 0:
@@ -138,7 +146,13 @@ class SimulationEngine:
                     # Z(t[i]) | Z(t[i-1]) has conditional mean and variance
                     # E[Z(t[i]) | Z(t[i-1])] = Z(t[i-1]) + theta * sqrt(t[i] - t[i-1])
                     # Var[Z(t[i]) | Z(t[i-1])] = t[i] - t[i-1]
-                    mean_at_prev = effect_calc.standardized_effect(spec, t[i - 1])
+                    mean_at_prev = effect_calc.standardized_effect(
+                        spec.effect,
+                        t[i - 1],
+                        sample_size=spec.sample_size,
+                        allocation_ratio=allocation_ratio,
+                        info_times=info_schedule,
+                    )
                     conditional_mean = Z[i - 1] + (mean_at_t - mean_at_prev)
                     dt = t[i] - t[i - 1]
                     Z[i] = rng.normal(conditional_mean, np.sqrt(dt))
@@ -166,7 +180,7 @@ class SimulationEngine:
 
     @staticmethod
     def run_simulations(
-        spec: DesignSpec, boundaries: Dict[str, Any], effect_calc: EffectCalculator
+        spec: DesignSpec, boundaries: Dict[str, Any], effect_calc: EffectSizeCalculator
     ) -> Dict[str, Any]:
         """Run full simulation study.
 
@@ -197,7 +211,11 @@ class SimulationEngine:
             stop_dist[a] = stop_dist.get(a, 0) + 1
 
         # Expected sample size
-        sample_info = effect_calc.sample_sizes(spec)
+        sample_info = effect_calc.sample_sizes(
+            spec.sample_size,
+            allocation_ratio=spec.allocation.alloc_ratio,
+            info_times=spec.resolved_info_times(),
+        )
         if "n_total" in sample_info:
             n_per_analysis = sample_info["n_total"]
         elif "events" in sample_info:

@@ -9,11 +9,9 @@ from typing import List
 
 import numpy as np
 
-from earlysign.stats.common.protocols import EffectSizeCalculator
+from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
 from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.schemes.two_proportions.config import (
-    ProportionsDesignSpec,
-)
+from earlysign.stats.essentials.schemes.protocols import FixedDesignEffectCalculator
 
 
 @dataclass
@@ -63,7 +61,7 @@ class OCCurveResult:
 
 
 def compute_oc_curve(
-    calculator: EffectSizeCalculator,
+    calculator: FixedDesignEffectCalculator,
     effect_sizes: np.ndarray,
     n_looks: int,
     n_per_analysis: int,
@@ -73,7 +71,7 @@ def compute_oc_curve(
     """Compute operating characteristics curve across effect sizes.
 
     Args:
-        calculator: Effect size calculator (determines test type)
+        calculator: Fixed-design effect size calculator
         effect_sizes: Array of effect sizes to evaluate
         n_looks: Number of analyses
         n_per_analysis: Sample size per analysis (per group)

@@ -18,7 +18,6 @@ earlysign/stats/design/
 │   ├── common/        # GST-specific shared components
 │   │   ├── boundaries.py    # Boundary value calculation
 │   │   ├── config.py        # Design specification dataclasses
-│   │   ├── effects.py       # Effect size and sample size calculation
 │   │   ├── lab.py           # Main orchestrator (DesignLab)
 │   │   ├── simulation.py    # Simulation engine
 │   │   └── types.py         # Type definitions (Enums)
@@ -28,11 +27,19 @@ earlysign/stats/design/
 │   ├── optimize_design/     # Multi-objective optimization design mode
 │   └── fixed_power/         # Fixed power design mode
 
+Shared scheme utilities now live in ``earlysign/stats/essentials/schemes/``::
+
+    essentials/schemes/
+    ├── protocols.py       # Protocols for effect size calculators
+    ├── survival/          # Time-to-event dataclasses + calculators
+    ├── two_means/         # Continuous-outcome dataclasses + calculators
+    └── two_proportions/   # Binary-outcome dataclasses + calculators
+
 Basic Usage
 -----------
 Two-Sample Proportions Sequential Design::
 
-    from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
+    from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
     from earlysign.stats.design.gst.common.lab import DesignLab
 
     # Create design specification
@@ -69,10 +76,10 @@ Extensibility
 -------------
 To add a new test type:
 
-1. Add new Effect and SampleSize classes in config.py
-2. Add new DesignSpec subclass in config.py
-3. Add new EffectCalculator subclass in effects.py
-4. Update _create_effect_calculator() method in lab.py
+1. Add new effect and sample size dataclasses (and calculators) under ``essentials/schemes/<scheme>/``
+2. Add a new ``DesignSpec`` subclass in ``config.py``
+3. Implement the scheme-specific ``EffectSizeCalculator`` using the shared protocol
+4. Update ``DesignLab._create_effect_calculator`` to reference the new calculator
 
 To add a new optimization objective:
 

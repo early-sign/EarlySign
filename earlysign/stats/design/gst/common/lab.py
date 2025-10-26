@@ -7,20 +7,18 @@ import numpy as np
 import pandas as pd
 
 from earlysign.stats.design.gst.common.adapter import BoundaryCalculator
-from earlysign.stats.design.gst.common.config import DesignSpec
-from earlysign.stats.design.gst.common.simulation import SimulationEngine
-from earlysign.stats.design.gst.schemes.survival.config import TimeToEventDesignSpec
-from earlysign.stats.design.gst.schemes.two_means.config import MeansDesignSpec
-from earlysign.stats.design.gst.schemes.two_proportions.config import (
+from earlysign.stats.design.gst.common.config import (
+    DesignSpec,
+    MeansDesignSpec,
     ProportionsDesignSpec,
+    TimeToEventDesignSpec,
 )
-from earlysign.stats.schemes.base.effects import EffectCalculator
-from earlysign.stats.schemes.survival.essentials.effects import (
-    TimeToEventEffectCalculator,
-)
-from earlysign.stats.schemes.two_means.essentials.effects import MeansEffectCalculator
-from earlysign.stats.schemes.two_proportions.essentials.effects import (
-    ProportionsEffectCalculator,
+from earlysign.stats.design.gst.common.simulation import SimulationEngine
+from earlysign.stats.essentials.schemes import EffectSizeCalculator
+from earlysign.stats.essentials.schemes.survival import TimeToEventEffectSizeCalculator
+from earlysign.stats.essentials.schemes.two_means import MeansEffectSizeCalculator
+from earlysign.stats.essentials.schemes.two_proportions import (
+    TwoProportionsEffectSizeCalculator,
 )
 
 
@@ -63,7 +61,7 @@ class DesignLab:
     --------
     Basic usage with two-sample proportions test::
 
-        >>> from earlysign.stats.design.gst.schemes.two_proportions.config import ProportionsDesignSpec
+        >>> from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
         >>> spec = ProportionsDesignSpec()
         >>> lab = DesignLab(spec)
         >>> _ = lab.compute_boundaries()
@@ -95,16 +93,16 @@ class DesignLab:
         self.spec = spec
         self.boundaries: Optional[Dict[str, Any]] = None
         self.simulation_results: Optional[Dict[str, Any]] = None
-        self._effect_calculator = self._create_effect_calculator()
+        self._effect_calculator: EffectSizeCalculator = self._create_effect_calculator()
 
-    def _create_effect_calculator(self) -> EffectCalculator:
+    def _create_effect_calculator(self) -> EffectSizeCalculator:
         """Factory method to create appropriate effect calculator."""
         if isinstance(self.spec, ProportionsDesignSpec):
-            return ProportionsEffectCalculator()
+            return TwoProportionsEffectSizeCalculator()
         elif isinstance(self.spec, TimeToEventDesignSpec):
-            return TimeToEventEffectCalculator()
+            return TimeToEventEffectSizeCalculator()
         elif isinstance(self.spec, MeansDesignSpec):
-            return MeansEffectCalculator()
+            return MeansEffectSizeCalculator()
         else:
             raise ValueError(f"Unsupported design spec type: {type(self.spec)}")
 
@@ -137,8 +135,14 @@ class DesignLab:
         z_lower = self.boundaries["z_futility"]
         alpha_cum = self.boundaries["cumulative_alpha"]
 
+        info_times = self.spec.resolved_info_times()
+
         # Sample size information
-        sample_info = self._effect_calculator.sample_sizes(self.spec)
+        sample_info = self._effect_calculator.sample_sizes(
+            self.spec.sample_size,
+            allocation_ratio=self.spec.allocation.alloc_ratio,
+            info_times=info_times,
+        )
 
         data: Dict[str, Any] = {
             "Analysis": np.arange(1, len(t) + 1),

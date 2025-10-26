@@ -10,8 +10,8 @@ Examples
 Basic GST operating characteristics with p0=0.2, effect_size=0.1:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
-...      TwoProportionsCalculator,
+>>> from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
+...     TwoProportionsEffectSizeCalculator,
 ... )
 >>> from earlysign.stats.design.gst.scenarios import (
 ...     run_scenario_a,
@@ -27,7 +27,7 @@ Basic GST operating characteristics with p0=0.2, effect_size=0.1:
 >>> p1_target = p0 + effect_size_target
 >>>
 >>> # Initialize calculator
->>> calculator = TwoProportionsCalculator(p_control=p0)
+>>> calculator = TwoProportionsEffectSizeCalculator(p_control=p0)
 >>>
 >>> # Calculate fixed design sample size
 >>> n_per_group = calculator.calculate_sample_size(effect_size_target, alpha, power)
@@ -104,8 +104,8 @@ True
 Realistic CTR scenario with p0=0.005, p1=0.007:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
-...      TwoProportionsCalculator,
+>>> from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
+...     TwoProportionsEffectSizeCalculator,
 ... )
 >>> from earlysign.stats.design.gst.scenarios import (
 ...     run_scenario_a,
@@ -129,7 +129,7 @@ Effect size: 0.20 pp
 >>> print(f"Relative lift: {(p1/p0 - 1)*100:.0f}%")
 Relative lift: 40%
 >>>
->>> calculator = TwoProportionsCalculator(p_control=p0)
+>>> calculator = TwoProportionsEffectSizeCalculator(p_control=p0)
 >>>
 >>> # Calculate fixed design sample size (expect large N due to low baseline)
 >>> n_per_group = calculator.calculate_sample_size(effect_size_target, alpha, power)
@@ -189,17 +189,17 @@ True
 Sample size calculation verification:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
-...      TwoProportionsCalculator,
+>>> from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
+...     TwoProportionsEffectSizeCalculator,
 ... )
 >>>
 >>> # Test various scenarios
->>> calc_20 = TwoProportionsCalculator(p_control=0.2)
+>>> calc_20 = TwoProportionsEffectSizeCalculator(p_control=0.2)
 >>> n_20 = calc_20.calculate_sample_size(effect_size=0.1, alpha=0.05, power=0.8)
 >>> n_20
 291
 >>>
->>> calc_50 = TwoProportionsCalculator(p_control=0.5)
+>>> calc_50 = TwoProportionsEffectSizeCalculator(p_control=0.5)
 >>> n_50 = calc_50.calculate_sample_size(effect_size=0.1, alpha=0.05, power=0.8)
 >>> n_50
 385
@@ -217,15 +217,15 @@ True
 Operating characteristics curve properties:
 
 >>> import numpy as np
->>> from earlysign.stats.design.gst.schemes.two_proportions.calculator import (
-...      TwoProportionsCalculator,
+>>> from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
+...     TwoProportionsEffectSizeCalculator,
 ... )
 >>> from earlysign.stats.design.gst.scenarios import (
 ...     run_scenario_a,
 ... )
 >>> np.random.seed(42)
 >>>
->>> calculator = TwoProportionsCalculator(p_control=0.2)
+>>> calculator = TwoProportionsEffectSizeCalculator(p_control=0.2)
 >>> effect_sizes = np.linspace(0.02, 0.35, 20)
 >>>
 >>> result = run_scenario_a(

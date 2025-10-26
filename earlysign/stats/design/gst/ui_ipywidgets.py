@@ -11,17 +11,12 @@ from typing import Any, Optional, Protocol
 import ipywidgets as widgets
 from IPython.display import clear_output, display
 
-from earlysign.stats.design.gst.common.config import DesignSpec
+from earlysign.stats.design.gst.common.config import DesignSpec, ProportionsDesignSpec
 from earlysign.stats.design.gst.common.lab import DesignLab
 from earlysign.stats.design.gst.common.optimize_info_times import (
     DesignOptimizer,
 )
-from earlysign.stats.design.gst.common.types import (
-    DesignMode,
-)
-from earlysign.stats.design.gst.schemes.two_proportions.config import (
-    ProportionsDesignSpec,
-)
+from earlysign.stats.design.gst.common.types import DesignMode
 from earlysign.stats.design.gst.widgets.fixed_power import FixedPowerDesigner
 from earlysign.stats.design.gst.widgets.fixed_timing import FixedTimingDesigner
 from earlysign.stats.design.gst.widgets.nmax_fixed_min_mde import (
