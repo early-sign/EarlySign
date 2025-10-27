@@ -79,6 +79,3 @@ def compute_wald_z(nA: int, mA: int, nB: int, mB: int, *, pooled: bool = True) -
         mB=mB,
         pooled=pooled,
     ).value()
-
-
-__all__ = ["WaldStatistic", "TwoProportionsWaldZ", "compute_wald_z"]

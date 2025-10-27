@@ -1,8 +1,10 @@
 """Shared protocols for scheme effect size calculators."""
 
-from typing import Any, Protocol
+from typing import Any, Protocol, Sequence
 
 import numpy as np
+
+from earlysign.stats.essentials.primitives.group_sequential import ASNDesignSummary
 
 
 class EffectSizeCalculator(Protocol):
@@ -41,4 +43,8 @@ class FixedDesignEffectCalculator(Protocol):
         """Return the baseline or null parameter value for the design."""
 
 
-__all__ = ["EffectSizeCalculator", "FixedDesignEffectCalculator"]
+class ASNCalculator(Protocol):
+    """Protocol for expected sample size evaluators."""
+
+    def evaluate(self, information_rates: Sequence[float]) -> ASNDesignSummary:
+        """Return a design summary from the supplied information schedule."""

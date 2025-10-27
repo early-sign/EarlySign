@@ -14,8 +14,8 @@ from earlysign.stats.design.gst.common.config import (
     TimeToEventDesignSpec,
 )
 from earlysign.stats.design.gst.common.simulation import SimulationEngine
-from earlysign.stats.essentials.schemes import EffectSizeCalculator
-from earlysign.stats.essentials.schemes.survival import TimeToEventEffectSizeCalculator
+from earlysign.stats.essentials.schemes.protocols import EffectSizeCalculator
+from earlysign.stats.essentials.schemes.survival.effect_size import TimeToEventEffectSizeCalculator
 from earlysign.stats.essentials.schemes.two_means.effect_size import (
     MeansEffectSizeCalculator,
 )

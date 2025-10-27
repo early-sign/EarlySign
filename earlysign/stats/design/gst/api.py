@@ -36,20 +36,20 @@ Examples
 >>> power_summary = result.lab.get_power_summary()  # doctest: +SKIP
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
-from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
-from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.optimize_info_times import (
+from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     BalancedDesign,
     DesignObjective,
-    DesignOptimizer,
     MaximizePower,
     MinimizeASN,
 )
+from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.optimizer import (
+    DesignOptimizer,
+)
+from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
+from earlysign.stats.design.gst.common.lab import DesignLab
 from earlysign.stats.design.gst.common.types import InformationSpacing, SpendingFunction
 
 

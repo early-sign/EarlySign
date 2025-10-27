@@ -62,7 +62,7 @@ Two-Sample Proportions Sequential Design::
 
 Design Optimization::
 
-    from earlysign.stats.design.gst.common.optimize_info_times import (
+    from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing import (
         DesignOptimizer,
         MinimizeASN,
     )
@@ -83,9 +83,9 @@ To add a new test type:
 
 To add a new optimization objective:
 
-Create a DesignObjective subclass in optimize_info_times/nelder_mead.py::
+Create a DesignObjective subclass in optimize_timing/nelder_mead.py::
 
-    from earlysign.stats.design.gst.common.optimize_info_times import DesignObjective
+    from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing import DesignObjective
 
     class CustomObjective(DesignObjective):
         def evaluate(self, spec, lab):

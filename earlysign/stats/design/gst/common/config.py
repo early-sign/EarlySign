@@ -13,7 +13,7 @@ from earlysign.stats.design.gst.common.types import (
     TestType,
     TimingType,
 )
-from earlysign.stats.essentials.schemes.survival import (
+from earlysign.stats.essentials.schemes.survival.effect_size import (
     TimeToEventEffect,
     TimeToEventSampleSize,
 )

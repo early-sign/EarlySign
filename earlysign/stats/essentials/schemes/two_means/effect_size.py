@@ -1,7 +1,5 @@
 """Effect size calculator for two-sample mean comparisons."""
 
-from __future__ import annotations
-
 import math
 from dataclasses import dataclass
 from typing import Dict
@@ -128,6 +126,3 @@ class MeansEffectSizeCalculator(EffectSizeCalculator):
             "n_total": n_control + n_treatment,
             "info_fraction": info_times,
         }
-
-
-__all__ = ["MeansEffect", "MeansSampleSize", "MeansEffectSizeCalculator"]

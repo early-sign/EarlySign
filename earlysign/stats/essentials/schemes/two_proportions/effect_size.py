@@ -1,7 +1,5 @@
 """Effect size utilities for two-sample proportion tests."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Dict, Literal
 
@@ -132,10 +130,3 @@ class TwoProportionsEffectSizeCalculator(
             "n_total": n_control + n_treatment,
             "info_fraction": info_times,
         }
-
-
-__all__ = [
-    "ProportionsEffect",
-    "ProportionsSampleSize",
-    "TwoProportionsEffectSizeCalculator",
-]

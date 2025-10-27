@@ -1,7 +1,5 @@
 """Effect size calculator for time-to-event designs."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Dict, Literal
 
@@ -79,10 +77,3 @@ class TimeToEventEffectSizeCalculator(EffectSizeCalculator):
             "n_total": n_total,
             "info_fraction": info_times,
         }
-
-
-__all__ = [
-    "TimeToEventEffect",
-    "TimeToEventSampleSize",
-    "TimeToEventEffectSizeCalculator",
-]

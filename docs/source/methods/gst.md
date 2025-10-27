@@ -320,8 +320,8 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 | `PowerContours` | `visualization.power_contours` | ✅ |
 | `SpendingOptimization` | `spending_optimization.optimize_spending_for_asn` | ✅ |
 |  | `spending_optimization.optimize_spending_for_power` | ✅ |
-| `ScheduleOptimization` | `schedule_optimization.optimize_schedule_for_asn` | ✅ |
-|  | `schedule_optimization.optimize_schedule_for_power` | ✅ |
+| `ScheduleOptimization` | `optimize_timing.minimize_asn.minimize_asn_schedule` | ✅ |
+|  | `optimize_timing.minimize_asn.summarize_schedule` | ✅ |
 | `ConditionalUpdate` | `conditional_update.conditional_power` | ✅ |
 |  | `conditional_update.update_remaining_boundaries` | ✅ |
 |  | `conditional_update.promising_zone_decision` | ✅ |
