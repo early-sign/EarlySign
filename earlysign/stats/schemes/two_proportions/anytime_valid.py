@@ -29,8 +29,10 @@ from scipy.special import betaln
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
+from earlysign.stats.applications.execution.schemes.two_proportions.records import (
+    BinomialCountsRecord,
+)
 from earlysign.stats.common.anytime_valid.records import EProcessRecord
-from earlysign.stats.schemes.two_proportions.records import BinomialCountsRecord
 
 
 def mixture_e_two_proportions(

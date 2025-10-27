@@ -12,18 +12,16 @@ Steps:
 
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
->>> from earlysign.stats.schemes.two_proportions.records import (
-...     BinomialCountsRecord, WaldZStatisticRecord
-... )
->>> from earlysign.stats.schemes.two_proportions.operators import WaldZStatistic
->>> from earlysign.stats.schemes.two_proportions.group_sequential import GSDecisionFromWaldZ
->>> from earlysign.stats.common.group_sequential.records import (
-...     InformationTimeRecord, GroupSequentialDesignRecord,
-...     GroupSequentialBoundaryRecord, GroupSequentialDecisionSignalRecord
-... )
->>> from earlysign.stats.common.group_sequential.operators.info_op import InformationTime
->>> from earlysign.stats.common.group_sequential.operators.design_op import GroupSequentialDesign
->>> from earlysign.stats.common.group_sequential.operators.boundary_op import BoundaryFromDesign
+>>> from earlysign.stats.applications.execution.schemes.two_proportions.records import BinomialCountsRecord
+>>> from earlysign.stats.applications.execution.methods.group_sequential.records.statistics import WaldZStatisticRecord
+>>> from earlysign.stats.applications.execution.schemes.two_proportions.operators import WaldZStatistic
+>>> from earlysign.stats.applications.execution.methods.group_sequential.operators.decision import GSDecisionFromWaldZ
+>>> from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
+>>> from earlysign.stats.applications.execution.methods.group_sequential.records.decision import GroupSequentialDecisionSignalRecord
+>>> from earlysign.stats.applications.execution.methods.group_sequential.records.design import GroupSequentialDesignRecord
+>>> from earlysign.stats.applications.execution.methods.group_sequential.records.info import InformationTimeRecord
+>>> from earlysign.stats.applications.execution.schemes.two_proportions.operators import InformationTime
+>>> from earlysign.stats.applications.execution.methods.group_sequential.operators.boundary import BoundaryFromDesign
 
 
 # --- Setup in-memory ledger ---------------------------------------------------
@@ -47,11 +45,16 @@ Steps:
 
 # --- Step 4. GS design → boundary → decision ---------------------------------
 >>> design_payload = {
-...     "alpha": 0.05, "tails": 2, "scale": "z",
+...     "alpha": 0.05,
+...     "hypothesis": {"structure": "two_sided_symmetric"},
+...     "statistic": {"kind": "wald_z", "scale": "z"},
 ...     "efficacy": {"style": "alpha_spending", "family": "obf"},
-...     "futility": {"mode": "symmetric"},
+...     "futility": {"mode": "symmetric", "binding_mode": "non_binding"},
+...     "planned_max_n": 600,
+...     "planned_info_times": [0.5, 1.0],
 ... }
->>> _ = GroupSequentialDesign(scoped, out_id="design1", design=design_payload).run()
+>>> design_rec = GroupSequentialDesignRecord(id="design1").attach(scoped)
+>>> _ = design_rec.insert(design_payload)
 >>> _ = BoundaryFromDesign(
 ...         scoped,
 ...         design=GroupSequentialDesignRecord(id="design1").attach(scoped),

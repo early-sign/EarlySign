@@ -2,15 +2,54 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Dict
 
 import numpy as np
 
 from earlysign.stats.essentials.schemes.protocols import EffectSizeCalculator
-from earlysign.stats.schemes.two_means.util import (
-    compute_standard_error as compute_se_means,
-)
+
+
+def compute_standard_error(
+    nA: int, nB: int, sigma: float, pooled: bool = True
+) -> float:
+    """Compute standard error for difference in means.
+
+    This is useful for design calculations where the common standard deviation
+    is assumed rather than observed.
+
+    Parameters
+    ----------
+    nA, nB : int
+        Sample sizes for groups A and B
+    sigma : float
+        Assumed common standard deviation (pooled)
+    pooled : bool, default True
+        Whether to use pooled variance estimate (for this function, always True
+        as we assume common sigma)
+
+    Returns
+    -------
+    se : float
+        Standard error of (muB - muA)
+
+    Examples
+    --------
+    >>> se = compute_standard_error(100, 100, 1.0)
+    >>> round(se, 4)
+    0.1414
+
+    >>> se2 = compute_standard_error(50, 100, 2.0)
+    >>> round(se2, 4)
+    0.3464
+    """
+    if sigma < 0:
+        raise ValueError("Standard deviation must be non-negative.")
+    if nA <= 0 or nB <= 0:
+        raise ValueError("Sample sizes must be positive.")
+
+    return sigma * math.sqrt(1.0 / nA + 1.0 / nB)
 
 
 @dataclass
@@ -60,7 +99,7 @@ class MeansEffectSizeCalculator(EffectSizeCalculator):
         if n_control_at_t == 0 or n_treatment_at_t == 0:
             return 0.0
 
-        se = compute_se_means(
+        se = compute_standard_error(
             n_control_at_t,
             n_treatment_at_t,
             std_dev,

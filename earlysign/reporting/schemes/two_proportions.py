@@ -25,19 +25,25 @@ from earlysign.reporting.reportkit import (
     to_pandas_tables,
     to_sql_dict,
 )
+from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import (
+    GroupSequentialBoundaryRecord,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.records.decision import (
+    GroupSequentialDecisionSignalRecord,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
+    InformationTimeRecord,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.records.statistics import (
+    WaldZStatisticRecord,
+)
+from earlysign.stats.applications.execution.schemes.two_proportions.records import (
+    BinomialCountsRecord,
+)
 from earlysign.stats.common.anytime_valid.records import (
     EProcessRecord,
     SafeDecisionRecord,
     SafeDesignRecord,
-)
-from earlysign.stats.common.group_sequential.records import (
-    GroupSequentialBoundaryRecord,
-    GroupSequentialDecisionSignalRecord,
-    InformationTimeRecord,
-)
-from earlysign.stats.schemes.two_proportions.records import (
-    BinomialCountsRecord,
-    WaldZStatisticRecord,
 )
 
 # ----------------------------- helpers (counts) ----------------------------- #

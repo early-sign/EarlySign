@@ -16,8 +16,10 @@ from earlysign.stats.design.gst.common.config import (
 from earlysign.stats.design.gst.common.simulation import SimulationEngine
 from earlysign.stats.essentials.schemes import EffectSizeCalculator
 from earlysign.stats.essentials.schemes.survival import TimeToEventEffectSizeCalculator
-from earlysign.stats.essentials.schemes.two_means import MeansEffectSizeCalculator
-from earlysign.stats.essentials.schemes.two_proportions import (
+from earlysign.stats.essentials.schemes.two_means.effect_size import (
+    MeansEffectSizeCalculator,
+)
+from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
     TwoProportionsEffectSizeCalculator,
 )
 

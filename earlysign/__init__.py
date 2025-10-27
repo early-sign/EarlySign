@@ -29,6 +29,9 @@ Example
 """
 
 # Expose package version at the package level (PEP-396 style)
-from .__version__ import __version__, __version_tuple__  # re-export for convenience
+from earlysign.__version__ import (  # re-export for convenience
+    __version__,
+    __version_tuple__,
+)
 
 __all__ = ["__version__", "__version_tuple__"]

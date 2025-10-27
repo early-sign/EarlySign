@@ -10,7 +10,11 @@ from typing import Any, Dict
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
+from pydantic import ValidationError
 
+from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
+    DesignPayloadModel,
+)
 from earlysign.stats.essentials.methods.group_sequential.boundary import (
     BoundaryCalculator,
 )
@@ -39,18 +43,27 @@ def plot_design_boundaries(
     Examples
     --------
     >>> design = {
-    ...     "alpha": 0.05, "tails": 2, "scale": "z",
+    ...     "alpha": 0.05,
+    ...     "hypothesis": {"structure": "two_sided_symmetric"},
+    ...     "statistic": {"kind": "wald_z", "scale": "z"},
     ...     "efficacy": {"style": "alpha_spending", "family": "obf"},
-    ...     "futility": {"mode": "symmetric"}
+    ...     "futility": {"mode": "symmetric", "binding_mode": "non_binding"},
+    ...     "planned_max_n": 1000,
+    ...     "planned_info_times": [0.33, 0.67, 1.0]
     ... }
     >>> fig = plot_design_boundaries(design)  # doctest: +SKIP
     """
+    try:
+        design_model = DesignPayloadModel.model_validate(design)
+        boundary_spec = design_model.boundary_spec()
+    except ValidationError:
+        boundary_spec = design
     # Generate information time points
     info_times = np.linspace(0.01, 1.0, n_points)
     upper_bounds = []
     lower_bounds = []
 
-    calc = BoundaryCalculator(spec=design, process=None)
+    calc = BoundaryCalculator(spec=boundary_spec, process=None)
 
     # Calculate boundaries at each information time
     for t in info_times:
@@ -90,7 +103,7 @@ def plot_design_boundaries(
 
     # Labels and title
     ax.set_xlabel("Information Fraction", fontsize=12)
-    scale = design.get("scale", "z")
+    scale = boundary_spec.get("scale", "z")
     if scale == "z":
         ax.set_ylabel("Z-statistic", fontsize=12)
     elif scale == "bm":
@@ -99,9 +112,9 @@ def plot_design_boundaries(
         ax.set_ylabel(f"Test Statistic ({scale})", fontsize=12)
 
     # Title with design details
-    design.get("efficacy", {}).get("style", "unknown")
-    efficacy_family = design.get("efficacy", {}).get("family", "")
-    alpha = design.get("alpha", 0.05)
+    boundary_spec.get("efficacy", {}).get("style", "unknown")
+    efficacy_family = boundary_spec.get("efficacy", {}).get("family", "")
+    alpha = boundary_spec.get("alpha", 0.05)
     title = f"Group Sequential Design (α={alpha}"
     if efficacy_family:
         title += f", {efficacy_family.upper()}"

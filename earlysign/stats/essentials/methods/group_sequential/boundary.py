@@ -43,9 +43,6 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 import numpy as np
 from scipy.stats import norm
 
-from earlysign.stats.common.group_sequential.essentials.design_schema import (
-    validate_design_payload,
-)
 from earlysign.stats.essentials.methods.group_sequential import spending as spending_mod
 
 # Essentials-level dataclasses for boundary configuration. Defined here per
@@ -68,7 +65,7 @@ class EfficacySpec:
 class FutilitySpec:
     """Specification of the futility (lower) boundary policy."""
 
-    mode: str  # 'none' | 'symmetric' | 'fixed_z' | 'beta_spending'
+    mode: str  # 'none' | 'symmetric' | 'fixed_threshold' | 'beta_spending'
     # scalar z or per-look mapping
     z: Optional[Union[float, Mapping[int, float]]] = None
     family: Optional[str] = None
@@ -113,12 +110,11 @@ class BoundaryCalculator:
         # Normalize and validate spec at construction time so the
         # calculator instance is bound to a specific spec.
         if isinstance(spec, BoundaryCalculatorSpec):
-            spec_dict = asdict(spec)
+            spec_dict: Mapping[str, Any] = asdict(spec)
         else:
             spec_dict = dict(spec)
-        validate_design_payload(spec_dict)
 
-        # store normalized spec on the instance
+        # store spec on the instance (assumed validated upstream)
         self.spec: Mapping[str, Any] = spec_dict
         self.process = process
 
@@ -258,13 +254,15 @@ class BoundaryCalculator:
                 raise ValueError("Symmetric futility only valid for two-sided tests")
             return -upper_z
 
-        if mode == "fixed_z":
+        if mode == "fixed_threshold":
             z_val = futility.get("z")
             if z_val is None:
-                raise ValueError("z value required for fixed_z futility mode")
+                raise ValueError("z value required for fixed_threshold futility mode")
             if isinstance(z_val, dict):
                 if look is None:
-                    raise ValueError("look number required for per-look fixed_z")
+                    raise ValueError(
+                        "look number required for per-look fixed_threshold"
+                    )
                 if look not in z_val:
                     raise KeyError(f"Look {look} not in futility z values")
                 return float(z_val[look])

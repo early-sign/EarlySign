@@ -18,7 +18,7 @@ applyTo: "**"
   - We rely on `ibis-framework` to enable efficient and consistent data-handling. The modules that operate on the ledger can leverage the features of `ibis`.
 
 # Development
-- Whenever you run a terminal command and the output seems empty, you should absolutely always autonomously check out "terminalLastCommand" to fetch the results. Sometimes you need to wait for a few seconds and check again. Keep in mind that VSCode GitHub copilot extension (the platform you are working in) seems to have issues with the integrated terminal connection. Therefore, you need the above workaround.
+- Whenever you run a terminal command and the output seems empty, you should absolutely always autonomously check out "terminal_last_command" to fetch the results. Sometimes you need to wait for a few seconds and check again. Keep in mind that VSCode GitHub copilot extension (the platform you are working in) seems to have issues with the integrated terminal connection. Therefore, you need the above workaround.
 - This repository uses `make` to organize workspace tasks. For the details, see the Makefile.
 - We use `poetry`. So the commands usually need to be run as `poetry run python ...` etc.
 - At the end of the edits, make sure to run `make format` to ensure the code is compliant to the formatting standards of this repository.

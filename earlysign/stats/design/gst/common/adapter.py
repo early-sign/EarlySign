@@ -72,7 +72,7 @@ class BoundaryCalculator:
         if getattr(self.spec.boundary, "futility_enabled", False):
             z_val = getattr(self.spec.boundary, "futility_z", None)
             if z_val is not None:
-                fut = FutilitySpec(mode="fixed_z", z=float(z_val))
+                fut = FutilitySpec(mode="fixed_threshold", z=float(z_val))
             elif getattr(self.spec.boundary, "futility_spending", None) is not None:
                 fut = FutilitySpec(
                     mode="beta_spending",

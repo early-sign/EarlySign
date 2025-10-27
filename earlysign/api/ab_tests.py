@@ -9,27 +9,32 @@ from matplotlib.figure import Figure
 from earlysign.core.ledger import Ledger
 from earlysign.framework import templates as tpl
 from earlysign.reporting.group_sequential import plot_design_boundaries
-from earlysign.stats.common.group_sequential.operators.boundary_op import (
+from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
+    DesignPayloadModel,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.operators.boundary import (
     BoundaryFromDesign,
 )
-from earlysign.stats.common.group_sequential.operators.info_op import (
-    InformationTime,
-)
-from earlysign.stats.common.group_sequential.records import (
-    GroupSequentialDecisionSignalRecord,
-    GroupSequentialDesignRecord,
-)
-from earlysign.stats.schemes.two_proportions.group_sequential import (
+from earlysign.stats.applications.execution.methods.group_sequential.operators.decision import (
     GSDecisionFromWaldZ,
 )
-from earlysign.stats.schemes.two_proportions.operators import (
+from earlysign.stats.applications.execution.methods.group_sequential.records.decision import (
+    GroupSequentialDecisionSignalRecord,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.records.design import (
+    GroupSequentialDesignRecord,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.records.statistics import (
+    WaldZStatisticRecord,
+)
+from earlysign.stats.applications.execution.schemes.two_proportions.operators import (
     BinomialCountsSnapshot,
+    InformationTime,
     WaldZStatistic,
 )
-from earlysign.stats.schemes.two_proportions.records import (
+from earlysign.stats.applications.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
-    WaldZStatisticRecord,
 )
 
 
@@ -90,26 +95,36 @@ class BinomialABTest(tpl.TemplateBase):
         Parameters
         ----------
         payload : Dict[str, Any]
-            Design configuration including:
-            - 'planned_max_n': Maximum sample size
-            - 'planned_info_times': Planned information times for analyses (optional)
-            - Other design parameters (alpha, tails, scale, efficacy, futility)
+            Design configuration matching ``DesignPayloadModel``::
+
+                {
+                    "alpha": 0.05,
+                    "hypothesis": {"structure": "two_sided_symmetric"},
+                    "statistic": {"kind": "wald_z", "scale": "z"},
+                    "efficacy": {"style": "alpha_spending", "family": "obf"},
+                    "futility": {"mode": "none", "binding_mode": "non_binding"},
+                    "planned_max_n": 1000,
+                    "planned_info_times": [0.33, 0.67, 1.0]
+                }
 
         Examples
         --------
         >>> import ibis
         >>> test = BinomialABTest(ibis.connect("duckdb://:memory:"), "exp1")
         >>> design = {
-        ...     "alpha": 0.05, "tails": 2, "scale": "z",
+        ...     "alpha": 0.05,
+        ...     "hypothesis": {"structure": "two_sided_symmetric"},
+        ...     "statistic": {"kind": "wald_z", "scale": "z"},
         ...     "efficacy": {"style": "alpha_spending", "family": "obrien_fleming"},
-        ...     "futility": {"mode": "symmetric"},
+        ...     "futility": {"mode": "symmetric", "binding_mode": "non_binding"},
         ...     "planned_max_n": 1000,
         ...     "planned_info_times": [0.33, 0.67, 1.0]
         ... }
         >>> test.set_design(design)
         """
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design.insert(payload)
+        design_model = DesignPayloadModel.model_validate(payload)
+        design.insert(design_model.to_payload())
 
     def update(self, payload: Dict[str, Any]) -> None:
         """Update experiment with new observations.
@@ -145,10 +160,15 @@ class BinomialABTest(tpl.TemplateBase):
         --------
         >>> import ibis
         >>> test = BinomialABTest(ibis.connect("duckdb://:memory:"), "exp1")
-        >>> design = {"alpha": 0.05, "tails": 2, "scale": "z",
-        ...           "efficacy": {"style": "alpha_spending", "family": "obrien_fleming"},
-        ...           "futility": {"mode": "symmetric"}, "planned_max_n": 1000,
-        ...           "planned_info_times": [0.5, 1.0]}
+        >>> design = {
+        ...     "alpha": 0.05,
+        ...     "hypothesis": {"structure": "two_sided_symmetric"},
+        ...     "statistic": {"kind": "wald_z", "scale": "z"},
+        ...     "efficacy": {"style": "alpha_spending", "family": "obrien_fleming"},
+        ...     "futility": {"mode": "symmetric", "binding_mode": "non_binding"},
+        ...     "planned_max_n": 1000,
+        ...     "planned_info_times": [0.5, 1.0]
+        ... }
         >>> test.set_design(design)
         >>> # First update doesn't trigger (info_time < 0.5)
         >>> test.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})
@@ -173,9 +193,14 @@ class BinomialABTest(tpl.TemplateBase):
 
         ## Read design info
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design_latest = design.latest().execute()
-        planned_max_n = int(design_latest["planned_max_n"].iloc[0])
-        planned_info_times: list[float] = design_latest["planned_info_times"].iloc[0]
+        design_latest = design.latest().select(payload=design.t.payload).execute()
+        if len(design_latest) == 0:
+            raise ValueError("Design must be set before calling update().")
+        design_model = DesignPayloadModel.model_validate(
+            design_latest.iloc[0]["payload"]
+        )
+        planned_max_n = int(design_model.planned_max_n)
+        planned_info_times: list[float] = list(design_model.planned_info_times)
 
         ## Compute information time
         info_op = InformationTime(
@@ -262,13 +287,18 @@ class BinomialABTest(tpl.TemplateBase):
         """
         # Read design from ledger
         design_record = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design = design_record.latest(explode=False).execute()
-        if len(design) == 0:
+        design_df = (
+            design_record.latest(explode=False)
+            .select(payload=design_record.t.payload)
+            .execute()
+        )
+        if len(design_df) == 0:
             raise ValueError("No design found in ledger. Call set_design() first.")
+        design_model = DesignPayloadModel.model_validate(design_df.iloc[0]["payload"])
 
         # Delegate to reporting module
         return plot_design_boundaries(
-            design=design.iloc[0]["payload"],
+            design=design_model.boundary_spec(),
             n_points=n_points,
         )
 
@@ -371,8 +401,13 @@ class BinomialABTest(tpl.TemplateBase):
         """
         # Get design
         design_rec = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design_df = design_rec.latest().execute()
-        design_payload = design_df.iloc[0]["payload"] if len(design_df) > 0 else {}
+        design_df = design_rec.latest().select(payload=design_rec.t.payload).execute()
+        if len(design_df) > 0:
+            design_payload = DesignPayloadModel.model_validate(
+                design_df.iloc[0]["payload"]
+            ).to_payload()
+        else:
+            design_payload = {}
 
         # Get history (this already does all the joining and computation)
         history_df = self.get_history()

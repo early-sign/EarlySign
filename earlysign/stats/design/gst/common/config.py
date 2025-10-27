@@ -17,11 +17,11 @@ from earlysign.stats.essentials.schemes.survival import (
     TimeToEventEffect,
     TimeToEventSampleSize,
 )
-from earlysign.stats.essentials.schemes.two_means import (
+from earlysign.stats.essentials.schemes.two_means.effect_size import (
     MeansEffect,
     MeansSampleSize,
 )
-from earlysign.stats.essentials.schemes.two_proportions import (
+from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
     ProportionsEffect,
     ProportionsSampleSize,
 )

@@ -299,17 +299,18 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 | `brownian_to_z` | `boundary.brownian_to_z` | ✅ |
 | `convert_scale` | `boundary.convert_statistic_scale` | ✅ |
 | **Type Definitions** | | |
-| `BindingMode` | `design_schema.BindingMode` | ✅ |
-| `SpendingFamily` | `design_schema.SpendingFamily` | ✅ |
-| `BoundaryScale` | `design_schema.BoundaryScale` | ✅ |
-| `FutilityMode` | `design_schema.FutilityMode` | ✅ |
-| `DesignPayload` | `design_schema.DesignPayload` | ✅ |
+| `BindingMode` | string literal (`"binding"`, `"non_binding"`) | ✅ |
+| `SpendingFamily` | string literal (`"obf"`, `"pocock"`, `"hsd"`) | ✅ |
+| `BoundaryScale` | string literal (`"z"`, `"bm"`) | ✅ |
+| `FutilityMode` | string literal (`"none"`, `"symmetric"`, `"fixed_threshold"`, `"beta_spending"`, `"custom"`) | ✅ |
+| `DesignPayload` | `applications.design.group_sequential.initial_design.schema.DesignPayloadModel` | ✅ |
 | **Ledger Operators** | | |
-| — | `operators.design_op.GroupSequentialDesign` | ✅ |
-| — | `operators.boundary_op.BoundaryFromDesign` | ✅ |
-| — | `operators.info_op.InformationTime` | ✅ |
-| — | `operators.decision_op.GSDecision` | ✅ |
-| — | `operators.decision_op.GSDecisionFromWaldZ` | ✅ |
+| — | `records.GroupSequentialDesignRecord` (insert) | ✅ |
+| — | `operators.boundary.BoundaryFromDesign` | ✅ |
+| — | `schemes.two_proportions.operators.InformationTime` | ✅ |
+| — | `operators.info.InformationTimeFromRatio` | ✅ |
+| — | `operators.decision.GSDecision` | ✅ |
+| — | `operators.decision.GSDecisionFromWaldZ` | ✅ |
 | **Advanced & Visualization** | | |
 | `InverseDesign` (power) | `inverse_design.inverse_design_from_power` | ✅ |
 | `InverseDesign` (MDE) | `inverse_design.inverse_design_from_mde` | ✅ |
@@ -327,5 +328,4 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 
 **Legend**: ✅ Implemented
 
-**Module locations**: All `essentials` functions are in `earlysign.stats.common.group_sequential.essentials.<module>`.
-All `operators` are in `earlysign.stats.common.group_sequential.operators.<module>`.
+**Module locations**: Core `essentials` live in `earlysign.stats.essentials.methods.group_sequential.<module>` with adaptive-routine implementations in `earlysign.stats.essentials.methods.adaptive_group_sequential.conditional_update`. Execution-layer operators live in `earlysign.stats.applications.execution.methods.group_sequential.operators.<module>` and adaptive operators in `earlysign.stats.applications.execution.methods.adaptive_group_sequential.operators.conditional_update`.

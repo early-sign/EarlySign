@@ -5,7 +5,7 @@ Use together with:
 - OneMeanSummaryRecord (+ your own loader to insert n/mean snapshots)
 - ZMeanKnownVar (to compute Z from summary)
 - InformationTime* (to write info_time)
-- GroupSequentialDesign + BoundaryFromDesign (to obtain boundaries)
+- GroupSequentialDesignRecord + BoundaryFromDesign (to obtain boundaries)
 - Decision (scale-aware; compares Z/BM value to boundary)
 """
 
@@ -16,9 +16,13 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.common.group_sequential.records import (
+from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.records.decision import (
     GroupSequentialDecisionSignalRecord,
+)
+from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
 from earlysign.stats.essentials.methods.group_sequential.boundary import (

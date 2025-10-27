@@ -12,7 +12,7 @@ from earlysign.stats.essentials.schemes.protocols import (
     EffectSizeCalculator,
     FixedDesignEffectCalculator,
 )
-from earlysign.stats.schemes.two_proportions.util import (
+from earlysign.stats.essentials.schemes.two_proportions.util import (
     compute_standard_error as compute_se_proportions,
 )
 

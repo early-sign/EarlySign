@@ -50,16 +50,15 @@ True
 """
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Any, Dict, Literal, Optional, Tuple, cast
 
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize_scalar
 
-from earlysign.stats.common.group_sequential.essentials.design_schema import (
-    BindingMode,
-)
 from earlysign.stats.common.group_sequential.essentials.performance import performance
 from earlysign.stats.essentials.methods.group_sequential import boundary
+
+BindingMode = Literal["binding", "non_binding"]
 
 
 def _create_hsd_design_payload(
@@ -71,9 +70,7 @@ def _create_hsd_design_payload(
         "tails": 2,
         "scale": "z",
         "efficacy": {"style": "alpha_spending", "family": "hsd", "gamma": gamma},
-        "futility": {
-            "mode": "beta_spending" if binding_mode == BindingMode.BINDING else "none"
-        },
+        "futility": {"mode": "beta_spending" if binding_mode == "binding" else "none"},
     }
 
 
@@ -84,7 +81,7 @@ def evaluate_spending_design(
     effect_size: float,
     alpha_gamma: float = -4.0,
     beta_gamma: float = -4.0,
-    binding_mode: BindingMode = BindingMode.NON_BINDING,
+    binding_mode: BindingMode = "non_binding",
     max_sample_size: Optional[int] = None,
     n_simulations: int = 5000,
     seed: Optional[int] = None,
@@ -113,7 +110,7 @@ def evaluate_spending_design(
         - gamma = 0: Linear spending
     beta_gamma : float, default=-4.0
         Shape parameter for beta spending (HSD family)
-    binding_mode : BindingMode, default=NON_BINDING
+    binding_mode : BindingMode, default="non_binding"
         Whether futility boundaries are binding
     max_sample_size : int, optional
         Maximum sample size for absolute ASN calculation
@@ -161,7 +158,7 @@ def evaluate_spending_design(
     design = _create_hsd_design_payload(alpha, alpha_gamma, binding_mode)
 
     # Add beta spending if binding
-    if binding_mode == BindingMode.BINDING:
+    if binding_mode == "binding":
         design["futility"]["family"] = "hsd"
         design["futility"]["gamma"] = beta_gamma
 
@@ -203,7 +200,7 @@ def optimize_spending_for_asn(
     target_power: float,
     max_sample_size: int,
     gamma_range: Tuple[float, float] = (-10.0, -1.0),
-    binding_mode: BindingMode = BindingMode.NON_BINDING,
+    binding_mode: BindingMode = "non_binding",
     n_simulations: int = 5000,
     seed: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -235,7 +232,7 @@ def optimize_spending_for_asn(
         Search range for gamma parameter
         - More negative: Conservative early stopping (OBF-like)
         - Less negative: More aggressive early stopping (Pocock-like)
-    binding_mode : BindingMode, default=NON_BINDING
+    binding_mode : BindingMode, default="non_binding"
         Whether futility boundaries are binding
     n_simulations : int, default=5000
         Number of Monte Carlo simulations per evaluation
@@ -381,7 +378,7 @@ def optimize_spending_for_power(
     effect_size: float,
     max_sample_size: int,
     gamma_range: Tuple[float, float] = (-10.0, -1.0),
-    binding_mode: BindingMode = BindingMode.NON_BINDING,
+    binding_mode: BindingMode = "non_binding",
     n_simulations: int = 5000,
     seed: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -405,7 +402,7 @@ def optimize_spending_for_power(
         Maximum allowable sample size
     gamma_range : tuple of float, default=(-10.0, -1.0)
         Search range for gamma parameter
-    binding_mode : BindingMode, default=NON_BINDING
+    binding_mode : BindingMode, default="non_binding"
         Whether futility boundaries are binding
     n_simulations : int, default=5000
         Number of Monte Carlo simulations per evaluation
