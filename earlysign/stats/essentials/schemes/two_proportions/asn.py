@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from earlysign.stats.essentials.methods.group_sequential.spending import (
     SpendingFunction,
 )
-from earlysign.stats.essentials.schemes.two_means.group_sequential import (
+from earlysign.stats.essentials.schemes.two_means.asn import (
     NormalMeansASNCalculator,
 )
 
