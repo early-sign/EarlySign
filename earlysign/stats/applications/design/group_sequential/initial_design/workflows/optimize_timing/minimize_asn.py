@@ -11,12 +11,7 @@ from scipy.optimize import minimize
 from scipy.special import expit, logit
 from scipy.stats import norm
 
-from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.spending import (
-    SpendingStrategy,
-)
-from earlysign.stats.essentials.schemes.two_means.group_sequential import (
-    NormalMeansASNCalculator,
-)
+from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 
 
 def _project_to_min_gap(
@@ -34,18 +29,23 @@ def _project_to_min_gap(
 
 
 class MinimizeASNOptimizer:
-    """Optimizer for choosing information times by minimizing ASN."""
+    """Optimizer for choosing information times by minimizing ASN.
+
+    Example (doctest)
+    ------------------
+    >>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
+    >>> from earlysign.stats.essentials.schemes.two_means.group_sequential import NormalMeansASNCalculator
+    >>> sp = OBFSpending(alpha=0.05, sided=2)
+    >>> calc = NormalMeansASNCalculator(alpha=0.05, beta=0.2, sided=2, alternative=0.2, st_dev=1.0, allocation_ratio=1.0, spending=sp)
+    >>> opt = MinimizeASNOptimizer(calculator=calc, k_max=2, seed=42, n_jobs=1, n_restarts=2)
+    >>> opt.minimize()
+    [0.6428970883, 1.0]
+    """
 
     def __init__(
         self,
         *,
-        alpha: float,
-        beta: float,
-        sided: int,
-        alternative: float,
-        st_dev: float,
-        allocation_ratio_planned: float,
-        spending: SpendingStrategy,
+        calculator: ASNCalculator,
         k_max: int,
         min_gap: float = 0.02,
         seed: Optional[int] = None,
@@ -59,16 +59,10 @@ class MinimizeASNOptimizer:
         self.n_jobs = n_jobs
         self.n_restarts = int(n_restarts)
         self.restart_scale = float(restart_scale)
-
-        self.calculator = NormalMeansASNCalculator(
-            alpha=alpha,
-            beta=beta,
-            sided=sided,
-            alternative=alternative,
-            st_dev=st_dev,
-            allocation_ratio=allocation_ratio_planned,
-            spending=spending,
-        )
+        # Expect a pre-instantiated ASN calculator implementing the
+        # ASNCalculator protocol. This keeps the optimizer generic and
+        # avoids passing low-level design parameters here.
+        self.calculator = calculator
 
     def evaluate(self, info: Sequence[float]) -> float:
         return self.calculator.evaluate(list(info))

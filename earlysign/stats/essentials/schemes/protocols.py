@@ -1,6 +1,6 @@
 """Shared protocols for scheme effect size calculators."""
 
-from typing import Any, Protocol, Sequence
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -42,18 +42,4 @@ class FixedDesignEffectCalculator(Protocol):
 
     def get_null_value(self) -> float:
         """Return the baseline or null parameter value for the design."""
-        ...
-
-
-class ASNCalculator(Protocol):
-    """Protocol for expected sample size evaluators.
-
-    The ASN calculator evaluates a schedule of information fractions and
-    returns the expected sample size (ASN) as a floating point value.
-    Detailed design summaries (boundaries, per-stage metrics) are not
-    part of this protocol and should be produced by other utilities.
-    """
-
-    def evaluate(self, information_rates: Sequence[float]) -> float:
-        """Return the expected sample size (ASN) for the supplied schedule."""
         ...

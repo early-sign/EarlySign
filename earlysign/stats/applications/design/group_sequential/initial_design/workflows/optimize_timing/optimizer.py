@@ -13,9 +13,6 @@ from earlysign.stats.applications.design.group_sequential.initial_design.workflo
 from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     DesignObjective,
 )
-from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.spending import (
-    SpendingStrategy,
-)
 from earlysign.stats.design.gst.common.config import DesignSpec
 from earlysign.stats.design.gst.common.lab import DesignLab
 from earlysign.stats.design.gst.common.types import InformationSpacing
@@ -23,10 +20,14 @@ from earlysign.stats.essentials.methods.group_sequential.spending import (
     HSDSpending,
     OBFSpending,
     PocockSpending,
+    SpendingFunction,
+)
+from earlysign.stats.essentials.schemes.two_means.group_sequential import (
+    NormalMeansASNCalculator,
 )
 
 
-def _spec_to_spending_strategy(spec: DesignSpec) -> SpendingStrategy:
+def _spec_to_spending_strategy(spec: DesignSpec) -> SpendingFunction:
     from earlysign.stats.design.gst.common.types import SpendingFunction as SpecSpending
 
     spending_type = spec.boundary.spending_function
@@ -84,14 +85,19 @@ class DesignOptimizer:
         spending = _spec_to_spending_strategy(spec)
 
         try:
-            optimizer = MinimizeASNOptimizer(
+            # Build an ASN calculator instance and inject it into the optimizer.
+            calculator = NormalMeansASNCalculator(
                 alpha=alpha,
                 beta=beta,
                 sided=sided,
                 alternative=alternative,
                 st_dev=st_dev,
-                allocation_ratio_planned=allocation_ratio,
+                allocation_ratio=allocation_ratio,
                 spending=spending,
+            )
+
+            optimizer = MinimizeASNOptimizer(
+                calculator=calculator,
                 k_max=n_analyses,
                 min_gap=0.02,
                 seed=42,
