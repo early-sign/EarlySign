@@ -13,8 +13,8 @@ class ASNCalculator(Protocol):
 
     Implementations are expected to provide an ``evaluate`` method that
     accepts a schedule of information fractions and returns the expected
-    sample size (ASN). The optimizer also relies on several internal
-    helpers (validation, stagewise alpha -> z-boundary conversion and
+    sample size, a.k.a. average sample number (ASN). The optimizer also
+    relies on several internal helpers (validation, stagewise alpha -> z-boundary conversion and
     a ``_n_max_from_power`` method) as well as a few public attributes
     used for computing stagewise means.
     """
