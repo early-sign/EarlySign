@@ -4,8 +4,6 @@ from typing import Any, Protocol, Sequence
 
 import numpy as np
 
-from earlysign.stats.essentials.primitives.group_sequential import ASNDesignSummary
-
 
 class EffectSizeCalculator(Protocol):
     """Protocol for group sequential effect size calculators."""
@@ -20,6 +18,7 @@ class EffectSizeCalculator(Protocol):
         info_times: np.ndarray,
     ) -> float:
         """Return standardized effect at a given information fraction."""
+        ...
 
     def sample_sizes(
         self,
@@ -29,6 +28,7 @@ class EffectSizeCalculator(Protocol):
         info_times: np.ndarray,
     ) -> dict[str, np.ndarray]:
         """Return planned sample sizes keyed by descriptive labels."""
+        ...
 
 
 class FixedDesignEffectCalculator(Protocol):
@@ -38,13 +38,22 @@ class FixedDesignEffectCalculator(Protocol):
         self, effect_size: float, alpha: float, power: float
     ) -> int:
         """Return the per-group sample size for the targeted effect."""
+        ...
 
     def get_null_value(self) -> float:
         """Return the baseline or null parameter value for the design."""
+        ...
 
 
 class ASNCalculator(Protocol):
-    """Protocol for expected sample size evaluators."""
+    """Protocol for expected sample size evaluators.
 
-    def evaluate(self, information_rates: Sequence[float]) -> ASNDesignSummary:
-        """Return a design summary from the supplied information schedule."""
+    The ASN calculator evaluates a schedule of information fractions and
+    returns the expected sample size (ASN) as a floating point value.
+    Detailed design summaries (boundaries, per-stage metrics) are not
+    part of this protocol and should be produced by other utilities.
+    """
+
+    def evaluate(self, information_rates: Sequence[float]) -> float:
+        """Return the expected sample size (ASN) for the supplied schedule."""
+        ...

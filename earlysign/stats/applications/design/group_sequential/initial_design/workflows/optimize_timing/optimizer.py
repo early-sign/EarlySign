@@ -8,7 +8,7 @@ from typing import Any, Tuple
 import numpy as np
 
 from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.minimize_asn import (
-    minimize_asn_schedule,
+    MinimizeASNOptimizer,
 )
 from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     DesignObjective,
@@ -84,7 +84,7 @@ class DesignOptimizer:
         spending = _spec_to_spending_strategy(spec)
 
         try:
-            info_rates = minimize_asn_schedule(
+            optimizer = MinimizeASNOptimizer(
                 alpha=alpha,
                 beta=beta,
                 sided=sided,
@@ -99,6 +99,7 @@ class DesignOptimizer:
                 n_restarts=12,
                 restart_scale=0.2,
             )
+            info_rates = optimizer.minimize()
             if not info_rates:
                 return np.linspace(0, 1, n_analyses + 1)[1:]
             return np.array(info_rates, dtype=float)

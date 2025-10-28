@@ -15,7 +15,8 @@ from scipy.stats import norm
 from earlysign.stats.essentials.methods.group_sequential.spending import (
     SpendingFunction,
 )
-from earlysign.stats.essentials.primitives.group_sequential import ASNDesignSummary
+
+# ASNDesignSummary removed from primitives; ASNCalculator.evaluate returns float
 
 
 class NormalMeansASNCalculator:
@@ -89,8 +90,8 @@ class NormalMeansASNCalculator:
             raise ValueError("information_rates must be strictly increasing in (0, 1]")
         return rates
 
-    def evaluate(self, information_rates: Iterable[float]) -> ASNDesignSummary:
-        """Evaluate expected sample size for a schedule of information rates."""
+    def evaluate(self, information_rates: Iterable[float]) -> float:
+        """Evaluate expected sample size (ASN) for a schedule of information rates."""
         rates = self._validate_information_rates(information_rates)
         per_stage = self._per_stage_alpha(rates)
         boundaries = self._z_boundaries(per_stage)
@@ -110,11 +111,4 @@ class NormalMeansASNCalculator:
             survival *= 1.0 - reject_prob
 
         expected = float(np.dot(stagewise, cumulative_n) + survival * n_max)
-        return ASNDesignSummary(
-            information_rates=rates,
-            z_boundaries=boundaries,
-            stagewise_rejection=stagewise,
-            expected_sample_size=expected,
-            max_sample_size=n_max,
-            per_stage_alpha=per_stage,
-        )
+        return expected
