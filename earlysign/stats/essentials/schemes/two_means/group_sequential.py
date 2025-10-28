@@ -16,8 +16,6 @@ from earlysign.stats.essentials.methods.group_sequential.spending import (
     SpendingFunction,
 )
 
-# ASNDesignSummary removed from primitives; ASNCalculator.evaluate returns float
-
 
 class NormalMeansASNCalculator:
     """Approximate ASN calculator for two-arm normal means group sequential tests."""
