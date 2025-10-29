@@ -1,7 +1,7 @@
 """Plotting utilities for group-sequential operating characteristics.
 
 This module provides a small plotting class that accepts the output of
-`compute_oc_curve` (a sequence of OCSinglePointResult) and draws curves
+`compute_oc_curve` (a sequence of OCPointResult) and draws curves
 and stopping-distribution markers using the visual style from
 `earlysign.stats.design.gst.common.visualization`.
 
@@ -17,15 +17,15 @@ import numpy as np
 from matplotlib.axes import Axes
 
 from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
-    OCSinglePointResult,
+    OCPointResult,
 )
 
 
-class OCSinglePlotter:
-    """Plotter for compute_oc_curve() results (List[OCSinglePointResult]).
+class OCCurvePlotter:
+    """Plotter for compute_oc_curve() results (List[OCPointResult]).
 
     Usage:
-        plotter = OCSinglePlotter()
+        plotter = OCCurvePlotter()
         plotter.plot_oc_curve(results, target_effect=..., null_value=..., save_path=...)
 
     The plot shows Expected Sample Size (ESS) vs effect size. For each
@@ -34,7 +34,7 @@ class OCSinglePlotter:
 
     Examples
     --------
-    A small doctest that creates two synthetic `OCSinglePointResult` objects
+    A small doctest that creates two synthetic `OCPointResult` objects
     and plots them. The test switches Matplotlib to the non-interactive
     'Agg' backend so it can run in CI without a display.
 
@@ -42,10 +42,10 @@ class OCSinglePlotter:
     >>> matplotlib.use('Agg')
     >>> from matplotlib.axes import Axes
     >>> from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
-    ...     OCSinglePointResult,
+    ...     OCPointResult,
     ... )
-    >>> # Create two minimal OCSinglePointResult instances
-    >>> r1 = OCSinglePointResult(
+    >>> # Create two minimal OCPointResult instances
+    >>> r1 = OCPointResult(
     ...     effect_size=0.0,
     ...     expected_sample_size=100.0,
     ...     power=0.05,
@@ -53,7 +53,7 @@ class OCSinglePlotter:
     ...     stop_distribution={1: 100},
     ...     metadata={"sample_sizes": [100, 200], "n_per_analysis": 50, "n_looks": 2},
     ... )
-    >>> r2 = OCSinglePointResult(
+    >>> r2 = OCPointResult(
     ...     effect_size=0.2,
     ...     expected_sample_size=80.0,
     ...     power=0.8,
@@ -61,7 +61,7 @@ class OCSinglePlotter:
     ...     stop_distribution={2: 200},
     ...     metadata={"sample_sizes": [100, 200], "n_per_analysis": 50, "n_looks": 2},
     ... )
-    >>> plotter = OCSinglePlotter(figsize=(6, 4))
+    >>> plotter = OCCurvePlotter(figsize=(6, 4))
     >>> ax = plotter.plot_oc_curve([r1, r2], target_effect=0.2, null_value=0.0)
     >>> isinstance(ax, Axes)
     True
@@ -79,7 +79,7 @@ class OCSinglePlotter:
 
     def plot_oc_curve(
         self,
-        results: List[OCSinglePointResult],
+        results: List[OCPointResult],
         target_effect: Optional[float] = None,
         null_value: float = 0.0,
         effect_label: str = "Effect Size",
@@ -88,7 +88,7 @@ class OCSinglePlotter:
         """Plot ESS vs effect size and overlay stopping distribution.
 
         Args:
-            results: List of OCSinglePointResult returned from compute_oc_curve
+            results: List of OCPointResult returned from compute_oc_curve
             target_effect: Optional target effect (draws a vertical line)
             null_value: Value to add to effect sizes to convert to absolute scale
             effect_label: Label for x-axis
@@ -100,7 +100,7 @@ class OCSinglePlotter:
         """
         if not results:
             raise ValueError(
-                "`results` must be a non-empty list of OCSinglePointResult"
+                "`results` must be a non-empty list of OCPointResult"
             )
 
         # Sort by effect_size to ensure monotonic curve
@@ -207,7 +207,7 @@ class OCSinglePlotter:
         return ax
 
     def _resolve_sample_sizes_from_result(
-        self, r: OCSinglePointResult, max_look: int
+        self, r: OCPointResult, max_look: int
     ) -> List[int]:
         """Try to obtain sample sizes at each analysis from result.metadata.
 

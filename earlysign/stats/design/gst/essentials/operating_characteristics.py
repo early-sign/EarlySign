@@ -15,7 +15,7 @@ from earlysign.stats.essentials.schemes.protocols import FixedDesignEffectCalcul
 
 
 @dataclass
-class OCSinglePointResult:
+class OCPointResult:
     """Result of computing operating characteristics at a single effect size.
 
     Attributes:
@@ -39,13 +39,13 @@ class OCCurveResult:
 
     Attributes:
         effect_sizes: Array of effect sizes evaluated
-        results: List of OCSinglePointResult for each effect size
+        results: List of OCPointResult for each effect size
         n_looks: Number of analyses
         n_per_analysis: Sample size per analysis (per group)
     """
 
     effect_sizes: np.ndarray
-    results: List[OCSinglePointResult]
+    results: List[OCPointResult]
     n_looks: int
     n_per_analysis: int
 
@@ -104,7 +104,7 @@ def compute_oc_curve(
         lab.compute_boundaries().run_simulations()
 
         if lab.simulation_results:
-            result = OCSinglePointResult(
+            result = OCPointResult(
                 effect_size=effect_size,
                 expected_sample_size=lab.simulation_results["expected_sample_size"],
                 power=lab.simulation_results["power"],
@@ -115,7 +115,7 @@ def compute_oc_curve(
             # Fallback if simulation fails
             summary = lab.get_summary()
             max_n = summary["N Control"].iloc[-1] * 2
-            result = OCSinglePointResult(
+            result = OCPointResult(
                 effect_size=effect_size,
                 expected_sample_size=max_n,
                 power=0.0,

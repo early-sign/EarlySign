@@ -18,7 +18,7 @@ import numpy as np
 
 
 @dataclass
-class OCSinglePointResult:
+class OCPointResult:
     """Operating characteristics at a single effect size.
 
     Attributes:
@@ -105,7 +105,7 @@ class Simulator(Protocol):
         effect_size: Optional[float] = None,
         n_simulations: Optional[int] = None,
         rng_seed: Optional[int] = None,
-    ) -> OCSinglePointResult:
+    ) -> OCPointResult:
         """Run simulations for the given procedure.
 
         Parameters
@@ -122,7 +122,7 @@ def compute_oc_curve(
     effect_sizes: Sequence[float],
     n_simulations: int = 2000,
     simulator_kwargs: Optional[Dict[str, Any]] = None,
-) -> List[OCSinglePointResult]:
+) -> List[OCPointResult]:
     """Compute operating characteristics across effect sizes.
 
     This function simply iterates over `effect_sizes`, delegates the
@@ -143,7 +143,7 @@ def compute_oc_curve(
     # Defensive copy to numpy array for convenience
     effect_sizes_arr = np.asarray(effect_sizes, dtype=float)
 
-    results: List[OCSinglePointResult] = []
+    results: List[OCPointResult] = []
 
     for es in effect_sizes_arr:
         call_kwargs = dict(simulator_kwargs or {})

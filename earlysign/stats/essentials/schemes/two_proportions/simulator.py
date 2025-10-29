@@ -4,7 +4,7 @@ from typing import Dict, Iterator, List, Optional
 import numpy as np
 
 from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
-    OCSinglePointResult,
+    OCPointResult,
     Procedure,
 )
 
@@ -80,7 +80,7 @@ class TwoProportionsSimulator:
         n_simulations: Optional[int] = None,
         rng_seed: Optional[int] = None,
         max_total: Optional[int] = None,
-    ) -> OCSinglePointResult:
+    ) -> OCPointResult:
         """Run Monte-Carlo replications and return operating characteristics.
 
         The implementation is intentionally compact: each replication runs
@@ -144,7 +144,7 @@ class TwoProportionsSimulator:
         )
         power = float(rejections) / float(max(1, n_sim))
 
-        return OCSinglePointResult(
+        return OCPointResult(
             effect_size=effect,
             expected_sample_size=expected_sample_size,
             power=power,
