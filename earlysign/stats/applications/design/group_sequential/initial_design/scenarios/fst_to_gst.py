@@ -413,7 +413,12 @@ class AddInterimToFixedSampleTest:
             )
         return self.designer_factory(info_times)
 
-    def compare_interim(self, k: int, keep_power_at_H1: bool = False) -> Dict[str, Any]:
+    def compare_interim(
+        self,
+        k: int,
+        keep_power_at_H1: bool = False,
+        plot_options: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Compute OC curve and related metadata for a given k.
 
         If `keep_power_at_H1` is False, the GST uses the FSD total as the
@@ -502,19 +507,45 @@ class AddInterimToFixedSampleTest:
                 rng_seed=self.seed,
                 max_total=int(planned_max_n),
             )
+            # Annotate simulator metadata with design-level info so plotter
+            # and downstream code can access planned_max_n and FSD info.
+            md = point.metadata or {}
+            # Ensure explicit per-look sample sizes are available in metadata.
+            # The Procedure computed the planned per-look total sample sizes
+            # during initialization; expose them so the plotter uses the
+            # exact same values (avoids rounding/mapping mismatches).
+            try:
+                sample_sizes = getattr(proc, "_sample_n_total", None)
+                if sample_sizes is not None:
+                    md.setdefault("sample_sizes", [int(x) for x in sample_sizes])
+            except Exception:
+                pass
+            md.setdefault("planned_max_n", int(planned_max_n))
+            if self.n_fsd_per_group is not None:
+                md.setdefault("n_fsd_per_group", int(self.n_fsd_per_group))
+                md.setdefault("fsd_total", int(2 * int(self.n_fsd_per_group)))
+            md.setdefault("n_per_analysis", int(n_per_analysis))
+            md.setdefault("n_looks", int(k))
+            point.metadata = md
             oc_results.append(point)
 
         closest = min(oc_results, key=lambda r: abs(r.effect_size - float(self.delta)))
 
         plotter = OCCurvePlotter()
+        plot_err: Optional[str] = None
         try:
             ax = plotter.plot_oc_curve(
                 oc_results,
                 target_effect=float(self.delta),
                 null_value=float(self.p_control),
+                plot_options=plot_options,
             )
-        except Exception:
+        except Exception as e:
+            # Do not silently swallow plotting errors; return them so callers
+            # (and notebooks) can surface the root cause and fix simulator
+            # metadata or data formatting issues.
             ax = None
+            plot_err = repr(e)
 
         return {
             "info_times": list(map(float, info_times)),
@@ -524,6 +555,7 @@ class AddInterimToFixedSampleTest:
             "plot_axes": ax,
             "n_per_analysis": n_per_analysis,
             "planned_max_n": int(planned_max_n),
+            "plot_error": plot_err,
         }
 
 
@@ -540,6 +572,7 @@ def add_interim(
     batch_size: int = 100,
     allocation_ratio: float,
     seed: Optional[int] = None,
+    plot_options: Optional[Dict[str, Any]] = None,
 ) -> Dict[int, Dict[str, Any]]:
     """Scenario A: build GSTs using FSD sample size as maximum and plot OC curves.
 
@@ -620,7 +653,9 @@ def add_interim(
 
     results: Dict[int, Dict[str, Any]] = {}
     for k in ks:
-        results[int(k)] = inst.compare_interim(k=int(k), keep_power_at_H1=False)
+        results[int(k)] = inst.compare_interim(
+            k=int(k), keep_power_at_H1=False, plot_options=plot_options
+        )
 
     return results
 
@@ -640,6 +675,7 @@ def add_interim_keep_power(
     seed: Optional[int] = None,
     max_multiplier: int = 4,
     tol: float = 0.01,
+    plot_options: Optional[Dict[str, Any]] = None,
 ) -> Dict[int, Dict[str, Any]]:
     """Scenario B: design GST maximum sample size to keep the same power at δ.
 
@@ -714,6 +750,8 @@ def add_interim_keep_power(
 
     results: Dict[int, Dict[str, Any]] = {}
     for k in ks:
-        results[int(k)] = inst.compare_interim(k=int(k), keep_power_at_H1=True)
+        results[int(k)] = inst.compare_interim(
+            k=int(k), keep_power_at_H1=True, plot_options=plot_options
+        )
 
     return results

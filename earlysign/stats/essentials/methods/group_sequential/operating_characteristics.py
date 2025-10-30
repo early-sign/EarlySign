@@ -26,7 +26,10 @@ class OCPointResult:
         expected_sample_size: expected sample size (ESS)
         power: estimated power (probability of rejecting H0)
         max_sample_size: maximum sample size observed in simulations
-        stop_distribution: mapping from analysis index (1-based) to counts
+        stop_distribution: mapping from actual total sample size (int) at stop time
+            to counts. Legacy formats using 1-based analysis indices (1..n_looks)
+            may be accepted by some visualizers, but simulators SHOULD emit
+            sample-size keyed stop distributions to avoid ambiguity.
         metadata: optional additional info produced by simulator
     """
 

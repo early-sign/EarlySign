@@ -111,6 +111,7 @@ class TwoProportionsSimulator:
                 self.batch_size + round(self.batch_size * self.allocation_ratio)
             )
 
+        # stop_counts: map actual total sample size at stopping -> count
         stop_counts: Dict[int, int] = {}
         rejections = 0
         total_sample_sizes: List[int] = []
@@ -134,20 +135,21 @@ class TwoProportionsSimulator:
                 procedure.ingest(data)
                 decision = procedure.should_stop(totals["look_idx"])
                 if decision is not None:
-                    idx = totals["look_idx"] if totals["look_idx"] > 0 else 1
-                    stop_counts.setdefault(idx, 0)
-                    stop_counts[idx] += 1
+                    # Use the actual cumulative total sample size as the key
+                    total_n = int(totals["cum_nA"] + totals["cum_nB"])
+                    stop_counts.setdefault(total_n, 0)
+                    stop_counts[total_n] += 1
                     if bool(decision.get("reject", False)):
                         rejections += 1
-                    total_sample_sizes.append(int(totals["cum_nA"] + totals["cum_nB"]))
+                    total_sample_sizes.append(total_n)
                     stopped = True
                     break
 
             if not stopped:
-                idx = totals["look_idx"] if totals["look_idx"] > 0 else 1
-                stop_counts.setdefault(idx, 0)
-                stop_counts[idx] += 1
-                total_sample_sizes.append(int(totals["cum_nA"] + totals["cum_nB"]))
+                total_n = int(totals["cum_nA"] + totals["cum_nB"])
+                stop_counts.setdefault(total_n, 0)
+                stop_counts[total_n] += 1
+                total_sample_sizes.append(total_n)
 
         expected_sample_size = (
             float(np.mean(total_sample_sizes)) if total_sample_sizes else 0.0
