@@ -30,10 +30,20 @@ def _sampler_gen(
     alloc = float(allocation_ratio)
 
     while True:
-        # decide batch sizes (fixed per-batch; may overshoot max_total)
-        incA = int(round(batch_total / (1.0 + alloc)))
-        incA = max(0, min(incA, batch_total))
-        incB = batch_total - incA
+        # respect max_total: compute remaining samples allowed (both groups)
+        if max_total is not None:
+            consumed = int(totals.get("cum_nA", 0) + totals.get("cum_nB", 0))
+            remaining = int(max_total) - consumed
+            if remaining <= 0:
+                return
+            cur_batch_total = min(batch_total, remaining)
+        else:
+            cur_batch_total = batch_total
+
+        # decide batch sizes (fixed per-batch; will not overshoot max_total)
+        incA = int(round(cur_batch_total / (1.0 + alloc)))
+        incA = max(0, min(incA, cur_batch_total))
+        incB = cur_batch_total - incA
         if incA == 0 and incB == 0:
             return
 

@@ -99,9 +99,7 @@ class OCCurvePlotter:
             The matplotlib Axes that was used for plotting.
         """
         if not results:
-            raise ValueError(
-                "`results` must be a non-empty list of OCPointResult"
-            )
+            raise ValueError("`results` must be a non-empty list of OCPointResult")
 
         # Sort by effect_size to ensure monotonic curve
         results_sorted = sorted(results, key=lambda r: float(r.effect_size))
