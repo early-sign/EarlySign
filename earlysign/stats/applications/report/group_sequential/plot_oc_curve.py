@@ -195,12 +195,12 @@ class OCCurvePlotter:
                     ax.scatter([eff], [n_total], color=gst_color, s=size, alpha=alpha_val, edgecolors="black", zorder=6)
 
         # Draw a star marker at the planned fixed-sample design point when
-        # metadata provides a planned_max_n. We choose the effect that has
-        # the largest ESS as a proxy for the fixed-sample point if no
-        # explicit target_effect was supplied. This restores the previous
-        # visual cue for the FSD point even when target_effect is omitted.
+        # metadata provides a planned_max_n. We only draw this representative
+        # FSD star when no explicit target_effect is supplied. If a
+        # target_effect is provided, the FSD marker is drawn at the
+        # target_effect location below to avoid duplicate stars.
         try:
-            if plot_options is None or plot_options.get("show_fsd_star", True):
+            if (plot_options is None or plot_options.get("show_fsd_star", True)) and target_effect is None:
                 # Find any planned_max_n in metadata and draw one star at the
                 # effect with maximum ESS as a representative location.
                 planned_vals = [
