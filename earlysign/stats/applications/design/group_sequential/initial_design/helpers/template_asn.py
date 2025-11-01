@@ -47,10 +47,10 @@ import numpy as np
 from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
 )
+from earlysign.stats.essentials.methods.group_sequential import simulation
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.essentials.schemes.two_proportions.simulator import (
     TwoProportionsSimulator,
-    compute_cumulative_sample_sizes,
 )
 
 DesignPayloadBuilder = Callable[[Sequence[float], int], Mapping[str, Any]]
@@ -83,8 +83,8 @@ class TemplateASNAdapter(ASNCalculator):
         self._simulator = TwoProportionsSimulator(
             effect_size=float(base_calculator.alternative),
             n_simulations=int(n_sim),
-            batch_size=self._batch_size,
             allocation_ratio=float(base_calculator.allocation_ratio),
+            strategy=None,
         )
 
         self.st_dev = float(base_calculator.st_dev)
@@ -110,8 +110,19 @@ class TemplateASNAdapter(ASNCalculator):
             rates, self._planned_max_n, payload, self._seed
         )
         procedure.reset()
-        sample_sizes = compute_cumulative_sample_sizes(rates, self._planned_max_n)
-        schedule_sizes = sample_sizes if self._batch_size is None else None
+        sampling_strategy: simulation.SamplingStrategy
+        if self._batch_size is None:
+            sampling_strategy = simulation.InfoTimeSampling(
+                info_times=rates,
+                planned_max_n=int(self._planned_max_n),
+                allocation_ratio=float(self.allocation_ratio),
+            )
+        else:
+            sampling_strategy = simulation.FixedBatchSampling(
+                size=int(self._batch_size),
+                allocation_ratio=float(self.allocation_ratio),
+                total=int(self._planned_max_n),
+            )
         result = self._simulator.simulate(
             procedure,
             p_control=self._p_control,
@@ -119,8 +130,7 @@ class TemplateASNAdapter(ASNCalculator):
             n_simulations=self._n_sim,
             rng_seed=self._seed,
             max_total=self._planned_max_n,
-            info_times=rates if self._batch_size is None else None,
-            cumulative_sizes=schedule_sizes,
+            sampling=sampling_strategy,
         )
         return float(result.expected_sample_size)
 

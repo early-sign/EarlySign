@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from math import ceil
-from typing import Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -8,72 +7,9 @@ from earlysign.stats.essentials.methods.group_sequential.operating_characteristi
     OCPointResult,
     Procedure,
 )
-
-
-def compute_cumulative_sample_sizes(
-    info_times: Sequence[float], planned_max_n: int
-) -> List[int]:
-    """Return cumulative sample-size targets using ceiling rounding.
-
-    The schedule uses ``ceil(planned_max_n * info_time)`` for each information
-    fraction and enforces monotonic growth with the final element equal to
-    ``planned_max_n``. This avoids undershooting the planned maxima when the
-    optimiser emits fractions that would otherwise round down.
-    """
-
-    max_total = int(planned_max_n)
-    if max_total <= 0:
-        raise ValueError("planned_max_n must be positive")
-
-    rates = [float(rate) for rate in info_times]
-    if not rates:
-        raise ValueError("info_times must be non-empty")
-
-    cumulative: List[int] = []
-    previous = 0
-    for idx, rate in enumerate(rates):
-        if rate <= 0:
-            target = previous
-        else:
-            target = int(ceil(max_total * rate))
-        if idx == len(rates) - 1:
-            target = max_total
-        target = max(previous, min(target, max_total))
-        cumulative.append(target)
-        previous = target
-
-    cumulative[-1] = max_total
-    return cumulative
-
-
-def _build_sampling_plan(
-    cumulative_totals: Sequence[int], allocation_ratio: float
-) -> List[Tuple[int, int]]:
-    """Derive per-look sample increments from cumulative totals."""
-
-    alloc = float(allocation_ratio)
-    if alloc <= 0.0:
-        raise ValueError("allocation_ratio must be positive")
-
-    plan: List[Tuple[int, int]] = []
-    prev_a = 0
-    prev_b = 0
-    for total in cumulative_totals:
-        total_int = int(total)
-        if total_int < 0:
-            raise ValueError("cumulative totals must be non-negative")
-        target_a = int(ceil(total_int / (1.0 + alloc)))
-        target_b = total_int - target_a
-        inc_a = target_a - prev_a
-        inc_b = target_b - prev_b
-        if inc_a < 0 or inc_b < 0:
-            raise ValueError("cumulative totals must be non-decreasing")
-        if inc_a > 0 or inc_b > 0:
-            plan.append((inc_a, inc_b))
-        prev_a = target_a
-        prev_b = target_b
-
-    return plan
+from earlysign.stats.essentials.methods.group_sequential.simulation import (
+    SamplingStrategy,
+)
 
 
 def _sampler_gen(
@@ -145,8 +81,7 @@ def _sampler_gen(
         totals["cum_nA"] += incA
         totals["cum_nB"] += incB
         totals["look_idx"] += 1
-
-    yield {"nA": incA, "mA": drawA, "nB": incB, "mB": drawB}
+        yield {"nA": incA, "mA": drawA, "nB": incB, "mB": drawB}
 
 
 @dataclass
@@ -160,14 +95,12 @@ class TwoProportionsSimulator:
 
     effect_size: float
     n_simulations: int = 2000
-    batch_size: Optional[int] = None
     allocation_ratio: float = 1.0
+    strategy: Optional[SamplingStrategy] = None
 
     def __post_init__(self) -> None:
         if self.n_simulations <= 0:
             raise ValueError("n_simulations must be positive")
-        if self.batch_size is not None and self.batch_size <= 0:
-            raise ValueError("batch_size must be positive")
         if self.allocation_ratio <= 0.0:
             raise ValueError("allocation_ratio must be positive")
         if not np.isfinite(self.effect_size):
@@ -182,17 +115,16 @@ class TwoProportionsSimulator:
         n_simulations: Optional[int] = None,
         rng_seed: Optional[int] = None,
         max_total: Optional[int] = None,
-        info_times: Optional[Sequence[float]] = None,
-        cumulative_sizes: Optional[Sequence[int]] = None,
+        sampling: Optional[SamplingStrategy] = None,
     ) -> OCPointResult:
         """Run Monte-Carlo replications and return operating characteristics.
 
         The implementation is intentionally compact: each replication runs
         incremental batches until ``max_total`` is reached or ``procedure``
-        requests to stop. When ``batch_size`` is ``None`` the caller must
-        provide either ``info_times`` or ``cumulative_sizes`` so that the
-        simulator can derive an efficient sampling schedule aligned with the
-        design information fractions.
+        requests to stop. Sampling behaviour is delegated to a
+        :class:`SamplingStrategy` so advanced flows can negotiate efficient
+        schedules (for example information-time aligned sampling) without
+        complicating the public API.
         """
 
         n_sim = (
@@ -203,28 +135,21 @@ class TwoProportionsSimulator:
         )
         rng = np.random.default_rng(rng_seed)
 
-        schedule: Optional[Sequence[Tuple[int, int]]] = None
-        if self.batch_size is None:
-            if cumulative_sizes is not None:
-                schedule = _build_sampling_plan(cumulative_sizes, self.allocation_ratio)
-            elif info_times is not None and max_total is not None:
-                cumulative_sizes = compute_cumulative_sample_sizes(
-                    info_times, max_total
-                )
-                schedule = _build_sampling_plan(cumulative_sizes, self.allocation_ratio)
-            else:
-                raise ValueError(
-                    "Provide info_times or cumulative_sizes when batch_size is None"
-                )
+        strategy = sampling or self.strategy
+        if strategy is None:
+            raise ValueError("Provide a sampling strategy to the simulator")
 
+        schedule = list(strategy.schedule)
+        if not schedule:
+            raise ValueError("Sampling strategy produced an empty schedule")
+
+        strategy_total = int(strategy.max_total)
         if max_total is None:
-            if self.batch_size is None:
-                raise ValueError("max_total is required when batch_size is None")
-            max_total = int(
-                self.batch_size + round(self.batch_size * self.allocation_ratio)
+            max_total = strategy_total
+        elif int(max_total) != strategy_total:
+            raise ValueError(
+                "max_total must match the sampling strategy's maximum total"
             )
-        else:
-            max_total = int(max_total)
 
         # stop_counts: map actual total sample size at stopping -> count
         stop_counts: Dict[int, int] = {}
@@ -236,7 +161,7 @@ class TwoProportionsSimulator:
 
             totals: Dict[str, int] = {"cum_nA": 0, "cum_nB": 0, "look_idx": 0}
             gen = _sampler_gen(
-                batch_size=self.batch_size,
+                batch_size=strategy.batch_size,
                 allocation_ratio=float(self.allocation_ratio),
                 pA=float(p_control),
                 pB=float(p_control + effect),
@@ -272,17 +197,26 @@ class TwoProportionsSimulator:
         )
         power = float(rejections) / float(max(1, n_sim))
 
+        metadata: Dict[str, Any] = {
+            "n_simulations": int(n_sim),
+            "allocation_ratio": float(self.allocation_ratio),
+            "sampling_strategy": strategy.description,
+        }
+        if strategy.batch_size is not None:
+            metadata["batch_size"] = int(strategy.batch_size)
+
+        strategy_meta = dict(strategy.metadata())
+        metadata.update(strategy_meta)
+        if "schedule" not in metadata:
+            metadata["schedule"] = [
+                (int(inc_a), int(inc_b)) for inc_a, inc_b in schedule
+            ]
+
         return OCPointResult(
             effect_size=effect,
             expected_sample_size=expected_sample_size,
             power=power,
             max_sample_size=float(int(max_total)),
             stop_distribution=stop_counts,
-            metadata={
-                "n_simulations": int(n_sim),
-                "batch_size": (
-                    int(self.batch_size) if self.batch_size is not None else None
-                ),
-                "allocation_ratio": float(self.allocation_ratio),
-            },
+            metadata=metadata,
         )

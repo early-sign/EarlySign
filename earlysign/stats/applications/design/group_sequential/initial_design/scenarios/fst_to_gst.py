@@ -40,6 +40,7 @@ implements the `Procedure` protocol expected by the simulator (``ingest``,
 exported functions below.
 """
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Union, cast
 
@@ -57,6 +58,7 @@ from earlysign.stats.applications.design.group_sequential.initial_design.workflo
 from earlysign.stats.applications.report.group_sequential.plot_oc_curve import (
     OCCurvePlotter,
 )
+from earlysign.stats.essentials.methods.group_sequential import simulation
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.essentials.methods.group_sequential.boundary import (
     BoundaryCalculator,
@@ -78,11 +80,13 @@ from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
 )
 from earlysign.stats.essentials.schemes.two_proportions.simulator import (
     TwoProportionsSimulator,
-    compute_cumulative_sample_sizes,
 )
 from earlysign.stats.essentials.schemes.two_proportions.wald_z import (
     compute_wald_z,
 )
+
+# Module logger - consumers should configure logging for the project (handlers/formatters)
+logger = logging.getLogger(__name__)
 
 
 def _spending_factory(
@@ -224,7 +228,7 @@ class _TwoPropProcedure:
         self._metadata_snapshot = self._build_metadata_snapshot()
 
     def _compute_sample_sizes(self) -> np.ndarray:
-        schedule = compute_cumulative_sample_sizes(
+        schedule = simulation.compute_cumulative_sample_sizes(
             [float(x) for x in self.info_times], self._planned_max_n
         )
         return np.asarray(schedule, dtype=int)
@@ -450,7 +454,6 @@ class AddInterimToFixedSampleTest:
         design_payload_builder: Optional[
             Callable[[Sequence[float], int], Mapping[str, Any]]
         ] = None,
-        verbose: bool = False,
     ) -> None:
         self.alpha = float(alpha)
         self.delta = float(delta)
@@ -468,7 +471,6 @@ class AddInterimToFixedSampleTest:
         self._procedure_factory = procedure_factory
         self._asn_calculator_factory = asn_calculator_factory
         self._design_payload_builder = design_payload_builder
-        self.verbose = bool(verbose)
 
         # placeholders set by design_fst()
         self.n_fsd_per_group: Optional[int] = None
@@ -477,8 +479,15 @@ class AddInterimToFixedSampleTest:
         self._simulator = TwoProportionsSimulator(
             effect_size=float(self.delta),
             n_simulations=int(self.n_sim),
-            batch_size=self.batch_size,
             allocation_ratio=float(self.allocation_ratio),
+            strategy=None,
+        )
+        logger.debug(
+            "Initialized AddInterimToFixedSampleTest: alpha=%s delta=%s power=%s n_sim=%s",
+            self.alpha,
+            self.delta,
+            self.power,
+            self.n_sim,
         )
 
     def design_fst(self) -> Dict[str, int]:
@@ -494,6 +503,11 @@ class AddInterimToFixedSampleTest:
 
         self.n_fsd_per_group = int(n_fsd_per_group)
         self.planned_max_n = int(planned_max_n)
+        logger.info(
+            "Computed FSD: n_fsd_per_group=%s planned_max_n=%s",
+            self.n_fsd_per_group,
+            self.planned_max_n,
+        )
         return {
             "n_fsd_per_group": int(self.n_fsd_per_group),
             "planned_max_n": int(self.planned_max_n),
@@ -509,6 +523,7 @@ class AddInterimToFixedSampleTest:
         info_times = optimizer.minimize()
         if not info_times:
             raise RuntimeError("Timing optimisation failed to produce info_times")
+        logger.info("Timing optimisation (k=%s) -> info_times=%s", k, info_times)
         return info_times
 
     def _build_design_payload(
@@ -538,8 +553,30 @@ class AddInterimToFixedSampleTest:
         procedure = self._make_procedure(info_times, planned_max_n, design_payload)
         procedure.reset()
         info_times_list = [float(x) for x in info_times]
-        sample_sizes = compute_cumulative_sample_sizes(info_times_list, planned_max_n)
-        schedule_sizes = sample_sizes if self.batch_size is None else None
+        sampling_strategy: simulation.SamplingStrategy
+        if self.batch_size is None:
+            sampling_strategy = simulation.InfoTimeSampling(
+                info_times=info_times_list,
+                planned_max_n=int(planned_max_n),
+                allocation_ratio=float(self.allocation_ratio),
+            )
+        else:
+            sampling_strategy = simulation.FixedBatchSampling(
+                size=int(self.batch_size),
+                allocation_ratio=float(self.allocation_ratio),
+                total=int(planned_max_n),
+            )
+        try:
+            meta_before = sampling_strategy.metadata()
+        except Exception:
+            meta_before = None
+        logger.info(
+            "Estimating power (planned_max_n=%s, info_times=%s, sampling_meta=%s)",
+            planned_max_n,
+            info_times_list,
+            meta_before,
+        )
+
         point = self._simulator.simulate(
             procedure,
             p_control=float(self.p_control),
@@ -547,8 +584,12 @@ class AddInterimToFixedSampleTest:
             n_simulations=int(self.n_sim),
             rng_seed=self.seed,
             max_total=int(planned_max_n),
-            info_times=info_times_list if self.batch_size is None else None,
-            cumulative_sizes=schedule_sizes,
+            sampling=sampling_strategy,
+        )
+        logger.info(
+            "Estimated power (planned_max_n=%s) -> %s",
+            planned_max_n,
+            float(point.power),
         )
         return float(point.power)
 
@@ -567,9 +608,34 @@ class AddInterimToFixedSampleTest:
         planned maximum (power may change). If True, the method searches for
         the minimal `planned_max_n` that preserves power at the design H1
         (self.delta) approximately.
+
+        Note on the search behaviour and reproducibility
+        -----------------------------------------------
+        When `keep_power_at_H1=True` the method performs a small binary
+        search over candidate budgets. It uses an early-stop strategy: the
+        first candidate `planned_max_n` whose estimated power falls in the
+        acceptance interval [target, target + tol] will be accepted and the
+        search will terminate. This makes the routine faster and aligns with
+        the common "first-match" usage pattern, but it also means the
+        returned budget depends on the order of mid-point evaluations and the
+        Monte-Carlo RNG. For reproducible results callers should provide and
+        manage `seed` consistently across runs.
         """
         if self.planned_max_n is None:
             raise RuntimeError("Call design_fst() before compare_interim()")
+
+        logger.info(
+            "Starting compare_interim(k=%s, keep_power_at_H1=%s)", k, keep_power_at_H1
+        )
+        # When searching for a budget that preserves the target power, log the
+        # requested target and tolerance so the Monte-Carlo estimates can be
+        # interpreted relative to the goal.
+        if keep_power_at_H1:
+            logger.info(
+                "Target power=%s, tolerance=%s (accept range: [target, target+tol])",
+                float(self.power),
+                float(tol),
+            )
 
         info_times = self._optimize_info_times(int(k))
 
@@ -580,22 +646,62 @@ class AddInterimToFixedSampleTest:
             lo = 2 * int(k)
             hi = max(2 * int(k), int(max_multiplier * fsd_total))
             best_n = hi
+            # Binary search for the minimal planned_max_n that attains the
+            # target power. Accept a configuration when the estimated power
+            # lies in [target_power, target_power + tol]. If the estimate is
+            # below the target, increase lower bound; if it's greater than
+            # target + tol, reduce the upper bound to try a smaller budget.
+            target_power = float(self.power)
             while lo <= hi:
                 mid = (lo + hi) // 2
                 achieved = self._estimate_power(info_times, int(mid))
-                if achieved + tol >= float(self.power):
+                # If achieved is within [target, target + tol], accept this mid
+                if achieved >= target_power and achieved <= target_power + float(tol):
                     best_n = int(mid)
-                    hi = mid - 1
-                else:
+                    logger.info(
+                        "Accepting planned_max_n=%s with achieved power=%s within [%s, %s] (early-stop)",
+                        int(mid),
+                        achieved,
+                        target_power,
+                        target_power + float(tol),
+                    )
+                    # Early-stop: accept the first candidate that meets the
+                    # acceptance interval and terminate the search. This makes
+                    # the behaviour deterministic w.r.t. the mid evaluation
+                    # order and relies on caller-managed RNG seed for
+                    # reproducibility.
+                    break
+                elif achieved < target_power:
+                    # Not enough power, increase budget
                     lo = mid + 1
+                else:
+                    # Achieved > target + tol: we might be able to reduce budget
+                    hi = mid - 1
 
             planned_max_n = int(best_n)
+
+        logger.info("Using planned_max_n=%s for k=%s", planned_max_n, k)
 
         design_payload = self._build_design_payload(info_times, planned_max_n)
 
         info_times_list = [float(x) for x in info_times]
-        sample_sizes = compute_cumulative_sample_sizes(info_times_list, planned_max_n)
-        schedule_sizes = sample_sizes if self.batch_size is None else None
+        sampling_strategy: simulation.SamplingStrategy
+        if self.batch_size is None:
+            sample_sizes = simulation.compute_cumulative_sample_sizes(
+                info_times_list, planned_max_n
+            )
+            sampling_strategy = simulation.InfoTimeSampling(
+                info_times=info_times_list,
+                planned_max_n=int(planned_max_n),
+                allocation_ratio=float(self.allocation_ratio),
+            )
+        else:
+            sampling_strategy = simulation.FixedBatchSampling(
+                size=int(self.batch_size),
+                allocation_ratio=float(self.allocation_ratio),
+                total=int(planned_max_n),
+            )
+            sample_sizes = sampling_strategy.metadata().get("cumulative_sizes", [])
         base_proc = self._make_procedure(info_times, planned_max_n, design_payload)
         base_proc_for_loop: Optional[ProcedureLike] = base_proc
         raw_metadata = base_proc.snapshot_metadata()
@@ -622,6 +728,12 @@ class AddInterimToFixedSampleTest:
                 else self._make_procedure(info_times, planned_max_n, design_payload)
             )
             procedure.reset()
+            logger.debug(
+                "Simulating effect_size=%s (idx=%s) with planned_max_n=%s",
+                es,
+                idx,
+                planned_max_n,
+            )
             point = self._simulator.simulate(
                 procedure,
                 p_control=float(self.p_control),
@@ -629,9 +741,9 @@ class AddInterimToFixedSampleTest:
                 n_simulations=int(self.n_sim),
                 rng_seed=self.seed,
                 max_total=int(planned_max_n),
-                info_times=info_times_list if self.batch_size is None else None,
-                cumulative_sizes=schedule_sizes,
+                sampling=sampling_strategy,
             )
+            logger.debug("Simulated effect_size=%s -> power=%s", es, float(point.power))
             base_proc_for_loop = None
             merged_md = dict(base_metadata)
             if point.metadata:
@@ -662,6 +774,7 @@ class AddInterimToFixedSampleTest:
             # metadata or data formatting issues.
             ax = None
             plot_err = repr(e)
+            logger.exception("Failed to plot OC curve: %s", e)
 
         per_group_total = planned_max_n / (1.0 + float(self.allocation_ratio))
         n_per_analysis = max(1, int(round(per_group_total / max(1, k))))
