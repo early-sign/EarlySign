@@ -41,8 +41,21 @@ exported functions below.
 """
 
 import logging
+import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+    cast,
+)
 
 import ibis
 import numpy as np
@@ -87,6 +100,69 @@ from earlysign.stats.essentials.schemes.two_proportions.wald_z import (
 
 # Module logger - consumers should configure logging for the project (handlers/formatters)
 logger = logging.getLogger(__name__)
+
+try:
+    from tqdm.auto import tqdm as _tqdm_impl
+    from tqdm.contrib.logging import (
+        logging_redirect_tqdm as _logging_redirect_tqdm_impl,
+    )
+except Exception:  # pragma: no cover
+    _tqdm_impl = None
+    _logging_redirect_tqdm_impl = None
+
+_FORCE_ENABLE_TQDM = os.environ.get("EARLYSIGN_ENABLE_TQDM") == "1"
+_FORCE_DISABLE_TQDM = os.environ.get("EARLYSIGN_DISABLE_TQDM") == "1"
+_TQDM_AVAILABLE = _tqdm_impl is not None
+
+
+def _progress_enabled() -> bool:
+    if _FORCE_DISABLE_TQDM:
+        return False
+    if not _TQDM_AVAILABLE:
+        return False
+    if _FORCE_ENABLE_TQDM:
+        return True
+    return logger.isEnabledFor(logging.INFO)
+
+
+def _iter_with_progress(
+    iterable: Iterable[Any], *, desc: str, unit: str, leave: bool = False
+) -> Iterable[Any]:
+    if not _progress_enabled():
+        return iterable
+    if _tqdm_impl is None:
+        return iterable
+    return cast(Iterable[Any], _tqdm_impl(iterable, desc=desc, unit=unit, leave=leave))
+
+
+@contextmanager
+def _tqdm_logging(loggers: Sequence[logging.Logger]) -> Iterator[None]:
+    if not _progress_enabled():
+        yield
+        return
+    if _logging_redirect_tqdm_impl is None:
+        yield
+        return
+    with _logging_redirect_tqdm_impl(loggers=loggers):
+        yield
+
+
+def _create_progress_bar(*args: Any, **kwargs: Any) -> Any:
+    if not _progress_enabled():
+        return None
+    if _tqdm_impl is None:
+        return None
+    return _tqdm_impl(*args, **kwargs)
+
+
+def _update_progress(bar: Any, *, n: int = 1) -> None:
+    if bar is not None:
+        bar.update(n)
+
+
+def _close_progress(bar: Any) -> None:
+    if bar is not None:
+        bar.close()
 
 
 def _spending_factory(
@@ -652,31 +728,45 @@ class AddInterimToFixedSampleTest:
             # below the target, increase lower bound; if it's greater than
             # target + tol, reduce the upper bound to try a smaller budget.
             target_power = float(self.power)
-            while lo <= hi:
-                mid = (lo + hi) // 2
-                achieved = self._estimate_power(info_times, int(mid))
-                # If achieved is within [target, target + tol], accept this mid
-                if achieved >= target_power and achieved <= target_power + float(tol):
-                    best_n = int(mid)
-                    logger.info(
-                        "Accepting planned_max_n=%s with achieved power=%s within [%s, %s] (early-stop)",
-                        int(mid),
-                        achieved,
-                        target_power,
-                        target_power + float(tol),
-                    )
-                    # Early-stop: accept the first candidate that meets the
-                    # acceptance interval and terminate the search. This makes
-                    # the behaviour deterministic w.r.t. the mid evaluation
-                    # order and relies on caller-managed RNG seed for
-                    # reproducibility.
-                    break
-                elif achieved < target_power:
-                    # Not enough power, increase budget
-                    lo = mid + 1
-                else:
-                    # Achieved > target + tol: we might be able to reduce budget
-                    hi = mid - 1
+            search_bar = _create_progress_bar(
+                total=None,
+                desc=f"Power search (k={k})",
+                unit="candidate",
+                leave=False,
+            )
+            try:
+                with _tqdm_logging([logger]):
+                    while lo <= hi:
+                        _update_progress(search_bar)
+                        mid = (lo + hi) // 2
+                        achieved = self._estimate_power(info_times, int(mid))
+                        # If achieved is within [target, target + tol], accept this mid
+                        if (
+                            achieved >= target_power
+                            and achieved <= target_power + float(tol)
+                        ):
+                            best_n = int(mid)
+                            logger.info(
+                                "Accepting planned_max_n=%s with achieved power=%s within [%s, %s] (early-stop)",
+                                int(mid),
+                                achieved,
+                                target_power,
+                                target_power + float(tol),
+                            )
+                            # Early-stop: accept the first candidate that meets the
+                            # acceptance interval and terminate the search. This makes
+                            # the behaviour deterministic w.r.t. the mid evaluation
+                            # order and relies on caller-managed RNG seed for
+                            # reproducibility.
+                            break
+                        elif achieved < target_power:
+                            # Not enough power, increase budget
+                            lo = mid + 1
+                        else:
+                            # Achieved > target + tol: we might be able to reduce budget
+                            hi = mid - 1
+            finally:
+                _close_progress(search_bar)
 
             planned_max_n = int(best_n)
 
@@ -721,41 +811,50 @@ class AddInterimToFixedSampleTest:
 
         oc_results = []
         effect_grid = list(self.effect_sizes)
-        for idx, es in enumerate(effect_grid):
-            procedure = (
-                base_proc_for_loop
-                if base_proc_for_loop is not None
-                else self._make_procedure(info_times, planned_max_n, design_payload)
-            )
-            procedure.reset()
-            logger.debug(
-                "Simulating effect_size=%s (idx=%s) with planned_max_n=%s",
-                es,
-                idx,
-                planned_max_n,
-            )
-            point = self._simulator.simulate(
-                procedure,
-                p_control=float(self.p_control),
-                effect_size=float(es),
-                n_simulations=int(self.n_sim),
-                rng_seed=self.seed,
-                max_total=int(planned_max_n),
-                sampling=sampling_strategy,
-            )
-            logger.debug("Simulated effect_size=%s -> power=%s", es, float(point.power))
-            base_proc_for_loop = None
-            merged_md = dict(base_metadata)
-            if point.metadata:
-                merged_md.update(
-                    {str(key): value for key, value in point.metadata.items()}
+        effect_iterable = _iter_with_progress(
+            effect_grid,
+            desc=f"Simulating effect sizes (k={k})",
+            unit="effect",
+            leave=False,
+        )
+        with _tqdm_logging([logger]):
+            for idx, es in enumerate(effect_iterable):
+                procedure = (
+                    base_proc_for_loop
+                    if base_proc_for_loop is not None
+                    else self._make_procedure(info_times, planned_max_n, design_payload)
                 )
-            merged_md.setdefault("sample_sizes", base_metadata.get("sample_sizes"))
-            merged_md["effect_size"] = float(es)
-            merged_md["n_looks"] = int(len(info_times))
-            merged_md["planned_max_n"] = int(planned_max_n)
-            point.metadata = merged_md
-            oc_results.append(point)
+                procedure.reset()
+                logger.debug(
+                    "Simulating effect_size=%s (idx=%s) with planned_max_n=%s",
+                    es,
+                    idx,
+                    planned_max_n,
+                )
+                point = self._simulator.simulate(
+                    procedure,
+                    p_control=float(self.p_control),
+                    effect_size=float(es),
+                    n_simulations=int(self.n_sim),
+                    rng_seed=self.seed,
+                    max_total=int(planned_max_n),
+                    sampling=sampling_strategy,
+                )
+                logger.debug(
+                    "Simulated effect_size=%s -> power=%s", es, float(point.power)
+                )
+                base_proc_for_loop = None
+                merged_md = dict(base_metadata)
+                if point.metadata:
+                    merged_md.update(
+                        {str(key): value for key, value in point.metadata.items()}
+                    )
+                merged_md.setdefault("sample_sizes", base_metadata.get("sample_sizes"))
+                merged_md["effect_size"] = float(es)
+                merged_md["n_looks"] = int(len(info_times))
+                merged_md["planned_max_n"] = int(planned_max_n)
+                point.metadata = merged_md
+                oc_results.append(point)
 
         closest = min(oc_results, key=lambda r: abs(r.effect_size - float(self.delta)))
 
@@ -882,10 +981,18 @@ def add_interim(
     inst.design_fst()
 
     results: Dict[int, Dict[str, Any]] = {}
-    for k in ks:
-        results[int(k)] = inst.compare_interim(
-            k=int(k), keep_power_at_H1=False, plot_options=plot_options
-        )
+    ks_iterable = [int(value) for value in ks]
+    with _tqdm_logging([logger]):
+        for k_value in _iter_with_progress(
+            ks_iterable,
+            desc="compare_interim (fixed budget)",
+            unit="design",
+            leave=False,
+        ):
+            logger.debug("Running compare_interim for k=%s (fixed budget)", k_value)
+            results[int(k_value)] = inst.compare_interim(
+                k=int(k_value), keep_power_at_H1=False, plot_options=plot_options
+            )
 
     return results
 
@@ -963,13 +1070,21 @@ def add_interim_keep_power(
     inst.design_fst()
 
     results: Dict[int, Dict[str, Any]] = {}
-    for k in ks:
-        results[int(k)] = inst.compare_interim(
-            k=int(k),
-            keep_power_at_H1=True,
-            plot_options=plot_options,
-            max_multiplier=max_multiplier,
-            tol=tol,
-        )
+    ks_iterable = [int(value) for value in ks]
+    with _tqdm_logging([logger]):
+        for k_value in _iter_with_progress(
+            ks_iterable,
+            desc="compare_interim (keep power)",
+            unit="design",
+            leave=False,
+        ):
+            logger.debug("Running compare_interim for k=%s (keep power)", k_value)
+            results[int(k_value)] = inst.compare_interim(
+                k=int(k_value),
+                keep_power_at_H1=True,
+                plot_options=plot_options,
+                max_multiplier=max_multiplier,
+                tol=tol,
+            )
 
     return results
