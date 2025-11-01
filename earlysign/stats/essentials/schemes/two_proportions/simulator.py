@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Optional
+from math import ceil
+from typing import Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -9,15 +10,82 @@ from earlysign.stats.essentials.methods.group_sequential.operating_characteristi
 )
 
 
+def compute_cumulative_sample_sizes(
+    info_times: Sequence[float], planned_max_n: int
+) -> List[int]:
+    """Return cumulative sample-size targets using ceiling rounding.
+
+    The schedule uses ``ceil(planned_max_n * info_time)`` for each information
+    fraction and enforces monotonic growth with the final element equal to
+    ``planned_max_n``. This avoids undershooting the planned maxima when the
+    optimiser emits fractions that would otherwise round down.
+    """
+
+    max_total = int(planned_max_n)
+    if max_total <= 0:
+        raise ValueError("planned_max_n must be positive")
+
+    rates = [float(rate) for rate in info_times]
+    if not rates:
+        raise ValueError("info_times must be non-empty")
+
+    cumulative: List[int] = []
+    previous = 0
+    for idx, rate in enumerate(rates):
+        if rate <= 0:
+            target = previous
+        else:
+            target = int(ceil(max_total * rate))
+        if idx == len(rates) - 1:
+            target = max_total
+        target = max(previous, min(target, max_total))
+        cumulative.append(target)
+        previous = target
+
+    cumulative[-1] = max_total
+    return cumulative
+
+
+def _build_sampling_plan(
+    cumulative_totals: Sequence[int], allocation_ratio: float
+) -> List[Tuple[int, int]]:
+    """Derive per-look sample increments from cumulative totals."""
+
+    alloc = float(allocation_ratio)
+    if alloc <= 0.0:
+        raise ValueError("allocation_ratio must be positive")
+
+    plan: List[Tuple[int, int]] = []
+    prev_a = 0
+    prev_b = 0
+    for total in cumulative_totals:
+        total_int = int(total)
+        if total_int < 0:
+            raise ValueError("cumulative totals must be non-negative")
+        target_a = int(ceil(total_int / (1.0 + alloc)))
+        target_b = total_int - target_a
+        inc_a = target_a - prev_a
+        inc_b = target_b - prev_b
+        if inc_a < 0 or inc_b < 0:
+            raise ValueError("cumulative totals must be non-decreasing")
+        if inc_a > 0 or inc_b > 0:
+            plan.append((inc_a, inc_b))
+        prev_a = target_a
+        prev_b = target_b
+
+    return plan
+
+
 def _sampler_gen(
     *,
-    batch_size: int,
+    batch_size: Optional[int],
     allocation_ratio: float,
     pA: float,
     pB: float,
     rng: np.random.Generator,
     max_total: Optional[int],
     totals: Dict[str, int],
+    schedule: Optional[Sequence[Tuple[int, int]]] = None,
 ) -> Iterator[Dict[str, int]]:
     """Simple generator yielding per-batch data and updating `totals`.
 
@@ -25,6 +93,30 @@ def _sampler_gen(
     contain keys 'cum_nA', 'cum_nB' and 'look_idx'. This keeps the
     sampler implementation minimal (yield + totals) as requested.
     """
+
+    if schedule is not None:
+        for inc_a, inc_b in schedule:
+            if inc_a == 0 and inc_b == 0:
+                totals["look_idx"] += 1
+                yield {"nA": 0, "mA": 0, "nB": 0, "mB": 0}
+                continue
+            drawA = int(rng.binomial(int(inc_a), pA)) if inc_a else 0
+            drawB = int(rng.binomial(int(inc_b), pB)) if inc_b else 0
+
+            totals["cum_nA"] += int(inc_a)
+            totals["cum_nB"] += int(inc_b)
+            totals["look_idx"] += 1
+
+            yield {
+                "nA": int(inc_a),
+                "mA": drawA,
+                "nB": int(inc_b),
+                "mB": drawB,
+            }
+        return
+
+    if batch_size is None:
+        raise ValueError("batch_size must be provided when schedule is absent")
 
     batch_total = int(batch_size + round(batch_size * allocation_ratio))
     alloc = float(allocation_ratio)
@@ -54,7 +146,7 @@ def _sampler_gen(
         totals["cum_nB"] += incB
         totals["look_idx"] += 1
 
-        yield {"nA": incA, "mA": drawA, "nB": incB, "mB": drawB}
+    yield {"nA": incA, "mA": drawA, "nB": incB, "mB": drawB}
 
 
 @dataclass
@@ -68,13 +160,13 @@ class TwoProportionsSimulator:
 
     effect_size: float
     n_simulations: int = 2000
-    batch_size: int = 100
+    batch_size: Optional[int] = None
     allocation_ratio: float = 1.0
 
     def __post_init__(self) -> None:
         if self.n_simulations <= 0:
             raise ValueError("n_simulations must be positive")
-        if self.batch_size <= 0:
+        if self.batch_size is not None and self.batch_size <= 0:
             raise ValueError("batch_size must be positive")
         if self.allocation_ratio <= 0.0:
             raise ValueError("allocation_ratio must be positive")
@@ -90,12 +182,17 @@ class TwoProportionsSimulator:
         n_simulations: Optional[int] = None,
         rng_seed: Optional[int] = None,
         max_total: Optional[int] = None,
+        info_times: Optional[Sequence[float]] = None,
+        cumulative_sizes: Optional[Sequence[int]] = None,
     ) -> OCPointResult:
         """Run Monte-Carlo replications and return operating characteristics.
 
         The implementation is intentionally compact: each replication runs
         incremental batches until ``max_total`` is reached or ``procedure``
-        requests to stop.
+        requests to stop. When ``batch_size`` is ``None`` the caller must
+        provide either ``info_times`` or ``cumulative_sizes`` so that the
+        simulator can derive an efficient sampling schedule aligned with the
+        design information fractions.
         """
 
         n_sim = (
@@ -106,10 +203,28 @@ class TwoProportionsSimulator:
         )
         rng = np.random.default_rng(rng_seed)
 
+        schedule: Optional[Sequence[Tuple[int, int]]] = None
+        if self.batch_size is None:
+            if cumulative_sizes is not None:
+                schedule = _build_sampling_plan(cumulative_sizes, self.allocation_ratio)
+            elif info_times is not None and max_total is not None:
+                cumulative_sizes = compute_cumulative_sample_sizes(
+                    info_times, max_total
+                )
+                schedule = _build_sampling_plan(cumulative_sizes, self.allocation_ratio)
+            else:
+                raise ValueError(
+                    "Provide info_times or cumulative_sizes when batch_size is None"
+                )
+
         if max_total is None:
+            if self.batch_size is None:
+                raise ValueError("max_total is required when batch_size is None")
             max_total = int(
                 self.batch_size + round(self.batch_size * self.allocation_ratio)
             )
+        else:
+            max_total = int(max_total)
 
         # stop_counts: map actual total sample size at stopping -> count
         stop_counts: Dict[int, int] = {}
@@ -121,13 +236,14 @@ class TwoProportionsSimulator:
 
             totals: Dict[str, int] = {"cum_nA": 0, "cum_nB": 0, "look_idx": 0}
             gen = _sampler_gen(
-                batch_size=int(self.batch_size),
+                batch_size=self.batch_size,
                 allocation_ratio=float(self.allocation_ratio),
                 pA=float(p_control),
                 pB=float(p_control + effect),
                 rng=rng,
                 max_total=max_total,
                 totals=totals,
+                schedule=schedule,
             )
 
             stopped = False
@@ -164,7 +280,9 @@ class TwoProportionsSimulator:
             stop_distribution=stop_counts,
             metadata={
                 "n_simulations": int(n_sim),
-                "batch_size": int(self.batch_size),
+                "batch_size": (
+                    int(self.batch_size) if self.batch_size is not None else None
+                ),
                 "allocation_ratio": float(self.allocation_ratio),
             },
         )

@@ -78,6 +78,7 @@ from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
 )
 from earlysign.stats.essentials.schemes.two_proportions.simulator import (
     TwoProportionsSimulator,
+    compute_cumulative_sample_sizes,
 )
 from earlysign.stats.essentials.schemes.two_proportions.wald_z import (
     compute_wald_z,
@@ -223,11 +224,10 @@ class _TwoPropProcedure:
         self._metadata_snapshot = self._build_metadata_snapshot()
 
     def _compute_sample_sizes(self) -> np.ndarray:
-        scaled = np.rint(self._info_times * float(self._planned_max_n)).astype(int)
-        scaled = np.maximum.accumulate(scaled)
-        if scaled[-1] != self._planned_max_n:
-            scaled[-1] = self._planned_max_n
-        return scaled
+        schedule = compute_cumulative_sample_sizes(
+            [float(x) for x in self.info_times], self._planned_max_n
+        )
+        return np.asarray(schedule, dtype=int)
 
     def _build_metadata_snapshot(self) -> Dict[str, Any]:
         raw_payload = dict(self.design_payload or {})
@@ -444,12 +444,13 @@ class AddInterimToFixedSampleTest:
         procedure_factory: ProcedureFactory,
         asn_calculator_factory: Callable[[], ASNCalculator],
         effect_sizes: Optional[Sequence[float]] = None,
-        n_sim: int = 2000,
-        batch_size: int = 100,
+        n_sim: int = 200,
+        batch_size: Optional[int] = None,
         seed: Optional[int] = None,
         design_payload_builder: Optional[
             Callable[[Sequence[float], int], Mapping[str, Any]]
         ] = None,
+        verbose: bool = False,
     ) -> None:
         self.alpha = float(alpha)
         self.delta = float(delta)
@@ -462,11 +463,12 @@ class AddInterimToFixedSampleTest:
             else list(np.linspace(0.0, max(self.delta * 2.0, 0.02), num=11))
         )
         self.n_sim = int(n_sim)
-        self.batch_size = int(batch_size)
+        self.batch_size = None if batch_size is None else int(batch_size)
         self.seed = seed
         self._procedure_factory = procedure_factory
         self._asn_calculator_factory = asn_calculator_factory
         self._design_payload_builder = design_payload_builder
+        self.verbose = bool(verbose)
 
         # placeholders set by design_fst()
         self.n_fsd_per_group: Optional[int] = None
@@ -475,7 +477,7 @@ class AddInterimToFixedSampleTest:
         self._simulator = TwoProportionsSimulator(
             effect_size=float(self.delta),
             n_simulations=int(self.n_sim),
-            batch_size=int(self.batch_size),
+            batch_size=self.batch_size,
             allocation_ratio=float(self.allocation_ratio),
         )
 
@@ -535,6 +537,9 @@ class AddInterimToFixedSampleTest:
         design_payload = self._build_design_payload(info_times, planned_max_n)
         procedure = self._make_procedure(info_times, planned_max_n, design_payload)
         procedure.reset()
+        info_times_list = [float(x) for x in info_times]
+        sample_sizes = compute_cumulative_sample_sizes(info_times_list, planned_max_n)
+        schedule_sizes = sample_sizes if self.batch_size is None else None
         point = self._simulator.simulate(
             procedure,
             p_control=float(self.p_control),
@@ -542,6 +547,8 @@ class AddInterimToFixedSampleTest:
             n_simulations=int(self.n_sim),
             rng_seed=self.seed,
             max_total=int(planned_max_n),
+            info_times=info_times_list if self.batch_size is None else None,
+            cumulative_sizes=schedule_sizes,
         )
         return float(point.power)
 
@@ -586,13 +593,16 @@ class AddInterimToFixedSampleTest:
 
         design_payload = self._build_design_payload(info_times, planned_max_n)
 
+        info_times_list = [float(x) for x in info_times]
+        sample_sizes = compute_cumulative_sample_sizes(info_times_list, planned_max_n)
+        schedule_sizes = sample_sizes if self.batch_size is None else None
         base_proc = self._make_procedure(info_times, planned_max_n, design_payload)
         base_proc_for_loop: Optional[ProcedureLike] = base_proc
         raw_metadata = base_proc.snapshot_metadata()
         base_metadata: Dict[str, Any] = {
             str(key): value for key, value in raw_metadata.items()
         }
-        base_metadata.setdefault("info_times", list(map(float, info_times)))
+        base_metadata.setdefault("info_times", info_times_list)
         base_metadata.setdefault("planned_max_n", int(planned_max_n))
         base_metadata.setdefault("allocation_ratio", float(self.allocation_ratio))
         if self.n_fsd_per_group is not None:
@@ -601,6 +611,7 @@ class AddInterimToFixedSampleTest:
         base_metadata.setdefault("target_power", float(self.power))
         base_metadata.setdefault("target_effect", float(self.delta))
         base_metadata.setdefault("alpha", float(self.alpha))
+        base_metadata.setdefault("sample_sizes", list(sample_sizes))
 
         oc_results = []
         effect_grid = list(self.effect_sizes)
@@ -618,6 +629,8 @@ class AddInterimToFixedSampleTest:
                 n_simulations=int(self.n_sim),
                 rng_seed=self.seed,
                 max_total=int(planned_max_n),
+                info_times=info_times_list if self.batch_size is None else None,
+                cumulative_sizes=schedule_sizes,
             )
             base_proc_for_loop = None
             merged_md = dict(base_metadata)
@@ -676,8 +689,8 @@ def add_interim(
     spending: Any,
     p_control: float,
     effect_sizes: Optional[Sequence[float]] = None,
-    n_sim: int = 2000,
-    batch_size: int = 100,
+    n_sim: int = 200,
+    batch_size: Optional[int] = None,
     allocation_ratio: float,
     seed: Optional[int] = None,
     plot_options: Optional[Dict[str, Any]] = None,
@@ -773,8 +786,8 @@ def add_interim_keep_power(
     spending: Any,
     p_control: float,
     effect_sizes: Optional[Sequence[float]] = None,
-    n_sim: int = 2000,
-    batch_size: int = 100,
+    n_sim: int = 200,
+    batch_size: Optional[int] = None,
     allocation_ratio: float,
     seed: Optional[int] = None,
     max_multiplier: int = 4,

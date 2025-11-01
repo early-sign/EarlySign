@@ -33,7 +33,7 @@ Examples
 ...     planned_max_n=200,
 ...     p_control=0.5,
 ...     n_sim=20,
-...     batch_size=50,
+...     batch_size=None,
 ...     seed=1234,
 ... )
 >>> adapter.evaluate([0.5, 1.0])
@@ -50,6 +50,7 @@ from earlysign.stats.applications.design.group_sequential.initial_design.helpers
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.essentials.schemes.two_proportions.simulator import (
     TwoProportionsSimulator,
+    compute_cumulative_sample_sizes,
 )
 
 DesignPayloadBuilder = Callable[[Sequence[float], int], Mapping[str, Any]]
@@ -65,8 +66,8 @@ class TemplateASNAdapter(ASNCalculator):
         base_calculator: ASNCalculator,
         planned_max_n: int,
         p_control: float,
-        n_sim: int = 100,
-        batch_size: int = 100,
+        n_sim: int = 200,
+        batch_size: Optional[int] = None,
         seed: Optional[int] = None,
         design_payload_builder: Optional[DesignPayloadBuilder] = None,
     ) -> None:
@@ -77,11 +78,12 @@ class TemplateASNAdapter(ASNCalculator):
         self._n_sim = int(n_sim)
         self._seed = seed
         self._design_payload_builder = design_payload_builder
+        self._batch_size = None if batch_size is None else int(batch_size)
 
         self._simulator = TwoProportionsSimulator(
             effect_size=float(base_calculator.alternative),
             n_simulations=int(n_sim),
-            batch_size=int(batch_size),
+            batch_size=self._batch_size,
             allocation_ratio=float(base_calculator.allocation_ratio),
         )
 
@@ -108,6 +110,8 @@ class TemplateASNAdapter(ASNCalculator):
             rates, self._planned_max_n, payload, self._seed
         )
         procedure.reset()
+        sample_sizes = compute_cumulative_sample_sizes(rates, self._planned_max_n)
+        schedule_sizes = sample_sizes if self._batch_size is None else None
         result = self._simulator.simulate(
             procedure,
             p_control=self._p_control,
@@ -115,6 +119,8 @@ class TemplateASNAdapter(ASNCalculator):
             n_simulations=self._n_sim,
             rng_seed=self._seed,
             max_total=self._planned_max_n,
+            info_times=rates if self._batch_size is None else None,
+            cumulative_sizes=schedule_sizes,
         )
         return float(result.expected_sample_size)
 
