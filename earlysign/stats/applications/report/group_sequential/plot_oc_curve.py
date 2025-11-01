@@ -29,7 +29,7 @@ look) as a best-effort fallback. Prefer emitting sample-size keyed maps to
 avoid ambiguity.
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -103,7 +103,7 @@ class OCCurvePlotter:
         null_value: float = 0.0,
         effect_label: str = "Effect Size",
         ax: Optional[Axes] = None,
-        plot_options: Optional[dict] = None,
+        plot_options: Optional[Dict[str, Any]] = None,
     ) -> Axes:
         """Plot ESS vs effect size and overlay stopping distribution.
 
@@ -161,12 +161,23 @@ class OCCurvePlotter:
         for r in results_sorted:
             eff = float(r.effect_size) + null_value
             # ESS scatter marker
-            ax.scatter([eff], [r.expected_sample_size], color=gst_color, s=64, zorder=5, edgecolors="black")
+            ax.scatter(
+                [eff],
+                [r.expected_sample_size],
+                color=gst_color,
+                s=64,
+                zorder=5,
+                edgecolors="black",
+            )
 
             # Stop-distribution: expect keys to be actual total sample sizes
             stop_dist = r.stop_distribution or {}
             if isinstance(stop_dist, dict) and stop_dist:
-                total = float(sum(stop_dist.values())) if sum(stop_dist.values()) > 0 else 1.0
+                total = (
+                    float(sum(stop_dist.values()))
+                    if sum(stop_dist.values()) > 0
+                    else 1.0
+                )
                 # plot each stop bin at its actual sample-size y coordinate
                 for raw_key, count in stop_dist.items():
                     try:
@@ -184,7 +195,9 @@ class OCCurvePlotter:
                             n_looks = len(stop_dist)
                         k_int = int(raw_key)
                         if 1 <= k_int <= n_looks:
-                            sample_sizes = self._resolve_sample_sizes_from_result(r, n_looks)
+                            sample_sizes = self._resolve_sample_sizes_from_result(
+                                r, n_looks
+                            )
                             n_total = int(sample_sizes[k_int - 1])
                         else:
                             # skip non-integer/unknown keys
@@ -192,7 +205,15 @@ class OCCurvePlotter:
                     prob = float(count) / total
                     size = max(30, min(300, int(prob * 600)))
                     alpha_val = min(max(prob * 0.8, 0.05), 0.9)
-                    ax.scatter([eff], [n_total], color=gst_color, s=size, alpha=alpha_val, edgecolors="black", zorder=6)
+                    ax.scatter(
+                        [eff],
+                        [n_total],
+                        color=gst_color,
+                        s=size,
+                        alpha=alpha_val,
+                        edgecolors="black",
+                        zorder=6,
+                    )
 
         # Draw a star marker at the planned fixed-sample design point when
         # metadata provides a planned_max_n. We only draw this representative
@@ -200,7 +221,9 @@ class OCCurvePlotter:
         # target_effect is provided, the FSD marker is drawn at the
         # target_effect location below to avoid duplicate stars.
         try:
-            if (plot_options is None or plot_options.get("show_fsd_star", True)) and target_effect is None:
+            if (
+                plot_options is None or plot_options.get("show_fsd_star", True)
+            ) and target_effect is None:
                 # Find any planned_max_n in metadata and draw one star at the
                 # effect with maximum ESS as a representative location.
                 planned_vals = [
@@ -276,11 +299,7 @@ class OCCurvePlotter:
         if plot_options:
             # Explicit ylim tuple takes precedence. Allow None for upper bound
             ylim = plot_options.get("ylim")
-            if (
-                ylim is not None
-                and isinstance(ylim, (list, tuple))
-                and len(ylim) == 2
-            ):
+            if ylim is not None and isinstance(ylim, (list, tuple)) and len(ylim) == 2:
                 lo, hi = ylim
                 if lo is None and hi is None:
                     pass

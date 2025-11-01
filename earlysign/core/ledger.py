@@ -79,6 +79,7 @@ import ibis.expr.schema as sch
 from ibis.expr.types import Table as TableExpr
 
 from earlysign import __version__
+from earlysign.core.util.sanitize_for_json import sanitize_for_json
 
 
 @dataclass(frozen=True)
@@ -192,7 +193,7 @@ class Ledger:
         self,
         payload_type: str,
         payload: Mapping[str, Any],
-        labels: Mapping[str, Any] = {},
+        labels: Mapping[str, Any] | None = None,
     ) -> None:
         """
         Insert one row (append-only). Auto-fills uuid and ts.
@@ -201,14 +202,16 @@ class Ledger:
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
 
-        labels = {**self.labels, **labels}
+        combined_labels: Dict[str, Any] = dict(self.labels)
+        if labels:
+            combined_labels.update(labels)
         row = {
             "uuid": uuidlib.uuid4().hex,
             "ts": datetime.now(timezone.utc),
             "pkg_version": f"earlysign=={__version__}",
             "payload_type": payload_type,
-            "payload": dict(payload),
-            "labels": labels if labels else None,
+            "payload": sanitize_for_json(dict(payload)),
+            "labels": sanitize_for_json(combined_labels) or None,
         }
         self.connector.insert(self.table_name, [row])
 

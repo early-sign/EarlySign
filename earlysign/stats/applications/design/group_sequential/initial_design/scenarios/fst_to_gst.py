@@ -40,13 +40,17 @@ implements the `Procedure` protocol expected by the simulator (``ingest``,
 exported functions below.
 """
 
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Sequence, Union, cast
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Union, cast
 
 import ibis
 import numpy as np
 
 from earlysign.framework.templates import TemplateBase
+from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
+    ProcedureFactory,
+    ProcedureLike,
+)
 from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.minimize_asn import (
     MinimizeASNOptimizer,
 )
@@ -70,7 +74,6 @@ from earlysign.stats.essentials.schemes.two_proportions.asn import (
     build_asn_calculator,
 )
 from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
-    ProportionsSampleSize,
     TwoProportionsEffectSizeCalculator,
 )
 from earlysign.stats.essentials.schemes.two_proportions.simulator import (
@@ -124,77 +127,148 @@ def _spending_family(spending_obj: SpendingFunction) -> str:
     return "obf"
 
 
+def _build_two_prop_procedure_factory(
+    *,
+    spending_obj: SpendingFunction,
+    alpha: float,
+    allocation_ratio: float,
+) -> ProcedureFactory:
+    """Return a :class:`ProcedureFactory` tailored to two-proportion tests.
+
+    Examples
+    --------
+    >>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
+    >>> factory = _build_two_prop_procedure_factory(
+    ...     spending_obj=OBFSpending(alpha=0.05, sided=2),
+    ...     alpha=0.05,
+    ...     allocation_ratio=1.0,
+    ... )
+    >>> procedure = factory([0.5, 1.0], 200, None, None)
+    >>> metadata = procedure.snapshot_metadata()
+    >>> (metadata["planned_max_n"], round(metadata["boundaries"]["upper"][0], 10))
+    (200, 2.7718076487)
+    >>> metadata["boundaries"]["lower"][0] == float("-inf")
+    True
+    """
+    family = _spending_family(spending_obj)
+
+    def _factory(
+        info_times: Sequence[float],
+        planned_max_n: int,
+        design_payload: Optional[Mapping[str, Any]],
+        rng_seed: Optional[int],
+    ) -> ProcedureLike:
+        rates = np.asarray(info_times, dtype=float)
+        eff = EfficacySpec(style="alpha_spending", family=family)
+        fut = FutilitySpec(mode="none")
+        spec = BoundaryCalculatorSpec(alpha=alpha, tails=2, efficacy=eff, futility=fut)
+        calculator = BoundaryCalculator(spec)
+        boundaries = calculator.compute_boundaries(rates)
+
+        payload = {str(key): value for key, value in dict(design_payload or {}).items()}
+        payload.setdefault("info_times", [float(x) for x in rates.tolist()])
+        payload.setdefault("planned_max_n", int(planned_max_n))
+        payload.setdefault("spending_family", family)
+        upper = [float(x) for x in boundaries["upper"]]
+        lower_raw = boundaries.get("lower")
+        payload["boundaries"] = {
+            "upper": upper,
+            "lower": [float(x) for x in lower_raw] if lower_raw is not None else None,
+        }
+
+        return _TwoPropProcedure(
+            info_times=rates.tolist(),
+            z_upper=list(boundaries["upper"]),
+            z_lower=(
+                list(boundaries["lower"])
+                if boundaries.get("lower") is not None
+                else None
+            ),
+            planned_max_n=int(planned_max_n),
+            allocation_ratio=float(allocation_ratio),
+            design_payload=payload,
+        )
+
+    return _factory
+
+
 @dataclass
 class _TwoPropProcedure:
-    """Lightweight Procedure implementing the simulator Protocol.
-
-    Behavior (pseudo-algorithm):
-    - Initialization inputs: info_times (fractions), z_upper, z_lower,
-      n_per_analysis (per-group), allocation_ratio, pooled variance flag.
-    - Precompute per-analysis planned sample sizes using
-      TwoProportionsEffectSizeCalculator.sample_sizes(). This yields arrays
-      of control/treatment/total sample sizes at each analysis.
-    - ingest(delta_batch): accumulate cumulative counts (nA, mA, nB, mB).
-    - should_stop(look_idx): determine the highest analysis index for which
-      the cumulative total samples reaches or exceeds the planned size. If a
-      new analysis boundary is now available, compute Wald Z from cumulative
-      counts and compare against the corresponding upper/lower boundaries.
-      If crossing occurs return a dict {'reject': bool, 'reason': 'efficacy'|'futility'}
-      otherwise return None to continue.
-
-    This minimal implementation is purposely independent from the ledger and
-    is intended for Monte-Carlo simulation only.
-    """
+    """Procedure implementation for the two-proportions simulator."""
 
     info_times: Sequence[float]
     z_upper: Sequence[float]
-    z_lower: Sequence[float]
-    n_per_analysis: int
+    z_lower: Optional[Sequence[float]]
+    planned_max_n: int
     allocation_ratio: float = 1.0
     pooled: bool = True
+    design_payload: Optional[Mapping[str, Any]] = None
 
-    # runtime state
-    _cum_nA: int = 0
-    _cum_mA: int = 0
-    _cum_nB: int = 0
-    _cum_mB: int = 0
-    _last_checked_idx: int = 0
+    _cum_nA: int = field(default=0, init=False)
+    _cum_mA: int = field(default=0, init=False)
+    _cum_nB: int = field(default=0, init=False)
+    _cum_mB: int = field(default=0, init=False)
+    _last_checked_idx: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
-        # build sample sizes per analysis using the effect-size helper (only
-        # uses sample size layout, we don't depend on effect parameters here).
-        calc = TwoProportionsEffectSizeCalculator()
-        sample_size_obj = ProportionsSampleSize(n_per_analysis=int(self.n_per_analysis))
-        sample_info = calc.sample_sizes(
-            sample_size_obj,
-            allocation_ratio=float(self.allocation_ratio),
-            info_times=np.asarray(self.info_times, dtype=float),
+        self._info_times = np.asarray(list(map(float, self.info_times)), dtype=float)
+        if self._info_times.size == 0 or not np.isclose(self._info_times[-1], 1.0):
+            raise ValueError("info_times must be non-empty and end at 1.0")
+        self._z_upper = [float(x) for x in self.z_upper]
+        self._z_lower = (
+            [float(x) for x in self.z_lower] if self.z_lower is not None else None
         )
-        # sample_info['n_total'] is an array (per-analysis total N)
-        self._sample_n_total = np.asarray(sample_info["n_total"], dtype=int)
+        self._planned_max_n = int(self.planned_max_n)
+        self._sample_n_total = self._compute_sample_sizes()
+        self._metadata_snapshot = self._build_metadata_snapshot()
 
-    def ingest(self, cumulative: Dict[str, int]) -> None:
-        # cumulative here is an incremental batch dict from the simulator
+    def _compute_sample_sizes(self) -> np.ndarray:
+        scaled = np.rint(self._info_times * float(self._planned_max_n)).astype(int)
+        scaled = np.maximum.accumulate(scaled)
+        if scaled[-1] != self._planned_max_n:
+            scaled[-1] = self._planned_max_n
+        return scaled
+
+    def _build_metadata_snapshot(self) -> Dict[str, Any]:
+        raw_payload = dict(self.design_payload or {})
+        payload: Dict[str, Any] = {
+            str(key): value for key, value in raw_payload.items()
+        }
+        sample_sizes = [int(x) for x in self._sample_n_total.tolist()]
+        payload.setdefault("info_times", [float(x) for x in self._info_times])
+        payload.setdefault("planned_max_n", int(self._planned_max_n))
+        payload.setdefault("sample_sizes", sample_sizes)
+        payload.setdefault(
+            "boundaries",
+            {
+                "upper": [float(x) for x in self._z_upper],
+                "lower": (
+                    [float(x) for x in self._z_lower]
+                    if self._z_lower is not None
+                    else None
+                ),
+            },
+        )
+        payload.setdefault("allocation_ratio", float(self.allocation_ratio))
+        payload.setdefault("n_looks", len(sample_sizes))
+        return payload
+
+    def ingest(self, cumulative: Mapping[str, Any]) -> None:
         self._cum_nA += int(cumulative.get("nA", 0))
         self._cum_mA += int(cumulative.get("mA", 0))
         self._cum_nB += int(cumulative.get("nB", 0))
         self._cum_mB += int(cumulative.get("mB", 0))
 
     def should_stop(self, look: int) -> Optional[Dict[str, Any]]:
-        # Determine if we crossed the next analysis sample threshold.
         total = int(self._cum_nA + self._cum_nB)
-        # find highest analysis index reached by current total
         idx = 0
-        for i, req in enumerate(self._sample_n_total):
-            if total >= int(req):
-                idx = i + 1
-
+        for analysis_idx, required in enumerate(self._sample_n_total, start=1):
+            if total >= int(required):
+                idx = analysis_idx
         if idx <= self._last_checked_idx:
             return None
 
-        # evaluate sequentially for any newly reached analyses
         for analysis in range(self._last_checked_idx + 1, idx + 1):
-            # compute Wald Z on cumulative counts
             z = compute_wald_z(
                 nA=self._cum_nA,
                 mA=self._cum_mA,
@@ -202,30 +276,27 @@ class _TwoPropProcedure:
                 mB=self._cum_mB,
                 pooled=self.pooled,
             )
-            up = float(self.z_upper[analysis - 1])
-            lo = (
-                float(self.z_lower[analysis - 1])
-                if self.z_lower is not None
-                else float("-inf")
+            upper = float(self._z_upper[analysis - 1])
+            lower = (
+                float(self._z_lower[analysis - 1])
+                if self._z_lower is not None and analysis - 1 < len(self._z_lower)
+                else None
             )
-            if z >= up:
-                self._last_checked_idx = analysis
+            self._last_checked_idx = analysis
+            if z >= upper:
                 return {
                     "reject": True,
                     "reason": "efficacy",
-                    "z": float(z),
                     "analysis": analysis,
+                    "z": float(z),
                 }
-            if lo is not None and z <= lo:
-                self._last_checked_idx = analysis
+            if lower is not None and z <= lower:
                 return {
                     "reject": False,
                     "reason": "futility",
-                    "z": float(z),
                     "analysis": analysis,
+                    "z": float(z),
                 }
-
-        self._last_checked_idx = idx
         return None
 
     def reset(self) -> None:
@@ -234,6 +305,9 @@ class _TwoPropProcedure:
         self._cum_nB = 0
         self._cum_mB = 0
         self._last_checked_idx = 0
+
+    def snapshot_metadata(self) -> Dict[str, Any]:
+        return dict(self._metadata_snapshot)
 
 
 class TemplateProcedureAdapter:
@@ -268,49 +342,73 @@ class TemplateProcedureAdapter:
         experiment_id: str,
         table_name: Optional[str],
         terminate_fn: Callable[[TemplateBase, int], Optional[Dict[str, Any]]],
+        info_times: Sequence[float],
+        planned_max_n: int,
+        design_payload: Optional[Mapping[str, Any]],
+        rng_seed: Optional[int],
     ) -> None:
         if terminate_fn is None:
-            raise ValueError(
-                "terminate_fn is required and must be provided by the caller"
-            )
+            raise ValueError("terminate_fn must be provided")
         self._factory = template_factory
         self._experiment_id = experiment_id
         self._table_name = table_name
         self._terminate_fn = terminate_fn
+        self._info_times = [float(x) for x in info_times]
+        self._planned_max_n = int(planned_max_n)
+        self._design_payload = dict(design_payload or {})
+        self._rng_seed = rng_seed
 
         self._backend: Optional[Any] = None
         self._template: Optional[TemplateBase] = None
 
-        # Immediately create the first instance
         self.reset()
 
+    def _initial_design_payload(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = dict(self._design_payload)
+        payload.setdefault("info_times", list(self._info_times))
+        payload.setdefault("planned_max_n", int(self._planned_max_n))
+        if self._rng_seed is not None:
+            payload.setdefault("rng_seed", int(self._rng_seed))
+        return payload
+
     def reset(self) -> None:
-        # Create a fresh in-memory DuckDB ibis backend and instantiate the
-        # template factory with it. This ensures reset produces a clean
-        # execution environment for Monte-Carlo replications.
         try:
             backend = ibis.duckdb.connect(":memory:")
         except Exception:
-            # Fallback: allow passing a string connector to the factory; the
-            # factory can decide how to handle it. We still attempt to pass
-            # the ibis backend where possible.
             backend = ":memory:"
 
         self._backend = backend
         self._template = self._factory(backend, self._experiment_id, self._table_name)
+        if self._template is not None:
+            try:
+                self._template.set_design(self._initial_design_payload())
+            except Exception:
+                pass
 
-    def ingest(self, cumulative: Dict[str, Any]) -> None:
+    def ingest(self, cumulative: Mapping[str, Any]) -> None:
         if self._template is None:
             raise RuntimeError("Template not initialized; call reset() first")
-        # Delegate to template's update API
-        self._template.update(cumulative)
+        self._template.update(dict(cumulative))
 
     def should_stop(self, look: int) -> Optional[Dict[str, Any]]:
         if self._template is None:
             raise RuntimeError("Template not initialized; call reset() first")
         return self._terminate_fn(self._template, look)
 
-    # Expose the underlying template for callers that need to query status
+    def snapshot_metadata(self) -> Dict[str, Any]:
+        metadata: Dict[str, Any] = {
+            "info_times": list(self._info_times),
+            "planned_max_n": int(self._planned_max_n),
+            "design_payload": dict(self._design_payload),
+        }
+        if self._template is not None:
+            try:
+                status = self._template.status()
+                metadata["template_status"] = status
+            except Exception:
+                metadata["template_status"] = None
+        return metadata
+
     @property
     def template(self) -> TemplateBase:
         if self._template is None:
@@ -322,7 +420,10 @@ class AddInterimToFixedSampleTest:
     """Class-based API to convert an FSD (two proportions) into GST designs.
 
     Usage:
-        inst = AddInterimToFixedSampleTest(alpha, delta, power, spending, p_control, allocation_ratio)
+        inst = AddInterimToFixedSampleTest(
+            alpha=..., delta=..., power=..., p_control=..., allocation_ratio=...,
+            procedure_factory=..., asn_calculator_factory=...
+        )
         inst.design_fst()
         res = inst.compare_interim(k=3, keep_power_at_H1=False)
 
@@ -334,17 +435,21 @@ class AddInterimToFixedSampleTest:
 
     def __init__(
         self,
+        *,
         alpha: float,
         delta: float,
         power: float,
         p_control: float,
         allocation_ratio: float,
+        procedure_factory: ProcedureFactory,
+        asn_calculator_factory: Callable[[], ASNCalculator],
         effect_sizes: Optional[Sequence[float]] = None,
         n_sim: int = 2000,
         batch_size: int = 100,
         seed: Optional[int] = None,
-        designer_factory: Optional[Callable[[Sequence[float]], Dict[str, Any]]] = None,
-        asn_calculator_factory: Optional[Callable[[], ASNCalculator]] = None,
+        design_payload_builder: Optional[
+            Callable[[Sequence[float], int], Mapping[str, Any]]
+        ] = None,
     ) -> None:
         self.alpha = float(alpha)
         self.delta = float(delta)
@@ -359,12 +464,20 @@ class AddInterimToFixedSampleTest:
         self.n_sim = int(n_sim)
         self.batch_size = int(batch_size)
         self.seed = seed
-        self.designer_factory = designer_factory
-        self.asn_calculator_factory = asn_calculator_factory
+        self._procedure_factory = procedure_factory
+        self._asn_calculator_factory = asn_calculator_factory
+        self._design_payload_builder = design_payload_builder
 
         # placeholders set by design_fst()
         self.n_fsd_per_group: Optional[int] = None
         self.planned_max_n: Optional[int] = None
+
+        self._simulator = TwoProportionsSimulator(
+            effect_size=float(self.delta),
+            n_simulations=int(self.n_sim),
+            batch_size=int(self.batch_size),
+            allocation_ratio=float(self.allocation_ratio),
+        )
 
     def design_fst(self) -> Dict[str, int]:
         """Compute fixed-sample (FSD) per-group sample size and set planned_max_n.
@@ -385,39 +498,61 @@ class AddInterimToFixedSampleTest:
         }
 
     def _optimize_info_times(self, k: int) -> Sequence[float]:
-        # ASN calculator is injected via asn_calculator_factory for flexibility
-        if self.asn_calculator_factory is not None:
-            asn_calc = self.asn_calculator_factory()
-        else:
-            raise RuntimeError(
-                "asn_calculator_factory not provided; caller must inject factory to build ASN calculator"
-            )
-
+        asn_calc = self._asn_calculator_factory()
         optimizer = MinimizeASNOptimizer(
-            calculator=asn_calc, k_max=int(k), seed=self.seed
+            calculator=asn_calc,
+            k_max=int(k),
+            seed=self.seed,
         )
         info_times = optimizer.minimize()
-        return info_times if info_times else list(np.linspace(1.0 / k, 1.0, k))
+        if not info_times:
+            raise RuntimeError("Timing optimisation failed to produce info_times")
+        return info_times
 
-    def make_designer(self, info_times: Sequence[float]) -> Dict[str, Any]:
-        """Instantiate a designer (boundary generator) for the provided info times.
+    def _build_design_payload(
+        self, info_times: Sequence[float], planned_max_n: int
+    ) -> Mapping[str, Any]:
+        if self._design_payload_builder is None:
+            raw_payload: Mapping[str, Any] = {
+                "info_times": list(map(float, info_times)),
+                "planned_max_n": int(planned_max_n),
+            }
+        else:
+            raw_payload = self._design_payload_builder(info_times, planned_max_n)
+        return {str(key): value for key, value in dict(raw_payload).items()}
 
-        The designer factory is injected by callers when different boundary
-        policies (spending, futility) or optimizers are required. If no
-        factory was provided, raise an error to force the caller to supply
-        a designer.
-        """
-        if self.designer_factory is None:
-            raise RuntimeError(
-                "designer_factory not provided; caller must inject a designer_factory"
-            )
-        return self.designer_factory(info_times)
+    def _make_procedure(
+        self,
+        info_times: Sequence[float],
+        planned_max_n: int,
+        payload: Mapping[str, Any],
+    ) -> ProcedureLike:
+        return self._procedure_factory(
+            info_times, int(planned_max_n), payload, self.seed
+        )
+
+    def _estimate_power(self, info_times: Sequence[float], planned_max_n: int) -> float:
+        design_payload = self._build_design_payload(info_times, planned_max_n)
+        procedure = self._make_procedure(info_times, planned_max_n, design_payload)
+        procedure.reset()
+        point = self._simulator.simulate(
+            procedure,
+            p_control=float(self.p_control),
+            effect_size=float(self.delta),
+            n_simulations=int(self.n_sim),
+            rng_seed=self.seed,
+            max_total=int(planned_max_n),
+        )
+        return float(point.power)
 
     def compare_interim(
         self,
         k: int,
         keep_power_at_H1: bool = False,
         plot_options: Optional[Dict[str, Any]] = None,
+        *,
+        max_multiplier: int = 4,
+        tol: float = 0.01,
     ) -> Dict[str, Any]:
         """Compute OC curve and related metadata for a given k.
 
@@ -430,45 +565,17 @@ class AddInterimToFixedSampleTest:
             raise RuntimeError("Call design_fst() before compare_interim()")
 
         info_times = self._optimize_info_times(int(k))
-        bdict = self.make_designer(info_times)
 
         if keep_power_at_H1 is False:
             planned_max_n = int(self.planned_max_n)
         else:
-            # binary search for minimal planned_max_n that attains power at H1
             fsd_total = int(self.planned_max_n)
-            lo = 2
-            hi = max(2, 4 * fsd_total)
+            lo = 2 * int(k)
+            hi = max(2 * int(k), int(max_multiplier * fsd_total))
             best_n = hi
-            tol = 0.01
             while lo <= hi:
                 mid = (lo + hi) // 2
-                per_group = max(1, mid // 2)
-                n_per_analysis = max(1, per_group // int(k))
-
-                proc = _TwoPropProcedure(
-                    info_times=info_times,
-                    z_upper=bdict["upper"],
-                    z_lower=bdict["lower"],
-                    n_per_analysis=n_per_analysis,
-                    allocation_ratio=self.allocation_ratio,
-                    pooled=True,
-                )
-                sim = TwoProportionsSimulator(
-                    effect_size=self.delta,
-                    n_simulations=int(self.n_sim),
-                    batch_size=int(self.batch_size),
-                    allocation_ratio=float(self.allocation_ratio),
-                )
-                point = sim.simulate(
-                    proc,
-                    p_control=float(self.p_control),
-                    effect_size=float(self.delta),
-                    n_simulations=int(self.n_sim),
-                    rng_seed=self.seed,
-                    max_total=int(mid),
-                )
-                achieved = float(point.power)
+                achieved = self._estimate_power(info_times, int(mid))
                 if achieved + tol >= float(self.power):
                     best_n = int(mid)
                     hi = mid - 1
@@ -477,56 +584,52 @@ class AddInterimToFixedSampleTest:
 
             planned_max_n = int(best_n)
 
-        # Evaluate OC curve at planned_max_n
-        per_group_total = max(1, int(planned_max_n) // 2)
-        n_per_analysis = max(1, per_group_total // int(k))
+        design_payload = self._build_design_payload(info_times, planned_max_n)
 
-        proc = _TwoPropProcedure(
-            info_times=info_times,
-            z_upper=bdict["upper"],
-            z_lower=bdict["lower"],
-            n_per_analysis=n_per_analysis,
-            allocation_ratio=self.allocation_ratio,
-            pooled=True,
-        )
-
-        sim = TwoProportionsSimulator(
-            effect_size=self.delta,
-            n_simulations=int(self.n_sim),
-            batch_size=int(self.batch_size),
-            allocation_ratio=float(self.allocation_ratio),
-        )
+        base_proc = self._make_procedure(info_times, planned_max_n, design_payload)
+        base_proc_for_loop: Optional[ProcedureLike] = base_proc
+        raw_metadata = base_proc.snapshot_metadata()
+        base_metadata: Dict[str, Any] = {
+            str(key): value for key, value in raw_metadata.items()
+        }
+        base_metadata.setdefault("info_times", list(map(float, info_times)))
+        base_metadata.setdefault("planned_max_n", int(planned_max_n))
+        base_metadata.setdefault("allocation_ratio", float(self.allocation_ratio))
+        if self.n_fsd_per_group is not None:
+            base_metadata.setdefault("n_fsd_per_group", int(self.n_fsd_per_group))
+            base_metadata.setdefault("fsd_total", int(2 * self.n_fsd_per_group))
+        base_metadata.setdefault("target_power", float(self.power))
+        base_metadata.setdefault("target_effect", float(self.delta))
+        base_metadata.setdefault("alpha", float(self.alpha))
 
         oc_results = []
-        for es in self.effect_sizes:
-            point = sim.simulate(
-                proc,
+        effect_grid = list(self.effect_sizes)
+        for idx, es in enumerate(effect_grid):
+            procedure = (
+                base_proc_for_loop
+                if base_proc_for_loop is not None
+                else self._make_procedure(info_times, planned_max_n, design_payload)
+            )
+            procedure.reset()
+            point = self._simulator.simulate(
+                procedure,
                 p_control=float(self.p_control),
                 effect_size=float(es),
                 n_simulations=int(self.n_sim),
                 rng_seed=self.seed,
                 max_total=int(planned_max_n),
             )
-            # Annotate simulator metadata with design-level info so plotter
-            # and downstream code can access planned_max_n and FSD info.
-            md = point.metadata or {}
-            # Ensure explicit per-look sample sizes are available in metadata.
-            # The Procedure computed the planned per-look total sample sizes
-            # during initialization; expose them so the plotter uses the
-            # exact same values (avoids rounding/mapping mismatches).
-            try:
-                sample_sizes = getattr(proc, "_sample_n_total", None)
-                if sample_sizes is not None:
-                    md.setdefault("sample_sizes", [int(x) for x in sample_sizes])
-            except Exception:
-                pass
-            md.setdefault("planned_max_n", int(planned_max_n))
-            if self.n_fsd_per_group is not None:
-                md.setdefault("n_fsd_per_group", int(self.n_fsd_per_group))
-                md.setdefault("fsd_total", int(2 * int(self.n_fsd_per_group)))
-            md.setdefault("n_per_analysis", int(n_per_analysis))
-            md.setdefault("n_looks", int(k))
-            point.metadata = md
+            base_proc_for_loop = None
+            merged_md = dict(base_metadata)
+            if point.metadata:
+                merged_md.update(
+                    {str(key): value for key, value in point.metadata.items()}
+                )
+            merged_md.setdefault("sample_sizes", base_metadata.get("sample_sizes"))
+            merged_md["effect_size"] = float(es)
+            merged_md["n_looks"] = int(len(info_times))
+            merged_md["planned_max_n"] = int(planned_max_n)
+            point.metadata = merged_md
             oc_results.append(point)
 
         closest = min(oc_results, key=lambda r: abs(r.effect_size - float(self.delta)))
@@ -547,9 +650,14 @@ class AddInterimToFixedSampleTest:
             ax = None
             plot_err = repr(e)
 
+        per_group_total = planned_max_n / (1.0 + float(self.allocation_ratio))
+        n_per_analysis = max(1, int(round(per_group_total / max(1, k))))
+
         return {
             "info_times": list(map(float, info_times)),
-            "boundaries": bdict,
+            "boundaries": base_metadata.get("boundaries"),
+            "design_payload": design_payload,
+            "procedure_metadata": base_metadata,
             "oc_results": oc_results,
             "power_at_delta": float(closest.power),
             "plot_axes": ax,
@@ -614,7 +722,7 @@ def add_interim(
     spending_obj = _spending_factory(spending, alpha=alpha)
 
     def asn_calculator_factory() -> Any:
-        asn = build_asn_calculator(
+        return build_asn_calculator(
             alpha=alpha,
             beta=1.0 - power,
             sided=2,
@@ -623,16 +731,12 @@ def add_interim(
             allocation_ratio=allocation_ratio,
             spending=spending_obj,
         )
-        return asn
 
-    def designer_factory(info_times: Sequence[float]) -> Dict[str, Any]:
-        eff = EfficacySpec(
-            style="alpha_spending", family=_spending_family(spending_obj)
-        )
-        fut = FutilitySpec(mode="none")
-        spec = BoundaryCalculatorSpec(alpha=alpha, tails=2, efficacy=eff, futility=fut)
-        bc = BoundaryCalculator(spec)
-        return bc.compute_boundaries(np.asarray(info_times, dtype=float))
+    procedure_factory = _build_two_prop_procedure_factory(
+        spending_obj=spending_obj,
+        alpha=alpha,
+        allocation_ratio=allocation_ratio,
+    )
 
     inst = AddInterimToFixedSampleTest(
         alpha=alpha,
@@ -640,12 +744,12 @@ def add_interim(
         power=power,
         p_control=p_control,
         allocation_ratio=allocation_ratio,
+        procedure_factory=procedure_factory,
+        asn_calculator_factory=asn_calculator_factory,
         effect_sizes=effect_sizes,
         n_sim=n_sim,
         batch_size=batch_size,
         seed=seed,
-        designer_factory=designer_factory,
-        asn_calculator_factory=asn_calculator_factory,
     )
 
     # ensure FSD design computed
@@ -695,25 +799,13 @@ def add_interim_keep_power(
     The search uses Monte-Carlo estimates and therefore may be noisy; for
     production use increase `n_sim` or tighten `tol`.
     """
-    # baseline FSD per-group sample size to guide search range
-    effect_calc = TwoProportionsEffectSizeCalculator(p_control=p_control)
-    n_fsd_per_group = effect_calc.calculate_sample_size(
-        effect_size=delta, alpha=alpha, power=power
-    )
-    int(2 * int(n_fsd_per_group))
-
     spending_obj = _spending_factory(spending, alpha=alpha)
 
     if effect_sizes is None:
         effect_sizes = [delta]
 
-    # Delegate to class-based API for clarity and reuse
-    # Create concrete spending instance and factories to inject into the
-    # class so the class itself remains agnostic to spending/futility policy.
-    spending_obj = _spending_factory(spending, alpha=alpha)
-
     def asn_calculator_factory() -> Any:
-        asn = build_asn_calculator(
+        return build_asn_calculator(
             alpha=alpha,
             beta=1.0 - power,
             sided=2,
@@ -722,16 +814,12 @@ def add_interim_keep_power(
             allocation_ratio=allocation_ratio,
             spending=spending_obj,
         )
-        return asn
 
-    def designer_factory(info_times: Sequence[float]) -> Dict[str, Any]:
-        eff = EfficacySpec(
-            style="alpha_spending", family=_spending_family(spending_obj)
-        )
-        fut = FutilitySpec(mode="none")
-        spec = BoundaryCalculatorSpec(alpha=alpha, tails=2, efficacy=eff, futility=fut)
-        bc = BoundaryCalculator(spec)
-        return bc.compute_boundaries(np.asarray(info_times, dtype=float))
+    procedure_factory = _build_two_prop_procedure_factory(
+        spending_obj=spending_obj,
+        alpha=alpha,
+        allocation_ratio=allocation_ratio,
+    )
 
     inst = AddInterimToFixedSampleTest(
         alpha=alpha,
@@ -739,19 +827,23 @@ def add_interim_keep_power(
         power=power,
         p_control=p_control,
         allocation_ratio=allocation_ratio,
+        procedure_factory=procedure_factory,
+        asn_calculator_factory=asn_calculator_factory,
         effect_sizes=effect_sizes,
         n_sim=n_sim,
         batch_size=batch_size,
         seed=seed,
-        designer_factory=designer_factory,
-        asn_calculator_factory=asn_calculator_factory,
     )
     inst.design_fst()
 
     results: Dict[int, Dict[str, Any]] = {}
     for k in ks:
         results[int(k)] = inst.compare_interim(
-            k=int(k), keep_power_at_H1=True, plot_options=plot_options
+            k=int(k),
+            keep_power_at_H1=True,
+            plot_options=plot_options,
+            max_multiplier=max_multiplier,
+            tol=tol,
         )
 
     return results
