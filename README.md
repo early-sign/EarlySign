@@ -36,7 +36,7 @@ Please check our [up-to-date documentation](https://early-sign.github.io/EarlySi
 
 ## Usage
 
-This library supports the following steps in your experimentation.
+This library supports the following steps that emerge in your implementation of statistical practice.
 
 1. Planning / Designing
 1. Executing / Analyzing
