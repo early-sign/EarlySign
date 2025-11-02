@@ -17,13 +17,14 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, MutableMapping, Optional, Sequence
 
 import ibis
 import numpy as np
 import pstats
 
 from earlysign.api.ab_tests import BinomialABTest
+from earlysign.core.util.ibis_cache import CacheEntry, IbisCache
 from earlysign.stats.applications.design.group_sequential.initial_design.helpers.template_helpers import (
     build_template_procedure_factory,
 )
@@ -183,8 +184,16 @@ def _template_compare_runtime_with_profile(
             spending_obj=spending_obj,
         )
 
+    template_cache_store: MutableMapping[str, CacheEntry] = {}
+
     def _template_factory(backend: Any, experiment_id: str, table_name: Optional[str]):
-        return BinomialABTest(backend, experiment_id, table_name)
+        ibis_cache = IbisCache(backend, mode="execute", cache=template_cache_store)
+        return BinomialABTest(
+            backend,
+            experiment_id,
+            table_name,
+            ibis_cache=ibis_cache,
+        )
 
     def _terminate_fn(template: Any, look: int) -> Optional[Dict[str, Any]]:
         status = template.status()

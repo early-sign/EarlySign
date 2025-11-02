@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, cast
+from typing import Any, Dict, Optional, cast
 
 import ibis
 import pandas as pd
@@ -7,6 +7,7 @@ from ibis import BaseBackend
 from matplotlib.figure import Figure
 
 from earlysign.core.ledger import Ledger
+from earlysign.core.util.ibis_cache import IbisCache
 from earlysign.framework import templates as tpl
 from earlysign.reporting.group_sequential import plot_design_boundaries
 from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
@@ -58,6 +59,8 @@ class BinomialABTest(tpl.TemplateBase):
         connector: BaseBackend | str,
         experiment_id: str,
         table_name: str | None = None,
+        *,
+        ibis_cache: Optional[IbisCache] = None,
     ) -> None:
         """Initialize BinomialABTest.
 
@@ -88,6 +91,11 @@ class BinomialABTest(tpl.TemplateBase):
             self.connector, table_name if table_name is not None else experiment_id
         ).bind(experiment_id=self.experiment_id)
         self.ledger.ensure()
+        self._ibis_cache = (
+            ibis_cache
+            if ibis_cache is not None
+            else IbisCache(self.connector, mode="execute")
+        )
 
     def set_design(self, payload: Dict[str, Any]) -> None:
         """Set the group sequential design.
@@ -125,6 +133,10 @@ class BinomialABTest(tpl.TemplateBase):
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
         design_model = DesignPayloadModel.model_validate(payload)
         design.insert(design_model.to_payload())
+
+    def _execute_expr(self, expr: Any) -> Any:
+        with self._ibis_cache as cached_execute:
+            return cached_execute(expr)
 
     def update(self, payload: Dict[str, Any]) -> None:
         """Update experiment with new observations.
@@ -193,7 +205,9 @@ class BinomialABTest(tpl.TemplateBase):
 
         ## Read design info
         design = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design_latest = design.latest().select(payload=design.t.payload).execute()
+        design_latest = self._execute_expr(
+            design.latest().select(payload=design.t.payload)
+        )
         if len(design_latest) == 0:
             raise ValueError("Design must be set before calling update().")
         design_model = DesignPayloadModel.model_validate(
@@ -213,22 +227,26 @@ class BinomialABTest(tpl.TemplateBase):
         info_record = info_op.outputs.info
 
         # Get current info time
-        current_info_time = float(
-            cast(Any, info_record.latest()["info_time"].execute().iloc[0])
+        info_time_expr = info_record.latest().select(
+            info_time=info_record.t.payload["info_time"].cast("float64")
         )
+        info_time_df = self._execute_expr(info_time_expr)
+        current_info_time = float(cast(Any, info_time_df.iloc[0]["info_time"]))
 
         # Use latest decision's timestamp to determine if a new look is due
         decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
             self.ledger
         )
-        latest_decision_df = decision_record.latest(explode=True).execute()
+        latest_decision_df = self._execute_expr(decision_record.latest(explode=True))
 
         # Get the last info_time before or at the last decision (if any)
         if len(latest_decision_df) > 0:
             last_decision_ts = latest_decision_df["ts"].iloc[0]
-            info_before_decision = info_record.latest_before(
-                last_decision_ts, include_ts=True, explode=True
-            ).execute()
+            info_before_decision = self._execute_expr(
+                info_record.latest_before(
+                    last_decision_ts, include_ts=True, explode=True
+                )
+            )
             last_info_time_before_decision = (
                 float(info_before_decision["info_time"].iloc[0])
                 if len(info_before_decision) > 0
@@ -264,7 +282,7 @@ class BinomialABTest(tpl.TemplateBase):
         decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
             self.ledger
         )
-        latest_decision = decision_record.latest().execute()
+        latest_decision = self._execute_expr(decision_record.latest())
         if len(latest_decision) == 0:
             return State(stop_recommended=False)
         if "stop" in latest_decision["signal"].iloc[0]:
@@ -287,10 +305,8 @@ class BinomialABTest(tpl.TemplateBase):
         """
         # Read design from ledger
         design_record = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design_df = (
-            design_record.latest(explode=False)
-            .select(payload=design_record.t.payload)
-            .execute()
+        design_df = self._execute_expr(
+            design_record.latest(explode=False).select(payload=design_record.t.payload)
         )
         if len(design_df) == 0:
             raise ValueError("No design found in ledger. Call set_design() first.")
@@ -373,7 +389,7 @@ class BinomialABTest(tpl.TemplateBase):
             )
         )
 
-        df_result = result.execute()
+        df_result = self._execute_expr(result)
         return df_result if isinstance(df_result, pd.DataFrame) else pd.DataFrame()
 
     def get_results(self) -> Dict[str, Any]:
@@ -401,7 +417,9 @@ class BinomialABTest(tpl.TemplateBase):
         """
         # Get design
         design_rec = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design_df = design_rec.latest().select(payload=design_rec.t.payload).execute()
+        design_df = self._execute_expr(
+            design_rec.latest().select(payload=design_rec.t.payload)
+        )
         if len(design_df) > 0:
             design_payload = DesignPayloadModel.model_validate(
                 design_df.iloc[0]["payload"]
