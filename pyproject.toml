@@ -19,6 +19,7 @@ numpy = "^2.3.2"
 matplotlib = "^3.10.6"
 ibis-framework = "^10.8.0"
 pydantic = "^2.11.9"
+tqdm = "^4.67.1"
 
 [tool.poetry.extras]
 examples = []

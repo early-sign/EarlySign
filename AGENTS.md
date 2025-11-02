@@ -8,6 +8,7 @@ applyTo: "**"
 - Toolkit
   - `make format` to auto-format code, and then `make check-lite` to run all sanity checks (lints, tests, and type checks). Therefore, you want to run `make format && make check-lite` for every set of edits you make.
   - We use `poetry` to manage dependencies. So you need to use `poetry run python` when you run Python commands.
+  - tqdm progress bars follow the module logger level: INFO (or lower) enables progress, WARNING (or higher) suppresses it. Do not add per-call toggles like `enable_progress`; tune logging instead or use the `EARLYSIGN_ENABLE_TQDM` / `EARLYSIGN_DISABLE_TQDM` environment overrides when necessary.
 - Main architectural decisions:
   - `__init__.py` purpose: Designed for documentation generation and namespace structure
     - ❌ **DO NOT** use for access restriction or selective imports (no `__all__` should be used except for the version exports in the top-level `__init__.py`)
