@@ -651,3 +651,78 @@ class ENormalMixture:
             )
 
             s.write_from(S_all, "e_state", {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")})
+
+# ==========================
+# cProfile profiling harness
+# ==========================
+if __name__ == "__main__":
+    """
+    Run:  python earlysign_dsl_design_5.py
+    Or:   python -m cProfile -o profile.out earlysign_dsl_design_5.py
+          python -m pstats profile.out
+    """
+    import cProfile
+    import pstats
+    import io
+    import ibis
+
+    def _run_workload():
+        # Recreate fresh in-memory DuckDB and table
+        con = ibis.connect("duckdb://")
+        con.raw_sql("""
+        CREATE TABLE ledger (
+          uuid         TEXT,
+          ts           TIMESTAMP,
+          pkg_version  TEXT,
+          payload_type TEXT,
+          payload      JSON,
+          labels       JSON
+        );
+        """)
+
+        # Prepare ledgers
+        base_ledger = Ledger(con, table="ledger")
+        ab_ledger = base_ledger.bind(experiment_id="exp_ab4")
+        e_ledger  = base_ledger.bind(experiment_id="exp_e")
+
+        # --- AB: 4-look, stop first at look=3 ---
+        ab = BinomialABTest(ab_ledger)
+        ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0])
+        ab.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})  # I = 0.20
+        ab.update({"nA": 50,  "mA": 5,  "nB": 50,  "mB": 6})   # I = 0.30 -> look=1 continue
+        ab.update({"nA": 150, "mA": 10, "nB": 150, "mB": 20})  # I = 0.60 -> look=2 continue
+        ab.update({"nA": 100, "mA": 5,  "nB": 100, "mB": 35})  # I = 0.80 -> look=3 stop
+
+        # --- E-process: 12 updates ---
+        ep = ENormalMixture(e_ledger)
+        ep.set_design(alpha=0.05, thetas=[0.25, 0.5, 0.75])
+        for _ in range(12):
+            ep.update(x=0.8)
+
+        # Return connection for optional inspection
+        return con
+
+    # Profile
+    pr = cProfile.Profile()
+    pr.enable()
+    _ = _run_workload()
+    pr.disable()
+
+    # Pretty print top offenders by total time and cumulative time
+    s = io.StringIO()
+    ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats("tottime")
+    ps.print_stats(30)  # top 30 by tottime
+    ps.sort_stats("cumtime").print_stats(30)  # top 30 by cumtime
+
+    # Focused filter: show rows mentioning insert/raw_sql/flush/write_from/write
+    s2 = io.StringIO()
+    p2 = pstats.Stats(pr, stream=s2).strip_dirs().sort_stats("cumtime")
+    p2.print_stats(r"(insert|raw_sql|flush|write_from|write|uuid|now)")
+    print("\n========== cProfile: Top by tottime / cumtime ==========\n")
+    print(s.getvalue())
+    print("\n========== cProfile: Filtered (insert/raw_sql/flush/...) ==========\n")
+    print(s2.getvalue())
+
+    # Also dump to file for external tools (snakeviz, gprof2dot, etc.)
+    pr.dump_stats("earlysign_profile.prof")
+    print("Wrote profile to earlysign_profile.prof")
