@@ -753,3 +753,62 @@ FROM ({D_latest.compile()})
 
     def latest_row(self, payload_type: str) -> ibis.Expr:
         return LedgerReaderBase(self.ledger).latest_row(payload_type)
+
+# ==========================
+# Profiling helper (callable)
+# ==========================
+
+def run_profile_demo(con: Any) -> str:
+    """
+    Run a short AB scenario under profiling and return stats as a string.
+
+    - Uses a separate label scope (experiment_id="exp_prof") so it doesn't
+      interfere with other runs.
+    - Filters stats to functions matching /(insert|raw_sql|flush|write_from|write|uuid|now)/.
+    - Sorts by cumulative time.
+    """
+    import cProfile
+    import pstats
+    import io
+
+    base = Ledger(con, table="ledger")
+    prof_ledger = base.bind(experiment_id="exp_prof")
+    ab = BinomialABTest(prof_ledger)
+
+    pr = cProfile.Profile()
+    pr.enable()
+
+    # Minimal work: design + two updates that trigger one or two looks
+    ab.set_design(max_n=400, looks=[0.5, 1.0])
+    ab.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})  # I≈0.5
+    ab.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})  # I≈1.0
+
+    pr.disable()
+    s = io.StringIO()
+    ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats("cumtime")
+    ps.print_stats(r"(insert|raw_sql|flush|write_from|write|uuid|now)")
+    return s.getvalue()
+
+
+# ==========================
+# Script entry: profiling
+# ==========================
+
+if __name__ == "__main__":
+    # When run as a script: create an in-memory DuckDB, ensure table, run profiling,
+    # and print the pstats summary to stdout.
+    con = ibis.connect("duckdb://")
+    con.raw_sql("""
+        CREATE TABLE IF NOT EXISTS ledger (
+          uuid         TEXT,
+          ts           TIMESTAMP,
+          pkg_version  TEXT,
+          payload_type TEXT,
+          payload      JSON,
+          labels       JSON
+        );
+    """)
+    out = run_profile_demo(con)
+    print("=== cProfile (filtered) ===")
+    print("Ordered by: cumulative time")
+    print(out)
