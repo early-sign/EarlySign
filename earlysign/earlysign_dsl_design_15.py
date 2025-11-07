@@ -1,10 +1,10 @@
-"""EarlySign DSL Design v14 - ledger-first group sequential demo.
+"""EarlySign DSL Design v15 - ibis-native state derivation demo.
 
 Doctest (A/B test with on-the-fly spending)
 -------------------------------------------
 >>> import ibis
 >>> con = ibis.duckdb.connect()
->>> ledger = Ledger(con, "ledger_dsl14_doctest", overwrite=True)
+>>> ledger = Ledger(con, "ledger_dsl15_doctest", overwrite=True)
 >>> ab = BinomialABTest(ledger, labels={"experiment_id": "exp_ab4"})
 >>> ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming")
 >>> ab.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})
@@ -36,7 +36,8 @@ import cProfile
 import json
 import math
 import pstats
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Sequence
 
 import ibis
 from ibis.backends import BaseBackend
@@ -51,7 +52,7 @@ from ibis.expr.types import (
     Table as IbisTable,
 )
 
-__version__ = "14.0.0"
+__version__ = "15.0.0"
 
 
 def json_get_str(json_expr: JSONValue, key: str) -> StringValue:
@@ -78,16 +79,21 @@ def _json_literal(data: Dict[str, Any]) -> JSONValue:
     return ibis.literal(json.dumps(data, sort_keys=True), type="string").cast("json")
 
 
-def _cdf_normal(x: float) -> float:
-    """Gaussian CDF via ``math.erf`` (two-sided inference helpers)."""
+def _label_predicates(table: IbisTable, labels: Dict[str, Any]) -> List[BooleanValue]:
+    """Return boolean predicates matching the provided labels for the table."""
 
+    labels_col = table["labels"]
+    return [
+        labels_col[key].unwrap_as("string") == ibis.literal(str(value))
+        for key, value in labels.items()
+    ]
+
+
+def _cdf_normal_scalar(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
-def _phi_inv(p: float) -> float:
-    """Inverse CDF Φ⁻¹ (Algorithm AS241)."""
-
-    # Constants replicated from AS241
+def _phi_inv_scalar(p: float) -> float:
     a = [
         -3.969683028665376e01,
         2.209460984245205e02,
@@ -120,9 +126,9 @@ def _phi_inv(p: float) -> float:
 
     plow = 0.02425
     phigh = 1 - plow
-    if p <= 0:  # pragma: no cover - defensive guard
+    if p <= 0:
         return -math.inf
-    if p >= 1:  # pragma: no cover - defensive guard
+    if p >= 1:
         return math.inf
     if p < plow:
         q = math.sqrt(-2.0 * math.log(p))
@@ -141,42 +147,39 @@ def _phi_inv(p: float) -> float:
     )
 
 
-def _alpha_spent(t: float, alpha: float, family: str) -> float:
-    """Lan–DeMets cumulative α(t) for the supported spending families."""
-
+def _alpha_spent_scalar(t: float, alpha: float, family: str) -> float:
     t = min(max(t, 1e-12), 1.0)
     family_key = family.lower()
     if family_key in {"of", "obrien_fleming", "o'brien_fleming", "obrien-fleming"}:
-        z = _phi_inv(1.0 - alpha / 2.0)
-        return 2.0 - 2.0 * _cdf_normal(z / math.sqrt(t))
+        z = _phi_inv_scalar(1.0 - alpha / 2.0)
+        return 2.0 - 2.0 * _cdf_normal_scalar(z / math.sqrt(t))
     if family_key == "pocock":
         return alpha * math.log(1.0 + (math.e - 1.0) * t)
     raise ValueError(f"Unknown spending family: {family}")
 
 
-def _boundary_from_spending(I0: float, I1: float, *, alpha: float, family: str) -> float:
-    """Two-sided single-look z-threshold from the local α increment."""
-
-    A1 = _alpha_spent(I1, alpha, family)
-    A0 = _alpha_spent(I0, alpha, family) if I0 > 0 else 0.0
+def _boundary_from_spending_scalar(I0: float, I1: float, *, alpha: float, family: str) -> float:
+    A1 = _alpha_spent_scalar(I1, alpha, family)
+    A0 = _alpha_spent_scalar(I0, alpha, family) if I0 > 0 else 0.0
     local = max(A1 - A0, 1e-16)
-    return _phi_inv(1.0 - local / 2.0)
+    return _phi_inv_scalar(1.0 - local / 2.0)
 
 
-def _pooled_z(nA: float, mA: float, nB: float, mB: float) -> float:
-    """Classic pooled two-proportion z-statistic."""
+def _pooled_z_expr(nA: FloatingValue, mA: FloatingValue, nB: FloatingValue, mB: FloatingValue) -> FloatingValue:
+    """Classic pooled two-proportion z-statistic expressed with ibis."""
 
-    eps = 1e-9
-    if nA <= 0 or nB <= 0:
-        return 0.0
-    pA = mA / max(nA, eps)
-    pB = mB / max(nB, eps)
+    eps = ibis.literal(1e-9)
+    zero = ibis.literal(0.0)
+    valid = (nA > 0) & (nB > 0)
+    nA_safe = ibis.greatest(nA, eps)
+    nB_safe = ibis.greatest(nB, eps)
     total_n = nA + nB
-    pooled = (mA + mB) / max(total_n, eps)
-    denom = math.sqrt(pooled * (1.0 - pooled) * (1.0 / max(nA, eps) + 1.0 / max(nB, eps)) + eps)
-    if denom <= eps:
-        return 0.0
-    return (pB - pA) / denom
+    total_safe = ibis.greatest(total_n, eps)
+    pA = mA / nA_safe
+    pB = mB / nB_safe
+    pooled = (mA + mB) / total_safe
+    denom = (pooled * (1 - pooled) * (1 / nA_safe + 1 / nB_safe) + eps).sqrt()
+    return ibis.ifelse(valid & (denom > eps), (pB - pA) / denom, zero)
 
 
 class Ledger:
@@ -288,134 +291,209 @@ class BinomialABTest:
     def _apply_labels(self, table: IbisTable) -> IbisTable:
         if not self.labels:
             return table
-        labels_col = table["labels"]
-        predicates: List[BooleanValue] = []
-        for key, value in self.labels.items():
-            condition = labels_col[key].unwrap_as("string") == ibis.literal(str(value))
-            predicates.append(condition)
+        predicates = _label_predicates(table, self.labels)
         return table.filter(predicates) if predicates else table
 
-    def _kind_exists(self, kind: str) -> bool:
+    def _scoped_kind(self, kind: str) -> IbisTable:
         tbl = self.ledger.table
-        kind_pred = tbl["kind"] == ibis.literal(kind)
-        filtered = tbl.filter(kind_pred)
-        filtered = self._apply_labels(filtered)
-        count_expr = filtered.count()
-        return bool(self.ledger.con.execute(count_expr))
+        filtered = tbl.filter(tbl["kind"] == ibis.literal(kind))
+        return self._apply_labels(filtered)
 
-    def _latest_row(self, kind: str) -> IbisTable:
-        tbl = self.ledger.table
-        kind_pred = tbl["kind"] == ibis.literal(kind)
-        filtered = tbl.filter(kind_pred)
-        filtered = self._apply_labels(filtered)
-        return filtered.order_by(tbl.ts.desc()).limit(1)
-
-    def _planned_looks(self) -> List[Tuple[int, float]]:
-        tbl = self.ledger.table
-        kind_pred = tbl["kind"] == ibis.literal("design-look")
-        looks_tbl = tbl.filter(kind_pred)
-        looks_tbl = self._apply_labels(looks_tbl)
-        looks_tbl = looks_tbl.order_by(tbl.ts)
-        look_expr = json_get_i64(looks_tbl.payload, "look").name("look")
-        planned_expr = json_get_f64(looks_tbl.payload, "planned_t").name("planned_t")
-        frame = looks_tbl.select(look_expr, planned_expr)
-        raw = self.ledger.con.execute(frame)
-        if raw.empty:
-            return []
-        return [(int(r["look"]), float(r["planned_t"])) for r in raw.to_dict("records")]
-
-    def _state_values(self) -> Dict[str, Any]:
-        if not self._kind_exists("design"):
-            raise RuntimeError("Design must be configured before calling update().")
-
-        snapshot_row = self._latest_row("snapshot")
-        design_row = self._latest_row("design")
-
-        snap_df = self.ledger.con.execute(
-            snapshot_row.select(
-                json_get_f64(snapshot_row.payload, "nA").name("nA"),
-                json_get_f64(snapshot_row.payload, "mA").name("mA"),
-                json_get_f64(snapshot_row.payload, "nB").name("nB"),
-                json_get_f64(snapshot_row.payload, "mB").name("mB"),
-            )
+    def _latest_snapshot_expr(self) -> IbisTable:
+        tbl = self._scoped_kind("snapshot")
+        payload = tbl["payload"]
+        typed = tbl.select(
+            ts_snapshot=tbl.ts,
+            prev_nA=json_get_f64(payload, "nA").cast("float64"),
+            prev_mA=json_get_f64(payload, "mA").cast("float64"),
+            prev_nB=json_get_f64(payload, "nB").cast("float64"),
+            prev_mB=json_get_f64(payload, "mB").cast("float64"),
         )
-        if snap_df.empty:
-            prev_nA = prev_mA = prev_nB = prev_mB = 0.0
-        else:
-            snap_row = snap_df.to_dict("records")[0]
-            prev_nA = float(snap_row.get("nA", 0.0) or 0.0)
-            prev_mA = float(snap_row.get("mA", 0.0) or 0.0)
-            prev_nB = float(snap_row.get("nB", 0.0) or 0.0)
-            prev_mB = float(snap_row.get("mB", 0.0) or 0.0)
-
-        design_df = self.ledger.con.execute(
-            design_row.select(
-                json_get_f64(design_row.payload, "planned_max_n").name("Nmax"),
-                json_get_f64(design_row.payload, "alpha").name("alpha"),
-                json_get_str(design_row.payload, "spending_family").name("family"),
-            )
+        default_snapshot = ibis.memtable(
+            [
+                {
+                    "ts_snapshot": datetime(1970, 1, 1),
+                    "prev_nA": 0.0,
+                    "prev_mA": 0.0,
+                    "prev_nB": 0.0,
+                    "prev_mB": 0.0,
+                }
+            ],
+            schema=ibis.schema(
+                {
+                    "ts_snapshot": "timestamp(6)",
+                    "prev_nA": "float64",
+                    "prev_mA": "float64",
+                    "prev_nB": "float64",
+                    "prev_mB": "float64",
+                }
+            ),
         )
-        if design_df.empty:
-            raise RuntimeError("Design row not found for current labels.")
-        design_vals = design_df.to_dict("records")[0]
-        Nmax = float(design_vals.get("Nmax", 0.0) or 0.0)
-        if Nmax <= 0:
-            raise RuntimeError("Design planned_max_n must be positive.")
+        union = typed.union(default_snapshot)
+        return union.order_by(union.ts_snapshot.desc()).limit(1)
 
-        return {
-            "prev_nA": prev_nA,
-            "prev_mA": prev_mA,
-            "prev_nB": prev_nB,
-            "prev_mB": prev_mB,
-            "Nmax": Nmax,
-            "alpha": float(design_vals.get("alpha", 0.05) or 0.05),
-            "family": str(design_vals.get("family", "obrien_fleming") or "obrien_fleming"),
-        }
+    def _latest_design_expr(self) -> IbisTable:
+        tbl = self._scoped_kind("design")
+        payload = tbl["payload"]
+        typed = tbl.select(
+            ts_design=tbl.ts,
+            planned_max_n=json_get_f64(payload, "planned_max_n").cast("float64"),
+            alpha=json_get_f64(payload, "alpha").cast("float64"),
+            family=json_get_str(payload, "spending_family"),
+            has_design=ibis.literal(1, type="int64"),
+        )
+        default_design = ibis.memtable(
+            [
+                {
+                    "ts_design": datetime(1970, 1, 1),
+                    "planned_max_n": 0.0,
+                    "alpha": 0.05,
+                    "family": "obrien_fleming",
+                    "has_design": 0,
+                }
+            ],
+            schema=ibis.schema(
+                {
+                    "ts_design": "timestamp(6)",
+                    "planned_max_n": "float64",
+                    "alpha": "float64",
+                    "family": "string",
+                    "has_design": "int64",
+                }
+            ),
+        )
+        union = typed.union(default_design)
+        return union.order_by(union.has_design.desc(), union.ts_design.desc()).limit(1)
 
-    def _select_due(self, I0: float, I1: float) -> Optional[Tuple[int, float]]:
-        candidates = [(look, t) for look, t in self._planned_looks() if I0 < t <= I1]
-        if not candidates:
-            return None
-        candidates.sort(key=lambda item: item[1])
-        return candidates[0]
+    def _looks_table(self) -> IbisTable:
+        tbl = self._scoped_kind("design-look")
+        payload = tbl["payload"]
+        return tbl.select(
+            look=json_get_i64(payload, "look").cast("int64"),
+            planned_t=json_get_f64(payload, "planned_t").cast("float64"),
+        ).order_by("planned_t")
+
+    def _state_with_due_frame(self, delta: IbisTable) -> IbisTable:
+        snapshot = self._latest_snapshot_expr()
+        design = self._latest_design_expr()
+        base = delta.cross_join(snapshot).cross_join(design)
+        state = base.mutate(
+            nA_now=lambda t: t.prev_nA + t.nA_add,
+            mA_now=lambda t: t.prev_mA + t.mA_add,
+            nB_now=lambda t: t.prev_nB + t.nB_add,
+            mB_now=lambda t: t.prev_mB + t.mB_add,
+        )
+        state = state.mutate(
+            total_prev=lambda t: t.prev_nA + t.prev_nB,
+            total_now=lambda t: t.nA_now + t.nB_now,
+        )
+        state = state.mutate(
+            I0=lambda t: ibis.ifelse(t.planned_max_n > 0, t.total_prev / t.planned_max_n, 0.0),
+            I1=lambda t: ibis.ifelse(t.planned_max_n > 0, t.total_now / t.planned_max_n, 0.0),
+        )
+        state = state.mutate(
+            z_value=lambda t: _pooled_z_expr(t.nA_now, t.mA_now, t.nB_now, t.mB_now),
+        )
+
+        state_cols = [
+            "nA_add",
+            "mA_add",
+            "nB_add",
+            "mB_add",
+            "prev_nA",
+            "prev_mA",
+            "prev_nB",
+            "prev_mB",
+            "planned_max_n",
+            "alpha",
+            "family",
+            "has_design",
+            "nA_now",
+            "mA_now",
+            "nB_now",
+            "mB_now",
+            "I0",
+            "I1",
+            "z_value",
+        ]
+        state = state.select(*state_cols)
+
+        looks = self._looks_table()
+        due_candidates = looks.cross_join(state).filter(
+            (looks.planned_t > state.I0) & (looks.planned_t <= state.I1)
+        )
+        due_candidates = due_candidates.order_by(looks.planned_t).limit(1).mutate(selector=ibis.literal(1))
+        due_candidates = due_candidates.select(
+            *[due_candidates[col] for col in state_cols],
+            due_look=due_candidates["look"],
+            due_planned_t=due_candidates["planned_t"],
+            selector=due_candidates.selector,
+        )
+        default_due = state.select(
+            *[state[col] for col in state_cols],
+            due_look=ibis.literal(None, type="int64"),
+            due_planned_t=ibis.literal(None, type="float64"),
+            selector=ibis.literal(0),
+        )
+        combined = due_candidates.union(default_due)
+        result = (
+            combined.order_by(combined.selector.desc())
+            .limit(1)
+            .mutate(
+                has_due=combined.selector,
+            )
+            .drop("selector")
+        )
+        return result
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def update(self, payload: Dict[str, int]) -> None:
+        delta = ibis.memtable(
+            [
+                {
+                    "nA_add": float(payload["nA"]),
+                    "mA_add": float(payload["mA"]),
+                    "nB_add": float(payload["nB"]),
+                    "mB_add": float(payload["mB"]),
+                }
+            ]
+        )
+        state_frame = self._state_with_due_frame(delta)
+        state_df = self.ledger.con.execute(state_frame)
+        if state_df.empty:
+            raise RuntimeError("Failed to derive state for update.")
+        state = state_df.to_dict("records")[0]
+        if not state.get("has_design"):
+            raise RuntimeError("Design must be configured before calling update().")
+        alpha_val = float(state["alpha"])
+        family_val = str(state["family"])
+
         nA_add = int(payload["nA"])
         mA_add = int(payload["mA"])
         nB_add = int(payload["nB"])
         mB_add = int(payload["mB"])
 
-        state = self._state_values()
-        prev_nA = float(state["prev_nA"])
-        prev_mA = float(state["prev_mA"])
-        prev_nB = float(state["prev_nB"])
-        prev_mB = float(state["prev_mB"])
-        Nmax = float(state["Nmax"])
-        alpha = float(state["alpha"])
-        family = str(state["family"])
-
-        nA_now = prev_nA + nA_add
-        mA_now = prev_mA + mA_add
-        nB_now = prev_nB + nB_add
-        mB_now = prev_mB + mB_add
-
-        total_prev = prev_nA + prev_nB
-        total_now = nA_now + nB_now
-        I0 = total_prev / Nmax if Nmax else 0.0
-        I1 = total_now / Nmax if Nmax else 0.0
-
-        due = self._select_due(I0, I1)
-        z_value = _pooled_z(nA_now, mA_now, nB_now, mB_now)
-        if due is not None:
-            boundary = _boundary_from_spending(I0, I1, alpha=alpha, family=family)
-            action = "stop_efficacy" if abs(z_value) >= boundary else "continue"
-        else:
-            boundary = None
-            action = None
+        nA_now = float(state["nA_now"])
+        mA_now = float(state["mA_now"])
+        nB_now = float(state["nB_now"])
+        mB_now = float(state["mB_now"])
+        info_time = float(state["I1"])
+        z_value = float(state["z_value"])
+        I0_val = float(state["I0"])
+        due_flag = bool(state.get("has_due"))
+        boundary_val = None
+        action_val = None
+        if due_flag:
+            boundary_val = _boundary_from_spending_scalar(
+                I0_val,
+                info_time,
+                alpha=alpha_val,
+                family=family_val,
+            )
+            action_val = "stop_efficacy" if abs(z_value) >= boundary_val else "continue"
 
         with self.ledger.session() as sess:
             obs_payload = dict(nA=nA_add, mA=mA_add, nB=nB_add, mB=mB_add)
@@ -424,28 +502,27 @@ class BinomialABTest:
             snapshot_payload = dict(nA=float(nA_now), mA=float(mA_now), nB=float(nB_now), mB=float(mB_now))
             sess.insert(kind="snapshot", labels=self.labels, payload=snapshot_payload)
 
-            info_payload = dict(info_time=float(I1))
+            info_payload = dict(info_time=info_time)
             sess.insert(kind="info", labels=self.labels, payload=info_payload)
 
-            if due is not None:
-                look_idx, planned_t = due
-                stat_payload = dict(z=float(z_value))
+            if due_flag:
+                stat_payload = dict(z=z_value)
                 sess.insert(kind="stat", labels=self.labels, payload=stat_payload)
 
                 decision_payload = dict(
-                    look=int(look_idx),
-                    planned_t=float(planned_t),
-                    info_time=float(I1),
-                    z=float(z_value),
-                    boundary=float(boundary) if boundary is not None else 0.0,
-                    action=str(action),
+                    look=int(state["due_look"]),
+                    planned_t=float(state["due_planned_t"]),
+                    info_time=info_time,
+                    z=z_value,
+                    boundary=float(boundary_val),
+                    action=str(action_val),
                 )
                 sess.insert(kind="decision", labels=self.labels, payload=decision_payload)
 
 
 def _ab_workload() -> BinomialABTest:
     con = ibis.duckdb.connect()
-    ledger = Ledger(con, "ledger_v14_profile", overwrite=True)
+    ledger = Ledger(con, "ledger_v15_profile", overwrite=True)
     ab = BinomialABTest(ledger, labels={"experiment_id": "demo"})
     ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05)
     batches = [

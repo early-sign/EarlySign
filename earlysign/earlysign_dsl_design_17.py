@@ -1,10 +1,10 @@
-"""EarlySign DSL Design v14 - ledger-first group sequential demo.
+"""EarlySign DSL Design v17 - materialized state cache demo.
 
 Doctest (A/B test with on-the-fly spending)
 -------------------------------------------
 >>> import ibis
 >>> con = ibis.duckdb.connect()
->>> ledger = Ledger(con, "ledger_dsl14_doctest", overwrite=True)
+>>> ledger = Ledger(con, "ledger_dsl17_doctest", overwrite=True)
 >>> ab = BinomialABTest(ledger, labels={"experiment_id": "exp_ab4"})
 >>> ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming")
 >>> ab.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})
@@ -32,6 +32,9 @@ Doctest (A/B test with on-the-fly spending)
 'stop_efficacy'
 """
 
+# NOTE: This variant validates materialized caching by inserting a ``state-cache`` row after
+#       each update so the next call can reuse the persisted intermediate statistics.
+
 import cProfile
 import json
 import math
@@ -51,7 +54,7 @@ from ibis.expr.types import (
     Table as IbisTable,
 )
 
-__version__ = "14.0.0"
+__version__ = "17.0.0"
 
 
 def json_get_str(json_expr: JSONValue, key: str) -> StringValue:
@@ -258,6 +261,7 @@ class BinomialABTest:
     def __init__(self, ledger: Ledger, *, labels: Dict[str, Any]):
         self.ledger = ledger
         self.labels = dict(labels)
+        self._planned_looks_cache: List[Tuple[int, float]] = []
 
     def set_design(
         self,
@@ -280,6 +284,7 @@ class BinomialABTest:
             for idx, planned_t in enumerate(looks, start=1):
                 look_payload = dict(look=int(idx), planned_t=float(planned_t))
                 sess.insert(kind="design-look", labels=self.labels, payload=look_payload)
+        self._planned_looks_cache = [(idx, float(t)) for idx, t in enumerate(looks, start=1)]
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -311,6 +316,8 @@ class BinomialABTest:
         return filtered.order_by(tbl.ts.desc()).limit(1)
 
     def _planned_looks(self) -> List[Tuple[int, float]]:
+        if self._planned_looks_cache:
+            return self._planned_looks_cache
         tbl = self.ledger.table
         kind_pred = tbl["kind"] == ibis.literal("design-look")
         looks_tbl = tbl.filter(kind_pred)
@@ -321,12 +328,29 @@ class BinomialABTest:
         frame = looks_tbl.select(look_expr, planned_expr)
         raw = self.ledger.con.execute(frame)
         if raw.empty:
-            return []
-        return [(int(r["look"]), float(r["planned_t"])) for r in raw.to_dict("records")]
+            self._planned_looks_cache = []
+        else:
+            self._planned_looks_cache = [(int(r["look"]), float(r["planned_t"])) for r in raw.to_dict("records")]
+        return self._planned_looks_cache
 
     def _state_values(self) -> Dict[str, Any]:
         if not self._kind_exists("design"):
             raise RuntimeError("Design must be configured before calling update().")
+
+        cache_row = self._latest_row("state-cache")
+        cache_df = self.ledger.con.execute(
+            cache_row.select(
+                json_get_f64(cache_row.payload, "nA").name("nA"),
+                json_get_f64(cache_row.payload, "mA").name("mA"),
+                json_get_f64(cache_row.payload, "nB").name("nB"),
+                json_get_f64(cache_row.payload, "mB").name("mB"),
+                json_get_f64(cache_row.payload, "info_time").name("info_time"),
+            )
+        )
+        if cache_df.empty:
+            cache_vals: Dict[str, float] = {}
+        else:
+            cache_vals = cache_df.to_dict("records")[0]
 
         snapshot_row = self._latest_row("snapshot")
         design_row = self._latest_row("design")
@@ -339,7 +363,12 @@ class BinomialABTest:
                 json_get_f64(snapshot_row.payload, "mB").name("mB"),
             )
         )
-        if snap_df.empty:
+        if cache_vals:
+            prev_nA = float(cache_vals.get("nA", 0.0) or 0.0)
+            prev_mA = float(cache_vals.get("mA", 0.0) or 0.0)
+            prev_nB = float(cache_vals.get("nB", 0.0) or 0.0)
+            prev_mB = float(cache_vals.get("mB", 0.0) or 0.0)
+        elif snap_df.empty:
             prev_nA = prev_mA = prev_nB = prev_mB = 0.0
         else:
             snap_row = snap_df.to_dict("records")[0]
@@ -362,6 +391,8 @@ class BinomialABTest:
         if Nmax <= 0:
             raise RuntimeError("Design planned_max_n must be positive.")
 
+        info_time_prev = float(cache_vals.get("info_time", (prev_nA + prev_nB) / Nmax if Nmax else 0.0))
+
         return {
             "prev_nA": prev_nA,
             "prev_mA": prev_mA,
@@ -370,6 +401,7 @@ class BinomialABTest:
             "Nmax": Nmax,
             "alpha": float(design_vals.get("alpha", 0.05) or 0.05),
             "family": str(design_vals.get("family", "obrien_fleming") or "obrien_fleming"),
+            "prev_info_time": info_time_prev,
         }
 
     def _select_due(self, I0: float, I1: float) -> Optional[Tuple[int, float]]:
@@ -397,6 +429,7 @@ class BinomialABTest:
         Nmax = float(state["Nmax"])
         alpha = float(state["alpha"])
         family = str(state["family"])
+        prev_info_time = float(state.get("prev_info_time", (prev_nA + prev_nB) / Nmax if Nmax else 0.0))
 
         nA_now = prev_nA + nA_add
         mA_now = prev_mA + mA_add
@@ -405,7 +438,7 @@ class BinomialABTest:
 
         total_prev = prev_nA + prev_nB
         total_now = nA_now + nB_now
-        I0 = total_prev / Nmax if Nmax else 0.0
+        I0 = prev_info_time if prev_info_time else (total_prev / Nmax if Nmax else 0.0)
         I1 = total_now / Nmax if Nmax else 0.0
 
         due = self._select_due(I0, I1)
@@ -442,10 +475,22 @@ class BinomialABTest:
                 )
                 sess.insert(kind="decision", labels=self.labels, payload=decision_payload)
 
+            cache_payload = dict(
+                nA=float(nA_now),
+                mA=float(mA_now),
+                nB=float(nB_now),
+                mB=float(mB_now),
+                info_time=float(I1),
+                z=float(z_value),
+                boundary=float(boundary) if boundary is not None else 0.0,
+                due_look=int(due[0]) if due is not None else -1,
+            )
+            sess.insert(kind="state-cache", labels=self.labels, payload=cache_payload)
+
 
 def _ab_workload() -> BinomialABTest:
     con = ibis.duckdb.connect()
-    ledger = Ledger(con, "ledger_v14_profile", overwrite=True)
+    ledger = Ledger(con, "ledger_v17_profile", overwrite=True)
     ab = BinomialABTest(ledger, labels={"experiment_id": "demo"})
     ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05)
     batches = [
