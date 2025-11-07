@@ -131,7 +131,6 @@ from typing import Dict, List, Optional, Protocol, Sequence, Union
 
 import ibis
 
-
 # ===================================
 # Framework: common JSON/labels utils
 # ===================================
@@ -662,8 +661,9 @@ if __name__ == "__main__":
           python -m pstats profile.out
     """
     import cProfile
-    import pstats
     import io
+    import pstats
+
     import ibis
 
     def _run_workload():

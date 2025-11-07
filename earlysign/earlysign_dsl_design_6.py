@@ -116,7 +116,6 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 import ibis
 
-
 # ==============================
 # Common JSON / labels utilities
 # ==============================

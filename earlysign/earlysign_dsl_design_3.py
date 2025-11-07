@@ -87,10 +87,11 @@ Doctest (DuckDB/Ibis)
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Union
-import ibis
 
+import ibis
 
 # ============================================================================
 # Utilities
@@ -363,7 +364,7 @@ class BinomialABTest:
             se_expr = (p_expr * (1 - p_expr) * (1 / X.nA + 1 / X.nB)).sqrt().nullif(0)
             z_expr = ((X.mB / X.nB) - (X.mA / X.nA)) / se_expr
 
-            bnd_expr = ibis.cases(
+            ibis.cases(
                 (I_expr <= 0.5, ibis.literal(2.963)),
                 (I_expr >= 1.0, ibis.literal(1.96)),
                 else_=ibis.literal(2.963)

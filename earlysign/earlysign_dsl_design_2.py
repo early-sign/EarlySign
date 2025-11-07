@@ -87,10 +87,11 @@ End-to-end doctest
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Union
-import ibis
 
+import ibis
 
 # ---------------------------------------------------------------------
 # Helpers
@@ -438,7 +439,7 @@ class BinomialABTest:
             p_expr = (baseX.mA1 + baseX.mB1) / (baseX.nA1 + baseX.nB1)
             se_expr = (p_expr * (1 - p_expr) * (1 / baseX.nA1 + 1 / baseX.nB1)).sqrt().nullif(0)
             z_expr = ((baseX.mB1 / baseX.nB1) - (baseX.mA1 / baseX.nA1)) / se_expr
-            bnd_expr = _boundary_OF_like(I_expr)
+            _boundary_OF_like(I_expr)
 
             is_due = (baseX.I0 < baseX.planned_t) & (baseX.planned_t <= I_expr)
 

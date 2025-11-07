@@ -125,7 +125,6 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 import ibis
 
-
 # ===================================
 # Common JSON / labels utilities
 # ===================================
@@ -689,8 +688,8 @@ def run_profile_demo(con: Any) -> str:
     - Sorts by cumulative time.
     """
     import cProfile
-    import pstats
     import io
+    import pstats
 
     base = Ledger(con, table="ledger")
     prof_ledger = base.bind(experiment_id="exp_prof")

@@ -1,85 +1,13 @@
 r"""
-Framework + Apps with on-the-fly alpha-spending boundaries (Lan–DeMets)
-======================================================================
+Framework + Apps with on-the-fly alpha-spending boundaries (Lan–DeMets) — v12
+=============================================================================
 
-- Each INSERT timestamp is evaluated at the database side via `now()` (no Python ts handoff).
-- Every read inside `update()` uses a *frozen past* view cut at the latest `observation` timestamp
-  for the same label scope, i.e., `ts < latest_observation_ts`. This avoids self-reference/order issues.
-- Boundaries and stats are expressed purely in Ibis algebra (no Python literal injection).
-- In addition to z, we also store a Gaussian-approx e-value: e = exp(z^2/2).
+変更点（v11 → v12 の最小差分）:
+- `stat` に `z`, `boundary`, `e_value`, `info_time` を保存。
+- `decision` は **再計算せず**、同一ラベルの **最新 `stat` 1行を読み戻して作成**。
+- 単一トランザクション内で `INSERT stat` → `INSERT decision (SELECT latest stat ...)` の順に実行。
 
-Table (DuckDB) used in doctest
-------------------------------
-uuid TEXT, ts TIMESTAMP, pkg_version TEXT, payload_type TEXT, payload JSON, labels JSON
-
-Doctest (end-to-end)
---------------------
->>> import ibis
->>> con = ibis.connect("duckdb://")
->>> _ = con.raw_sql('''
-... CREATE TABLE ledger (
-...   uuid         TEXT,
-...   ts           TIMESTAMP,
-...   pkg_version  TEXT,
-...   payload_type TEXT,
-...   payload      JSON,
-...   labels       JSON
-... );
-... ''')
->>>
->>> base_ledger = Ledger(con, table="ledger")
->>> ab_ledger = base_ledger.bind(experiment_id="exp_ab4")
->>> e_ledger  = base_ledger.bind(experiment_id="exp_e")
-
-# (A) A/B test with alpha-spending design (4 looks).
-#     Crafted so: look=1 -> continue, look=2 -> continue, look=3 -> STOP.
->>> ab = BinomialABTest(ab_ledger)
->>> ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming")
->>> # Update-1: I -> 0.20 (< 0.25), no look
->>> ab.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})
->>> # Update-2: I -> 0.30, triggers look=1 -> continue
->>> ab.update({"nA": 50, "mA": 5, "nB": 50, "mB": 6})
->>> # Update-3: I -> 0.60, triggers look=2 -> continue
->>> ab.update({"nA": 150, "mA": 10, "nB": 150, "mB": 20})
->>> # Update-4: I -> 0.80, triggers look=3 -> STOP
->>> ab.update({"nA": 100, "mA": 5, "nB": 100, "mB": 35})
->>>
->>> # Check decisions via typed view
->>> V_base = ABRowsBase(ab_ledger).typed_view()
->>> decisions = V_base.filter(lambda r: r.payload_type == "decision").order_by(lambda r: r.ts)
->>> df_dec = con.execute(decisions.select(
-...     decisions.look.name("look"),
-...     decisions.planned_t.name("planned_t"),
-...     decisions.action.name("action")
-... ))
->>> rows = df_dec.to_dict("records")
->>> len(rows) >= 3
-True
->>> rows[0]["look"], float(rows[0]["planned_t"]), rows[0]["action"]
-(1, 0.25, 'continue')
->>> rows[1]["look"], float(rows[1]["planned_t"]), rows[1]["action"]
-(2, 0.5, 'continue')
->>> rows[2]["look"], float(rows[2]["planned_t"]), rows[2]["action"]
-(3, 0.75, 'stop_efficacy')
->>>
->>> # Inspect ledger content (illustrative)
->>> _ = ab_ledger.show().execute()
-
-# (B) E-process (mixture over fixed thetas, Ville alarm at 1/alpha)
->>> ep = ENormalMixture(e_ledger)
->>> ep.set_design(alpha=0.05, thetas=[0.25, 0.5, 0.75])
->>> for _ in range(12):
-...     ep.update(x=0.8)
->>> V_e_base = EBaseRows(e_ledger).typed_view()
->>> qE = (
-...     V_e_base.filter(lambda r: r.payload_type == "e_state")
-...     .order_by(lambda r: r.ts.desc())
-...     .limit(1)
-... )
->>> dfE = con.execute(qE.select(qE.e_value.name("e_value"), qE.alarm.name("alarm")))
->>> rowE = dfE.to_dict("records")[0]
->>> (round(float(rowE["e_value"]), 2), bool(rowE["alarm"]))
-(26.84, True)
+その他の点は v11 と同一（観測は即時 INSERT、残りは semicolon 連結で一括実行）。
 """
 
 from __future__ import annotations
@@ -203,12 +131,14 @@ def _tanh_expr(x: ibis.Expr) -> ibis.Expr:
 
 
 def ibis_norm_cdf(x: ibis.Expr) -> ibis.Expr:
+    # GELU-style tanh approx for Φ
     a = 0.044715
     c = (2.0 / 3.141592653589793) ** 0.5  # √(2/π)
     return 0.5 * (1.0 + _tanh_expr(c * (x + a * x * x * x)))
 
 
 def ibis_norm_ppf(p: ibis.Expr) -> ibis.Expr:
+    # Acklam rational approximation implemented in ibis primitives
     eps = 1e-12
     p_clip = ibis.greatest(ibis.least(p, 1.0 - eps), eps)
 
@@ -579,6 +509,40 @@ WHERE {where}
 """
         return ledger.con.sql(sql)
 
+    # ---- v12 追加：最新 stat 読み戻し（型付き） ----
+    @staticmethod
+    def latest_stat_typed(ledger: Ledger) -> ibis.Expr:
+        """同一ラベルスコープの最新 stat 1行を型付きで取得。"""
+        be = _backend(ledger.con)
+        where = _labels_where_sql(ledger.con, ledger.labels)
+        if be == "duckdb":
+            sql = f"""
+SELECT
+  CAST(ts AS TIMESTAMP)                                   AS ts,
+  CAST(json_extract(payload,'$.z')         AS DOUBLE)     AS z,
+  CAST(json_extract(payload,'$.boundary')  AS DOUBLE)     AS boundary,
+  CAST(json_extract(payload,'$.e_value')   AS DOUBLE)     AS e_value,
+  CAST(json_extract(payload,'$.info_time') AS DOUBLE)     AS info_time
+FROM {ledger.table}
+WHERE {where} AND payload_type='stat'
+ORDER BY ts DESC
+LIMIT 1
+"""
+        else:
+            sql = f"""
+SELECT
+  ts                                                    AS ts,
+  CAST(JSON_VALUE(payload,'$.z')         AS FLOAT64)    AS z,
+  CAST(JSON_VALUE(payload,'$.boundary')  AS FLOAT64)    AS boundary,
+  CAST(JSON_VALUE(payload,'$.e_value')   AS FLOAT64)    AS e_value,
+  CAST(JSON_VALUE(payload,'$.info_time') AS FLOAT64)    AS info_time
+FROM {ledger.table}
+WHERE {where} AND payload_type='stat'
+ORDER BY ts DESC
+LIMIT 1
+"""
+        return ledger.con.sql(sql)
+
     @staticmethod
     def e_latest_state_before_tsrel(ledger: Ledger, ts_rel: ibis.Expr) -> ibis.Expr:
         return _R.latest_by_type_before_tsrel(ledger, "e_state", ts_rel)
@@ -606,141 +570,140 @@ class BinomialABTest:
             )
 
     def update(self, payload: Dict[str, int]) -> None:
-      """Insert one observation and write derived rows using a frozen-past cut.
+        """v12: observation 即時 INSERT → 残りは一括。decision は最新 stat を読み戻し。"""
+        nA_add = float(payload["nA"]); mA_add = float(payload["mA"])
+        nB_add = float(payload["nB"]); mB_add = float(payload["mB"])
 
-      Semantics:
-      - Insert the observation immediately with ts evaluated on DB (now()).
-      - All subsequent reads in this call use a frozen cut at the latest
-        observation timestamp (same label scope): ts <= latest_observation_ts.
-      - Stats/boundaries are expressed purely in Ibis algebra.
-      - E-value (Gaussian approx) is also stored: e = exp(z^2 / 2).
-      """
-      nA_add = float(payload["nA"]); mA_add = float(payload["mA"])
-      nB_add = float(payload["nB"]); mB_add = float(payload["mB"])
+        # (0) Insert observation immediately (ts evaluated on DB)
+        anchor = self.ledger.view_json().limit(0)
+        obs_row = anchor.select(
+            _uuid_expr().name("uuid"),
+            _now_ts().name("ts"),
+            ibis.literal(_PKG_VERSION).name("pkg_version"),
+            ibis.literal("observation").name("payload_type"),
+            ibis.struct({
+                "nA": ibis.literal(nA_add).cast("float64"),
+                "mA": ibis.literal(mA_add).cast("float64"),
+                "nB": ibis.literal(nB_add).cast("float64"),
+                "mB": ibis.literal(mB_add).cast("float64"),
+            }).name("payload"),
+            ibis.struct({k: ibis.literal(str(v)).cast("string") for k, v in self.ledger.labels.items()}).name("labels"),
+        )
+        row_sql = obs_row.compile()
+        self.ledger.con.raw_sql(f"""
+INSERT INTO {self.ledger.table} (uuid, ts, pkg_version, payload_type, payload, labels)
+SELECT uuid, ts, pkg_version, payload_type, {_to_json_wrapper_sql(self.ledger.con, "payload")}, {_to_json_wrapper_sql(self.ledger.con, "labels")}
+FROM ({row_sql}) t
+""")
 
-      # (0) Insert the observation immediately (ts evaluated on DB)
-      anchor = self.ledger.view_json().limit(0)
-      obs_row = anchor.select(
-          _uuid_expr().name("uuid"),
-          _now_ts().name("ts"),
-          ibis.literal(_PKG_VERSION).name("pkg_version"),
-          ibis.literal("observation").name("payload_type"),
-          ibis.struct({
-              "nA": ibis.literal(nA_add).cast("float64"),
-              "mA": ibis.literal(mA_add).cast("float64"),
-              "nB": ibis.literal(nB_add).cast("float64"),
-              "mB": ibis.literal(mB_add).cast("float64"),
-          }).name("payload"),
-          ibis.struct({k: ibis.literal(str(v)).cast("string") for k, v in self.ledger.labels.items()}).name("labels"),
-      )
-      row_sql = obs_row.compile()
-      self.ledger.con.raw_sql(f"""
-  INSERT INTO {self.ledger.table} (uuid, ts, pkg_version, payload_type, payload, labels)
-  SELECT uuid, ts, pkg_version, payload_type, {_to_json_wrapper_sql(self.ledger.con, "payload")}, {_to_json_wrapper_sql(self.ledger.con, "labels")}
-  FROM ({row_sql}) t
-  """)
+        # (1) Remaining writes batched in a single transaction (BEGIN...COMMIT)
+        with LedgerSessionSQL(self.ledger) as s:
+            # Frozen cut at latest observation ts (same labels)
+            T_latest = _R._latest_observation_ts_rel(self.ledger)
 
-      # (1) Remaining writes batched in a single transaction (BEGIN...COMMIT)
-      with LedgerSessionSQL(self.ledger) as s:
-          # Frozen cut at latest observation ts (same labels)
-          T_latest = _R._latest_observation_ts_rel(self.ledger)
+            # Read previous snapshot (or zeros), design params, and looks as of the cut
+            S_prev = _R.latest_snapshot_before_tsrel(self.ledger, T_latest)
+            Dpars  = _R.design_params_before_tsrel(self.ledger, T_latest)
+            Looks  = _R.looks_from_design_before_tsrel(self.ledger, T_latest)
 
-          # Read previous snapshot (or zeros), design params, and looks as of the cut
-          S_prev = _R.latest_snapshot_before_tsrel(self.ledger, T_latest)
-          Dpars  = _R.design_params_before_tsrel(self.ledger, T_latest)
-          Looks  = _R.looks_from_design_before_tsrel(self.ledger, T_latest)
+            # Aggregate new observations between previous snapshot ts and the cut
+            T_from  = S_prev.select(S_prev.ts.name("ts"))
+            Obs_inc = _R.obs_sum_after_until_tsrel(self.ledger, T_from, T_latest)
 
-          # Aggregate new observations between previous snapshot ts and the cut
-          T_from  = S_prev.select(S_prev.ts.name("ts"))
-          Obs_inc = _R.obs_sum_after_until_tsrel(self.ledger, T_from, T_latest)
+            # Accumulate counts to "now" (at the cut)
+            before = S_prev.cross_join(Obs_inc).select(
+                (S_prev.nA + Obs_inc.d_nA).name("nA_before"),
+                (S_prev.mA + Obs_inc.d_mA).name("mA_before"),
+                (S_prev.nB + Obs_inc.d_nB).name("nB_before"),
+                (S_prev.mB + Obs_inc.d_mB).name("mB_before"),
+            )
+            now = before.cross_join(Dpars).select(
+                before.nA_before.name("nA"),
+                before.mA_before.name("mA"),
+                before.nB_before.name("nB"),
+                before.mB_before.name("mB"),
+                (before.nA_before + before.nB_before).name("n_before"),
+                Dpars.Nmax.name("Nmax"),
+                Dpars.alpha.name("alpha"),
+                Dpars.family.name("family"),
+            )
 
-          # Accumulate counts to "now" (at the cut)
-          before = S_prev.cross_join(Obs_inc).select(
-              (S_prev.nA + Obs_inc.d_nA).name("nA_before"),
-              (S_prev.mA + Obs_inc.d_mA).name("mA_before"),
-              (S_prev.nB + Obs_inc.d_nB).name("nB_before"),
-              (S_prev.mB + Obs_inc.d_mB).name("mB_before"),
-          )
-          now = before.cross_join(Dpars).select(
-              before.nA_before.name("nA"),
-              before.mA_before.name("mA"),
-              before.nB_before.name("nB"),
-              before.mB_before.name("mB"),
-              (before.nA_before + before.nB_before).name("n_before"),
-              Dpars.Nmax.name("Nmax"),
-              Dpars.alpha.name("alpha"),
-              Dpars.family.name("family"),
-          )
+            # Snapshot at the cut
+            s.insert_from_select(now, "snapshot", {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB})
 
-          # Snapshot at the cut
-          s.insert_from_select(now, "snapshot", {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB})
+            # Information times I0 (previous total) and I1 (current total)
+            I0_tbl = now.select((_safe_div(now.n_before, now.Nmax)).name("I0"))
+            I1_tbl = now.select((_safe_div(now.nA + now.nB, now.Nmax)).name("I1"))
+            s.insert_from_select(I1_tbl, "info", {"info_time": I1_tbl.I1})
 
-          # Information times I0 (previous total) and I1 (current total)
-          I0_tbl = now.select((_safe_div(now.n_before, now.Nmax)).name("I0"))
-          I1_tbl = now.select((_safe_div(now.nA + now.nB, now.Nmax)).name("I1"))
-          s.insert_from_select(I1_tbl, "info", {"info_time": I1_tbl.I1})
+            # Due detection: smallest planned_t with I0 < t <= I1
+            due_candidates = Looks.cross_join(I0_tbl).cross_join(I1_tbl).select(
+                Looks.look.name("look"),
+                Looks.planned_t.name("planned_t"),
+                I0_tbl.I0.name("I0"),
+                I1_tbl.I1.name("I1"),
+            ).filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            min_due = due_candidates.aggregate(min_planned_t=due_candidates.planned_t.min())
+            due = due_candidates.join(min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]).limit(1)
 
-          # Due detection: smallest planned_t with I0 < t <= I1
-          due_candidates = Looks.cross_join(I0_tbl).cross_join(I1_tbl).select(
-              Looks.look.name("look"),
-              Looks.planned_t.name("planned_t"),
-              I0_tbl.I0.name("I0"),
-              I1_tbl.I1.name("I1"),
-          ).filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
-          min_due = due_candidates.aggregate(min_planned_t=due_candidates.planned_t.min())
-          due = due_candidates.join(min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]).limit(1)
+            # --- All stats and boundaries computed on a single base relation to avoid parent-mismatch ---
+            Zbase = now.cross_join(I0_tbl).cross_join(I1_tbl)
 
-          # --- All stats and boundaries computed on a single base relation to avoid parent-mismatch ---
-          Zbase = now.cross_join(I0_tbl).cross_join(I1_tbl)
+            # Wald z for two-sample binomial with pooled variance
+            pA = _safe_div(Zbase.mA, Zbase.nA)
+            pB = _safe_div(Zbase.mB, Zbase.nB)
+            p_all = _safe_div(Zbase.mA + Zbase.mB, Zbase.nA + Zbase.nB)
+            se = (p_all * (1.0 - p_all) * (_safe_inv(Zbase.nA) + _safe_inv(Zbase.nB))).sqrt()
+            z_expr = ((pB - pA) / (se == 0).ifelse(ibis.null(), se)).name("z")
 
-          # Wald z for two-sample binomial with pooled variance
-          pA = _safe_div(Zbase.mA, Zbase.nA)
-          pB = _safe_div(Zbase.mB, Zbase.nB)
-          p_all = _safe_div(Zbase.mA + Zbase.mB, Zbase.nA + Zbase.nB)
-          se = (p_all * (1.0 - p_all) * (_safe_inv(Zbase.nA) + _safe_inv(Zbase.nB))).sqrt()
-          z = ((pB - pA) / (se == 0).ifelse(ibis.null(), se)).name("z")
+            # Lan–DeMets local alpha and boundary
+            A1 = ibis_alpha_spent(Zbase.I1, Zbase.alpha, Zbase.family)
+            A0 = ibis_alpha_spent(Zbase.I0, Zbase.alpha, Zbase.family)
+            local_alpha = ibis.greatest(A1 - A0, 1e-16).name("local_alpha")
+            boundary = ibis_norm_ppf(1.0 - local_alpha / 2.0).name("boundary")
 
-          # Lan–DeMets local alpha and boundary
-          A1 = ibis_alpha_spent(Zbase.I1, Zbase.alpha, Zbase.family)
-          A0 = ibis_alpha_spent(Zbase.I0, Zbase.alpha, Zbase.family)
-          local_alpha = ibis.greatest(A1 - A0, 1e-16).name("local_alpha")
-          boundary = ibis_norm_ppf(1.0 - local_alpha / 2.0).name("boundary")
+            # Gaussian-approx e-value
+            e_gauss = ((z_expr * z_expr) / 2.0).exp().name("e_value")
 
-          # Gaussian-approx e-value
-          e_gauss = ((z * z) / 2.0).exp().name("e_value")
+            # [v12] stat に必要列すべてを保存（z, boundary, e_value, info_time）
+            Zrow = Zbase.select(
+                z_expr,
+                local_alpha,
+                boundary,
+                e_gauss,
+                Zbase.I1.name("info_time"),
+            )
+            s.insert_from_select(
+                Zrow,
+                "stat",
+                {"z": Zrow.z, "boundary": Zrow.boundary, "e_value": Zrow.e_value, "info_time": Zrow.info_time}
+            )
 
-          # Persist stat row
-          Zrow = Zbase.select(
-              z.name("z"),
-              local_alpha.name("local_alpha"),
-              boundary.name("boundary"),
-              e_gauss.name("e_value"),
-              Zbase.I1.name("info_time"),
-          )
-          s.insert_from_select(Zrow, "stat", {"z": Zrow.z, "e_value": Zrow.e_value})
+            # [v12] 最新 stat を“読み戻して” decision を作る（再計算なし）
+            StatLatest = _R.latest_stat_typed(self.ledger)
 
-          # Decision if a due look exists
-          Decision = Zrow.cross_join(due).select(
-              look=due.look,
-              planned_t=due.planned_t,
-              info_time=Zrow.info_time,
-              z=Zrow.z,
-              boundary=Zrow.boundary,
-              e_value=Zrow.e_value,
-              action=(Zrow.z.abs() >= Zrow.boundary).ifelse("stop_efficacy", "continue").name("action"),
-          )
-          s.insert_from_select(
-              Decision, "decision",
-              {
-                  "look": Decision.look,
-                  "planned_t": Decision.planned_t,
-                  "info_time": Decision.info_time,
-                  "z": Decision.z,
-                  "boundary": Decision.boundary,
-                  "e_value": Decision.e_value,
-                  "action": Decision.action,
-              },
-          )
+            Decision = StatLatest.cross_join(due).select(
+                look=due.look,
+                planned_t=due.planned_t,
+                info_time=StatLatest.info_time,
+                z=StatLatest.z,
+                boundary=StatLatest.boundary,
+                e_value=StatLatest.e_value,
+                action=(StatLatest.z.abs() >= StatLatest.boundary).ifelse("stop_efficacy", "continue").name("action"),
+            )
+            s.insert_from_select(
+                Decision, "decision",
+                {
+                    "look": Decision.look,
+                    "planned_t": Decision.planned_t,
+                    "info_time": Decision.info_time,
+                    "z": Decision.z,
+                    "boundary": Decision.boundary,
+                    "e_value": Decision.e_value,
+                    "action": Decision.action,
+                },
+            )
+
 
 # ==========================
 # E-process: Normal mixture
@@ -792,10 +755,9 @@ FROM ({row_sql}) t
             D = _R.e_latest_design_before_tsrel(self.ledger, T_latest)
             Sn = _R.e_sum_and_count_upto_latest(self.ledger, T_latest)
 
-            # Compute mixture e-value from S and n and stored theta grid
             be = _backend(self.ledger.con)
             if be == "duckdb":
-                # UNNEST JSON array: json_extract(thetas_json, '$') returns JSON list; use json_each to iterate
+                # UNNEST JSON array via json_each
                 sql_emix = f"""
 WITH pars AS ({D.compile()}),
      sagg AS ({Sn.compile()}),
@@ -848,7 +810,7 @@ FROM ({ins_sql}) t
 
 
 # ==========================
-# Typed views for doctests
+# Typed views for doctests / inspection
 # ==========================
 
 @dataclass
@@ -966,7 +928,7 @@ def run_profile_demo(con: Any) -> str:
     import pstats
 
     base = Ledger(con, table="ledger")
-    prof = base.bind(experiment_id="exp_prof")
+    prof = base.bind(experiment_id="exp_prof_v12")
     ab = BinomialABTest(prof)
 
     pr = cProfile.Profile()
