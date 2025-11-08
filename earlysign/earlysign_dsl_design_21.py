@@ -1,11 +1,11 @@
-"""EarlySign DSL Design v20 - lazy-read define-by-run DSL demo.
+"""EarlySign DSL Design v21 - lazy-read define-by-run DSL with explicit DuckDB transactions.
 
 Doctest (end-to-end workflows)
 ------------------------------
 >>> import ibis
 >>> con = ibis.duckdb.connect()
->>> ledger = Ledger(con, "ledger_dsl20_doctest", overwrite=True)
->>> ab = BinomialABTestV20(ledger, labels={"experiment_id": "exp_ab4"})
+>>> ledger = Ledger(con, "ledger_dsl21_doctest", overwrite=True)
+>>> ab = BinomialABTestV21(ledger, labels={"experiment_id": "exp_ab4"})
 >>> ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming")
 >>> ab.update({"nA": 100, "mA": 10, "nB": 100, "mB": 12})
 >>> ab.update({"nA": 50, "mA": 5, "nB": 50, "mB": 6})
@@ -36,8 +36,8 @@ Doctest (end-to-end workflows)
 'stop_efficacy'
 
 >>> # E-process example (copied from v9 to ensure parity)
->>> eledger = Ledger(con, "ledger_dsl20_eproc", overwrite=True)
->>> ep = ENormalMixtureV20(eledger, labels={"run": "mixture"})
+>>> eledger = Ledger(con, "ledger_dsl21_eproc", overwrite=True)
+>>> ep = ENormalMixtureV21(eledger, labels={"run": "mixture"})
 >>> ep.set_design(alpha=0.05, thetas=[0.25, 0.5, 0.75])
 >>> for _ in range(12):
 ...     ep.update(x=0.8)
@@ -50,7 +50,9 @@ Doctest (end-to-end workflows)
 True
 """
 
-# NOTE: v20 builds on v18's define-by-run DSL but keeps every "latest" read entirely
+# NOTE: v21 builds on v20 by wrapping every update in a DuckDB transaction so the
+#       staged reads/inserts share the same connection scope without re-opening
+#       implicit transactions per statement.
 #       ibis-native. The update logic mirrors the light-weight Python arithmetic from
 #       v18 while emitting expressions that read the ledger lazily so we can benchmark
 #       the impact without the massive recursive plans seen in v19.
@@ -61,6 +63,7 @@ import cProfile
 import json
 import math
 import pstats
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -76,7 +79,7 @@ from ibis.expr.types import (
     Table as IbisTable,
 )
 
-__version__ = "20.0.0"
+__version__ = "21.0.0"
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +137,18 @@ class Ledger:
 
     def reader(self) -> "LedgerReader":
         return LedgerReader(self)
+
+    @contextmanager
+    def transaction(self):
+        """Yield a DuckDB transaction scope using raw SQL."""
+        try:
+            self.con.raw_sql("BEGIN")
+            yield
+        except Exception:
+            self.con.raw_sql("ROLLBACK")
+            raise
+        else:
+            self.con.raw_sql("COMMIT")
 
 
 class LedgerSession:
@@ -228,8 +243,9 @@ class Stage:
         else:
             count_value = int(count)
         if count_value == 0:
-            with self.ledger.session() as sess:
-                sess.insert(kind=self.kind, payload=self.default_payload)
+            with self.ledger.transaction():
+                with self.ledger.session() as sess:
+                    sess.insert(kind=self.kind, payload=self.default_payload)
         self._seeded = True
 
     def latest_expr(self) -> IbisTable:
@@ -509,7 +525,7 @@ def _pooled_z_expr(nA: FloatingValue, mA: FloatingValue, nB: FloatingValue, mB: 
 # ---------------------------------------------------------------------------
 
 
-class BinomialABTestV20:
+class BinomialABTestV21:
     def __init__(self, ledger: Ledger, labels: Dict[str, Any]):
         self.ledger = ledger.bind(**labels)
         self.reader = self.ledger.reader()
@@ -629,78 +645,78 @@ class BinomialABTestV20:
 
     def set_design(self, *, max_n: int, looks: Sequence[float], alpha: float, spending: str) -> None:
         looks = [float(x) for x in looks]
-        with self.ledger.session() as sess:
-            sess.insert(
-                kind="design",
-                payload=dict(planned_max_n=float(max_n), alpha=float(alpha), spending_family=str(spending)),
-            )
-            for idx, planned_t in enumerate(looks, start=1):
-                sess.insert(kind="design-look", payload=dict(look=idx, planned_t=float(planned_t)))
+        with self.ledger.transaction():
+            with self.ledger.session() as sess:
+                sess.insert(
+                    kind="design",
+                    payload=dict(planned_max_n=float(max_n), alpha=float(alpha), spending_family=str(spending)),
+                )
+                for idx, planned_t in enumerate(looks, start=1):
+                    sess.insert(kind="design-look", payload=dict(look=idx, planned_t=float(planned_t)))
         self._has_design = True
         self._looks_cache = [(idx, planned_t) for idx, planned_t in enumerate(looks, start=1)]
 
     def update(self, payload: Dict[str, int]) -> None:
         if not self._has_design:
             raise RuntimeError("Design must be configured before calling update().")
-        snapshot_prev = self.snapshot_stage.latest_payload()
-        design = self._latest_design_payload()
-        looks = self._planned_looks()
+        with self.ledger.transaction():
+            snapshot_prev = self.snapshot_stage.latest_payload()
+            design = self._latest_design_payload()
+            looks = self._planned_looks()
 
-        nA_add = float(payload["nA"])
-        mA_add = float(payload["mA"])
-        nB_add = float(payload["nB"])
-        mB_add = float(payload["mB"])
+            nA_add = float(payload["nA"])
+            mA_add = float(payload["mA"])
+            nB_add = float(payload["nB"])
+            mB_add = float(payload["mB"])
 
-        snapshot_next = dict(
-            nA=snapshot_prev["nA"] + nA_add,
-            mA=snapshot_prev["mA"] + mA_add,
-            nB=snapshot_prev["nB"] + nB_add,
-            mB=snapshot_prev["mB"] + mB_add,
-        )
-        snapshot_next["nA"] + snapshot_next["nB"]
-        Nmax = design["planned_max_n"]
-        info_prev = self.info_stage.latest_payload().get("info_time", 0.0)
+            snapshot_next = dict(
+                nA=snapshot_prev["nA"] + nA_add,
+                mA=snapshot_prev["mA"] + mA_add,
+                nB=snapshot_prev["nB"] + nB_add,
+                mB=snapshot_prev["mB"] + mB_add,
+            )
+            Nmax = design["planned_max_n"]
+            info_prev = self.info_stage.latest_payload().get("info_time", 0.0)
 
-        z_value = _pooled_z(snapshot_next["nA"], snapshot_next["mA"], snapshot_next["nB"], snapshot_next["mB"])
-        boundary = None
-        action = None
-        due = None
+            z_value = _pooled_z(snapshot_next["nA"], snapshot_next["mA"], snapshot_next["nB"], snapshot_next["mB"])
+            boundary = None
+            action = None
+            due = None
 
-        observation_payload = dict(nA=int(payload["nA"]), mA=int(payload["mA"]), nB=int(payload["nB"]), mB=int(payload["mB"]))
+            observation_payload = dict(nA=int(payload["nA"]), mA=int(payload["mA"]), nB=int(payload["nB"]), mB=int(payload["mB"]))
 
-        with self.ledger.session() as sess:
-            sess.insert(kind="observation", payload=observation_payload)
-            self.snapshot_stage.emit_from_dict(sess, snapshot_next)
-            snapshot_curr = self.snapshot_stage.latest_payload()
-            info_payload = {"info_time": (snapshot_curr["nA"] + snapshot_curr["nB"]) / Nmax if Nmax else 0.0}
-            self.info_stage.emit_from_dict(sess, info_payload)
-            info_curr = self.info_stage.latest_payload()
-            info_now = info_curr.get("info_time", 0.0)
-            stat_payload = {"info_time_prev": info_prev, "info_time": info_now, "z": z_value}
-            self.stat_stage.emit_from_dict(sess, stat_payload)
-            stat_curr = self.stat_stage.latest_payload()
-            due = next(((idx, t) for idx, t in looks if info_prev < t <= stat_curr["info_time"]), None)
-            if due is not None:
-                boundary = _boundary_from_spending(
-                    stat_curr["info_time_prev"],
-                    stat_curr["info_time"],
-                    alpha=design["alpha"],
-                    family=design["family"],
-                )
-                action = "stop_efficacy" if abs(stat_curr["z"]) >= boundary else "continue"
-            if due is not None and boundary is not None and action is not None:
-                look_idx, planned_t = due
-                self.decision_stage.emit_from_dict(
-                    sess,
-                    dict(
-                        look=int(look_idx),
-                        planned_t=float(planned_t),
-                        info_time=stat_curr["info_time"],
-                        z=float(stat_curr["z"]),
-                        boundary=float(boundary),
-                        action=action,
-                    ),
-                )
+            with self.ledger.session() as sess:
+                sess.insert(kind="observation", payload=observation_payload)
+                self.snapshot_stage.emit_from_dict(sess, snapshot_next)
+                snapshot_curr = self.snapshot_stage.latest_payload()
+                info_payload = {"info_time": (snapshot_curr["nA"] + snapshot_curr["nB"]) / Nmax if Nmax else 0.0}
+                self.info_stage.emit_from_dict(sess, info_payload)
+                info_curr = self.info_stage.latest_payload()
+                stat_payload = {"info_time_prev": info_prev, "info_time": info_curr.get("info_time", 0.0), "z": z_value}
+                self.stat_stage.emit_from_dict(sess, stat_payload)
+                stat_curr = self.stat_stage.latest_payload()
+                due = next(((idx, t) for idx, t in looks if info_prev < t <= stat_curr["info_time"]), None)
+                if due is not None:
+                    boundary = _boundary_from_spending(
+                        stat_curr["info_time_prev"],
+                        stat_curr["info_time"],
+                        alpha=design["alpha"],
+                        family=design["family"],
+                    )
+                    action = "stop_efficacy" if abs(stat_curr["z"]) >= boundary else "continue"
+                if due is not None and boundary is not None and action is not None:
+                    look_idx, planned_t = due
+                    self.decision_stage.emit_from_dict(
+                        sess,
+                        dict(
+                            look=int(look_idx),
+                            planned_t=float(planned_t),
+                            info_time=stat_curr["info_time"],
+                            z=float(stat_curr["z"]),
+                            boundary=float(boundary),
+                            action=action,
+                        ),
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -708,7 +724,7 @@ class BinomialABTestV20:
 # ---------------------------------------------------------------------------
 
 
-class ENormalMixtureV20:
+class ENormalMixtureV21:
     def __init__(self, ledger: Ledger, labels: Dict[str, Any]):
         self.ledger = ledger.bind(**labels)
         self.reader = self.ledger.reader()
@@ -716,11 +732,12 @@ class ENormalMixtureV20:
 
     def set_design(self, *, alpha: float, thetas: Sequence[float]) -> None:
         self.design = {"alpha": float(alpha), "thetas": list(map(float, thetas))}
-        with self.ledger.session() as sess:
-            sess.insert(
-                kind="e_design",
-                payload=dict(alpha=float(alpha), thetas=list(map(float, thetas))),
-            )
+        with self.ledger.transaction():
+            with self.ledger.session() as sess:
+                sess.insert(
+                    kind="e_design",
+                    payload=dict(alpha=float(alpha), thetas=list(map(float, thetas))),
+                )
 
     def _latest_state_expr(self) -> IbisTable:
         tbl = self.reader.table_of_kind("e_state")
@@ -749,40 +766,41 @@ class ENormalMixtureV20:
         alpha_literal = ibis.literal(self.design["alpha"], type="float64")
         theta_count = ibis.literal(float(len(self.design["thetas"])), type="float64")
 
-        with self.ledger.session() as sess:
-            sess.insert(kind="e_observation", payload_expr=ibis.struct(dict(x=obs_delta.x)), source=obs_delta)
+        with self.ledger.transaction():
+            with self.ledger.session() as sess:
+                sess.insert(kind="e_observation", payload_expr=ibis.struct(dict(x=obs_delta.x)), source=obs_delta)
 
-            state_next = state_prev.cross_join(obs_delta).select(
-                sum_x=state_prev.sum_x + obs_delta.x,
-                n_obs=state_prev.n_obs + ibis.literal(1, type="int64"),
-            )
-            mix_terms = theta_tbl.cross_join(state_next).select(
-                term=((theta_tbl.theta * state_next.sum_x) - 0.5 * theta_tbl.theta * theta_tbl.theta * state_next.n_obs).exp()
-            )
-            mix_value = mix_terms.aggregate(e_sum=mix_terms.term.sum())
-            state_full = state_next.cross_join(mix_value).select(
-                sum_x=state_next.sum_x,
-                n_obs=state_next.n_obs,
-                e_value=mix_value.e_sum / theta_count,
-            )
-            state_payload = state_full.select(
-                sum_x=state_full.sum_x,
-                n_obs=state_full.n_obs,
-                e_value=state_full.e_value,
-                alarm=(state_full.e_value >= (1 / alpha_literal)).ifelse(1, 0),
-            )
-            sess.insert(
-                kind="e_state",
-                payload_expr=ibis.struct(
-                    dict(
-                        sum_x=state_payload.sum_x,
-                        n_obs=state_payload.n_obs,
-                        e_value=state_payload.e_value,
-                        alarm=state_payload.alarm,
-                    )
-                ),
-                source=state_payload,
-            )
+                state_next = state_prev.cross_join(obs_delta).select(
+                    sum_x=state_prev.sum_x + obs_delta.x,
+                    n_obs=state_prev.n_obs + ibis.literal(1, type="int64"),
+                )
+                mix_terms = theta_tbl.cross_join(state_next).select(
+                    term=((theta_tbl.theta * state_next.sum_x) - 0.5 * theta_tbl.theta * theta_tbl.theta * state_next.n_obs).exp()
+                )
+                mix_value = mix_terms.aggregate(e_sum=mix_terms.term.sum())
+                state_full = state_next.cross_join(mix_value).select(
+                    sum_x=state_next.sum_x,
+                    n_obs=state_next.n_obs,
+                    e_value=mix_value.e_sum / theta_count,
+                )
+                state_payload = state_full.select(
+                    sum_x=state_full.sum_x,
+                    n_obs=state_full.n_obs,
+                    e_value=state_full.e_value,
+                    alarm=(state_full.e_value >= (1 / alpha_literal)).ifelse(1, 0),
+                )
+                sess.insert(
+                    kind="e_state",
+                    payload_expr=ibis.struct(
+                        dict(
+                            sum_x=state_payload.sum_x,
+                            n_obs=state_payload.n_obs,
+                            e_value=state_payload.e_value,
+                            alarm=state_payload.alarm,
+                        )
+                    ),
+                    source=state_payload,
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -790,10 +808,10 @@ class ENormalMixtureV20:
 # ---------------------------------------------------------------------------
 
 
-def _ab_workload() -> BinomialABTestV20:
+def _ab_workload() -> BinomialABTestV21:
     con = ibis.duckdb.connect()
     ledger = Ledger(con, "ledger_v20_profile", overwrite=True)
-    ab = BinomialABTestV20(ledger, labels={"experiment_id": "demo"})
+    ab = BinomialABTestV21(ledger, labels={"experiment_id": "demo"})
     ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming")
     for batch in [
         {"nA": 100, "mA": 10, "nB": 100, "mB": 12},

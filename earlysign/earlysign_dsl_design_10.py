@@ -499,12 +499,10 @@ class BinomialABTest:
             A0_P  = I_tbl.alpha * ((1.0 + EM1 * I_tbl.I0).log())
 
             fam_lc = I_tbl.family.lower()
-            local_alpha = (
-                ibis.case()
-                .when((fam_lc == "pocock"), (A1_P - A0_P))
-                .when((fam_lc == "of") | (fam_lc == "obrien_fleming") | (fam_lc == "o'brien_fleming") | (fam_lc == "obrien-fleming"), (A1_OF - A0_OF))
-                .else_(A1_OF - A0_OF)
-                .end()
+            local_alpha = ibis.cases(
+                ((fam_lc == "pocock"), (A1_P - A0_P)),
+                ((fam_lc == "of") | (fam_lc == "obrien_fleming") | (fam_lc == "o'brien_fleming") | (fam_lc == "obrien-fleming"), (A1_OF - A0_OF)),
+                else_=A1_OF - A0_OF
             )
             local_alpha = (local_alpha + ibis.literal(1e-16))
 
