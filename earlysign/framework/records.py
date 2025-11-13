@@ -1,3 +1,5 @@
+import json
+from functools import lru_cache
 from typing import (
     Any,
     Dict,
@@ -114,9 +116,9 @@ class QueryMixin:
 
 class LedgerRecord:
     """
-    Base class for typed views over ledger rows for a given payload_type and record_id.
+    Base class for typed views over ledger rows for a given payload_type and record_name.
 
-    - `id` is REQUIRED: every persisted row will be tagged with labels["record_id"] = id
+    - `name` is REQUIRED: every persisted row will be tagged with labels["record_name"] = name
     - `schema` is a dict of type identifiers. It is converted to a Pydantic model by `pydantic.create_model()`.
         At least, the value of the dict can be one of the following:
         - A type identifier (e.g., `int`, `"int"`)
@@ -139,16 +141,16 @@ class LedgerRecord:
 
     schema: Dict[str, PydanticField] = {}
 
-    def __init__(self, id: str):
-        self.id = id
+    def __init__(self, name: str):
+        self.name = name
         self.ledger: Optional[Ledger] = None
 
     def attach(self, ledger: Ledger) -> Self:
         self.ledger = ledger
         return self
 
-    @property
-    def payload_type(self) -> str:
+    @classmethod
+    def payload_type_name(cls) -> str:
         """
         Auto-generated payload type from module path and class name.
 
@@ -156,8 +158,8 @@ class LedgerRecord:
         Example: earlysign.stats.common.anytime_valid.records.EProcessRecord
                  -> stats.common.anytime_valid.records.EProcessRecord
         """
-        module = self.__class__.__module__
-        cls_name = self.__class__.__name__
+        module = cls.__module__
+        cls_name = cls.__name__
 
         # Remove 'earlysign.' prefix if present
         path = module.removeprefix("earlysign.")
@@ -166,11 +168,20 @@ class LedgerRecord:
         return f"{path}.{cls_name}"
 
     @property
-    def schema_pydantic_model(self) -> type[pydantic.BaseModel]:
-        """Create Pydantic model from schema class attribute."""
+    def payload_type(self) -> str:
+        return self.__class__.payload_type_name()
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def _schema_model(cls) -> type[pydantic.BaseModel]:
+        """Cached Pydantic model from schema class attribute."""
         return pydantic.create_model(
-            self.payload_type, **cast(Dict[str, Any], self.schema)
+            cls.payload_type_name(), **cast(Dict[str, Any], cls.schema)
         )
+
+    @property
+    def schema_pydantic_model(self) -> type[pydantic.BaseModel]:
+        return self.__class__._schema_model()
 
     @property
     def t(self) -> TableExpr:
@@ -180,7 +191,7 @@ class LedgerRecord:
         t = t.filter(
             cast(Any, t.payload_type == self.payload_type)
         )  # Cast to satisfy mypy type check
-        t = t.filter(t.labels["record_id"].str == str(self.id))
+        t = t.filter(t.labels["record_name"].str == str(self.name))
         return t
 
     # --- overloads -----------------------------------------------------------
@@ -229,14 +240,51 @@ class LedgerRecord:
             else:
                 payload = kwargs
 
-        # Validate and fill defaults using Pydantic model
-        # model_validate() automatically handles validation, default filling, and extra field filtering
-        payload_with_defaults = self.schema_pydantic_model.model_validate(
-            payload
-        ).model_dump()
-
+        payload_with_defaults = self._validate_payload(payload)
         self.ledger.insert(
             payload_type=self.payload_type,
             payload=payload_with_defaults,
-            labels={**labels, "record_id": self.id},
+            labels={**labels, "record_name": self.name},
         )
+
+    def _validate_payload(self, payload: Mapping[str, Any]) -> Dict[str, Any]:
+        """Validate payload against schema and return a plain dict."""
+        model = self.schema_pydantic_model
+        parsed = model.model_validate(dict(payload))
+        return cast(Dict[str, Any], parsed.model_dump())
+
+    def latest_payload(
+        self,
+        *,
+        default: Optional[Mapping[str, Any]] = None,
+        include_ts: bool = False,
+    ) -> Dict[str, Any] | tuple[Dict[str, Any], Any]:
+        """
+        Fetch the latest payload as a Python dict.
+
+        Parameters
+        ----------
+        default : Mapping, optional
+            Returned when no row exists. Raises LookupError otherwise.
+        """
+        if self.ledger is None:
+            raise RuntimeError("Record is not attached. Call .attach(ledger).")
+        tbl = self.t
+        tbl = tbl.order_by(tbl.ts.desc(), tbl.uuid.desc()).limit(1)
+        df = tbl.select(tbl.ts, tbl.payload).execute()
+        if df.empty:
+            if default is not None:
+                return dict(default)
+            raise LookupError(f"No rows found for record_name={self.name}")
+        row = df.iloc[0]
+        raw_payload = row["payload"]
+        ts_value = row["ts"]
+        if raw_payload is None:
+            data = {}
+        else:
+            if isinstance(raw_payload, str):
+                raw_payload = json.loads(raw_payload)
+            data = dict(cast(Mapping[str, Any], raw_payload))
+        if include_ts:
+            return data, ts_value
+        return data

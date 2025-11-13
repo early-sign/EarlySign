@@ -62,7 +62,7 @@ class VilleThreshold(LedgerOperator):
         super().__init__(scoped, out_id=out_id, alpha=alpha)
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"threshold": VilleThresholdRecord(id=self.out_id)}
+        return {"threshold": VilleThresholdRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.threshold
@@ -99,7 +99,7 @@ class VilleDecision(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"decision": SafeDecisionRecord(id=self.out_id)}
+        return {"decision": SafeDecisionRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.decision

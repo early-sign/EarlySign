@@ -64,7 +64,7 @@ class ZMeanKnownVar(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"z": ZMeanKnownVarRecord(id=self.out_id)}
+        return {"z": ZMeanKnownVarRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.z

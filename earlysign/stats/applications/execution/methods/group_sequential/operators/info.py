@@ -42,7 +42,7 @@ class InformationTimeFromRatio(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}
+        return {"info": InformationTimeRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -81,7 +81,7 @@ class InformationTimeFromVariance(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}
+        return {"info": InformationTimeRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -120,7 +120,7 @@ class InformationTimeFromSD(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}
+        return {"info": InformationTimeRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -163,7 +163,7 @@ class InformationTimeFromFisher(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}
+        return {"info": InformationTimeRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.info

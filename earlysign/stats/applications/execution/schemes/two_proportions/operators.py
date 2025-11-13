@@ -68,18 +68,17 @@ class InformationTime(LedgerOperator):
         )
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(id=self.out_id)}
+        return {"info": InformationTimeRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.info
         cum_counts = getattr(self, "cum_counts")
         planned_max_n = getattr(self, "planned_max_n")
 
-        cdf = cum_counts.latest().execute()
-        if len(cdf) == 0:
-            raise ValueError("No counts data available")
-
-        latest = cdf.iloc[0]
+        try:
+            latest = cum_counts.latest_payload()
+        except LookupError as exc:
+            raise ValueError("No counts data available") from exc
         n_total = int(latest["nA"]) + int(latest["nB"])
 
         t = info_time_from_sample_size(n_current=n_total, n_max=planned_max_n)
@@ -107,27 +106,24 @@ class BinomialCountsSnapshot(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"snapshot": BinomialCountsSnapshotRecord(id=self.out_id)}
+        return {"snapshot": BinomialCountsSnapshotRecord(name=self.out_id)}
 
     def run(self) -> None:
         obs_rec = self.obs
         snapshot_rec = self.outputs.snapshot
-        latest_obs = obs_rec.latest().execute().iloc[0]
+        latest_obs = obs_rec.latest_payload()
         delta_nA = int(latest_obs["nA"])
         delta_mA = int(latest_obs["mA"])
         delta_nB = int(latest_obs["nB"])
         delta_mB = int(latest_obs["mB"])
 
-        # Read previous snapshot (or initialize to zero)
-        try:
-            prev_snapshot = snapshot_rec.latest().execute().iloc[0]
-            prev_nA = int(prev_snapshot["nA"])
-            prev_mA = int(prev_snapshot["mA"])
-            prev_nB = int(prev_snapshot["nB"])
-            prev_mB = int(prev_snapshot["mB"])
-        except (IndexError, KeyError):
-            # First observation - no previous snapshot
-            prev_nA = prev_mA = prev_nB = prev_mB = 0
+        prev_snapshot = snapshot_rec.latest_payload(
+            default={"nA": 0, "mA": 0, "nB": 0, "mB": 0}
+        )
+        prev_nA = int(prev_snapshot["nA"])
+        prev_mA = int(prev_snapshot["mA"])
+        prev_nB = int(prev_snapshot["nB"])
+        prev_mB = int(prev_snapshot["mB"])
 
         # Compute cumulative snapshot
         new_nA = prev_nA + delta_nA
@@ -160,15 +156,18 @@ class WaldZStatistic(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"wald": WaldZStatisticRecord(id=self.out_id)}
+        return {"wald": WaldZStatisticRecord(name=self.out_id)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts
         out = self.outputs.wald
         pooled = bool(getattr(self, "pooled", True))
 
-        cdf = cum_counts.latest().execute().iloc[0]
-        nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
+        latest = cum_counts.latest_payload()
+        nA = int(latest["nA"])
+        mA = int(latest["mA"])
+        nB = int(latest["nB"])
+        mB = int(latest["mB"])
         z = compute_wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=pooled)
 
         payload = {"wald_z": float(z)}
@@ -195,15 +194,18 @@ class ScoreZStatistic(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"score": ScoreZStatisticRecord(id=self.out_id)}
+        return {"score": ScoreZStatisticRecord(name=self.out_id)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts
         out = self.outputs.score
 
-        cdf = cum_counts.latest().execute().iloc[0]
+        latest = cum_counts.latest_payload()
 
-        nA, mA, nB, mB = map(int, cdf[["nA", "mA", "nB", "mB"]])
+        nA = int(latest["nA"])
+        mA = int(latest["mA"])
+        nB = int(latest["nB"])
+        mB = int(latest["mB"])
         # Score Z is equivalent to Wald Z with pooled variance
         z = compute_wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=True)
 

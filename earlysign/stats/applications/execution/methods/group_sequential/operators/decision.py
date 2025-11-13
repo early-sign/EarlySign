@@ -97,7 +97,7 @@ class GSDecision(LedgerOperator):
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events")
     >>> ledger.ensure()
-    >>> boundary = GroupSequentialBoundaryRecord(id="bound1").attach(ledger)
+    >>> boundary = GroupSequentialBoundaryRecord(name="bound1").attach(ledger)
     >>> boundary.insert({"upper": 2.5, "lower": -2.5, "scale": "z", "info_time": 0.5,
     ...                  "alpha": 0.05, "tails": 2})
     >>> op = GSDecision(ledger, boundary=boundary, out_id="decision1",
@@ -138,7 +138,7 @@ class GSDecision(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
+        return {"decision": GroupSequentialDecisionSignalRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.decision
@@ -147,47 +147,31 @@ class GSDecision(LedgerOperator):
         value_scale = str(getattr(self, "value_scale")).lower()
 
         # Read latest boundary
-        bdf = (
-            boundary.latest()
-            .select(
-                upper=boundary.t.payload["upper"].cast("float64"),
-                lower=boundary.t.payload["lower"].cast("float64"),
-                scale=boundary.t.payload["scale"],
-                statistic_type=boundary.t.payload["statistic_type"],
-                statistic_scale=boundary.t.payload["statistic_scale"],
-                info_time=boundary.t.payload["info_time"].cast("float64"),
-            )
-            .execute()
-        )
-        if len(bdf) == 0:
+        try:
+            boundary_payload = boundary.latest_payload()
+        except LookupError:
             return
 
-        upper = float(bdf.iloc[0]["upper"])
-        lower = float(bdf.iloc[0]["lower"])
-        bscale = str(bdf.iloc[0]["scale"])
-        raw_stat_type = (
-            bdf.iloc[0]["statistic_type"] if "statistic_type" in bdf.columns else None
-        )
-        statistic_type = str(raw_stat_type) if raw_stat_type not in (None, "") else None
-        statistic_scale = (
-            str(bdf.iloc[0]["statistic_scale"])
-            if "statistic_scale" in bdf.columns
-            and bdf.iloc[0]["statistic_scale"] not in (None, "")
-            else None
-        )
-        t = float(bdf.iloc[0]["info_time"]) if "info_time" in bdf.columns else None
+        upper_val = boundary_payload.get("upper")
+        lower_val = boundary_payload.get("lower")
+        upper = float(upper_val) if upper_val is not None else float("inf")
+        lower = float(lower_val) if lower_val is not None else float("-inf")
+        bscale = str(boundary_payload.get("scale", "z"))
+        statistic_type = boundary_payload.get("statistic_type")
+        statistic_scale = boundary_payload.get("statistic_scale")
+        t_raw = boundary_payload.get("info_time")
+        t = float(t_raw) if t_raw is not None else None
 
         # Fall back to info record if needed
         if t is None and getattr(self, "info", None) is not None:
             info = self.info
             if info is not None:
-                idf = (
-                    info.latest()
-                    .select(info_time=info.t.payload["info_time"].cast("float64"))
-                    .execute()
-                )
-                if len(idf) > 0:
-                    t = float(idf.iloc[0]["info_time"])
+                try:
+                    info_payload = info.latest_payload()
+                except LookupError:
+                    info_payload = None
+                if info_payload is not None:
+                    t = float(info_payload.get("info_time", 0.0))
 
         # Convert value to boundary scale using essentials
         if value_scale != bscale:
@@ -253,9 +237,9 @@ class GSDecisionFromWaldZ(LedgerOperator):
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events")
     >>> ledger.ensure()
-    >>> wald_rec = WaldZStatisticRecord(id="wald1").attach(ledger)
+    >>> wald_rec = WaldZStatisticRecord(name="wald1").attach(ledger)
     >>> wald_rec.insert({"wald_z": 3.0})
-    >>> boundary = GroupSequentialBoundaryRecord(id="bound1").attach(ledger)
+    >>> boundary = GroupSequentialBoundaryRecord(name="bound1").attach(ledger)
     >>> boundary.insert({"upper": 2.5, "lower": -2.5, "scale": "z",
     ...                  "info_time": 0.5, "alpha": 0.05, "tails": 2})
     >>> op = GSDecisionFromWaldZ(ledger, wald=wald_rec, boundary=boundary, out_id="decision1")
@@ -295,7 +279,7 @@ class GSDecisionFromWaldZ(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
+        return {"decision": GroupSequentialDecisionSignalRecord(name=self.out_id)}
 
     def run(self) -> None:
         wald = self.wald
@@ -304,10 +288,11 @@ class GSDecisionFromWaldZ(LedgerOperator):
         value_scale = str(getattr(self, "value_scale", "z"))
 
         # Read latest Wald Z
-        wdf = wald.latest().select("wald_z").execute()
-        if len(wdf) == 0:
+        try:
+            wald_payload = wald.latest_payload()
+        except LookupError:
             return
-        z_val = float(wdf.iloc[0]["wald_z"])
+        z_val = float(wald_payload["wald_z"])
 
         # Delegate to GSDecision
         gs_decision = GSDecision(

@@ -23,11 +23,11 @@ Doctest (structure only)
 >>> from earlysign.stats.common.anytime_valid.records import (
 ...     EProcessRecord, VilleThresholdRecord, SafeDecisionRecord
 ... )
->>> EProcessRecord(id="e1").payload_type
+>>> EProcessRecord(name="e1").payload_type
 'stats.common.anytime_valid.records.EProcessRecord'
->>> VilleThresholdRecord(id="v1").payload_type
+>>> VilleThresholdRecord(name="v1").payload_type
 'stats.common.anytime_valid.records.VilleThresholdRecord'
->>> SafeDecisionRecord(id="d1").payload_type
+>>> SafeDecisionRecord(name="d1").payload_type
 'stats.common.anytime_valid.records.SafeDecisionRecord'
 """
 

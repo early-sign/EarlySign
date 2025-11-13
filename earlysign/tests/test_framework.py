@@ -31,7 +31,7 @@ Steps:
 >>> scoped = ledger.bind(experiment_id="exp_demo")
 
 # --- Step 1. Insert binomial observation snapshots ----------------------------
->>> counts = BinomialCountsRecord(id="counts1").attach(scoped)
+>>> counts = BinomialCountsRecord(name="counts1").attach(scoped)
 >>> _ = counts.insert({"nA": 100, "mA": 38, "nB": 120, "mB": 51})
 >>> _ = counts.insert({"nA": 150, "mA": 60, "nB": 140, "mB": 48})
 
@@ -53,25 +53,25 @@ Steps:
 ...     "planned_max_n": 600,
 ...     "planned_info_times": [0.5, 1.0],
 ... }
->>> design_rec = GroupSequentialDesignRecord(id="design1").attach(scoped)
+>>> design_rec = GroupSequentialDesignRecord(name="design1").attach(scoped)
 >>> _ = design_rec.insert(design_payload)
 >>> _ = BoundaryFromDesign(
 ...         scoped,
-...         design=GroupSequentialDesignRecord(id="design1").attach(scoped),
-...         info=InformationTimeRecord(id="info1").attach(scoped),
+...         design=GroupSequentialDesignRecord(name="design1").attach(scoped),
+...         info=InformationTimeRecord(name="info1").attach(scoped),
 ...         out_id="bound1",
 ...     ).run()
 >>> _ = GSDecisionFromWaldZ(
 ...         scoped,
-...         wald=WaldZStatisticRecord(id="wald1").attach(scoped),
-...         boundary=GroupSequentialBoundaryRecord(id="bound1").attach(scoped),
-...         info=InformationTimeRecord(id="info1").attach(scoped),
+...         wald=WaldZStatisticRecord(name="wald1").attach(scoped),
+...         boundary=GroupSequentialBoundaryRecord(name="bound1").attach(scoped),
+...         info=InformationTimeRecord(name="info1").attach(scoped),
 ...         out_id="dec1",
 ...         value_scale="z",
 ...     ).run()
 
 # --- Inspect final decision ---------------------------------------------------
->>> dec = GroupSequentialDecisionSignalRecord(id="dec1").attach(scoped)
+>>> dec = GroupSequentialDecisionSignalRecord(name="dec1").attach(scoped)
 >>> df = dec.latest().select(signal=dec.t.payload["signal"]).execute()
 >>> df["signal"].iloc[0] in ("continue", "stop_efficacy", "stop_futility")
 True

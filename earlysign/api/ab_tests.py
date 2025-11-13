@@ -204,15 +204,12 @@ class BinomialABTest(tpl.TemplateBase):
         stat_record = stat_op.outputs.wald
 
         ## Read design info
-        design = GroupSequentialDesignRecord("design").attach(self.ledger)
-        design_latest = self._execute_expr(
-            design.latest().select(payload=design.t.payload)
-        )
-        if len(design_latest) == 0:
-            raise ValueError("Design must be set before calling update().")
-        design_model = DesignPayloadModel.model_validate(
-            design_latest.iloc[0]["payload"]
-        )
+        design_record = GroupSequentialDesignRecord("design").attach(self.ledger)
+        try:
+            design_payload = design_record.latest_payload()
+        except LookupError as exc:
+            raise ValueError("Design must be set before calling update().") from exc
+        design_model = DesignPayloadModel.model_validate(design_payload)
         planned_max_n = int(design_model.planned_max_n)
         planned_info_times: list[float] = list(design_model.planned_info_times)
 
@@ -227,32 +224,22 @@ class BinomialABTest(tpl.TemplateBase):
         info_record = info_op.outputs.info
 
         # Get current info time
-        info_time_expr = info_record.latest().select(
-            info_time=info_record.t.payload["info_time"].cast("float64")
-        )
-        info_time_df = self._execute_expr(info_time_expr)
-        current_info_time = float(cast(Any, info_time_df.iloc[0]["info_time"]))
+        info_payload = info_record.latest_payload()
+        current_info_time = float(info_payload["info_time"])
 
         # Use latest decision's timestamp to determine if a new look is due
         decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
             self.ledger
         )
-        latest_decision_df = self._execute_expr(decision_record.latest(explode=True))
 
-        # Get the last info_time before or at the last decision (if any)
-        if len(latest_decision_df) > 0:
-            last_decision_ts = latest_decision_df["ts"].iloc[0]
-            info_before_decision = self._execute_expr(
-                info_record.latest_before(
-                    last_decision_ts, include_ts=True, explode=True
-                )
+        try:
+            decision_payload, _last_decision_ts = decision_record.latest_payload(
+                include_ts=True
             )
-            last_info_time_before_decision = (
-                float(info_before_decision["info_time"].iloc[0])
-                if len(info_before_decision) > 0
-                else 0.0
+            last_info_time_before_decision = float(
+                decision_payload.get("info_time", 0.0)
             )
-        else:
+        except LookupError:
             last_info_time_before_decision = 0.0
 
         # Trigger only if any planned look is newly due since last decision
@@ -264,7 +251,10 @@ class BinomialABTest(tpl.TemplateBase):
 
         ## Compute boundary
         boundary_op = BoundaryFromDesign(
-            self.ledger, design=design, info=info_record, out_id="boundary"
+            self.ledger,
+            design=design_record,
+            info=info_record,
+            out_id="boundary",
         )
         boundary_op.run()
         boundary_record = boundary_op.outputs.boundary

@@ -11,9 +11,9 @@ Records for the "one-mean (Gaussian)" scheme.
 
 Doctest (structure only)
 ------------------------
->>> OneMeanSummaryRecord(id="s1").payload_type
+>>> OneMeanSummaryRecord(name="s1").payload_type
 'OneMean/Summary'
->>> ZMeanKnownVarRecord(id="z1").payload_type
+>>> ZMeanKnownVarRecord(name="z1").payload_type
 'OneMean/ZKnownVar'
 """
 

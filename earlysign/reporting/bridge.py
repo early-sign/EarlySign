@@ -22,10 +22,10 @@ Examples
 >>> con = ibis.duckdb.connect(":memory:")
 >>> scoped = Ledger(con, "events").bind(experiment_id="mixA"); scoped.ensure()
 >>> # minimal Safe-mode rows
->>> BinomialCountsRecord(id="C1").attach(scoped).insert(payload={"nA":10, "mA":3, "nB":12, "mB":5})
->>> EProcessRecord(id="E1").attach(scoped).insert(payload={"E":9.0, "logE":2.2})
->>> SafeDesignRecord(id="S1").attach(scoped).insert(payload={"alpha":0.05})
->>> SafeDecisionRecord(id="D1").attach(scoped).insert(payload={"signal":"continue", "reason":"n/a", "threshold":20.0})
+>>> BinomialCountsRecord(name="C1").attach(scoped).insert(payload={"nA":10, "mA":3, "nB":12, "mB":5})
+>>> EProcessRecord(name="E1").attach(scoped).insert(payload={"E":9.0, "logE":2.2})
+>>> SafeDesignRecord(name="S1").attach(scoped).insert(payload={"alpha":0.05})
+>>> SafeDecisionRecord(name="D1").attach(scoped).insert(payload={"signal":"continue", "reason":"n/a", "threshold":20.0})
 >>>
 >>> class _T(ReportingBridgeMixin):
 ...     def __init__(self, scoped, ids):

@@ -61,10 +61,10 @@ def get_reporter(
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demoF"); scoped.ensure()
     >>> # minimal Safe-mode rows
-    >>> BinomialCountsRecord(id="C8").attach(scoped).insert(payload={"nA": 10, "mA": 3, "nB": 11, "mB": 4})
-    >>> EProcessRecord(id="E8").attach(scoped).insert(payload={"E":7.0, "logE":1.95})
-    >>> SafeDesignRecord(id="S8").attach(scoped).insert(payload={"alpha":0.05})
-    >>> SafeDecisionRecord(id="D8").attach(scoped).insert(payload={"signal":"continue", "reason":"n/a", "threshold":20.0})
+    >>> BinomialCountsRecord(name="C8").attach(scoped).insert(payload={"nA": 10, "mA": 3, "nB": 11, "mB": 4})
+    >>> EProcessRecord(name="E8").attach(scoped).insert(payload={"E":7.0, "logE":1.95})
+    >>> SafeDesignRecord(name="S8").attach(scoped).insert(payload={"alpha":0.05})
+    >>> SafeDecisionRecord(name="D8").attach(scoped).insert(payload={"signal":"continue", "reason":"n/a", "threshold":20.0})
     >>> r = get_reporter(scoped, {"counts":"C8","eproc":"E8","design":"S8","decision":"D8"})
     >>> isinstance(r, ReporterBase)
     True

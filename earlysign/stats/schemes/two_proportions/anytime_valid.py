@@ -143,7 +143,7 @@ class MixtureEProcessTwoProportions(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(id=self.out_id)}
+        return {"eproc": EProcessRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.eproc
@@ -212,7 +212,7 @@ class MixtureEProcessTwoProportionsSkew(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(id=self.out_id)}
+        return {"eproc": EProcessRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.eproc

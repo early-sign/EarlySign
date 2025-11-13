@@ -50,7 +50,7 @@ from earlysign.stats.common.anytime_valid.records import (
 
 
 def _latest_counts_expr(scoped: Ledger, counts_id: str) -> Any:
-    counts = BinomialCountsRecord(id=counts_id).attach(scoped)
+    counts = BinomialCountsRecord(name=counts_id).attach(scoped)
     t = counts.latest().select(
         nA=counts.t.payload["nA"].cast("int64"),
         mA=counts.t.payload["mA"].cast("int64"),
@@ -87,20 +87,20 @@ def interim_report(
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo"); scoped.ensure()
     >>> # prepare minimal rows
-    >>> BinomialCountsRecord(id="C").attach(scoped).insert(payload={"nA": 10, "mA": 3, "nB": 12, "mB": 5})
-    >>> WaldZStatisticRecord(id="W").attach(scoped).insert(payload={"wald_z": 1.2})
-    >>> InformationTimeRecord(id="I").attach(scoped).insert(payload={"info_time": 0.4})
-    >>> GroupSequentialBoundaryRecord(id="B").attach(scoped).insert(payload={"upper": 2.0, "lower": -2.0, "scale": "z"})
-    >>> GroupSequentialDecisionSignalRecord(id="D").attach(scoped).insert(payload={"signal": "continue", "reason": "start"})
+    >>> BinomialCountsRecord(name="C").attach(scoped).insert(payload={"nA": 10, "mA": 3, "nB": 12, "mB": 5})
+    >>> WaldZStatisticRecord(name="W").attach(scoped).insert(payload={"wald_z": 1.2})
+    >>> InformationTimeRecord(name="I").attach(scoped).insert(payload={"info_time": 0.4})
+    >>> GroupSequentialBoundaryRecord(name="B").attach(scoped).insert(payload={"upper": 2.0, "lower": -2.0, "scale": "z"})
+    >>> GroupSequentialDecisionSignalRecord(name="D").attach(scoped).insert(payload={"signal": "continue", "reason": "start"})
     >>> out = interim_report(scoped, {"counts":"C","wald":"W","info":"I","boundary":"B","decision":"D"})
     >>> set(out.keys()) == {"snapshot_counts","snapshot_stats","snapshot_info","snapshot_boundary","snapshot_decision"}
     True
     """
     counts = _latest_counts_expr(scoped, ids["counts"])
-    w = WaldZStatisticRecord(id=ids["wald"]).attach(scoped)
-    i = InformationTimeRecord(id=ids["info"]).attach(scoped)
-    b = GroupSequentialBoundaryRecord(id=ids["boundary"]).attach(scoped)
-    d = GroupSequentialDecisionSignalRecord(id=ids["decision"]).attach(scoped)
+    w = WaldZStatisticRecord(name=ids["wald"]).attach(scoped)
+    i = InformationTimeRecord(name=ids["info"]).attach(scoped)
+    b = GroupSequentialBoundaryRecord(name=ids["boundary"]).attach(scoped)
+    d = GroupSequentialDecisionSignalRecord(name=ids["decision"]).attach(scoped)
 
     wald = w.latest().select(wald_z=w.t.payload["wald_z"].cast("float64"))
     info = i.latest().select(t=i.t.payload["t"].cast("float64"))
@@ -151,14 +151,14 @@ def interim_plotdata(
     >>> from earlysign.core.ledger import Ledger
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo2"); scoped.ensure()
-    >>> WaldZStatisticRecord(id="W2").attach(scoped).insert(payload={"wald_z": 1.5})
-    >>> GroupSequentialBoundaryRecord(id="B2").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z", alpha=0.05, tails=2, info_time=0.5)
+    >>> WaldZStatisticRecord(name="W2").attach(scoped).insert(payload={"wald_z": 1.5})
+    >>> GroupSequentialBoundaryRecord(name="B2").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z", alpha=0.05, tails=2, info_time=0.5)
     >>> out = interim_plotdata(scoped, {"wald":"W2","boundary":"B2"})
     >>> list(out.keys()) == ["wald_vs_boundary"]
     True
     """
-    w = WaldZStatisticRecord(id=ids["wald"]).attach(scoped)
-    b = GroupSequentialBoundaryRecord(id=ids["boundary"]).attach(scoped)
+    w = WaldZStatisticRecord(name=ids["wald"]).attach(scoped)
+    b = GroupSequentialBoundaryRecord(name=ids["boundary"]).attach(scoped)
     wdf = w.latest().select(
         look=ibis.literal(1).cast("int64"),
         value=w.t.payload["wald_z"].cast("float64"),
@@ -189,10 +189,10 @@ def interim_summary_exprs(scoped: Ledger, ids: Dict[str, str]) -> Dict[str, Any]
     dict with keys:
       - bounds_t, wald_t, stop_ts, tidy  # (t, y, series) in tidy
     """
-    b = GroupSequentialBoundaryRecord(id=ids["boundary"]).attach(scoped)
-    i = InformationTimeRecord(id=ids["info"]).attach(scoped)
-    w = WaldZStatisticRecord(id=ids["wald"]).attach(scoped)
-    d = GroupSequentialDecisionSignalRecord(id=ids["decision"]).attach(scoped)
+    b = GroupSequentialBoundaryRecord(name=ids["boundary"]).attach(scoped)
+    i = InformationTimeRecord(name=ids["info"]).attach(scoped)
+    w = WaldZStatisticRecord(name=ids["wald"]).attach(scoped)
+    d = GroupSequentialDecisionSignalRecord(name=ids["decision"]).attach(scoped)
 
     # Information time with next_ts via column .lead() over a window
     info = i.t.select(ts=i.t.ts, t=i.t.payload["t"].cast("float64"))
@@ -262,10 +262,10 @@ def interim_summary_sql(
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo4"); scoped.ensure()
     >>> # minimal rows
-    >>> InformationTimeRecord(id="I4").attach(scoped).insert(info_time=0.5)
-    >>> GroupSequentialBoundaryRecord(id="B4").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z")
-    >>> WaldZStatisticRecord(id="W4").attach(scoped).insert(wald_z=1.7)
-    >>> GroupSequentialDecisionSignalRecord(id="D4").attach(scoped).insert(signal="continue", reason="n/a")
+    >>> InformationTimeRecord(name="I4").attach(scoped).insert(info_time=0.5)
+    >>> GroupSequentialBoundaryRecord(name="B4").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z")
+    >>> WaldZStatisticRecord(name="W4").attach(scoped).insert(wald_z=1.7)
+    >>> GroupSequentialDecisionSignalRecord(name="D4").attach(scoped).insert(signal="continue", reason="n/a")
     >>> sqls = interim_summary_sql(scoped, {"info":"I4","boundary":"B4","wald":"W4","decision":"D4"}, backend=con)
     >>> set(sqls.keys()) == {"bounds_t","wald_t","stop_ts","tidy"}
     True
@@ -286,10 +286,10 @@ def interim_summary_plot(
     >>> from earlysign.core.ledger import Ledger
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo5"); scoped.ensure()
-    >>> InformationTimeRecord(id="I5").attach(scoped).insert(info_time=0.4)
-    >>> GroupSequentialBoundaryRecord(id="B5").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z")
-    >>> WaldZStatisticRecord(id="W5").attach(scoped).insert(wald_z=1.1)
-    >>> GroupSequentialDecisionSignalRecord(id="D5").attach(scoped).insert(signal="continue", reason="n/a")
+    >>> InformationTimeRecord(name="I5").attach(scoped).insert(info_time=0.4)
+    >>> GroupSequentialBoundaryRecord(name="B5").attach(scoped).insert(upper=2.0, lower=-2.0, scale="z")
+    >>> WaldZStatisticRecord(name="W5").attach(scoped).insert(wald_z=1.1)
+    >>> GroupSequentialDecisionSignalRecord(name="D5").attach(scoped).insert(signal="continue", reason="n/a")
     >>> fig = interim_summary_plot(scoped, {"info":"I5","boundary":"B5","wald":"W5","decision":"D5"})
     >>> hasattr(fig, "savefig")
     True
@@ -328,20 +328,20 @@ def safe_report(
         tables["snapshot_counts"] = _latest_counts_expr(scoped, ids["counts"])
 
     if ids.get("eproc"):
-        e = EProcessRecord(id=ids["eproc"]).attach(scoped)
+        e = EProcessRecord(name=ids["eproc"]).attach(scoped)
         tables["snapshot_eproc"] = e.latest().select(
             E=e.t.payload["E"].cast("float64"),
             logE=e.t.payload["logE"].cast("float64"),
         )
 
     if ids.get("design"):
-        dsg = SafeDesignRecord(id=ids["design"]).attach(scoped)
+        dsg = SafeDesignRecord(name=ids["design"]).attach(scoped)
         tables["snapshot_design"] = dsg.latest().select(
             alpha=dsg.t.payload["alpha"].cast("float64")
         )
 
     if ids.get("decision"):
-        dec = SafeDecisionRecord(id=ids["decision"]).attach(scoped)
+        dec = SafeDecisionRecord(name=ids["decision"]).attach(scoped)
         tables["snapshot_decision"] = dec.latest().select(
             signal=dec.t.payload["signal"],
             reason=dec.t.payload["reason"],
@@ -377,14 +377,14 @@ def safe_plotdata(
     >>> from earlysign.core.ledger import Ledger
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demo7"); scoped.ensure()
-    >>> EProcessRecord(id="E7").attach(scoped).insert(E=10.0, logE=2.3)
-    >>> SafeDesignRecord(id="S7").attach(scoped).insert(alpha=0.05)
+    >>> EProcessRecord(name="E7").attach(scoped).insert(E=10.0, logE=2.3)
+    >>> SafeDesignRecord(name="S7").attach(scoped).insert(alpha=0.05)
     >>> out = safe_plotdata(scoped, {"eproc":"E7","design":"S7"})
     >>> list(out.keys()) == ["evalue_snapshot"]
     True
     """
-    e = EProcessRecord(id=ids["eproc"]).attach(scoped)
-    d = SafeDesignRecord(id=ids["design"]).attach(scoped)
+    e = EProcessRecord(name=ids["eproc"]).attach(scoped)
+    d = SafeDesignRecord(name=ids["design"]).attach(scoped)
     e_tbl = e.latest().select(
         x=ibis.literal("E"),
         value=e.t.payload["E"].cast("float64"),
@@ -414,8 +414,8 @@ class TwoProportionsReporter(ReporterBase):
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demoR"); scoped.ensure()
     >>> # Safe mode smoke
-    >>> EProcessRecord(id="ER").attach(scoped).insert(E=5.0, logE=1.6)
-    >>> SafeDesignRecord(id="SR").attach(scoped).insert(alpha=0.05)
+    >>> EProcessRecord(name="ER").attach(scoped).insert(E=5.0, logE=1.6)
+    >>> SafeDesignRecord(name="SR").attach(scoped).insert(alpha=0.05)
     >>> r2 = TwoProportionsReporter(scoped, {"eproc":"ER","design":"SR"})
     >>> isinstance(r2.report_tables("ibis"), dict)
     True

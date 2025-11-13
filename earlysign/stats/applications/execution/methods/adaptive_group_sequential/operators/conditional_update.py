@@ -102,7 +102,7 @@ class ConditionalPowerCalculation(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"cp": ConditionalPowerRecord(id=self.out_id)}
+        return {"cp": ConditionalPowerRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.cp
@@ -232,7 +232,7 @@ class PromisingZoneDecision(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": DesignUpdateDecisionRecord(id=self.out_id)}
+        return {"decision": DesignUpdateDecisionRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.decision
@@ -354,7 +354,7 @@ class UpdateRemainingBoundaries(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"updated_boundaries": UpdatedBoundariesRecord(id=self.out_id)}
+        return {"updated_boundaries": UpdatedBoundariesRecord(name=self.out_id)}
 
     def run(self) -> None:
         import numpy as np

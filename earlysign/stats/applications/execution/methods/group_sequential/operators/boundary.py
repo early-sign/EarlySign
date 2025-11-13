@@ -7,6 +7,7 @@ Reads Design and InfoTime records, computes boundaries using essentials function
 from dataclasses import dataclass
 from typing import Dict, Optional
 
+from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
@@ -59,7 +60,7 @@ class BoundaryFromDesign(LedgerOperator):
     >>> ledger.ensure()
     >>>
     >>> # Write design
-    >>> design_rec = GroupSequentialDesignRecord(id="design1").attach(ledger)
+    >>> design_rec = GroupSequentialDesignRecord(name="design1").attach(ledger)
     >>> design_rec.insert(
     ...     {
     ...         "alpha": 0.05,
@@ -73,13 +74,13 @@ class BoundaryFromDesign(LedgerOperator):
     ... )
     >>>
     >>> # Write info time
-    >>> info_rec = InformationTimeRecord(id="info1").attach(ledger)
+    >>> info_rec = InformationTimeRecord(name="info1").attach(ledger)
     >>> info_rec.insert({"info_time": 0.5})
     >>>
     >>> # Compute boundary
     >>> boundary_op = BoundaryFromDesign(
     ...     ledger,
-    ...     design=GroupSequentialDesignRecord(id="design1").attach(ledger),
+    ...     design=GroupSequentialDesignRecord(name="design1").attach(ledger),
     ...     info=info_rec,
     ...     out_id="bound1",
     ...     look=2
@@ -99,7 +100,7 @@ class BoundaryFromDesign(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"boundary": GroupSequentialBoundaryRecord(id=self.out_id)}
+        return {"boundary": GroupSequentialBoundaryRecord(name=self.out_id)}
 
     def run(self) -> None:
         design_rec = self.design
@@ -108,21 +109,19 @@ class BoundaryFromDesign(LedgerOperator):
         look = getattr(self, "look", None)
 
         # Read latest design
-        ddf = design_rec.latest().select(design=design_rec.t.payload).execute()
-        if len(ddf) == 0:
+        try:
+            design_payload = design_rec.latest_payload()
+        except LookupError:
             return
-        design_model = DesignPayloadModel.model_validate(ddf.iloc[0]["design"])
+        design_model = DesignPayloadModel.model_validate(design_payload)
         boundary_spec = design_model.boundary_spec()
 
         # Read latest info time
-        idf = (
-            info_rec.latest()
-            .select(info_time=info_rec.t.payload["info_time"].cast("float64"))
-            .execute()
-        )
-        if len(idf) == 0:
+        try:
+            info_payload = info_rec.latest_payload()
+        except LookupError:
             return
-        t = float(idf.iloc[0]["info_time"])
+        t = float(info_payload["info_time"])
 
         # Compute boundaries using the canonical BoundaryCalculator API
         calc = boundary.BoundaryCalculator(spec=boundary_spec, process=None)

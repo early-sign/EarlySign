@@ -84,7 +84,7 @@ class GSDecisionFromZMean(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(id=self.out_id)}
+        return {"decision": GroupSequentialDecisionSignalRecord(name=self.out_id)}
 
     def run(self) -> None:
         out = self.outputs.decision

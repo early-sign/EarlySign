@@ -1,4 +1,4 @@
-"""EarlySign DSL Design v24 — layered rewrite of BinomialABTest.
+"""EarlySign DSL Design v26 — multi-tenant ledger DSL demo.
 
 This single file mirrors the intended package layout:
 
@@ -9,8 +9,11 @@ This single file mirrors the intended package layout:
 * ``earlysign.stats.applications.execution`` → composed procedures (here inlined via helpers)
 * ``earlysign.api``         → ``BinomialABTest`` (public surface identical to the real API)
 
-The code remains self-contained so the script can run on its own while
-illustrating the layering strategy.
+Multiple experiments can share a single physical ledger table: each ``BinomialABTest``
+binds to a label scope (``experiment_id`` here), and the core layer ensures that all
+reads/writes stay inside that scope without framework/application code having to care.
+The code remains self-contained so the script can run on its own while illustrating the
+layering strategy.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from ibis.backends import BaseBackend
 from ibis.expr.types import JSONValue
 from ibis.expr.types import Table as IbisTable
 
-__version__ = "24.0.0"
+__version__ = "26.0.0"
 
 
 # ---------------------------------------------------------------------------
@@ -156,10 +159,11 @@ class LedgerSession:
 
 
 class RecordBase:
-    """Typed convenience wrapper that determines ``kind`` from the subclass."""
+    """Typed convenience wrapper that determines ``kind`` and schema per subclass."""
 
     KIND: Optional[str] = None
-    MAPPING: Dict[str, Tuple[str, str]] = {}
+    SCHEMA: Dict[str, Tuple[str, str]] = {}
+    DEFAULT: Optional[Dict[str, Any]] = None
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
@@ -168,7 +172,6 @@ class RecordBase:
     def _resolve_kind(self) -> str:
         if self.KIND:
             return self.KIND
-        # fallback: snake_case of class name, e.g., DesignLookRecord -> design_look
         import re
 
         name = self.__class__.__name__
@@ -176,8 +179,11 @@ class RecordBase:
         snake = re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
         return snake.replace("_record", "").replace("__", "_")
 
-    def mapping(self) -> Dict[str, Tuple[str, str]]:
-        return self.MAPPING
+    def schema(self) -> Dict[str, Tuple[str, str]]:
+        return self.SCHEMA
+
+    def default(self) -> Optional[Dict[str, Any]]:
+        return dict(self.DEFAULT) if self.DEFAULT is not None else None
 
     def insert(self, payload: Dict[str, Any]) -> None:
         with self.ledger.session() as sess:
@@ -186,21 +192,22 @@ class RecordBase:
     def latest(self, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         tbl = self.ledger.scoped_table()
         tbl = tbl.filter(tbl.kind == self.kind).order_by(tbl.ts.desc()).limit(1)
-        mapping = self.mapping()
+        mapping = self.schema()
+        fallback = default if default is not None else self.default()
         if not mapping:
-            return dict(default) if default else {}
+            return dict(fallback) if fallback else {}
         payload = tbl.payload
         selects = [payload[field].unwrap_as(dtype).name(alias) for alias, (field, dtype) in mapping.items()]
         df = self.ledger.con.execute(tbl.select(*selects))
         if df.empty:
-            return dict(default) if default else {}
+            return dict(fallback) if fallback else {}
         return df.to_dict("records")[0]
 
     def list(self, *, order_by: Optional[str] = None) -> List[Dict[str, Any]]:
         tbl = self.ledger.scoped_table()
         tbl = tbl.filter(tbl.kind == self.kind)
         payload = tbl.payload
-        mapping = self.mapping()
+        mapping = self.schema()
         if order_by is not None:
             if order_by in mapping:
                 field, dtype = mapping[order_by]
@@ -215,37 +222,45 @@ class RecordBase:
 
 class DesignRecord(RecordBase):
     KIND = "design"
-    MAPPING = {
+    SCHEMA = {
         "planned_max_n": ("planned_max_n", "float64"),
         "alpha": ("alpha", "float64"),
         "spending_family": ("spending_family", "string"),
         "planned_info_times": ("planned_info_times", "string"),
     }
+    DEFAULT = {
+        "planned_max_n": 0.0,
+        "alpha": 0.05,
+        "spending_family": "obrien_fleming",
+        "planned_info_times": "[]",
+    }
 
 
 class ObservationRecord(RecordBase):
     KIND = "observation"
-    MAPPING = {"nA": ("nA", "int64"), "mA": ("mA", "int64"), "nB": ("nB", "int64"), "mB": ("mB", "int64")}
+    SCHEMA = {"nA": ("nA", "int64"), "mA": ("mA", "int64"), "nB": ("nB", "int64"), "mB": ("mB", "int64")}
 
 
 class SnapshotRecord(RecordBase):
     KIND = "snapshot"
-    MAPPING = {"nA": ("nA", "int64"), "mA": ("mA", "int64"), "nB": ("nB", "int64"), "mB": ("mB", "int64")}
+    SCHEMA = {"nA": ("nA", "int64"), "mA": ("mA", "int64"), "nB": ("nB", "int64"), "mB": ("mB", "int64")}
+    DEFAULT = {"nA": 0, "mA": 0, "nB": 0, "mB": 0}
 
 
 class InfoRecord(RecordBase):
     KIND = "info"
-    MAPPING = {"info_time": ("info_time", "float64")}
+    SCHEMA = {"info_time": ("info_time", "float64")}
+    DEFAULT = {"info_time": 0.0}
 
 
 class StatRecord(RecordBase):
     KIND = "stat"
-    MAPPING = {"z": ("z", "float64")}
+    SCHEMA = {"z": ("z", "float64")}
 
 
 class DecisionRecord(RecordBase):
     KIND = "decision"
-    MAPPING = {
+    SCHEMA = {
         "look": ("look", "int64"),
         "planned_t": ("planned_t", "float64"),
         "info_time": ("info_time", "float64"),
@@ -290,7 +305,7 @@ class BinomialABTest:
             raise TypeError("connector must be an ibis backend or connection string")
         self.experiment_id = experiment_id
         ledger_name = table_name if table_name is not None else experiment_id
-        base_ledger = Ledger(self.connector, ledger_name, overwrite=True).bind(experiment_id=experiment_id)
+        base_ledger = Ledger(self.connector, ledger_name, overwrite=False).bind(experiment_id=experiment_id)
         base_ledger.ensure()
         self.ledger = base_ledger
         self._records = _build_records(self.ledger)
@@ -298,17 +313,16 @@ class BinomialABTest:
 
     # --- API helpers -----------------------------------------------------
 
-    def _planned_looks(self) -> List[Tuple[int, float]]:
-        design = self._latest_design()
-        planned_times = json.loads(design.get("planned_info_times", "[]"))
+    def _planned_looks(self, design: Optional[Dict[str, Any]] = None) -> List[Tuple[int, float]]:
+        design_data = design or self._latest_design()
+        planned_times = json.loads(design_data.get("planned_info_times", "[]"))
         return [(idx + 1, float(t)) for idx, t in enumerate(planned_times)]
 
     def _latest_snapshot(self) -> Dict[str, float]:
-        defaults = {"nA": 0, "mA": 0, "nB": 0, "mB": 0}
-        return self._records["snapshot"].latest(defaults)
+        return self._records["snapshot"].latest()
 
     def _latest_info(self) -> Dict[str, float]:
-        return self._records["info"].latest({"info_time": 0.0})
+        return self._records["info"].latest()
 
     def _latest_design(self) -> Dict[str, Any]:
         design = self._records["design"].latest(
@@ -344,38 +358,58 @@ class BinomialABTest:
         return self.connector.execute(expr)
 
     def update(self, payload: Dict[str, Any]) -> None:
-        snapshot_prev = self._latest_snapshot()
-        info_prev = self._latest_info()
         design = self._latest_design()
+        info_prev = self._records["info"].latest()
         if design["planned_max_n"] <= 0:
             raise RuntimeError("Call set_design() before update().")
 
+        self._observation_op(self._records, payload)
+        self._snapshot_op(self._records, payload)
+        self._info_op(self._records, design)
+        looks = self._planned_looks(design)
+        self._decision_op(self._records, design, info_prev, looks)
+
+    @staticmethod
+    def _observation_op(records: Dict[str, RecordBase], payload: Dict[str, Any]) -> None:
         obs_payload = dict(
             nA=int(payload["nA"]),
             mA=int(payload["mA"]),
             nB=int(payload["nB"]),
             mB=int(payload["mB"]),
         )
-        self._records["observation"].insert(obs_payload)
+        records["observation"].insert(obs_payload)
 
+    @staticmethod
+    def _snapshot_op(records: Dict[str, RecordBase], payload: Dict[str, Any]) -> None:
+        prev_snapshot = records["snapshot"].latest()
         snapshot_now = dict(
-            nA=int(snapshot_prev["nA"] + obs_payload["nA"]),
-            mA=int(snapshot_prev["mA"] + obs_payload["mA"]),
-            nB=int(snapshot_prev["nB"] + obs_payload["nB"]),
-            mB=int(snapshot_prev["mB"] + obs_payload["mB"]),
+            nA=int(prev_snapshot["nA"] + payload["nA"]),
+            mA=int(prev_snapshot["mA"] + payload["mA"]),
+            nB=int(prev_snapshot["nB"] + payload["nB"]),
+            mB=int(prev_snapshot["mB"] + payload["mB"]),
         )
-        self._records["snapshot"].insert(snapshot_now)
+        records["snapshot"].insert(snapshot_now)
 
-        snapshot_latest = self._latest_snapshot()
+    @staticmethod
+    def _info_op(records: Dict[str, RecordBase], design: Dict[str, Any]) -> None:
+        snapshot_latest = records["snapshot"].latest()
         info_now = (snapshot_latest["nA"] + snapshot_latest["nB"]) / design["planned_max_n"]
-        self._records["info"].insert({"info_time": float(info_now)})
+        records["info"].insert({"info_time": float(info_now)})
 
-        looks = self._planned_looks()
+    @staticmethod
+    def _decision_op(
+        records: Dict[str, RecordBase],
+        design: Dict[str, Any],
+        info_prev: Dict[str, Any],
+        looks: List[Tuple[int, float]],
+    ) -> None:
+        info_latest = records["info"].latest()
         I0 = float(info_prev["info_time"])
-        I1 = float(info_now)
+        I1 = float(info_latest["info_time"])
         due = next(((idx, t) for idx, t in looks if I0 < t <= I1), None)
         if due is None:
             return
+        snapshot_latest = records["snapshot"].latest()
         z_value = _pooled_z(
             snapshot_latest["nA"],
             snapshot_latest["mA"],
@@ -384,8 +418,8 @@ class BinomialABTest:
         )
         boundary = _boundary_from_spending(I0, I1, alpha=design["alpha"], family=design["spending_family"])
         action = "stop_efficacy" if abs(z_value) >= boundary else "continue"
-        self._records["stat"].insert({"z": float(z_value)})
-        self._records["decision"].insert(
+        records["stat"].insert({"z": float(z_value)})
+        records["decision"].insert(
             dict(
                 look=int(due[0]),
                 planned_t=float(due[1]),
@@ -402,34 +436,47 @@ class BinomialABTest:
 # ---------------------------------------------------------------------------
 
 
-def _ab_workload() -> BinomialABTest:
+def _ab_workload() -> Tuple[BinomialABTest, BinomialABTest]:
     con = ibis.duckdb.connect()
-    con.raw_sql("DROP TABLE IF EXISTS ledger_v23_demo")
-    test = BinomialABTest(con, "ledger_v23_demo")
+    shared_table = "ledger_v26_shared"
+    con.raw_sql(f"DROP TABLE IF EXISTS {shared_table}")
+    test_a = BinomialABTest(con, "exp_alpha", table_name=shared_table)
+    test_b = BinomialABTest(con, "exp_beta", table_name=shared_table)
     design = {
         "alpha": 0.05,
         "planned_max_n": 1000,
         "planned_info_times": [0.25, 0.5, 0.75, 1.0],
         "efficacy": {"family": "obrien_fleming"},
     }
-    test.set_design(design)
-    for batch in [
+    for test in (test_a, test_b):
+        test.set_design(design)
+    updates_a = [
+        {"nA": 80, "mA": 8, "nB": 80, "mB": 9},
+        {"nA": 60, "mA": 6, "nB": 60, "mB": 8},
+        {"nA": 200, "mA": 18, "nB": 200, "mB": 25},
+    ]
+    updates_b = [
         {"nA": 100, "mA": 10, "nB": 100, "mB": 12},
         {"nA": 50, "mA": 5, "nB": 50, "mB": 6},
         {"nA": 150, "mA": 10, "nB": 150, "mB": 20},
         {"nA": 100, "mA": 5, "nB": 100, "mB": 35},
-    ]:
-        test.update(batch)
-    return test
+    ]
+    for payload in updates_a:
+        test_a.update(payload)
+    for payload in updates_b:
+        test_b.update(payload)
+    return test_a, test_b
 
 
 def _profile_run() -> None:
     profiler = cProfile.Profile()
     profiler.enable()
-    ab = _ab_workload()
+    test_a, test_b = _ab_workload()
     profiler.disable()
     pstats.Stats(profiler).strip_dirs().sort_stats("cumulative").print_stats(20)
-    print(ab.ledger.con.execute(ab.ledger.table()))
+    # Print combined ledger table (both experiments share the same table)
+    shared_table_expr = test_a.ledger.table()
+    print(test_a.ledger.con.execute(shared_table_expr.order_by("labels", "ts")))
 
 
 if __name__ == "__main__":
