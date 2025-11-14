@@ -29,7 +29,7 @@ from typing import Any, Dict
 from scipy.stats import norm
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.anytime_valid.records import EProcessRecord
 from earlysign.stats.schemes.one_mean.records import OneMeanSummaryRecord
@@ -91,7 +91,7 @@ def one_sided_mixture_e_one_mean_known_var(
     return float(f1 / max(f0, 1e-300))
 
 
-class MixtureEProcessOneMeanKnownVar(LedgerOperator):
+class MixtureEProcessOneMeanKnownVar(LedgerOp):
     """Insert symmetric-alt mixture e-process row for one-mean."""
 
     out_id: str
@@ -149,7 +149,7 @@ class MixtureEProcessOneMeanKnownVar(LedgerOperator):
         out.insert(payload)
 
 
-class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOperator):
+class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOp):
     """Insert one-sided-alt mixture e-process row for one-mean."""
 
     out_id: str

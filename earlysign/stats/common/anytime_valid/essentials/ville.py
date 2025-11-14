@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.anytime_valid.records import (
     EProcessRecord,
@@ -40,7 +40,7 @@ def ville_threshold(alpha: float) -> float:
     return 1.0 / float(alpha)
 
 
-class VilleThreshold(LedgerOperator):
+class VilleThreshold(LedgerOp):
     """
     Insert a Ville threshold row: {"alpha": alpha, "threshold": 1/alpha}.
 
@@ -71,7 +71,7 @@ class VilleThreshold(LedgerOperator):
         out.insert({"alpha": alpha, "threshold": float(thr)})
 
 
-class VilleDecision(LedgerOperator):
+class VilleDecision(LedgerOp):
     """
     Compare the latest E-process value to a Ville threshold.
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
@@ -40,7 +40,7 @@ def _decide(value: float, upper: float, lower: float) -> tuple[str, str]:
     return "continue", "none"
 
 
-class GSDecisionFromZMean(LedgerOperator):
+class GSDecisionFromZMean(LedgerOp):
     """
     Compare Z (one-mean known var) to GS boundary with scale handling.
 

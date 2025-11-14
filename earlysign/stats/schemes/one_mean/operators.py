@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Dict
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.schemes.one_mean.records import (
     OneMeanSummaryRecord,
@@ -33,7 +33,7 @@ def compute_z_mean_known_var(n: int, mean: float, sigma2: float) -> float:
     return float(mean) * math.sqrt(float(n) / float(sigma2))
 
 
-class ZMeanKnownVar(LedgerOperator):
+class ZMeanKnownVar(LedgerOp):
     """
     Read OneMeanSummaryRecord (n, mean) and insert a ZKnownVar row.
 

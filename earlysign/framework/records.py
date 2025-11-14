@@ -141,9 +141,11 @@ class LedgerRecord:
 
     schema: Dict[str, PydanticField] = {}
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, *, ledger: Optional[Ledger] = None):
         self.name = name
         self.ledger: Optional[Ledger] = None
+        if ledger is not None:
+            self.attach(ledger)
 
     def attach(self, ledger: Ledger) -> Self:
         self.ledger = ledger

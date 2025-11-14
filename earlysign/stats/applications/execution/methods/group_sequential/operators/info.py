@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
@@ -17,7 +17,7 @@ from earlysign.stats.essentials.methods.group_sequential.info_time import (
 )
 
 
-class InformationTimeFromRatio(LedgerOperator):
+class InformationTimeFromRatio(LedgerOp):
     """Insert t = info_now / info_max."""
 
     out_id: str
@@ -56,7 +56,7 @@ class InformationTimeFromRatio(LedgerOperator):
         out.insert(payload)
 
 
-class InformationTimeFromVariance(LedgerOperator):
+class InformationTimeFromVariance(LedgerOp):
     """Insert t = var_target / var_now."""
 
     out_id: str
@@ -95,7 +95,7 @@ class InformationTimeFromVariance(LedgerOperator):
         out.insert(payload)
 
 
-class InformationTimeFromSD(LedgerOperator):
+class InformationTimeFromSD(LedgerOp):
     """Insert t = (sd_target^2) / (sd_now^2)."""
 
     out_id: str
@@ -134,7 +134,7 @@ class InformationTimeFromSD(LedgerOperator):
         out.insert(payload)
 
 
-class InformationTimeFromFisher(LedgerOperator):
+class InformationTimeFromFisher(LedgerOp):
     """Insert t = fisher_now / fisher_max."""
 
     out_id: str

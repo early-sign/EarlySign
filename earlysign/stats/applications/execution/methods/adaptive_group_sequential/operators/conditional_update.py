@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Dict
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.execution.methods.adaptive_group_sequential.records.conditional import (
     ConditionalPowerRecord,
@@ -24,7 +24,7 @@ from earlysign.stats.essentials.methods.adaptive_group_sequential.conditional_up
 )
 
 
-class ConditionalPowerCalculation(LedgerOperator):
+class ConditionalPowerCalculation(LedgerOp):
     """
     Calculate conditional power at an interim analysis.
 
@@ -144,7 +144,7 @@ class ConditionalPowerCalculation(LedgerOperator):
         )
 
 
-class PromisingZoneDecision(LedgerOperator):
+class PromisingZoneDecision(LedgerOp):
     """
     Make continuation decision based on conditional power in promising zone.
 
@@ -276,7 +276,7 @@ class PromisingZoneDecision(LedgerOperator):
         )
 
 
-class UpdateRemainingBoundaries(LedgerOperator):
+class UpdateRemainingBoundaries(LedgerOp):
     """
     Recompute boundaries for remaining analyses after interim update.
 

@@ -27,7 +27,7 @@ from typing import Any, Dict, Tuple
 from scipy.special import betaln
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
@@ -113,7 +113,7 @@ def mixture_e_two_proportions_skew(
     return float(math.exp(float(log_alt - log_null)))
 
 
-class MixtureEProcessTwoProportions(LedgerOperator):
+class MixtureEProcessTwoProportions(LedgerOp):
     """Insert symmetric-alt mixture e-process row for two-proportions."""
 
     out_id: str
@@ -180,7 +180,7 @@ class MixtureEProcessTwoProportions(LedgerOperator):
         out.insert(payload)
 
 
-class MixtureEProcessTwoProportionsSkew(LedgerOperator):
+class MixtureEProcessTwoProportionsSkew(LedgerOp):
     """Insert skewed-alt mixture e-process row for two-proportions."""
 
     out_id: str

@@ -5,12 +5,12 @@ Design operators for Anytime-Valid (Safe) testing.
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.common.anytime_valid.records import SafeDesignRecord
 
 
-class SafeDesign(LedgerOperator):
+class SafeDesign(LedgerOp):
     """
     Persist a safe-testing design.
 

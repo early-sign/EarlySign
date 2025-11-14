@@ -45,7 +45,7 @@ class LedgerOpOutputs(ABCMapping[str, LedgerRecord]):
 
 
 @dataclass
-class LedgerOperator:
+class LedgerOp:
     """
     __init__(scoped, **inputs):
       - scoped: Ledger
@@ -67,7 +67,9 @@ class LedgerOperator:
 
         outs: Dict[str, LedgerRecord] = {}
         for name, rec in self.derived_records().items():
-            outs[name] = rec.attach(scoped)
+            if rec.ledger is None:
+                rec = rec.attach(scoped)
+            outs[name] = rec
 
         # If subclass has Outputs class, create instance; otherwise use dict
         if hasattr(self.__class__, "Outputs"):

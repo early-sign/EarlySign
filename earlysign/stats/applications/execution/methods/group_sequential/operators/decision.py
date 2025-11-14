@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Dict, Literal, Optional, Tuple
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
@@ -65,7 +65,7 @@ def _decide(
     return "continue", "none"
 
 
-class GSDecision(LedgerOperator):
+class GSDecision(LedgerOp):
     """
     Scale-aware decision against a GroupSequentialBoundaryRecord.
 
@@ -138,7 +138,11 @@ class GSDecision(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(name=self.out_id)}
+        return {
+            "decision": GroupSequentialDecisionSignalRecord(
+                name=self.out_id, ledger=self.scoped
+            )
+        }
 
     def run(self) -> None:
         out = self.outputs.decision
@@ -211,7 +215,7 @@ class GSDecision(LedgerOperator):
 Decision = GSDecision
 
 
-class GSDecisionFromWaldZ(LedgerOperator):
+class GSDecisionFromWaldZ(LedgerOp):
     """
     Decision operator that reads Wald Z-statistic from a record.
 
@@ -279,7 +283,11 @@ class GSDecisionFromWaldZ(LedgerOperator):
         )
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(name=self.out_id)}
+        return {
+            "decision": GroupSequentialDecisionSignalRecord(
+                name=self.out_id, ledger=self.scoped
+            )
+        }
 
     def run(self) -> None:
         wald = self.wald

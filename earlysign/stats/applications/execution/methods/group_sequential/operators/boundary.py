@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
     DesignPayloadModel,
@@ -25,7 +25,7 @@ from earlysign.stats.applications.execution.methods.group_sequential.records.inf
 from earlysign.stats.essentials.methods.group_sequential import boundary
 
 
-class BoundaryFromDesign(LedgerOperator):
+class BoundaryFromDesign(LedgerOp):
     """
     Read latest Design & InfoTime, compute and insert boundary record.
 
@@ -100,7 +100,11 @@ class BoundaryFromDesign(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"boundary": GroupSequentialBoundaryRecord(name=self.out_id)}
+        return {
+            "boundary": GroupSequentialBoundaryRecord(
+                name=self.out_id, ledger=self.scoped
+            )
+        }
 
     def run(self) -> None:
         design_rec = self.design

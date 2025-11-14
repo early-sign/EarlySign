@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Union
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOperator, LedgerOpOutputs
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
@@ -28,7 +28,7 @@ from earlysign.stats.essentials.methods.group_sequential.info_time import (
 from earlysign.stats.essentials.schemes.two_proportions.wald_z import compute_wald_z
 
 
-class InformationTime(LedgerOperator):
+class InformationTime(LedgerOp):
     """
     Insert information-time record from sample counts.
 
@@ -68,7 +68,9 @@ class InformationTime(LedgerOperator):
         )
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(name=self.out_id)}
+        return {
+            "info": InformationTimeRecord(name=self.out_id, ledger=self.scoped)
+        }
 
     def run(self) -> None:
         out = self.outputs.info
@@ -85,7 +87,7 @@ class InformationTime(LedgerOperator):
         out.insert({"info_time": float(t)})
 
 
-class BinomialCountsSnapshot(LedgerOperator):
+class BinomialCountsSnapshot(LedgerOp):
     """Compute cumulative snapshot from incremental observations.
 
     Reads the latest incremental observation from BinomialCountsRecord,
@@ -106,7 +108,11 @@ class BinomialCountsSnapshot(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"snapshot": BinomialCountsSnapshotRecord(name=self.out_id)}
+        return {
+            "snapshot": BinomialCountsSnapshotRecord(
+                name=self.out_id, ledger=self.scoped
+            )
+        }
 
     def run(self) -> None:
         obs_rec = self.obs
@@ -135,7 +141,7 @@ class BinomialCountsSnapshot(LedgerOperator):
         snapshot_rec.insert(nA=new_nA, mA=new_mA, nB=new_nB, mB=new_mB)
 
 
-class WaldZStatistic(LedgerOperator):
+class WaldZStatistic(LedgerOp):
     """Compute Wald Z and insert one row.
 
     Accepts either BinomialCountsRecord or BinomialCountsSnapshotRecord.
@@ -156,7 +162,9 @@ class WaldZStatistic(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"wald": WaldZStatisticRecord(name=self.out_id)}
+        return {
+            "wald": WaldZStatisticRecord(name=self.out_id, ledger=self.scoped)
+        }
 
     def run(self) -> None:
         cum_counts = self.cum_counts
@@ -174,7 +182,7 @@ class WaldZStatistic(LedgerOperator):
         out.insert(payload)
 
 
-class ScoreZStatistic(LedgerOperator):
+class ScoreZStatistic(LedgerOp):
     """Compute score Z (pooled variance) and insert one row.
 
     Accepts either BinomialCountsRecord or BinomialCountsSnapshotRecord.
@@ -194,7 +202,9 @@ class ScoreZStatistic(LedgerOperator):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"score": ScoreZStatisticRecord(name=self.out_id)}
+        return {
+            "score": ScoreZStatisticRecord(name=self.out_id, ledger=self.scoped)
+        }
 
     def run(self) -> None:
         cum_counts = self.cum_counts
