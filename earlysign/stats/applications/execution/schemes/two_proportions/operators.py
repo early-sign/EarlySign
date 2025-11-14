@@ -68,9 +68,7 @@ class InformationTime(LedgerOp):
         )
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {
-            "info": InformationTimeRecord(name=self.out_id, ledger=self.scoped)
-        }
+        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.scoped)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -162,9 +160,7 @@ class WaldZStatistic(LedgerOp):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {
-            "wald": WaldZStatisticRecord(name=self.out_id, ledger=self.scoped)
-        }
+        return {"wald": WaldZStatisticRecord(name=self.out_id, ledger=self.scoped)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts
@@ -202,9 +198,7 @@ class ScoreZStatistic(LedgerOp):
     outputs: Outputs
 
     def derived_records(self) -> dict[str, LedgerRecord]:
-        return {
-            "score": ScoreZStatisticRecord(name=self.out_id, ledger=self.scoped)
-        }
+        return {"score": ScoreZStatisticRecord(name=self.out_id, ledger=self.scoped)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts

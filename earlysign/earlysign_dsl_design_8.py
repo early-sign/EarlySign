@@ -132,7 +132,9 @@ import ibis
 _PKG_VERSION = "earlysign==dev"
 
 
-def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = None) -> ibis.Expr:
+def _json_from_kv(
+    items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = None
+) -> ibis.Expr:
     """Build a JSON object purely from Ibis expressions (no Python dumps)."""
     raw_keys = raw_keys or set()
     if not items:
@@ -143,7 +145,11 @@ def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = No
         if k in raw_keys:
             val = v.cast("string")
         else:
-            val = (ibis.literal('"') + v.cast("string") + ibis.literal('"')) if v.type().is_string() else v.cast("string")
+            val = (
+                (ibis.literal('"') + v.cast("string") + ibis.literal('"'))
+                if v.type().is_string()
+                else v.cast("string")
+            )
         parts.append(key + val)
     out = parts[0]
     for p in parts[1:]:
@@ -155,9 +161,11 @@ def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = No
 # Ledger (bindable facade)
 # =========================
 
+
 @dataclass(frozen=True)
 class Ledger:
     """Append-only JSON ledger with bindable labels (scope)."""
+
     con: Any
     table: str = "ledger"
     labels: Dict[str, Union[str, int, float, bool]] = field(default_factory=dict)
@@ -192,6 +200,7 @@ class Ledger:
 # Per-row UUID/TS auto fillers (portable)
 # =======================================
 
+
 def _has_ibis_uuid() -> bool:
     return hasattr(ibis, "uuid")
 
@@ -208,7 +217,11 @@ def _uuid_multi(src: ibis.Expr) -> ibis.Expr:
     Return a multi-row UUID expression based on a scalar base + row_number suffix.
     This stays backend-agnostic and deterministic per `src` materialization.
     """
-    base = ibis.uuid().cast("string") if _has_ibis_uuid() else ibis.literal(_py_uuid.uuid4().hex)
+    base = (
+        ibis.uuid().cast("string")
+        if _has_ibis_uuid()
+        else ibis.literal(_py_uuid.uuid4().hex)
+    )
     first_col = src[list(src.schema().names)[0]]
     w = ibis.window(order_by=[first_col])
     rn = ibis.row_number().over(w)
@@ -219,6 +232,7 @@ def _uuid_multi(src: ibis.Expr) -> ibis.Expr:
 # ======================================
 # Transaction-local staging session DSL
 # ======================================
+
 
 @dataclass
 class _Staged:
@@ -239,6 +253,7 @@ class _Staged:
 @dataclass
 class LedgerSession:
     """Labels-bound staging session; INSERT happens only at flush/commit."""
+
     ledger: Ledger
     staged: _Staged = field(default_factory=_Staged)
 
@@ -256,42 +271,60 @@ class LedgerSession:
         finally:
             self.staged = _Staged()
 
-    def _labels_json_expr(self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None) -> ibis.Expr:
+    def _labels_json_expr(
+        self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None
+    ) -> ibis.Expr:
         merged = dict(self.ledger.labels)
         if extra:
             merged.update(extra)
         parts = {k: ibis.literal(str(v)) for k, v in merged.items()}
         return _json_from_kv(parts)
 
-    def write(self, payload_type: str, payload: Dict[str, Union[int, float, str, ibis.Expr]],
-              *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
-              raw_keys: set[str] | None = None) -> None:
+    def write(
+        self,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+        raw_keys: set[str] | None = None,
+    ) -> None:
         """Stage one row built from Python scalars / Ibis Expr values."""
         anchor = ibis.memtable([{"one": 1}])
-        items = {k: (v if isinstance(v, ibis.Expr) else ibis.literal(v)) for k, v in payload.items()}
+        items = {
+            k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+            for k, v in payload.items()
+        }
         row = anchor.select(
-            uuid         = _uuid_single(),
-            ts           = ibis.now().cast("timestamp(6)"),
-            pkg_version  = ibis.literal(_PKG_VERSION),
-            payload_type = ibis.literal(payload_type),
-            payload      = _json_from_kv(items, raw_keys=raw_keys or set()),
-            labels       = self._labels_json_expr(extra_labels),
+            uuid=_uuid_single(),
+            ts=ibis.now().cast("timestamp(6)"),
+            pkg_version=ibis.literal(_PKG_VERSION),
+            payload_type=ibis.literal(payload_type),
+            payload=_json_from_kv(items, raw_keys=raw_keys or set()),
+            labels=self._labels_json_expr(extra_labels),
         )
         self.staged.add(row)
 
-    def write_from(self, src: ibis.Expr, payload_type: str,
-                   payload: Dict[str, Union[int, float, str, ibis.Expr]],
-                   *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
-                   raw_keys: set[str] | None = None) -> None:
+    def write_from(
+        self,
+        src: ibis.Expr,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+        raw_keys: set[str] | None = None,
+    ) -> None:
         """Stage 0..N rows derived from an Ibis source."""
-        items = {k: (v if isinstance(v, ibis.Expr) else ibis.literal(v)) for k, v in payload.items()}
+        items = {
+            k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+            for k, v in payload.items()
+        }
         row = src.select(
-            uuid         = _uuid_multi(src),
-            ts           = ibis.now().cast("timestamp(6)"),
-            pkg_version  = ibis.literal(_PKG_VERSION),
-            payload_type = ibis.literal(payload_type),
-            payload      = _json_from_kv(items, raw_keys=raw_keys or set()),
-            labels       = self._labels_json_expr(extra_labels),
+            uuid=_uuid_multi(src),
+            ts=ibis.now().cast("timestamp(6)"),
+            pkg_version=ibis.literal(_PKG_VERSION),
+            payload_type=ibis.literal(payload_type),
+            payload=_json_from_kv(items, raw_keys=raw_keys or set()),
+            labels=self._labels_json_expr(extra_labels),
         )
         self.staged.add(row)
 
@@ -308,9 +341,11 @@ class LedgerSession:
 # Reader base + AB/E readers
 # =================================
 
+
 @dataclass(frozen=True)
 class LedgerReaderBase:
     """Base for typed/projected readers bound to a Ledger scope."""
+
     ledger: Ledger
 
     @staticmethod
@@ -346,7 +381,9 @@ LIMIT 1
 """
         return self.ledger.con.sql(sql)
 
-    def rows_since(self, payload_type: str, ts_expr: ibis.Expr, *, strict: bool = True) -> ibis.Expr:
+    def rows_since(
+        self, payload_type: str, ts_expr: ibis.Expr, *, strict: bool = True
+    ) -> ibis.Expr:
         """All rows of payload_type with ts > (or >=) given ts_expr (single-row table with 'ts')."""
         where_labels = self._labels_where_sql(self.ledger.labels)
         cmp = ">" if strict else ">="
@@ -369,6 +406,7 @@ WHERE {where_labels}
 
 class ABRowsBase(LedgerReaderBase):
     """Typed view for AB payloads (reused by multiple small readers)."""
+
     def typed_view(self) -> ibis.Expr:
         where_labels = self._labels_where_sql(self.ledger.labels)
         sql = f"""
@@ -396,6 +434,7 @@ FROM (
 
 class ABDesignLatest(LedgerReaderBase):
     """Latest design (planned_max_n, ts)."""
+
     def latest(self) -> ibis.Expr:
         base = self.latest_row("design")
         sql = f"""
@@ -409,6 +448,7 @@ FROM ({base.compile()})
 
 class ABDesignLooks(LedgerReaderBase):
     """Explode 'looks' from latest design ts -> (look, planned_t)."""
+
     def looks(self) -> ibis.Expr:
         D = ABDesignLatest(self.ledger).latest()
         where_labels = self._labels_where_sql(self.ledger.labels)
@@ -428,6 +468,7 @@ WHERE {where_labels} AND b.payload_type = 'design'
 
 class ABSnapshotLatest(LedgerReaderBase):
     """Latest snapshot row; if none, return a single 0-initialized row with epoch ts."""
+
     def latest(self) -> ibis.Expr:
         base = self.latest_row("snapshot")
         sql = f"""
@@ -451,6 +492,7 @@ WHERE NOT EXISTS (SELECT 1 FROM s)
 
 class ABObsSince(LedgerReaderBase):
     """Aggregate observations strictly after given ts0."""
+
     def sum_after(self, ts0: ibis.Expr) -> ibis.Expr:
         obs = self.rows_since("observation", ts0, strict=True)
         sql = f"""
@@ -468,6 +510,7 @@ FROM ({obs.compile()})
 # AB application (two-props)
 # ==========================
 
+
 class BinomialABTest:
     """Two-proportions group-seq test (single 'design' row)."""
 
@@ -479,7 +522,11 @@ class BinomialABTest:
         looks_text = "[" + ",".join(str(float(t)) for t in looks) + "]"
         looks_json = ibis.literal(looks_text)
         with LedgerSession(self.ledger) as s:
-            s.write("design", {"planned_max_n": int(max_n), "looks": looks_json}, raw_keys={"looks"})
+            s.write(
+                "design",
+                {"planned_max_n": int(max_n), "looks": looks_json},
+                raw_keys={"looks"},
+            )
 
     def update(self, payload: Dict[str, int]) -> None:
         """
@@ -509,25 +556,42 @@ class BinomialABTest:
 
             # "before" cumulative (previous snapshot + obs since snapshot)
             before = S_prev.cross_join(Obs_since).select(
-                nA_before = S_prev.nA + Obs_since.d_nA,
-                mA_before = S_prev.mA + Obs_since.d_mA,
-                nB_before = S_prev.nB + Obs_since.d_nB,
-                mB_before = S_prev.mB + Obs_since.d_mB,
+                nA_before=S_prev.nA + Obs_since.d_nA,
+                mA_before=S_prev.mA + Obs_since.d_mA,
+                nB_before=S_prev.nB + Obs_since.d_nB,
+                mB_before=S_prev.mB + Obs_since.d_mB,
             )
 
             # Add current delta to get "now"
-            add_tbl = ibis.memtable([{"nA_add": nA_add, "mA_add": mA_add, "nB_add": nB_add, "mB_add": mB_add}])
-            now = before.cross_join(add_tbl).cross_join(Dmax).select(
-                nA = before.nA_before + add_tbl.nA_add,
-                mA = before.mA_before + add_tbl.mA_add,
-                nB = before.nB_before + add_tbl.nB_add,
-                mB = before.mB_before + add_tbl.mB_add,
-                Nmax = Dmax.Nmax,
-                n_before = before.nA_before + before.nB_before
+            add_tbl = ibis.memtable(
+                [
+                    {
+                        "nA_add": nA_add,
+                        "mA_add": mA_add,
+                        "nB_add": nB_add,
+                        "mB_add": mB_add,
+                    }
+                ]
+            )
+            now = (
+                before.cross_join(add_tbl)
+                .cross_join(Dmax)
+                .select(
+                    nA=before.nA_before + add_tbl.nA_add,
+                    mA=before.mA_before + add_tbl.mA_add,
+                    nB=before.nB_before + add_tbl.nB_add,
+                    mB=before.mB_before + add_tbl.mB_add,
+                    Nmax=Dmax.Nmax,
+                    n_before=before.nA_before + before.nB_before,
+                )
             )
 
             # (1) snapshot ALWAYS
-            s.write_from(now, "snapshot", {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB})
+            s.write_from(
+                now,
+                "snapshot",
+                {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB},
+            )
 
             # (2) info ALWAYS (I1)
             I1 = (now.nA + now.nB) / now.Nmax.nullif(0)
@@ -535,17 +599,24 @@ class BinomialABTest:
 
             # (3) due detection using I0 < t_i ≤ I1 (I0 excludes current delta)
             I0_tbl = now.select(I0=(now.n_before / now.Nmax.nullif(0)))
-            due_candidates = Looks.cross_join(I0_tbl).cross_join(now.select(I1=I1)).select(
-                look=Looks.look, planned_t=Looks.planned_t, I0=I0_tbl.I0, I1=I1
-            ).filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            due_candidates = (
+                Looks.cross_join(I0_tbl)
+                .cross_join(now.select(I1=I1))
+                .select(look=Looks.look, planned_t=Looks.planned_t, I0=I0_tbl.I0, I1=I1)
+                .filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            )
 
-            min_due = due_candidates.aggregate(min_planned_t=due_candidates.planned_t.min())
-            due = due_candidates.join(min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]).limit(1)
+            min_due = due_candidates.aggregate(
+                min_planned_t=due_candidates.planned_t.min()
+            )
+            due = due_candidates.join(
+                min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]
+            ).limit(1)
 
             # (4) if due, compute Z/boundary/decision at I1
-            p_all  = ((now.mA + now.mB) / (now.nA + now.nB))
+            p_all = (now.mA + now.mB) / (now.nA + now.nB)
             se_all = (p_all * (1 - p_all) * (1 / now.nA + 1 / now.nB)).sqrt().nullif(0)
-            z_all  = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
+            z_all = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
 
             Z_join = now.cross_join(due).select(
                 look=due.look, planned_t=due.planned_t, info_time=I1, z=z_all
@@ -553,18 +624,27 @@ class BinomialABTest:
 
             bnd = ibis.cases(
                 (Z_join.info_time <= 0.25, ibis.literal(3.5)),
-                (Z_join.info_time <= 0.5,  ibis.literal(2.963)),
-                (Z_join.info_time >= 1.0,  ibis.literal(1.96)),
+                (Z_join.info_time <= 0.5, ibis.literal(2.963)),
+                (Z_join.info_time >= 1.0, ibis.literal(1.96)),
                 else_=ibis.literal(2.963)
-                      + (ibis.literal(1.96) - ibis.literal(2.963)) * (Z_join.info_time - 0.5) / 0.5,
+                + (ibis.literal(1.96) - ibis.literal(2.963))
+                * (Z_join.info_time - 0.5)
+                / 0.5,
             )
             action = (Z_join.z.abs() >= bnd).ifelse("stop_efficacy", "continue")
 
             s.write_from(Z_join, "stat", {"z": Z_join.z})
             s.write_from(
-                Z_join, "decision",
-                {"look": Z_join.look, "planned_t": Z_join.planned_t, "info_time": Z_join.info_time,
-                 "z": Z_join.z, "boundary": bnd, "action": action},
+                Z_join,
+                "decision",
+                {
+                    "look": Z_join.look,
+                    "planned_t": Z_join.planned_t,
+                    "info_time": Z_join.info_time,
+                    "z": Z_join.z,
+                    "boundary": bnd,
+                    "action": action,
+                },
             )
 
 
@@ -572,8 +652,10 @@ class BinomialABTest:
 # E readers (inline SQL)
 # =========================
 
+
 class EBaseRows(LedgerReaderBase):
     """Project e_design/e_obs/e_state with only needed typed columns."""
+
     def typed_view(self) -> ibis.Expr:
         where_labels = self._labels_where_sql(self.ledger.labels)
         sql = f"""
@@ -594,6 +676,7 @@ FROM (
 
 class EThetas(LedgerReaderBase):
     """Explode theta grid from the single 'e_design' row -> (ts, theta)."""
+
     def grid(self) -> ibis.Expr:
         latest_design = self.latest_row("e_design")
         sql = f"""
@@ -613,6 +696,7 @@ WHERE {self._labels_where_sql(self.ledger.labels)} AND b.payload_type = 'e_desig
 # E-process application impl
 # ==========================
 
+
 class ENormalMixture:
     """Normal-mixture E-process (uniform over given thetas; single 'e_design' row)."""
 
@@ -624,7 +708,11 @@ class ENormalMixture:
         thetas_text = "[" + ",".join(str(float(t)) for t in thetas) + "]"
         thetas_json = ibis.literal(thetas_text)
         with LedgerSession(self.ledger) as s:
-            s.write("e_design", {"alpha": float(alpha), "thetas": thetas_json}, raw_keys={"thetas"})
+            s.write(
+                "e_design",
+                {"alpha": float(alpha), "thetas": thetas_json},
+                raw_keys={"thetas"},
+            )
 
     def update(self, *, x: float) -> None:
         """Record x; update running mixture E-value and write e_state with alarm."""
@@ -637,37 +725,53 @@ class ENormalMixture:
 
             # K and Obs aggregates before current delta (current delta not yet committed)
             K = Theta.aggregate(k=Theta.theta.count())
-            Obs_prev = Vb.filter(lambda r: r.payload_type == "e_obs").select(x_prev=Vb.x)
+            Obs_prev = Vb.filter(lambda r: r.payload_type == "e_obs").select(
+                x_prev=Vb.x
+            )
             Agg_prev = Obs_prev.aggregate(
                 S_prev=Obs_prev.x_prev.sum().fill_null(0.0),
-                t_prev=Obs_prev.x_prev.count()
+                t_prev=Obs_prev.x_prev.count(),
             )
 
             add_tbl = ibis.memtable([{"x_add": x_add, "one": 1}])
             Agg = Agg_prev.cross_join(add_tbl).select(
-                S = Agg_prev.S_prev + add_tbl.x_add,
-                t = Agg_prev.t_prev + add_tbl.one,
+                S=Agg_prev.S_prev + add_tbl.x_add,
+                t=Agg_prev.t_prev + add_tbl.one,
             )
 
-            parts = Theta.cross_join(Agg).cross_join(K).select(
-                term = ((ibis.literal(1.0) / K.k.nullif(0))
-                        * ((Theta.theta * Agg.S) - (0.5 * Theta.theta * Theta.theta * Agg.t)).exp())
+            parts = (
+                Theta.cross_join(Agg)
+                .cross_join(K)
+                .select(
+                    term=(
+                        (ibis.literal(1.0) / K.k.nullif(0))
+                        * (
+                            (Theta.theta * Agg.S)
+                            - (0.5 * Theta.theta * Theta.theta * Agg.t)
+                        ).exp()
+                    )
+                )
             )
             E = parts.aggregate(e_value=parts.term.sum())
 
             # Threshold 1/alpha from the latest e_design (generic latest_row + SQL json_extract)
             D_latest = LedgerReaderBase(self.ledger).latest_row("e_design")
-            Thr = self.ledger.con.sql(f"""
+            Thr = self.ledger.con.sql(
+                f"""
 SELECT (1.0 / TRY_CAST(json_extract(payload, '$.alpha') AS DOUBLE)) AS thr
 FROM ({D_latest.compile()})
-""")
-
-            S_all = E.cross_join(Thr).select(
-                e_value=E.e_value,
-                alarm=(E.e_value >= Thr.thr)
+"""
             )
 
-            s.write_from(S_all, "e_state", {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")})
+            S_all = E.cross_join(Thr).select(
+                e_value=E.e_value, alarm=(E.e_value >= Thr.thr)
+            )
+
+            s.write_from(
+                S_all,
+                "e_state",
+                {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")},
+            )
 
     # Expose generic helper if needed by callers
     def latest_row(self, payload_type: str) -> ibis.Expr:
@@ -677,6 +781,7 @@ FROM ({D_latest.compile()})
 # ==========================
 # Profiling helper (callable)
 # ==========================
+
 
 def run_profile_demo(con: Any) -> str:
     """
@@ -718,7 +823,8 @@ if __name__ == "__main__":
     # When run as a script: create an in-memory DuckDB, ensure table, run profiling,
     # and print the pstats summary to stdout.
     con = ibis.connect("duckdb://")
-    con.raw_sql("""
+    con.raw_sql(
+        """
         CREATE TABLE IF NOT EXISTS ledger (
           uuid         TEXT,
           ts           TIMESTAMP,
@@ -727,7 +833,8 @@ if __name__ == "__main__":
           payload      JSON,
           labels       JSON
         );
-    """)
+    """
+    )
     out = run_profile_demo(con)
     print("=== cProfile (filtered) ===")
     print("Ordered by: cumulative time")

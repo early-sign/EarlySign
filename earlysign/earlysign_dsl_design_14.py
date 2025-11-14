@@ -131,13 +131,15 @@ def _phi_inv(p: float) -> float:
         )
     if p > phigh:
         q = math.sqrt(-2.0 * math.log(1.0 - p))
-        return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-            ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0)
-        )
+        return -(
+            ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
+        ) / (((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0))
     q = p - 0.5
     r = q * q
-    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (
-        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0)
+    return (
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
+        / ((((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0))
     )
 
 
@@ -154,7 +156,9 @@ def _alpha_spent(t: float, alpha: float, family: str) -> float:
     raise ValueError(f"Unknown spending family: {family}")
 
 
-def _boundary_from_spending(I0: float, I1: float, *, alpha: float, family: str) -> float:
+def _boundary_from_spending(
+    I0: float, I1: float, *, alpha: float, family: str
+) -> float:
     """Two-sided single-look z-threshold from the local α increment."""
 
     A1 = _alpha_spent(I1, alpha, family)
@@ -173,7 +177,9 @@ def _pooled_z(nA: float, mA: float, nB: float, mB: float) -> float:
     pB = mB / max(nB, eps)
     total_n = nA + nB
     pooled = (mA + mB) / max(total_n, eps)
-    denom = math.sqrt(pooled * (1.0 - pooled) * (1.0 / max(nA, eps) + 1.0 / max(nB, eps)) + eps)
+    denom = math.sqrt(
+        pooled * (1.0 - pooled) * (1.0 / max(nA, eps) + 1.0 / max(nB, eps)) + eps
+    )
     if denom <= eps:
         return 0.0
     return (pB - pA) / denom
@@ -182,7 +188,9 @@ def _pooled_z(nA: float, mA: float, nB: float, mB: float) -> float:
 class Ledger:
     """Ibis-backed ledger storing immutable JSON payloads."""
 
-    def __init__(self, con: BaseBackend, table_name: str, overwrite: bool = True) -> None:
+    def __init__(
+        self, con: BaseBackend, table_name: str, overwrite: bool = True
+    ) -> None:
         self.con = con
         self.table_name = table_name
         schema = ibis.schema(
@@ -236,7 +244,9 @@ class LedgerSession:
 
         self._jobs.append(_exec)
 
-    def insert(self, *, kind: str, labels: Dict[str, Any], payload: Dict[str, Any]) -> None:
+    def insert(
+        self, *, kind: str, labels: Dict[str, Any], payload: Dict[str, Any]
+    ) -> None:
         labels_expr = _json_literal({k: str(v) for k, v in labels.items()})
         payload_json = _json_literal(payload)
 
@@ -279,7 +289,9 @@ class BinomialABTest:
             sess.insert(kind="design", labels=self.labels, payload=design_payload)
             for idx, planned_t in enumerate(looks, start=1):
                 look_payload = dict(look=int(idx), planned_t=float(planned_t))
-                sess.insert(kind="design-look", labels=self.labels, payload=look_payload)
+                sess.insert(
+                    kind="design-look", labels=self.labels, payload=look_payload
+                )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -369,7 +381,9 @@ class BinomialABTest:
             "prev_mB": prev_mB,
             "Nmax": Nmax,
             "alpha": float(design_vals.get("alpha", 0.05) or 0.05),
-            "family": str(design_vals.get("family", "obrien_fleming") or "obrien_fleming"),
+            "family": str(
+                design_vals.get("family", "obrien_fleming") or "obrien_fleming"
+            ),
         }
 
     def _select_due(self, I0: float, I1: float) -> Optional[Tuple[int, float]]:
@@ -421,7 +435,9 @@ class BinomialABTest:
             obs_payload = dict(nA=nA_add, mA=mA_add, nB=nB_add, mB=mB_add)
             sess.insert(kind="observation", labels=self.labels, payload=obs_payload)
 
-            snapshot_payload = dict(nA=float(nA_now), mA=float(mA_now), nB=float(nB_now), mB=float(mB_now))
+            snapshot_payload = dict(
+                nA=float(nA_now), mA=float(mA_now), nB=float(nB_now), mB=float(mB_now)
+            )
             sess.insert(kind="snapshot", labels=self.labels, payload=snapshot_payload)
 
             info_payload = dict(info_time=float(I1))
@@ -440,7 +456,9 @@ class BinomialABTest:
                     boundary=float(boundary) if boundary is not None else 0.0,
                     action=str(action),
                 )
-                sess.insert(kind="decision", labels=self.labels, payload=decision_payload)
+                sess.insert(
+                    kind="decision", labels=self.labels, payload=decision_payload
+                )
 
 
 def _ab_workload() -> BinomialABTest:

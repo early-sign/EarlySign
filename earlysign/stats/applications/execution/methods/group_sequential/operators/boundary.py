@@ -7,7 +7,6 @@ Reads Design and InfoTime records, computes boundaries using essentials function
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.stats.applications.design.group_sequential.initial_design.schema import (

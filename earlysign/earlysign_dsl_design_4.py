@@ -111,6 +111,7 @@ _PKG_VERSION = "earlysign==dev"
 # Helpers
 # ============================================================================
 
+
 def _json_from_kv(items: Dict[str, ibis.Expr]) -> ibis.Expr:
     """Build a JSON object from Ibis expressions only (no Python json.dumps)."""
     if not items:
@@ -120,7 +121,8 @@ def _json_from_kv(items: Dict[str, ibis.Expr]) -> ibis.Expr:
         key = ibis.literal(f'"{k}":')
         val = (
             ibis.literal('"') + v.cast("string") + ibis.literal('"')
-            if v.type().is_string() else v.cast("string")
+            if v.type().is_string()
+            else v.cast("string")
         )
         parts.append(key + val)
     combined = parts[0]
@@ -208,6 +210,7 @@ def _uuid_for_multi_rows(src: ibis.Expr) -> ibis.Expr:
 # Transaction-local staging (payload-agnostic; labels-bound)
 # ============================================================================
 
+
 @dataclass
 class _Staged:
     rows: List[ibis.Expr] = field(default_factory=list)
@@ -235,6 +238,7 @@ class LedgerSession:
         * pkg_version -> constant string
     - All reads/writes are implicitly scoped by `labels`
     """
+
     con: ibis.Client
     table: str
     labels: Dict[str, Union[str, int, float, bool]] = field(default_factory=dict)
@@ -254,7 +258,9 @@ class LedgerSession:
         finally:
             self.staged = _Staged()
 
-    def _labels_json_expr(self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None) -> ibis.Expr:
+    def _labels_json_expr(
+        self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None
+    ) -> ibis.Expr:
         """Return labels JSON (bound labels merged with extra)."""
         merged = dict(self.labels)
         if extra:
@@ -262,36 +268,50 @@ class LedgerSession:
         parts = {k: ibis.literal(str(v)) for k, v in merged.items()}
         return _json_from_kv(parts)
 
-    def write(self, payload_type: str, payload: Dict[str, Union[int, float, str]],
-              *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None) -> None:
+    def write(
+        self,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+    ) -> None:
         """Stage a single JSON row (uuid via ibis.uuid; ts via ibis.now)."""
         anchor = ibis.memtable([{"one": 1}])
         row = anchor.select(
-            uuid         = _uuid_for_single_row(),
-            ts           = ibis.now().cast("timestamp(6)"),
-            pkg_version  = ibis.literal(_PKG_VERSION),
-            payload_type = ibis.literal(payload_type),
-            payload      = _json_from_kv({k: ibis.literal(v) for k, v in payload.items()}),
-            labels       = self._labels_json_expr(extra_labels),
+            uuid=_uuid_for_single_row(),
+            ts=ibis.now().cast("timestamp(6)"),
+            pkg_version=ibis.literal(_PKG_VERSION),
+            payload_type=ibis.literal(payload_type),
+            payload=_json_from_kv({k: ibis.literal(v) for k, v in payload.items()}),
+            labels=self._labels_json_expr(extra_labels),
         )
         self.staged.add(row)
 
-    def write_from(self, src: ibis.Expr, payload_type: str,
-                   payload: Dict[str, Union[int, float, str, ibis.Expr]],
-                   *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None) -> None:
+    def write_from(
+        self,
+        src: ibis.Expr,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+    ) -> None:
         """
         Stage rows produced from an Ibis source (0..N rows).
         - UUIDs are unique per row via (ibis.uuid() base) + row_number() bound to `src`.
         - TS is per-row via ibis.now().
         """
         row = src.select(
-            uuid         = _uuid_for_multi_rows(src),
-            ts           = ibis.now().cast("timestamp(6)"),
-            pkg_version  = ibis.literal(_PKG_VERSION),
-            payload_type = ibis.literal(payload_type),
-            payload      = _json_from_kv({k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
-                                          for k, v in payload.items()}),
-            labels       = self._labels_json_expr(extra_labels),
+            uuid=_uuid_for_multi_rows(src),
+            ts=ibis.now().cast("timestamp(6)"),
+            pkg_version=ibis.literal(_PKG_VERSION),
+            payload_type=ibis.literal(payload_type),
+            payload=_json_from_kv(
+                {
+                    k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+                    for k, v in payload.items()
+                }
+            ),
+            labels=self._labels_json_expr(extra_labels),
         )
         self.staged.add(row)
 
@@ -324,6 +344,7 @@ class LedgerSession:
 # (A) Two-proportions Group-Sequential Test (labels-bound; payload_type-based)
 # ============================================================================
 
+
 class BinomialABTest:
     """Two-proportions group-sequential test (OF-like demo boundary).
 
@@ -334,7 +355,12 @@ class BinomialABTest:
       - All reads/writes are scoped by `labels`
     """
 
-    def __init__(self, con: ibis.Client, labels: Dict[str, Union[str, int, float, bool]], table: str = "ledger"):
+    def __init__(
+        self,
+        con: ibis.Client,
+        labels: Dict[str, Union[str, int, float, bool]],
+        table: str = "ledger",
+    ):
         self.con, self.labels, self.table = con, dict(labels), table
 
     def set_design(self, *, max_n: int, looks: Sequence[float]) -> None:
@@ -343,7 +369,9 @@ class BinomialABTest:
             # Single row
             s.write("design_max_n", {"planned_max_n": int(max_n)})
             # Multi rows: vector-safe via base-uuid + row_number()
-            tbl = ibis.memtable([{"look": i + 1, "planned_t": float(t)} for i, t in enumerate(looks)])
+            tbl = ibis.memtable(
+                [{"look": i + 1, "planned_t": float(t)} for i, t in enumerate(looks)]
+            )
             s.write_from(
                 tbl,
                 "design_look",
@@ -364,22 +392,28 @@ class BinomialABTest:
             # (2) Read committed design/obs and compute derived stats using expressions
             V = s.view_real()
 
-            design_ts = V.filter(lambda r: r.payload_type.isin(("design_max_n", "design_look"))) \
-                         .aggregate(ts_max=V.ts.max())
+            design_ts = V.filter(
+                lambda r: r.payload_type.isin(("design_max_n", "design_look"))
+            ).aggregate(ts_max=V.ts.max())
 
-            Dmax = V.filter(lambda r: r.payload_type == "design_max_n") \
-                    .join(design_ts, predicates=[V.ts == design_ts.ts_max]) \
-                    .select(Nmax=V.planned_max_n)
+            Dmax = (
+                V.filter(lambda r: r.payload_type == "design_max_n")
+                .join(design_ts, predicates=[V.ts == design_ts.ts_max])
+                .select(Nmax=V.planned_max_n)
+            )
 
-            Looks = V.filter(lambda r: r.payload_type == "design_look") \
-                     .join(design_ts, predicates=[V.ts == design_ts.ts_max]) \
-                     .select(look=V.look.cast("int64"), planned_t=V.planned_t)
+            Looks = (
+                V.filter(lambda r: r.payload_type == "design_look")
+                .join(design_ts, predicates=[V.ts == design_ts.ts_max])
+                .select(look=V.look.cast("int64"), planned_t=V.planned_t)
+            )
 
             Dec = V.filter(lambda r: r.payload_type == "decision")
             next_look_tbl = Dec.aggregate(next_look=(Dec.payload_type.count() + 1))
 
-            planned = Looks.join(next_look_tbl, predicates=[Looks.look == next_look_tbl.next_look]) \
-                           .select(look=Looks.look, planned_t=Looks.planned_t)
+            planned = Looks.join(
+                next_look_tbl, predicates=[Looks.look == next_look_tbl.next_look]
+            ).select(look=Looks.look, planned_t=Looks.planned_t)
 
             Obs_prev = V.filter(lambda r: r.payload_type == "observation")
             agg_prev = Obs_prev.aggregate(
@@ -389,68 +423,98 @@ class BinomialABTest:
                 mB=Obs_prev.mB.sum().fill_null(0.0),
             )
 
-            add_tbl = ibis.memtable([{"nA_add": nA_add, "mA_add": mA_add, "nB_add": nB_add, "mB_add": mB_add}])
+            add_tbl = ibis.memtable(
+                [
+                    {
+                        "nA_add": nA_add,
+                        "mA_add": mA_add,
+                        "nB_add": nB_add,
+                        "mB_add": mB_add,
+                    }
+                ]
+            )
 
-            base = agg_prev.cross_join(add_tbl).cross_join(Dmax).cross_join(planned).select(
-                nA = (agg_prev.nA + add_tbl.nA_add),
-                mA = (agg_prev.mA + add_tbl.mA_add),
-                nB = (agg_prev.nB + add_tbl.nB_add),
-                mB = (agg_prev.mB + add_tbl.mB_add),
-                Nmax = Dmax.Nmax,
-                look = planned.look,
-                planned_t = planned.planned_t,
+            base = (
+                agg_prev.cross_join(add_tbl)
+                .cross_join(Dmax)
+                .cross_join(planned)
+                .select(
+                    nA=(agg_prev.nA + add_tbl.nA_add),
+                    mA=(agg_prev.mA + add_tbl.mA_add),
+                    nB=(agg_prev.nB + add_tbl.nB_add),
+                    mB=(agg_prev.mB + add_tbl.mB_add),
+                    Nmax=Dmax.Nmax,
+                    look=planned.look,
+                    planned_t=planned.planned_t,
+                )
             )
 
             I0_tbl = agg_prev.cross_join(Dmax).select(
                 ((agg_prev.nA + agg_prev.nB) / Dmax.Nmax.nullif(0)).name("I0")
             )
             X = base.cross_join(I0_tbl).select(
-                nA=base.nA, mA=base.mA, nB=base.nB, mB=base.mB,
-                Nmax=base.Nmax, look=base.look, planned_t=base.planned_t, I0=I0_tbl.I0
+                nA=base.nA,
+                mA=base.mA,
+                nB=base.nB,
+                mB=base.mB,
+                Nmax=base.Nmax,
+                look=base.look,
+                planned_t=base.planned_t,
+                I0=I0_tbl.I0,
             )
 
             I_expr = (X.nA + X.nB) / X.Nmax.nullif(0)
 
-            p_expr  = (X.mA + X.mB) / (X.nA + X.nB)
+            p_expr = (X.mA + X.mB) / (X.nA + X.nB)
             se_expr = (p_expr * (1 - p_expr) * (1 / X.nA + 1 / X.nB)).sqrt().nullif(0)
-            z_expr  = ((X.mB / X.nB) - (X.mA / X.nA)) / se_expr
+            z_expr = ((X.mB / X.nB) - (X.mA / X.nA)) / se_expr
 
             ibis.cases(
                 (I_expr <= 0.5, ibis.literal(2.963)),
                 (I_expr >= 1.0, ibis.literal(1.96)),
                 else_=ibis.literal(2.963)
-                      + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_expr - 0.5) / 0.5,
+                + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_expr - 0.5) / 0.5,
             )
 
             is_due = (X.I0 < X.planned_t) & (X.planned_t <= I_expr)
 
-            s.write_from(X, "snapshot", {"nA": X.nA, "mA": X.mA, "nB": X.nB, "mB": X.mB})
-            s.write_from(X, "stat",     {"z": z_expr})
-            s.write_from(X, "info",     {"info_time": I_expr})
+            s.write_from(
+                X, "snapshot", {"nA": X.nA, "mA": X.mA, "nB": X.nB, "mB": X.mB}
+            )
+            s.write_from(X, "stat", {"z": z_expr})
+            s.write_from(X, "info", {"info_time": I_expr})
 
             due = X.filter(is_due)
-            I_due  = (due.nA + due.nB) / due.Nmax.nullif(0)
-            p_due  = (due.mA + due.mB) / (due.nA + due.nB)
+            I_due = (due.nA + due.nB) / due.Nmax.nullif(0)
+            p_due = (due.mA + due.mB) / (due.nA + due.nB)
             se_due = (p_due * (1 - p_due) * (1 / due.nA + 1 / due.nB)).sqrt().nullif(0)
-            z_due  = ((due.mB / due.nB) - (due.mA / due.nA)) / se_due
+            z_due = ((due.mB / due.nB) - (due.mA / due.nA)) / se_due
             bnd_due = ibis.cases(
                 (I_due <= 0.5, ibis.literal(2.963)),
                 (I_due >= 1.0, ibis.literal(1.96)),
                 else_=ibis.literal(2.963)
-                      + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_due - 0.5) / 0.5,
+                + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_due - 0.5) / 0.5,
             )
             action = (z_due.abs() >= bnd_due).ifelse("stop_efficacy", "continue")
 
             s.write_from(
-                due, "decision",
-                {"look": due.look, "planned_t": due.planned_t, "info_time": I_due,
-                 "z": z_due, "boundary": bnd_due, "action": action},
+                due,
+                "decision",
+                {
+                    "look": due.look,
+                    "planned_t": due.planned_t,
+                    "info_time": I_due,
+                    "z": z_due,
+                    "boundary": bnd_due,
+                    "action": action,
+                },
             )
 
 
 # ============================================================================
 # (B) Normal-mixture E-process (labels-bound; expressions only)
 # ============================================================================
+
 
 class ENormalMixture:
     """
@@ -467,7 +531,12 @@ class ENormalMixture:
       - Emit payload_type='e_state' with {"e_value": ..., "alarm": bool}
     """
 
-    def __init__(self, con: ibis.Client, labels: Dict[str, Union[str, int, float, bool]], table: str = "ledger"):
+    def __init__(
+        self,
+        con: ibis.Client,
+        labels: Dict[str, Union[str, int, float, bool]],
+        table: str = "ledger",
+    ):
         self.con, self.labels, self.table = con, dict(labels), table
 
     def set_design(self, *, alpha: float, thetas: Sequence[float]) -> None:
@@ -487,31 +556,45 @@ class ENormalMixture:
             Dts = D.aggregate(ts_max=D.ts.max())
             Dcur = D.join(Dts, predicates=[D.ts == Dts.ts_max]).select(alpha=D.alpha)
 
-            Theta = V.filter(lambda r: r.payload_type == "e_theta").select(theta=V.theta)
+            Theta = V.filter(lambda r: r.payload_type == "e_theta").select(
+                theta=V.theta
+            )
             K = Theta.aggregate(k=Theta.theta.count())
 
             Obs_prev = V.filter(lambda r: r.payload_type == "e_obs").select(x_prev=V.x)
             Agg_prev = Obs_prev.aggregate(
                 S_prev=Obs_prev.x_prev.sum().fill_null(0.0),
-                t_prev=Obs_prev.x_prev.count()
+                t_prev=Obs_prev.x_prev.count(),
             )
 
             add_tbl = ibis.memtable([{"x_add": x_add, "one": 1}])
             Agg = Agg_prev.cross_join(add_tbl).select(
-                S = Agg_prev.S_prev + add_tbl.x_add,
-                t = Agg_prev.t_prev + add_tbl.one,
+                S=Agg_prev.S_prev + add_tbl.x_add,
+                t=Agg_prev.t_prev + add_tbl.one,
             )
 
-            parts = Theta.cross_join(Agg).cross_join(K).select(
-                term = ( (ibis.literal(1.0) / K.k.nullif(0))
-                         * ( (Theta.theta * Agg.S) - (0.5 * Theta.theta * Theta.theta * Agg.t) ).exp() )
+            parts = (
+                Theta.cross_join(Agg)
+                .cross_join(K)
+                .select(
+                    term=(
+                        (ibis.literal(1.0) / K.k.nullif(0))
+                        * (
+                            (Theta.theta * Agg.S)
+                            - (0.5 * Theta.theta * Theta.theta * Agg.t)
+                        ).exp()
+                    )
+                )
             )
             E = parts.aggregate(e_value=parts.term.sum())
 
             Thr = Dcur.select(thr=(ibis.literal(1.0) / Dcur.alpha.nullif(0)))
             S_all = E.cross_join(Thr).select(
-                e_value=E.e_value,
-                alarm=(E.e_value >= Thr.thr)
+                e_value=E.e_value, alarm=(E.e_value >= Thr.thr)
             )
 
-            s.write_from(S_all, "e_state", {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")})
+            s.write_from(
+                S_all,
+                "e_state",
+                {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")},
+            )

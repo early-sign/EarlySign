@@ -86,6 +86,7 @@ __version__ = "21.0.0"
 # JSON helpers
 # ---------------------------------------------------------------------------
 
+
 def json_get_str(json_expr: JSONValue, key: str) -> StringValue:
     return json_expr[key].unwrap_as("string")
 
@@ -108,12 +109,26 @@ def _json_literal(data: Dict[str, Any]) -> JSONValue:
 
 
 class Ledger:
-    def __init__(self, con: BaseBackend, table_name: str, *, labels: Optional[Dict[str, Any]] = None, overwrite: bool = True):
+    def __init__(
+        self,
+        con: BaseBackend,
+        table_name: str,
+        *,
+        labels: Optional[Dict[str, Any]] = None,
+        overwrite: bool = True,
+    ):
         self.con = con
         self.table_name = table_name
         self.labels = dict(labels or {})
         schema = ibis.schema(
-            dict(id="uuid", ts="timestamp", pkg_version="string", kind="string", labels="json", payload="json")
+            dict(
+                id="uuid",
+                ts="timestamp",
+                pkg_version="string",
+                kind="string",
+                labels="json",
+                payload="json",
+            )
         )
         if overwrite:
             try:
@@ -287,7 +302,8 @@ class LedgerReader:
             return tbl
         lbl = tbl["labels"]
         predicates = [
-            lbl[key].unwrap_as("string") == ibis.literal(str(value)) for key, value in self.ledger.labels.items()
+            lbl[key].unwrap_as("string") == ibis.literal(str(value))
+            for key, value in self.ledger.labels.items()
         ]
         return tbl.filter(predicates) if predicates else tbl
 
@@ -328,7 +344,10 @@ class LedgerReader:
         tbl = self.table_of_kind(kind)
         tbl = tbl.order_by(tbl.ts.desc()).limit(1)
         payload = tbl["payload"]
-        selects = [payload[field].unwrap_as(dtype).name(alias) for alias, (field, dtype) in mapping.items()]
+        selects = [
+            payload[field].unwrap_as(dtype).name(alias)
+            for alias, (field, dtype) in mapping.items()
+        ]
         if not selects:
             return dict(default) if default else {}
         df = self.ledger.con.execute(tbl.select(*selects))
@@ -351,7 +370,10 @@ class LedgerReader:
             else:
                 order_expr = tbl[order_by]
             tbl = tbl.order_by(order_expr)
-        selects = [payload[field].unwrap_as(dtype).name(alias) for alias, (field, dtype) in mapping.items()]
+        selects = [
+            payload[field].unwrap_as(dtype).name(alias)
+            for alias, (field, dtype) in mapping.items()
+        ]
         df = self.ledger.con.execute(tbl.select(*selects))
         return df.to_dict("records")
 
@@ -371,10 +393,35 @@ def _cdf_normal(x: float) -> float:
 
 
 def _phi_inv(p: float) -> float:
-    a = [-3.969683028665376e01, 2.209460984245205e02, -2.759285104469687e02, 1.383577518672690e02, -3.066479806614716e01, 2.506628277459239e00]
-    b = [-5.447609879822406e01, 1.615858368580409e02, -1.556989798598866e02, 6.680131188771972e01, -1.328068155288572e01]
-    c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e00, -2.549732539343734e00, 4.374664141464968e00, 2.938163982698783e00]
-    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.754408661907416e00]
+    a = [
+        -3.969683028665376e01,
+        2.209460984245205e02,
+        -2.759285104469687e02,
+        1.383577518672690e02,
+        -3.066479806614716e01,
+        2.506628277459239e00,
+    ]
+    b = [
+        -5.447609879822406e01,
+        1.615858368580409e02,
+        -1.556989798598866e02,
+        6.680131188771972e01,
+        -1.328068155288572e01,
+    ]
+    c = [
+        -7.784894002430293e-03,
+        -3.223964580411365e-01,
+        -2.400758277161838e00,
+        -2.549732539343734e00,
+        4.374664141464968e00,
+        2.938163982698783e00,
+    ]
+    d = [
+        7.784695709041462e-03,
+        3.224671290700398e-01,
+        2.445134137142996e00,
+        3.754408661907416e00,
+    ]
     plow = 0.02425
     phigh = 1 - plow
     if p <= 0:
@@ -388,13 +435,15 @@ def _phi_inv(p: float) -> float:
         )
     if p > phigh:
         q = math.sqrt(-2.0 * math.log(1.0 - p))
-        return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-            ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0)
-        )
+        return -(
+            ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
+        ) / (((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0))
     q = p - 0.5
     r = q * q
-    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (
-        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0)
+    return (
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
+        / ((((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0))
     )
 
 
@@ -409,7 +458,9 @@ def _alpha_spent(t: float, alpha: float, family: str) -> float:
     raise ValueError(f"Unknown spending family: {family}")
 
 
-def _boundary_from_spending(I0: float, I1: float, *, alpha: float, family: str) -> float:
+def _boundary_from_spending(
+    I0: float, I1: float, *, alpha: float, family: str
+) -> float:
     A1 = _alpha_spent(I1, alpha, family)
     A0 = _alpha_spent(I0, alpha, family) if I0 > 0 else 0.0
     local = max(A1 - A0, 1e-16)
@@ -424,7 +475,9 @@ def _pooled_z(nA: float, mA: float, nB: float, mB: float) -> float:
     pB = mB / max(nB, eps)
     total_n = nA + nB
     pooled = (mA + mB) / max(total_n, eps)
-    denom = math.sqrt(pooled * (1.0 - pooled) * (1.0 / max(nA, eps) + 1.0 / max(nB, eps)) + eps)
+    denom = math.sqrt(
+        pooled * (1.0 - pooled) * (1.0 / max(nA, eps) + 1.0 / max(nB, eps)) + eps
+    )
     if denom <= eps:
         return 0.0
     return (pB - pA) / denom
@@ -440,7 +493,7 @@ def _erf_expr(x: FloatingValue) -> FloatingValue:
     a4 = ibis.literal(-1.453152027)
     a5 = ibis.literal(1.061405429)
     t = 1 / (1 + p * abs_x)
-    poly = (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t)
+    poly = ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t
     exp_term = (-abs_x * abs_x).exp()
     return sign * (1 - poly * exp_term)
 
@@ -464,27 +517,91 @@ def _phi_inv_expr(p_raw: FloatingValue) -> FloatingValue:
 
     q_low = (-2 * p.log()).sqrt()
     low = _poly(
-        [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e00, -2.549732539343734e00, 4.374664141464968e00, 2.938163982698783e00],
+        [
+            -7.784894002430293e-03,
+            -3.223964580411365e-01,
+            -2.400758277161838e00,
+            -2.549732539343734e00,
+            4.374664141464968e00,
+            2.938163982698783e00,
+        ],
         q_low,
-    ) / (_poly([7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.754408661907416e00], q_low) * q_low + 1)
+    ) / (
+        _poly(
+            [
+                7.784695709041462e-03,
+                3.224671290700398e-01,
+                2.445134137142996e00,
+                3.754408661907416e00,
+            ],
+            q_low,
+        )
+        * q_low
+        + 1
+    )
 
     q_high = (-2 * (1 - p).log()).sqrt()
     high = -_poly(
-        [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e00, -2.549732539343734e00, 4.374664141464968e00, 2.938163982698783e00],
+        [
+            -7.784894002430293e-03,
+            -3.223964580411365e-01,
+            -2.400758277161838e00,
+            -2.549732539343734e00,
+            4.374664141464968e00,
+            2.938163982698783e00,
+        ],
         q_high,
-    ) / (_poly([7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.754408661907416e00], q_high) * q_high + 1)
+    ) / (
+        _poly(
+            [
+                7.784695709041462e-03,
+                3.224671290700398e-01,
+                2.445134137142996e00,
+                3.754408661907416e00,
+            ],
+            q_high,
+        )
+        * q_high
+        + 1
+    )
 
     q = p - 0.5
     r = q * q
-    mid = _poly(
-        [-3.969683028665376e01, 2.209460984245205e02, -2.759285104469687e02, 1.383577518672690e02, -3.066479806614716e01, 2.506628277459239e00],
-        r,
-    ) * q / (_poly([-5.447609879822406e01, 1.615858368580409e02, -1.556989798598866e02, 6.680131188771972e01, -1.328068155288572e01], r) * r + 1)
+    mid = (
+        _poly(
+            [
+                -3.969683028665376e01,
+                2.209460984245205e02,
+                -2.759285104469687e02,
+                1.383577518672690e02,
+                -3.066479806614716e01,
+                2.506628277459239e00,
+            ],
+            r,
+        )
+        * q
+        / (
+            _poly(
+                [
+                    -5.447609879822406e01,
+                    1.615858368580409e02,
+                    -1.556989798598866e02,
+                    6.680131188771972e01,
+                    -1.328068155288572e01,
+                ],
+                r,
+            )
+            * r
+            + 1
+        )
+    )
 
     return ibis.ifelse(p < plow, low, ibis.ifelse(p > phigh, high, mid))
 
 
-def _alpha_spent_expr(t: FloatingValue, alpha: FloatingValue, family: StringValue) -> FloatingValue:
+def _alpha_spent_expr(
+    t: FloatingValue, alpha: FloatingValue, family: StringValue
+) -> FloatingValue:
     clipped_t = ibis.greatest(ibis.least(t, ibis.literal(1.0)), ibis.literal(1e-12))
     family_lower = family.lower()
     alpha_half = alpha / 2.0
@@ -492,13 +609,17 @@ def _alpha_spent_expr(t: FloatingValue, alpha: FloatingValue, family: StringValu
     obrien = 2 - 2 * _cdf_normal_expr(z / clipped_t.sqrt())
     pocock = alpha * (1 + ibis.literal(math.e - 1.0) * clipped_t).log()
     return ibis.ifelse(
-        family_lower.isin(["of", "obrien_fleming", "o'brien_fleming", "obrien-fleming"]),
+        family_lower.isin(
+            ["of", "obrien_fleming", "o'brien_fleming", "obrien-fleming"]
+        ),
         obrien,
         ibis.ifelse(family_lower == "pocock", pocock, ibis.literal(0.0)),
     )
 
 
-def _boundary_from_spending_expr(I0: FloatingValue, I1: FloatingValue, *, alpha: FloatingValue, family: StringValue) -> FloatingValue:
+def _boundary_from_spending_expr(
+    I0: FloatingValue, I1: FloatingValue, *, alpha: FloatingValue, family: StringValue
+) -> FloatingValue:
     eps = ibis.literal(1e-16)
     A1 = _alpha_spent_expr(I1, alpha, family)
     A0 = ibis.ifelse(I0 > 0, _alpha_spent_expr(I0, alpha, family), ibis.literal(0.0))
@@ -506,7 +627,9 @@ def _boundary_from_spending_expr(I0: FloatingValue, I1: FloatingValue, *, alpha:
     return _phi_inv_expr(ibis.literal(1.0) - local / 2.0)
 
 
-def _pooled_z_expr(nA: FloatingValue, mA: FloatingValue, nB: FloatingValue, mB: FloatingValue) -> FloatingValue:
+def _pooled_z_expr(
+    nA: FloatingValue, mA: FloatingValue, nB: FloatingValue, mB: FloatingValue
+) -> FloatingValue:
     eps = ibis.literal(1e-9)
     valid = (nA > 0) & (nB > 0)
     nA_safe = ibis.greatest(nA, eps)
@@ -539,7 +662,12 @@ class BinomialABTestV21:
         self.snapshot_stage = Stage(
             self.ledger,
             kind="snapshot",
-            mapping={"nA": "float64", "mA": "float64", "nB": "float64", "mB": "float64"},
+            mapping={
+                "nA": "float64",
+                "mA": "float64",
+                "nB": "float64",
+                "mB": "float64",
+            },
             default_payload={"nA": 0.0, "mA": 0.0, "nB": 0.0, "mB": 0.0},
         )
         self.info_stage = Stage(
@@ -551,7 +679,11 @@ class BinomialABTestV21:
         self.stat_stage = Stage(
             self.ledger,
             kind="stat",
-            mapping={"info_time_prev": "float64", "info_time": "float64", "z": "float64"},
+            mapping={
+                "info_time_prev": "float64",
+                "info_time": "float64",
+                "z": "float64",
+            },
             default_payload={"info_time_prev": 0.0, "info_time": 0.0, "z": 0.0},
         )
         self.decision_stage = Stage(
@@ -617,7 +749,9 @@ class BinomialABTestV21:
                     mB=float(payload["mB"]),
                 )
             ],
-            schema=ibis.schema({"nA": "float64", "mA": "float64", "nB": "float64", "mB": "float64"}),
+            schema=ibis.schema(
+                {"nA": "float64", "mA": "float64", "nB": "float64", "mB": "float64"}
+            ),
         )
 
     def _latest_design_payload(self) -> Dict[str, Any]:
@@ -626,7 +760,9 @@ class BinomialABTestV21:
         if df.empty:
             return dict(self._design_default)
         row = df.to_dict("records")[0]
-        return dict(planned_max_n=row["planned_max_n"], alpha=row["alpha"], family=row["family"])
+        return dict(
+            planned_max_n=row["planned_max_n"], alpha=row["alpha"], family=row["family"]
+        )
 
     def _planned_looks(self) -> List[Tuple[int, float]]:
         if self._looks_cache:
@@ -639,22 +775,35 @@ class BinomialABTestV21:
                 planned_t=json_get_f64(payload, "planned_t").cast("float64"),
             ).order_by("planned_t")
         )
-        looks = [(int(row["look"]), float(row["planned_t"])) for row in df.to_dict("records")]
+        looks = [
+            (int(row["look"]), float(row["planned_t"])) for row in df.to_dict("records")
+        ]
         self._looks_cache = looks
         return looks
 
-    def set_design(self, *, max_n: int, looks: Sequence[float], alpha: float, spending: str) -> None:
+    def set_design(
+        self, *, max_n: int, looks: Sequence[float], alpha: float, spending: str
+    ) -> None:
         looks = [float(x) for x in looks]
         with self.ledger.transaction():
             with self.ledger.session() as sess:
                 sess.insert(
                     kind="design",
-                    payload=dict(planned_max_n=float(max_n), alpha=float(alpha), spending_family=str(spending)),
+                    payload=dict(
+                        planned_max_n=float(max_n),
+                        alpha=float(alpha),
+                        spending_family=str(spending),
+                    ),
                 )
                 for idx, planned_t in enumerate(looks, start=1):
-                    sess.insert(kind="design-look", payload=dict(look=idx, planned_t=float(planned_t)))
+                    sess.insert(
+                        kind="design-look",
+                        payload=dict(look=idx, planned_t=float(planned_t)),
+                    )
         self._has_design = True
-        self._looks_cache = [(idx, planned_t) for idx, planned_t in enumerate(looks, start=1)]
+        self._looks_cache = [
+            (idx, planned_t) for idx, planned_t in enumerate(looks, start=1)
+        ]
 
     def update(self, payload: Dict[str, int]) -> None:
         if not self._has_design:
@@ -678,24 +827,51 @@ class BinomialABTestV21:
             Nmax = design["planned_max_n"]
             info_prev = self.info_stage.latest_payload().get("info_time", 0.0)
 
-            z_value = _pooled_z(snapshot_next["nA"], snapshot_next["mA"], snapshot_next["nB"], snapshot_next["mB"])
+            z_value = _pooled_z(
+                snapshot_next["nA"],
+                snapshot_next["mA"],
+                snapshot_next["nB"],
+                snapshot_next["mB"],
+            )
             boundary = None
             action = None
             due = None
 
-            observation_payload = dict(nA=int(payload["nA"]), mA=int(payload["mA"]), nB=int(payload["nB"]), mB=int(payload["mB"]))
+            observation_payload = dict(
+                nA=int(payload["nA"]),
+                mA=int(payload["mA"]),
+                nB=int(payload["nB"]),
+                mB=int(payload["mB"]),
+            )
 
             with self.ledger.session() as sess:
                 sess.insert(kind="observation", payload=observation_payload)
                 self.snapshot_stage.emit_from_dict(sess, snapshot_next)
                 snapshot_curr = self.snapshot_stage.latest_payload()
-                info_payload = {"info_time": (snapshot_curr["nA"] + snapshot_curr["nB"]) / Nmax if Nmax else 0.0}
+                info_payload = {
+                    "info_time": (
+                        (snapshot_curr["nA"] + snapshot_curr["nB"]) / Nmax
+                        if Nmax
+                        else 0.0
+                    )
+                }
                 self.info_stage.emit_from_dict(sess, info_payload)
                 info_curr = self.info_stage.latest_payload()
-                stat_payload = {"info_time_prev": info_prev, "info_time": info_curr.get("info_time", 0.0), "z": z_value}
+                stat_payload = {
+                    "info_time_prev": info_prev,
+                    "info_time": info_curr.get("info_time", 0.0),
+                    "z": z_value,
+                }
                 self.stat_stage.emit_from_dict(sess, stat_payload)
                 stat_curr = self.stat_stage.latest_payload()
-                due = next(((idx, t) for idx, t in looks if info_prev < t <= stat_curr["info_time"]), None)
+                due = next(
+                    (
+                        (idx, t)
+                        for idx, t in looks
+                        if info_prev < t <= stat_curr["info_time"]
+                    ),
+                    None,
+                )
                 if due is not None:
                     boundary = _boundary_from_spending(
                         stat_curr["info_time_prev"],
@@ -703,7 +879,11 @@ class BinomialABTestV21:
                         alpha=design["alpha"],
                         family=design["family"],
                     )
-                    action = "stop_efficacy" if abs(stat_curr["z"]) >= boundary else "continue"
+                    action = (
+                        "stop_efficacy"
+                        if abs(stat_curr["z"]) >= boundary
+                        else "continue"
+                    )
                 if due is not None and boundary is not None and action is not None:
                     look_idx, planned_t = due
                     self.decision_stage.emit_from_dict(
@@ -755,27 +935,41 @@ class ENormalMixtureV21:
                     n_obs=0,
                 )
             ],
-            schema=ibis.schema({"ts_state": "timestamp(6)", "sum_x": "float64", "n_obs": "int64"}),
+            schema=ibis.schema(
+                {"ts_state": "timestamp(6)", "sum_x": "float64", "n_obs": "int64"}
+            ),
         )
         return typed.union(default_tbl).order_by(ibis.desc("ts_state")).limit(1)
 
     def update(self, *, x: float) -> None:
-        obs_delta = ibis.memtable([{"x": float(x)}], schema=ibis.schema({"x": "float64"}))
+        obs_delta = ibis.memtable(
+            [{"x": float(x)}], schema=ibis.schema({"x": "float64"})
+        )
         state_prev = self._latest_state_expr()
-        theta_tbl = ibis.memtable([{"theta": float(theta)} for theta in self.design["thetas"]], schema=ibis.schema({"theta": "float64"}))
+        theta_tbl = ibis.memtable(
+            [{"theta": float(theta)} for theta in self.design["thetas"]],
+            schema=ibis.schema({"theta": "float64"}),
+        )
         alpha_literal = ibis.literal(self.design["alpha"], type="float64")
         theta_count = ibis.literal(float(len(self.design["thetas"])), type="float64")
 
         with self.ledger.transaction():
             with self.ledger.session() as sess:
-                sess.insert(kind="e_observation", payload_expr=ibis.struct(dict(x=obs_delta.x)), source=obs_delta)
+                sess.insert(
+                    kind="e_observation",
+                    payload_expr=ibis.struct(dict(x=obs_delta.x)),
+                    source=obs_delta,
+                )
 
                 state_next = state_prev.cross_join(obs_delta).select(
                     sum_x=state_prev.sum_x + obs_delta.x,
                     n_obs=state_prev.n_obs + ibis.literal(1, type="int64"),
                 )
                 mix_terms = theta_tbl.cross_join(state_next).select(
-                    term=((theta_tbl.theta * state_next.sum_x) - 0.5 * theta_tbl.theta * theta_tbl.theta * state_next.n_obs).exp()
+                    term=(
+                        (theta_tbl.theta * state_next.sum_x)
+                        - 0.5 * theta_tbl.theta * theta_tbl.theta * state_next.n_obs
+                    ).exp()
                 )
                 mix_value = mix_terms.aggregate(e_sum=mix_terms.term.sum())
                 state_full = state_next.cross_join(mix_value).select(
@@ -812,7 +1006,9 @@ def _ab_workload() -> BinomialABTestV21:
     con = ibis.duckdb.connect()
     ledger = Ledger(con, "ledger_v20_profile", overwrite=True)
     ab = BinomialABTestV21(ledger, labels={"experiment_id": "demo"})
-    ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming")
+    ab.set_design(
+        max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming"
+    )
     for batch in [
         {"nA": 100, "mA": 10, "nB": 100, "mB": 12},
         {"nA": 50, "mA": 5, "nB": 50, "mB": 6},

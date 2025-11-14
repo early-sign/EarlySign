@@ -97,12 +97,15 @@ import ibis
 # Helpers
 # ---------------------------------------------------------------------
 
+
 def _now_ts() -> ibis.Expr:
     """Return TIMESTAMP(6) expression for schema consistency."""
     return ibis.now().cast("timestamp(6)")
 
 
-def _json_concat_from_kv(items: Dict[str, ibis.Expr], *, string_keys: set[str]) -> ibis.Expr:
+def _json_concat_from_kv(
+    items: Dict[str, ibis.Expr], *, string_keys: set[str]
+) -> ibis.Expr:
     """
     Build a JSON object via string concatenation and CAST JSON.
     Supports Ibis Expr values and avoids Python json.dumps on expressions.
@@ -115,7 +118,8 @@ def _json_concat_from_kv(items: Dict[str, ibis.Expr], *, string_keys: set[str]) 
         key = ibis.literal(f'"{k}":')
         val = (
             ibis.literal('"') + v.cast("string") + ibis.literal('"')
-            if k in string_keys else v.cast("string")
+            if k in string_keys
+            else v.cast("string")
         )
         parts.append(key + val)
 
@@ -126,13 +130,13 @@ def _json_concat_from_kv(items: Dict[str, ibis.Expr], *, string_keys: set[str]) 
     return (ibis.literal("{") + combined + ibis.literal("}")).cast("json")
 
 
-def _boundary_OF_like(I: ibis.Expr) -> ibis.Expr:
+def _boundary_OF_like(info_fraction: ibis.Expr) -> ibis.Expr:
     """Simple O'Brien–Fleming-like boundary for demo purposes."""
     return ibis.cases(
-        (I <= 0.5, ibis.literal(2.963)),
-        (I >= 1.0, ibis.literal(1.96)),
+        (info_fraction <= 0.5, ibis.literal(2.963)),
+        (info_fraction >= 1.0, ibis.literal(1.96)),
         else_=ibis.literal(2.963)
-              + (ibis.literal(1.96) - ibis.literal(2.963)) * (I - 0.5) / 0.5,
+        + (ibis.literal(1.96) - ibis.literal(2.963)) * (info_fraction - 0.5) / 0.5,
     )
 
 
@@ -165,6 +169,7 @@ def _real_flat_view(con: ibis.Client, ledger: str, exp_id: str) -> ibis.Expr:
 # Staging system for the lazy DSL
 # ---------------------------------------------------------------------
 
+
 @dataclass
 class _Staged:
     json_rows: List[ibis.Expr] = field(default_factory=list)
@@ -194,6 +199,7 @@ class _Staged:
 @dataclass
 class LedgerSession:
     """Transaction-local lazy staging session."""
+
     con: ibis.Client
     ledger: str
     exp_id: str
@@ -213,8 +219,13 @@ class LedgerSession:
         finally:
             self.staged = _Staged()
 
-    def write(self, kind: str, payload: Dict[str, Union[int, float, str]],
-              *, ts: Optional[ibis.Expr] = None) -> None:
+    def write(
+        self,
+        kind: str,
+        payload: Dict[str, Union[int, float, str]],
+        *,
+        ts: Optional[ibis.Expr] = None,
+    ) -> None:
         """Stage one JSON row with literal payload values."""
         ts = _now_ts() if ts is None else ts
         ts6 = ts.cast("timestamp(6)")
@@ -229,31 +240,53 @@ class LedgerSession:
             payload=json_expr,
         )
 
-        def _lit(n, typ): return ibis.literal(payload[n]).cast(typ) if n in payload else ibis.null().cast(typ)
+        def _lit(n, typ):
+            return (
+                ibis.literal(payload[n]).cast(typ)
+                if n in payload
+                else ibis.null().cast(typ)
+            )
+
         flat_row = anchor.select(
-            exp_id=ibis.literal(self.exp_id), ts=ts6, kind=ibis.literal(kind),
+            exp_id=ibis.literal(self.exp_id),
+            ts=ts6,
+            kind=ibis.literal(kind),
             payload=json_expr,
-            nA=_lit("nA", "int64"), mA=_lit("mA", "int64"),
-            nB=_lit("nB", "int64"), mB=_lit("mB", "int64"),
+            nA=_lit("nA", "int64"),
+            mA=_lit("mA", "int64"),
+            nB=_lit("nB", "int64"),
+            mB=_lit("mB", "int64"),
             planned_max_n=_lit("planned_max_n", "int64"),
             planned_t=_lit("planned_t", "float64"),
-            look=_lit("look", "int64"), info_time=_lit("info_time", "float64"),
-            z=_lit("z", "float64"), boundary=_lit("boundary", "float64"),
+            look=_lit("look", "int64"),
+            info_time=_lit("info_time", "float64"),
+            z=_lit("z", "float64"),
+            boundary=_lit("boundary", "float64"),
             action=_lit("action", "string"),
         )
         self.staged.add(json_row, flat_row)
 
-    def write_from(self, source: ibis.Expr, kind: str,
-                   payload: Dict[str, Union[int, float, str, ibis.Expr]],
-                   *, ts: ibis.Expr) -> None:
+    def write_from(
+        self,
+        source: ibis.Expr,
+        kind: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        ts: ibis.Expr,
+    ) -> None:
         """Stage a row from an Ibis source with Expr payloads."""
         ts6 = ts.cast("timestamp(6)")
-        expr_payload = {k: (v if isinstance(v, ibis.Expr) else ibis.literal(v)) for k, v in payload.items()}
+        expr_payload = {
+            k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+            for k, v in payload.items()
+        }
         json_expr = _json_concat_from_kv(expr_payload, string_keys={"action"})
 
         json_row = source.select(
-            exp_id=ibis.literal(self.exp_id), ts=ts6,
-            kind=ibis.literal(kind), payload=json_expr
+            exp_id=ibis.literal(self.exp_id),
+            ts=ts6,
+            kind=ibis.literal(kind),
+            payload=json_expr,
         )
 
         def _expr_or_null(n, typ):
@@ -263,10 +296,14 @@ class LedgerSession:
             return (v if isinstance(v, ibis.Expr) else ibis.literal(v)).cast(typ)
 
         flat_row = source.select(
-            exp_id=ibis.literal(self.exp_id), ts=ts6, kind=ibis.literal(kind),
+            exp_id=ibis.literal(self.exp_id),
+            ts=ts6,
+            kind=ibis.literal(kind),
             payload=json_expr,
-            nA=_expr_or_null("nA", "int64"), mA=_expr_or_null("mA", "int64"),
-            nB=_expr_or_null("nB", "int64"), mB=_expr_or_null("mB", "int64"),
+            nA=_expr_or_null("nA", "int64"),
+            mA=_expr_or_null("mA", "int64"),
+            nB=_expr_or_null("nB", "int64"),
+            mB=_expr_or_null("mB", "int64"),
             planned_max_n=_expr_or_null("planned_max_n", "int64"),
             planned_t=_expr_or_null("planned_t", "float64"),
             look=_expr_or_null("look", "int64"),
@@ -298,6 +335,7 @@ class LedgerSession:
 # Public BinomialABTest API
 # ---------------------------------------------------------------------
 
+
 class BinomialABTest:
     """Group-sequential A/B test interface using the lazy ledger DSL."""
 
@@ -324,7 +362,9 @@ class BinomialABTest:
             payload=maxn_payload,
         )
 
-        looks_tbl = ibis.memtable([{"look": i + 1, "planned_t": float(t)} for i, t in enumerate(looks)])
+        looks_tbl = ibis.memtable(
+            [{"look": i + 1, "planned_t": float(t)} for i, t in enumerate(looks)]
+        )
         look_payload = (
             ibis.literal('{"look":')
             + looks_tbl["look"].cast("string")
@@ -418,26 +458,31 @@ class BinomialABTest:
             )
 
             # Bring I0 as a column into the same root via cross join to avoid alias leakage
-            I0_tbl = (
-                agg_prev.cross_join(dmax)
-                .select(
-                    ((agg_prev.nA.cast("float64") + agg_prev.nB.cast("float64")) /
-                    dmax.Nmax.nullif(0)).name("I0")
-                )
+            I0_tbl = agg_prev.cross_join(dmax).select(
+                (
+                    (agg_prev.nA.cast("float64") + agg_prev.nB.cast("float64"))
+                    / dmax.Nmax.nullif(0)
+                ).name("I0")
             )
-            baseX = (
-                base.cross_join(I0_tbl)
-                .select(
-                    nA1=base.nA1, mA1=base.mA1, nB1=base.nB1, mB1=base.mB1,
-                    Nmax=base.Nmax, look=base.look, planned_t=base.planned_t,
-                    I0=I0_tbl.I0,
-                )
+            baseX = base.cross_join(I0_tbl).select(
+                nA1=base.nA1,
+                mA1=base.mA1,
+                nB1=base.nB1,
+                mB1=base.mB1,
+                Nmax=base.Nmax,
+                look=base.look,
+                planned_t=base.planned_t,
+                I0=I0_tbl.I0,
             )
 
             # Reusable expressions on baseX (same root)
             I_expr = (baseX.nA1 + baseX.nB1) / baseX.Nmax.nullif(0)
             p_expr = (baseX.mA1 + baseX.mB1) / (baseX.nA1 + baseX.nB1)
-            se_expr = (p_expr * (1 - p_expr) * (1 / baseX.nA1 + 1 / baseX.nB1)).sqrt().nullif(0)
+            se_expr = (
+                (p_expr * (1 - p_expr) * (1 / baseX.nA1 + 1 / baseX.nB1))
+                .sqrt()
+                .nullif(0)
+            )
             z_expr = ((baseX.mB1 / baseX.nB1) - (baseX.mA1 / baseX.nA1)) / se_expr
             _boundary_OF_like(I_expr)
 
@@ -463,7 +508,9 @@ class BinomialABTest:
             due = baseX.filter(is_due)
             I_due = (due.nA1 + due.nB1) / due.Nmax.nullif(0)
             p_due = (due.mA1 + due.mB1) / (due.nA1 + due.nB1)
-            se_due = (p_due * (1 - p_due) * (1 / due.nA1 + 1 / due.nB1)).sqrt().nullif(0)
+            se_due = (
+                (p_due * (1 - p_due) * (1 / due.nA1 + 1 / due.nB1)).sqrt().nullif(0)
+            )
             z_due = ((due.mB1 / due.nB1) - (due.mA1 / due.nA1)) / se_due
             bnd_due = _boundary_OF_like(I_due)
             action_due = (z_due.abs() >= bnd_due).ifelse("stop_efficacy", "continue")

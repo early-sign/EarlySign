@@ -5,6 +5,7 @@ compare runtime/ledger output between the production implementation and the
 experimental DSL variants. It spins up two experiments sharing the same ledger
 (same table name, different labels) and executes the same batches used in v26.
 """
+
 from __future__ import annotations
 
 import cProfile
@@ -78,6 +79,7 @@ def main() -> None:
     print("=== exp_alpha_api ===")
     # Ensure all columns are visible in the output for easier inspection
     import pandas as pd
+
     pd.set_option("display.max_columns", None)
     # print(test_a.ledger.show().drop(columns=["payload_name", "labels"]).to_dict(orient="records"))
     # print(test_a.ledger.show())

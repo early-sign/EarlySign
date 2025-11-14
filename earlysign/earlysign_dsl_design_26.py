@@ -22,7 +22,7 @@ import cProfile
 import json
 import math
 import pstats
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import ibis
 from ibis.backends import BaseBackend
@@ -53,7 +53,9 @@ def _pooled_z(nA: float, mA: float, nB: float, mB: float) -> float:
     return (pB - pA) / math.sqrt(variance)
 
 
-def _boundary_from_spending(I0: float, I1: float, *, alpha: float, family: str) -> float:
+def _boundary_from_spending(
+    I0: float, I1: float, *, alpha: float, family: str
+) -> float:
     # Demo-friendly spending functions.
     spent = max(I1 - I0, 1e-9)
     fam = family.lower()
@@ -82,7 +84,14 @@ class Ledger:
         self.table_name = table_name
         self.labels = dict(labels or {})
         self._schema = ibis.schema(
-            dict(id="uuid", ts="timestamp", pkg_version="string", kind="string", labels="json", payload="json")
+            dict(
+                id="uuid",
+                ts="timestamp",
+                pkg_version="string",
+                kind="string",
+                labels="json",
+                payload="json",
+            )
         )
         if overwrite:
             try:
@@ -116,7 +125,13 @@ class Ledger:
     def session(self) -> "LedgerSession":
         return LedgerSession(self)
 
-    def _row_expr(self, *, kind: str, payload: Dict[str, Any], labels: Optional[Dict[str, Any]] = None) -> IbisTable:
+    def _row_expr(
+        self,
+        *,
+        kind: str,
+        payload: Dict[str, Any],
+        labels: Optional[Dict[str, Any]] = None,
+    ) -> IbisTable:
         merged_labels = dict(self.labels)
         if labels:
             merged_labels.update(labels)
@@ -144,7 +159,13 @@ class LedgerSession:
         for job in self._jobs:
             job()
 
-    def insert(self, *, kind: str, payload: Dict[str, Any], labels: Optional[Dict[str, Any]] = None) -> None:
+    def insert(
+        self,
+        *,
+        kind: str,
+        payload: Dict[str, Any],
+        labels: Optional[Dict[str, Any]] = None,
+    ) -> None:
         row = self.ledger._row_expr(kind=kind, payload=payload, labels=labels)
 
         def _exec() -> None:
@@ -197,7 +218,10 @@ class RecordBase:
         if not mapping:
             return dict(fallback) if fallback else {}
         payload = tbl.payload
-        selects = [payload[field].unwrap_as(dtype).name(alias) for alias, (field, dtype) in mapping.items()]
+        selects = [
+            payload[field].unwrap_as(dtype).name(alias)
+            for alias, (field, dtype) in mapping.items()
+        ]
         df = self.ledger.con.execute(tbl.select(*selects))
         if df.empty:
             return dict(fallback) if fallback else {}
@@ -215,7 +239,10 @@ class RecordBase:
             else:
                 order_expr = tbl[order_by]
             tbl = tbl.order_by(order_expr)
-        selects = [payload[field].unwrap_as(dtype).name(alias) for alias, (field, dtype) in mapping.items()]
+        selects = [
+            payload[field].unwrap_as(dtype).name(alias)
+            for alias, (field, dtype) in mapping.items()
+        ]
         df = self.ledger.con.execute(tbl.select(*selects))
         return df.to_dict("records")
 
@@ -238,12 +265,22 @@ class DesignRecord(RecordBase):
 
 class ObservationRecord(RecordBase):
     KIND = "observation"
-    SCHEMA = {"nA": ("nA", "int64"), "mA": ("mA", "int64"), "nB": ("nB", "int64"), "mB": ("mB", "int64")}
+    SCHEMA = {
+        "nA": ("nA", "int64"),
+        "mA": ("mA", "int64"),
+        "nB": ("nB", "int64"),
+        "mB": ("mB", "int64"),
+    }
 
 
 class SnapshotRecord(RecordBase):
     KIND = "snapshot"
-    SCHEMA = {"nA": ("nA", "int64"), "mA": ("mA", "int64"), "nB": ("nB", "int64"), "mB": ("mB", "int64")}
+    SCHEMA = {
+        "nA": ("nA", "int64"),
+        "mA": ("mA", "int64"),
+        "nB": ("nB", "int64"),
+        "mB": ("mB", "int64"),
+    }
     DEFAULT = {"nA": 0, "mA": 0, "nB": 0, "mB": 0}
 
 
@@ -305,7 +342,9 @@ class BinomialABTest:
             raise TypeError("connector must be an ibis backend or connection string")
         self.experiment_id = experiment_id
         ledger_name = table_name if table_name is not None else experiment_id
-        base_ledger = Ledger(self.connector, ledger_name, overwrite=False).bind(experiment_id=experiment_id)
+        base_ledger = Ledger(self.connector, ledger_name, overwrite=False).bind(
+            experiment_id=experiment_id
+        )
         base_ledger.ensure()
         self.ledger = base_ledger
         self._records = _build_records(self.ledger)
@@ -313,7 +352,9 @@ class BinomialABTest:
 
     # --- API helpers -----------------------------------------------------
 
-    def _planned_looks(self, design: Optional[Dict[str, Any]] = None) -> List[Tuple[int, float]]:
+    def _planned_looks(
+        self, design: Optional[Dict[str, Any]] = None
+    ) -> List[Tuple[int, float]]:
         design_data = design or self._latest_design()
         planned_times = json.loads(design_data.get("planned_info_times", "[]"))
         return [(idx + 1, float(t)) for idx, t in enumerate(planned_times)]
@@ -341,7 +382,9 @@ class BinomialABTest:
         planned_max_n = float(payload["planned_max_n"])
         alpha = float(payload.get("alpha", 0.05))
         efficacy = payload.get("efficacy") or payload.get("spending") or {}
-        spending_family = efficacy.get("family", payload.get("spending_family", "obrien_fleming"))
+        spending_family = efficacy.get(
+            "family", payload.get("spending_family", "obrien_fleming")
+        )
         looks = payload.get("planned_info_times") or payload.get("looks") or []
         with self.ledger.session() as sess:
             sess.insert(
@@ -370,7 +413,9 @@ class BinomialABTest:
         self._decision_op(self._records, design, info_prev, looks)
 
     @staticmethod
-    def _observation_op(records: Dict[str, RecordBase], payload: Dict[str, Any]) -> None:
+    def _observation_op(
+        records: Dict[str, RecordBase], payload: Dict[str, Any]
+    ) -> None:
         obs_payload = dict(
             nA=int(payload["nA"]),
             mA=int(payload["mA"]),
@@ -393,7 +438,9 @@ class BinomialABTest:
     @staticmethod
     def _info_op(records: Dict[str, RecordBase], design: Dict[str, Any]) -> None:
         snapshot_latest = records["snapshot"].latest()
-        info_now = (snapshot_latest["nA"] + snapshot_latest["nB"]) / design["planned_max_n"]
+        info_now = (snapshot_latest["nA"] + snapshot_latest["nB"]) / design[
+            "planned_max_n"
+        ]
         records["info"].insert({"info_time": float(info_now)})
 
     @staticmethod
@@ -416,7 +463,9 @@ class BinomialABTest:
             snapshot_latest["nB"],
             snapshot_latest["mB"],
         )
-        boundary = _boundary_from_spending(I0, I1, alpha=design["alpha"], family=design["spending_family"])
+        boundary = _boundary_from_spending(
+            I0, I1, alpha=design["alpha"], family=design["spending_family"]
+        )
         action = "stop_efficacy" if abs(z_value) >= boundary else "continue"
         records["stat"].insert({"z": float(z_value)})
         records["decision"].insert(

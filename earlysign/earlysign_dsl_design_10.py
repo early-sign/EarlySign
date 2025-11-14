@@ -19,7 +19,9 @@ import ibis
 _PKG_VERSION = "earlysign==dev"
 
 
-def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = None) -> ibis.Expr:
+def _json_from_kv(
+    items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = None
+) -> ibis.Expr:
     raw_keys = raw_keys or set()
     if not items:
         return ibis.literal("{}").cast("json")
@@ -29,7 +31,11 @@ def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = No
         if k in raw_keys:
             val = v.cast("string")
         else:
-            val = (ibis.literal('"') + v.cast("string") + ibis.literal('"')) if v.type().is_string() else v.cast("string")
+            val = (
+                (ibis.literal('"') + v.cast("string") + ibis.literal('"'))
+                if v.type().is_string()
+                else v.cast("string")
+            )
         parts.append(key + val)
     out = parts[0]
     for p in parts[1:]:
@@ -67,7 +73,7 @@ def ibis_depth(expr: ibis.Expr) -> tuple[int, int]:
         cnt += 1
         max_d = max(max_d, d)
         args = getattr(node, "args", [])
-        for arg in (args if isinstance(args, (list, tuple)) else [args]):
+        for arg in args if isinstance(args, (list, tuple)) else [args]:
             it = arg if isinstance(arg, (list, tuple)) else (arg,)
             for a in it:
                 child = to_node(a)
@@ -117,7 +123,11 @@ def _uuid_single() -> ibis.Expr:
 
 
 def _uuid_multi(src: ibis.Expr) -> ibis.Expr:
-    base = ibis.uuid().cast("string") if _has_ibis_uuid() else ibis.literal(_py_uuid.uuid4().hex)
+    base = (
+        ibis.uuid().cast("string")
+        if _has_ibis_uuid()
+        else ibis.literal(_py_uuid.uuid4().hex)
+    )
     first_col = src[list(src.schema().names)[0]]
     w = ibis.window(order_by=[first_col])
     rn = ibis.row_number().over(w)
@@ -160,18 +170,28 @@ class LedgerSession:
         finally:
             self.staged = _Staged()
 
-    def _labels_json_expr(self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None) -> ibis.Expr:
+    def _labels_json_expr(
+        self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None
+    ) -> ibis.Expr:
         merged = dict(self.ledger.labels)
         if extra:
             merged.update(extra)
         parts = {k: ibis.literal(str(v)) for k, v in merged.items()}
         return _json_from_kv(parts)
 
-    def write(self, payload_type: str, payload: Dict[str, Union[int, float, str, ibis.Expr]],
-              *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
-              raw_keys: set[str] | None = None) -> None:
+    def write(
+        self,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+        raw_keys: set[str] | None = None,
+    ) -> None:
         anchor = ibis.memtable([{"one": 1}])
-        items = {k: (v if isinstance(v, ibis.Expr) else ibis.literal(v)) for k, v in payload.items()}
+        items = {
+            k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+            for k, v in payload.items()
+        }
         row = anchor.select(
             uuid=_uuid_single(),
             ts=ibis.now().cast("timestamp(6)"),
@@ -182,11 +202,19 @@ class LedgerSession:
         )
         self.staged.add(row)
 
-    def write_from(self, src: ibis.Expr, payload_type: str,
-                   payload: Dict[str, Union[int, float, str, ibis.Expr]],
-                   *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
-                   raw_keys: set[str] | None = None) -> None:
-        items = {k: (v if isinstance(v, ibis.Expr) else ibis.literal(v)) for k, v in payload.items()}
+    def write_from(
+        self,
+        src: ibis.Expr,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+        raw_keys: set[str] | None = None,
+    ) -> None:
+        items = {
+            k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+            for k, v in payload.items()
+        }
         row = src.select(
             uuid=_uuid_multi(src),
             ts=ibis.now().cast("timestamp(6)"),
@@ -240,7 +268,9 @@ LIMIT 1
 """
         return self.ledger.con.sql(sql)
 
-    def rows_since(self, payload_type: str, ts_expr: ibis.Expr, *, strict: bool = True) -> ibis.Expr:
+    def rows_since(
+        self, payload_type: str, ts_expr: ibis.Expr, *, strict: bool = True
+    ) -> ibis.Expr:
         where_labels = self._labels_where_sql(self.ledger.labels)
         cmp = ">" if strict else ">="
         sql = f"""
@@ -364,28 +394,54 @@ def _phi_inv(p: float) -> float:
         if p == 1.0:
             return float("inf")
         raise ValueError("p must be in (0,1)")
-    a = [ -3.969683028665376e+01,  2.209460984245205e+02, -2.759285104469687e+02,
-           1.383577518672690e+02, -3.066479806614716e+01,  2.506628277459239e+00 ]
-    b = [ -5.447609879822406e+01,  1.615858368580409e+02, -1.556989798598866e+02,
-           6.680131188771972e+01, -1.328068155288572e+01 ]
-    c = [ -7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
-          -2.549732539343734e+00,  4.374664141464968e+00,  2.938163982698783e+00 ]
-    d = [ 7.784695709041462e-03,  3.224671290700398e-01,  2.445134137142996e+00,
-          3.754408661907416e+00 ]
-    plow  = 0.02425
+    a = [
+        -3.969683028665376e01,
+        2.209460984245205e02,
+        -2.759285104469687e02,
+        1.383577518672690e02,
+        -3.066479806614716e01,
+        2.506628277459239e00,
+    ]
+    b = [
+        -5.447609879822406e01,
+        1.615858368580409e02,
+        -1.556989798598866e02,
+        6.680131188771972e01,
+        -1.328068155288572e01,
+    ]
+    c = [
+        -7.784894002430293e-03,
+        -3.223964580411365e-01,
+        -2.400758277161838e00,
+        -2.549732539343734e00,
+        4.374664141464968e00,
+        2.938163982698783e00,
+    ]
+    d = [
+        7.784695709041462e-03,
+        3.224671290700398e-01,
+        2.445134137142996e00,
+        3.754408661907416e00,
+    ]
+    plow = 0.02425
     phigh = 1 - plow
     if p < plow:
-        q = math.sqrt(-2*math.log(p))
-        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-               ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+        q = math.sqrt(-2 * math.log(p))
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+            (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+        )
     if phigh < p:
-        q = math.sqrt(-2*math.log(1 - p))
-        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-                 ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+        q = math.sqrt(-2 * math.log(1 - p))
+        return -(
+            ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
+        ) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     q = p - 0.5
-    r = q*q
-    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5]) * q / \
-           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+    r = q * q
+    return (
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
+        / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+    )
 
 
 class BinomialABTest:
@@ -393,11 +449,18 @@ class BinomialABTest:
         self.ledger = ledger
         self._last_depths: Dict[str, tuple[int, int]] = {}
 
-    def set_design(self, *, max_n: int, looks: Sequence[float], alpha: float = 0.05, spending: str = "obrien_fleming") -> None:
+    def set_design(
+        self,
+        *,
+        max_n: int,
+        looks: Sequence[float],
+        alpha: float = 0.05,
+        spending: str = "obrien_fleming",
+    ) -> None:
         looks = [float(x) for x in looks]
         looks_text = "[" + ",".join(str(u) for u in looks) + "]"
-        looks_json  = ibis.literal(looks_text)
-        z_alpha_over_2 = float(_phi_inv(1.0 - float(alpha)/2.0))
+        looks_json = ibis.literal(looks_text)
+        z_alpha_over_2 = float(_phi_inv(1.0 - float(alpha) / 2.0))
         with LedgerSession(self.ledger) as s:
             s.write(
                 "design",
@@ -408,7 +471,7 @@ class BinomialABTest:
                     "spending_family": spending,
                     "z_alpha_over_2": z_alpha_over_2,
                 },
-                raw_keys={"looks"}
+                raw_keys={"looks"},
             )
 
     def update(self, payload: Dict[str, int]) -> None:
@@ -421,54 +484,78 @@ class BinomialABTest:
             s.write("observation", payload)
 
             D_latest = ABDesignLatest(self.ledger).latest()
-            Looks    = ABDesignLooks(self.ledger).table()
-            S_prev   = ABSnapshotLatest(self.ledger).latest()
-            Obs_since= ABObsSince(self.ledger).sum_after(S_prev.select("ts"))
+            Looks = ABDesignLooks(self.ledger).table()
+            S_prev = ABSnapshotLatest(self.ledger).latest()
+            Obs_since = ABObsSince(self.ledger).sum_after(S_prev.select("ts"))
 
             Dpars = D_latest.select(
-                Nmax   = D_latest.planned_max_n,
-                alpha  = D_latest.alpha,
-                family = D_latest.spending_family,
-                zfix   = D_latest.z_alpha_over_2,
+                Nmax=D_latest.planned_max_n,
+                alpha=D_latest.alpha,
+                family=D_latest.spending_family,
+                zfix=D_latest.z_alpha_over_2,
             )
 
             before = S_prev.cross_join(Obs_since).select(
-                nA_before = S_prev.nA + Obs_since.d_nA,
-                mA_before = S_prev.mA + Obs_since.d_mA,
-                nB_before = S_prev.nB + Obs_since.d_nB,
-                mB_before = S_prev.mB + Obs_since.d_mB,
+                nA_before=S_prev.nA + Obs_since.d_nA,
+                mA_before=S_prev.mA + Obs_since.d_mA,
+                nB_before=S_prev.nB + Obs_since.d_nB,
+                mB_before=S_prev.mB + Obs_since.d_mB,
             )
 
-            add_tbl = ibis.memtable([{"nA_add": nA_add, "mA_add": mA_add, "nB_add": nB_add, "mB_add": mB_add}])
-            now = before.cross_join(add_tbl).cross_join(Dpars).select(
-                nA = before.nA_before + add_tbl.nA_add,
-                mA = before.mA_before + add_tbl.mA_add,
-                nB = before.nB_before + add_tbl.nB_add,
-                mB = before.mB_before + add_tbl.mB_add,
-                Nmax = Dpars.Nmax,
-                alpha = Dpars.alpha,
-                family = Dpars.family,
-                zfix = Dpars.zfix,
-                n_before = before.nA_before + before.nB_before
+            add_tbl = ibis.memtable(
+                [
+                    {
+                        "nA_add": nA_add,
+                        "mA_add": mA_add,
+                        "nB_add": nB_add,
+                        "mB_add": mB_add,
+                    }
+                ]
+            )
+            now = (
+                before.cross_join(add_tbl)
+                .cross_join(Dpars)
+                .select(
+                    nA=before.nA_before + add_tbl.nA_add,
+                    mA=before.mA_before + add_tbl.mA_add,
+                    nB=before.nB_before + add_tbl.nB_add,
+                    mB=before.mB_before + add_tbl.mB_add,
+                    Nmax=Dpars.Nmax,
+                    alpha=Dpars.alpha,
+                    family=Dpars.family,
+                    zfix=Dpars.zfix,
+                    n_before=before.nA_before + before.nB_before,
+                )
             )
 
-            s.write_from(now, "snapshot", {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB})
+            s.write_from(
+                now,
+                "snapshot",
+                {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB},
+            )
 
             I1 = (now.nA + now.nB) / now.Nmax.nullif(0)
             s.write_from(now, "info", {"info_time": I1})
 
             I0_tbl = now.select(I0=(now.n_before / now.Nmax.nullif(0)))
-            due_candidates = Looks.cross_join(I0_tbl).cross_join(now.select(I1=I1)).select(
-                look=Looks.look, planned_t=Looks.planned_t, I0=I0_tbl.I0, I1=I1
-            ).filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            due_candidates = (
+                Looks.cross_join(I0_tbl)
+                .cross_join(now.select(I1=I1))
+                .select(look=Looks.look, planned_t=Looks.planned_t, I0=I0_tbl.I0, I1=I1)
+                .filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            )
 
-            min_due = due_candidates.aggregate(min_planned_t=due_candidates.planned_t.min())
-            due = due_candidates.join(min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]).limit(1)
+            min_due = due_candidates.aggregate(
+                min_planned_t=due_candidates.planned_t.min()
+            )
+            due = due_candidates.join(
+                min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]
+            ).limit(1)
 
-            p_all  = ((now.mA + now.mB) / (now.nA + now.nB))
+            p_all = (now.mA + now.mB) / (now.nA + now.nB)
             se_all = (p_all * (1 - p_all) * (1 / now.nA + 1 / now.nB)).sqrt().nullif(0)
-            z_all  = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
-            z_abs  = z_all.abs()
+            z_all = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
+            z_abs = z_all.abs()
 
             INV_SQRT_2PI = ibis.literal(1.0 / math.sqrt(2.0 * math.pi))
             p_const = ibis.literal(0.2316419)
@@ -480,55 +567,68 @@ class BinomialABTest:
 
             def Phi_ibis(x: ibis.Expr) -> ibis.Expr:
                 ax = x.abs()
-                t  = 1.0 / (1.0 + p_const * ax)
+                t = 1.0 / (1.0 + p_const * ax)
                 poly = (((b5 * t + b4) * t + b3) * t + b2) * t + b1
                 poly = poly * t
-                phi  = INV_SQRT_2PI * (-0.5 * ax * ax).exp()
+                phi = INV_SQRT_2PI * (-0.5 * ax * ax).exp()
                 Phi_abs = 1.0 - phi * poly
                 return (x >= 0).ifelse(Phi_abs, 1.0 - Phi_abs)
 
-            p_two = (ibis.literal(2.0) * (1.0 - Phi_ibis(z_abs)))
+            p_two = ibis.literal(2.0) * (1.0 - Phi_ibis(z_abs))
 
-            I_tbl = now.cross_join(I0_tbl).select(I0=I0_tbl.I0, I1=I1, alpha=now.alpha, zfix=now.zfix, family=now.family)
+            I_tbl = now.cross_join(I0_tbl).select(
+                I0=I0_tbl.I0, I1=I1, alpha=now.alpha, zfix=now.zfix, family=now.family
+            )
 
             A1_OF = 2.0 - 2.0 * Phi_ibis(I_tbl.zfix / I_tbl.I1.sqrt().nullif(0))
             A0_OF = 2.0 - 2.0 * Phi_ibis(I_tbl.zfix / I_tbl.I0.sqrt().nullif(0))
 
-            EM1   = ibis.literal(math.e - 1.0)
-            A1_P  = I_tbl.alpha * ((1.0 + EM1 * I_tbl.I1).log())
-            A0_P  = I_tbl.alpha * ((1.0 + EM1 * I_tbl.I0).log())
+            EM1 = ibis.literal(math.e - 1.0)
+            A1_P = I_tbl.alpha * ((1.0 + EM1 * I_tbl.I1).log())
+            A0_P = I_tbl.alpha * ((1.0 + EM1 * I_tbl.I0).log())
 
             fam_lc = I_tbl.family.lower()
             local_alpha = ibis.cases(
                 ((fam_lc == "pocock"), (A1_P - A0_P)),
-                ((fam_lc == "of") | (fam_lc == "obrien_fleming") | (fam_lc == "o'brien_fleming") | (fam_lc == "obrien-fleming"), (A1_OF - A0_OF)),
-                else_=A1_OF - A0_OF
+                (
+                    (fam_lc == "of")
+                    | (fam_lc == "obrien_fleming")
+                    | (fam_lc == "o'brien_fleming")
+                    | (fam_lc == "obrien-fleming"),
+                    (A1_OF - A0_OF),
+                ),
+                else_=A1_OF - A0_OF,
             )
-            local_alpha = (local_alpha + ibis.literal(1e-16))
+            local_alpha = local_alpha + ibis.literal(1e-16)
 
             action_expr = (p_two <= local_alpha).ifelse("stop_efficacy", "continue")
 
-            decision_base = now.cross_join(due).cross_join(I_tbl).select(
-                look=due.look,
-                planned_t=due.planned_t,
-                info_time=I_tbl.I1,
-                z=z_all,
-                p_two=p_two,
-                local_alpha=local_alpha,
-                action=action_expr,
+            decision_base = (
+                now.cross_join(due)
+                .cross_join(I_tbl)
+                .select(
+                    look=due.look,
+                    planned_t=due.planned_t,
+                    info_time=I_tbl.I1,
+                    z=z_all,
+                    p_two=p_two,
+                    local_alpha=local_alpha,
+                    action=action_expr,
+                )
             )
 
             self._last_depths = {
-                "I1":           ibis_depth(I1),
-                "z_all":        ibis_depth(z_all),
-                "p_two":        ibis_depth(p_two),
-                "local_alpha":  ibis_depth(local_alpha),
-                "action":       ibis_depth(action_expr),
+                "I1": ibis_depth(I1),
+                "z_all": ibis_depth(z_all),
+                "p_two": ibis_depth(p_two),
+                "local_alpha": ibis_depth(local_alpha),
+                "action": ibis_depth(action_expr),
             }
 
             s.write_from(decision_base, "stat", {"z": decision_base.z})
             s.write_from(
-                decision_base, "decision",
+                decision_base,
+                "decision",
                 {
                     "look": decision_base.look,
                     "planned_t": decision_base.planned_t,
@@ -583,7 +683,11 @@ class ENormalMixture:
         thetas_text = "[" + ",".join(str(float(t)) for t in thetas) + "]"
         thetas_json = ibis.literal(thetas_text)
         with LedgerSession(self.ledger) as s:
-            s.write("e_design", {"alpha": float(alpha), "thetas": thetas_json}, raw_keys={"thetas"})
+            s.write(
+                "e_design",
+                {"alpha": float(alpha), "thetas": thetas_json},
+                raw_keys={"thetas"},
+            )
 
     def update(self, *, x: float) -> None:
         x_add = float(x)
@@ -594,36 +698,52 @@ class ENormalMixture:
             Theta = EThetas(self.ledger).grid()
 
             K = Theta.aggregate(k=Theta.theta.count())
-            Obs_prev = Vb.filter(lambda r: r.payload_type == "e_obs").select(x_prev=Vb.x)
+            Obs_prev = Vb.filter(lambda r: r.payload_type == "e_obs").select(
+                x_prev=Vb.x
+            )
             Agg_prev = Obs_prev.aggregate(
                 S_prev=Obs_prev.x_prev.sum().fill_null(0.0),
-                t_prev=Obs_prev.x_prev.count()
+                t_prev=Obs_prev.x_prev.count(),
             )
 
             add_tbl = ibis.memtable([{"x_add": x_add, "one": 1}])
             Agg = Agg_prev.cross_join(add_tbl).select(
-                S = Agg_prev.S_prev + add_tbl.x_add,
-                t = Agg_prev.t_prev + add_tbl.one,
+                S=Agg_prev.S_prev + add_tbl.x_add,
+                t=Agg_prev.t_prev + add_tbl.one,
             )
 
-            parts = Theta.cross_join(Agg).cross_join(K).select(
-                term = ((ibis.literal(1.0) / K.k.nullif(0))
-                        * ((Theta.theta * Agg.S) - (0.5 * Theta.theta * Theta.theta * Agg.t)).exp())
+            parts = (
+                Theta.cross_join(Agg)
+                .cross_join(K)
+                .select(
+                    term=(
+                        (ibis.literal(1.0) / K.k.nullif(0))
+                        * (
+                            (Theta.theta * Agg.S)
+                            - (0.5 * Theta.theta * Theta.theta * Agg.t)
+                        ).exp()
+                    )
+                )
             )
             E = parts.aggregate(e_value=parts.term.sum())
 
             D_latest = LedgerReaderBase(self.ledger).latest_row("e_design")
-            Thr = self.ledger.con.sql(f"""
+            Thr = self.ledger.con.sql(
+                f"""
 SELECT (1.0 / TRY_CAST(json_extract(payload, '$.alpha') AS DOUBLE)) AS thr
 FROM ({D_latest.compile()})
-""")
-
-            S_all = E.cross_join(Thr).select(
-                e_value=E.e_value,
-                alarm=(E.e_value >= Thr.thr)
+"""
             )
 
-            s.write_from(S_all, "e_state", {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")})
+            S_all = E.cross_join(Thr).select(
+                e_value=E.e_value, alarm=(E.e_value >= Thr.thr)
+            )
+
+            s.write_from(
+                S_all,
+                "e_state",
+                {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")},
+            )
 
     def latest_row(self, payload_type: str) -> ibis.Expr:
         return LedgerReaderBase(self.ledger).latest_row(payload_type)
@@ -666,7 +786,8 @@ def run_profile_demo(con: Any) -> str:
 
 if __name__ == "__main__":
     con = ibis.connect("duckdb://")
-    con.raw_sql("""
+    con.raw_sql(
+        """
         CREATE TABLE IF NOT EXISTS ledger (
           uuid         TEXT,
           ts           TIMESTAMP,
@@ -675,7 +796,8 @@ if __name__ == "__main__":
           payload      JSON,
           labels       JSON
         );
-    """)
+    """
+    )
     out = run_profile_demo(con)
     print("=== cProfile (filtered) ===")
     print("Ordered by: cumulative time")

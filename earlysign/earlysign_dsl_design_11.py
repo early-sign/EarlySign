@@ -153,6 +153,7 @@ def _safe_div(num: ibis.Expr, den: ibis.Expr) -> ibis.Expr:
 # Ledger API
 # ==========
 
+
 @dataclass(frozen=True)
 class Ledger:
     con: Any
@@ -197,6 +198,7 @@ ORDER BY ts
 # Ibis-only math: Φ, Φ^{-1}, alpha spending
 # ==========================================
 
+
 def _tanh_expr(x: ibis.Expr) -> ibis.Expr:
     e2x = (x * 2.0).exp()
     return (e2x - 1.0) / (e2x + 1.0)
@@ -215,48 +217,48 @@ def ibis_norm_ppf(p: ibis.Expr) -> ibis.Expr:
     plow = 0.02425
     phigh = 1.0 - plow
 
-    a0 = -3.969683028665376e+01
-    a1 =  2.209460984245205e+02
-    a2 = -2.759285104469687e+02
-    a3 =  1.383577518672690e+02
-    a4 = -3.066479806614716e+01
-    a5 =  2.506628277459239e+00
+    a0 = -3.969683028665376e01
+    a1 = 2.209460984245205e02
+    a2 = -2.759285104469687e02
+    a3 = 1.383577518672690e02
+    a4 = -3.066479806614716e01
+    a5 = 2.506628277459239e00
 
-    b0 = -5.447609879822406e+01
-    b1 =  1.615858368580409e+02
-    b2 = -1.556989798598866e+02
-    b3 =  6.680131188771972e+01
-    b4 = -1.328068155288572e+01
+    b0 = -5.447609879822406e01
+    b1 = 1.615858368580409e02
+    b2 = -1.556989798598866e02
+    b3 = 6.680131188771972e01
+    b4 = -1.328068155288572e01
 
     c0 = -7.784894002430293e-03
     c1 = -3.223964580411365e-01
-    c2 = -2.400758277161838e+00
-    c3 = -2.549732539343734e+00
-    c4 =  4.374664141464968e+00
-    c5 =  2.938163982698783e+00
+    c2 = -2.400758277161838e00
+    c3 = -2.549732539343734e00
+    c4 = 4.374664141464968e00
+    c5 = 2.938163982698783e00
 
-    d0 =  7.784695709041462e-03
-    d1 =  3.224671290700398e-01
-    d2 =  2.445134137142996e+00
-    d3 =  3.754408661907416e+00
+    d0 = 7.784695709041462e-03
+    d1 = 3.224671290700398e-01
+    d2 = 2.445134137142996e00
+    d3 = 3.754408661907416e00
 
-    is_low  = p_clip < plow
+    is_low = p_clip < plow
     is_high = p_clip > phigh
 
     q = p_clip - 0.5
     r = q * q
     num_c = (((((a0 * r + a1) * r + a2) * r + a3) * r + a4) * r + a5) * q
-    den_c = (((((b0 * r + b1) * r + b2) * r + b3) * r + b4) * r + 1.0)
+    den_c = ((((b0 * r + b1) * r + b2) * r + b3) * r + b4) * r + 1.0
     x_c = num_c / den_c
 
     ql = (-2.0 * (p_clip).log()).sqrt()
-    num_l = (((((c0 * ql + c1) * ql + c2) * ql + c3) * ql + c4) * ql + c5)
-    den_l = ((((d0 * ql + d1) * ql + d2) * ql + d3) * ql + 1.0)
+    num_l = ((((c0 * ql + c1) * ql + c2) * ql + c3) * ql + c4) * ql + c5
+    den_l = (((d0 * ql + d1) * ql + d2) * ql + d3) * ql + 1.0
     x_l = num_l / den_l
 
     qh = (-2.0 * (1.0 - p_clip).log()).sqrt()
     num_h = -(((((c0 * qh + c1) * qh + c2) * qh + c3) * qh + c4) * qh + c5)
-    den_h = ((((d0 * qh + d1) * qh + d2) * qh + d3) * qh + 1.0)
+    den_h = (((d0 * qh + d1) * qh + d2) * qh + d3) * qh + 1.0
     x_h = num_h / den_h
 
     return ibis.cases((is_low, x_l), (is_high, x_h), else_=x_c)
@@ -279,6 +281,7 @@ def ibis_alpha_spent(t: ibis.Expr, alpha: ibis.Expr, family: ibis.Expr) -> ibis.
 # ==================================
 # Minimal SQL batcher (semicolon txn)
 # ==================================
+
 
 @dataclass
 class LedgerSessionSQL:
@@ -313,7 +316,9 @@ class LedgerSessionSQL:
             pkg_version=ibis.literal(_PKG_VERSION).name("pkg_version"),
             payload_type=ibis.literal(payload_type).name("payload_type"),
             payload=ibis.struct(payload_items).name("payload"),
-            labels=ibis.struct({k: ibis.literal(str(v)).cast("string") for k, v in labels_map.items()}).name("labels"),
+            labels=ibis.struct(
+                {k: ibis.literal(str(v)).cast("string") for k, v in labels_map.items()}
+            ).name("labels"),
         )
         row_sql = row.compile()
         pj = _to_json_wrapper_sql(self.ledger.con, "payload")
@@ -332,7 +337,9 @@ FROM ({row_sql}) AS t
         *,
         extra_labels: Optional[Dict[str, object]] = None,
     ) -> None:
-        self._stmts.append(self._insert_select_sql(src, payload_type, exprs, extra_labels=extra_labels))
+        self._stmts.append(
+            self._insert_select_sql(src, payload_type, exprs, extra_labels=extra_labels)
+        )
 
     def insert_row(
         self,
@@ -342,12 +349,17 @@ FROM ({row_sql}) AS t
         extra_labels: Optional[Dict[str, object]] = None,
     ) -> None:
         anchor = self.ledger.view_json().limit(0)
-        self._stmts.append(self._insert_select_sql(anchor, payload_type, exprs, extra_labels=extra_labels))
+        self._stmts.append(
+            self._insert_select_sql(
+                anchor, payload_type, exprs, extra_labels=extra_labels
+            )
+        )
 
 
 # ==========================
 # Reader-ish frozen helpers
 # ==========================
+
 
 class _R:
     @staticmethod
@@ -361,7 +373,9 @@ WHERE {where} AND payload_type = 'observation'
         return ledger.con.sql(sql)
 
     @staticmethod
-    def latest_by_type_before_tsrel(ledger: Ledger, payload_type: str, ts_rel: ibis.Expr) -> ibis.Expr:
+    def latest_by_type_before_tsrel(
+        ledger: Ledger, payload_type: str, ts_rel: ibis.Expr
+    ) -> ibis.Expr:
         where = _labels_where_sql(ledger.con, ledger.labels)
         ts_rel_sql = ts_rel.select(ts_rel.ts.name("ts0")).compile()
         sql = f"""
@@ -485,7 +499,9 @@ SELECT * FROM z WHERE NOT EXISTS (SELECT 1 FROM s)
         return ledger.con.sql(sql)
 
     @staticmethod
-    def obs_sum_after_until_tsrel(ledger: Ledger, ts_rel_from: ibis.Expr, ts_rel_to: ibis.Expr) -> ibis.Expr:
+    def obs_sum_after_until_tsrel(
+        ledger: Ledger, ts_rel_from: ibis.Expr, ts_rel_to: ibis.Expr
+    ) -> ibis.Expr:
         be = _backend(ledger.con)
         where = _labels_where_sql(ledger.con, ledger.labels)
         t_from_sql = ts_rel_from.select(ts_rel_from.ts.name("ts_from")).compile()
@@ -588,11 +604,19 @@ WHERE {where}
 # Binomial A/B application
 # ==========================
 
+
 class BinomialABTest:
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def set_design(self, *, max_n: int, looks: list[float], alpha: float = 0.05, spending: str = "obrien_fleming") -> None:
+    def set_design(
+        self,
+        *,
+        max_n: int,
+        looks: list[float],
+        alpha: float = 0.05,
+        spending: str = "obrien_fleming",
+    ) -> None:
         looks = [float(x) for x in looks]
         with LedgerSessionSQL(self.ledger) as s:
             s.insert_row(
@@ -602,149 +626,180 @@ class BinomialABTest:
                     "looks": ibis.array([ibis.literal(float(x)) for x in looks]),
                     "alpha": ibis.literal(float(alpha)),
                     "spending_family": ibis.literal(str(spending)),
-                }
+                },
             )
 
-    def update(self, payload: Dict[str, int]) -> None:
-      """Insert one observation and write derived rows using a frozen-past cut.
+        def update(self, payload: Dict[str, int]) -> None:
+            """Insert one observation and write derived rows using a frozen-past cut.
 
-      Semantics:
-      - Insert the observation immediately with ts evaluated on DB (now()).
-      - All subsequent reads in this call use a frozen cut at the latest
-        observation timestamp (same label scope): ts <= latest_observation_ts.
-      - Stats/boundaries are expressed purely in Ibis algebra.
-      - E-value (Gaussian approx) is also stored: e = exp(z^2 / 2).
-      """
-      nA_add = float(payload["nA"]); mA_add = float(payload["mA"])
-      nB_add = float(payload["nB"]); mB_add = float(payload["mB"])
+            Semantics:
+            - Insert the observation immediately with ts evaluated on DB (now()).
+            - All subsequent reads in this call use a frozen cut at the latest
+                observation timestamp (same label scope): ts <= latest_observation_ts.
+            - Stats/boundaries are expressed purely in Ibis algebra.
+            - E-value (Gaussian approx) is also stored: e = exp(z^2 / 2).
+            """
+            nA_add = float(payload["nA"])
+            mA_add = float(payload["mA"])
+            nB_add = float(payload["nB"])
+            mB_add = float(payload["mB"])
 
-      # (0) Insert the observation immediately (ts evaluated on DB)
-      anchor = self.ledger.view_json().limit(0)
-      obs_row = anchor.select(
-          _uuid_expr().name("uuid"),
-          _now_ts().name("ts"),
-          ibis.literal(_PKG_VERSION).name("pkg_version"),
-          ibis.literal("observation").name("payload_type"),
-          ibis.struct({
-              "nA": ibis.literal(nA_add).cast("float64"),
-              "mA": ibis.literal(mA_add).cast("float64"),
-              "nB": ibis.literal(nB_add).cast("float64"),
-              "mB": ibis.literal(mB_add).cast("float64"),
-          }).name("payload"),
-          ibis.struct({k: ibis.literal(str(v)).cast("string") for k, v in self.ledger.labels.items()}).name("labels"),
-      )
-      row_sql = obs_row.compile()
-      self.ledger.con.raw_sql(f"""
-  INSERT INTO {self.ledger.table} (uuid, ts, pkg_version, payload_type, payload, labels)
-  SELECT uuid, ts, pkg_version, payload_type, {_to_json_wrapper_sql(self.ledger.con, "payload")}, {_to_json_wrapper_sql(self.ledger.con, "labels")}
-  FROM ({row_sql}) t
-  """)
+            # (0) Insert the observation immediately (ts evaluated on DB)
+            anchor = self.ledger.view_json().limit(0)
+            obs_row = anchor.select(
+                _uuid_expr().name("uuid"),
+                _now_ts().name("ts"),
+                ibis.literal(_PKG_VERSION).name("pkg_version"),
+                ibis.literal("observation").name("payload_type"),
+                ibis.struct(
+                    {
+                        "nA": ibis.literal(nA_add).cast("float64"),
+                        "mA": ibis.literal(mA_add).cast("float64"),
+                        "nB": ibis.literal(nB_add).cast("float64"),
+                        "mB": ibis.literal(mB_add).cast("float64"),
+                    }
+                ).name("payload"),
+                ibis.struct(
+                    {
+                        k: ibis.literal(str(v)).cast("string")
+                        for k, v in self.ledger.labels.items()
+                    }
+                ).name("labels"),
+            )
+            row_sql = obs_row.compile()
+            self.ledger.con.raw_sql(
+                f"""
+INSERT INTO {self.ledger.table} (uuid, ts, pkg_version, payload_type, payload, labels)
+SELECT uuid, ts, pkg_version, payload_type, {_to_json_wrapper_sql(self.ledger.con, "payload")}, {_to_json_wrapper_sql(self.ledger.con, "labels")}
+FROM ({row_sql}) t
+  """
+            )
 
-      # (1) Remaining writes batched in a single transaction (BEGIN...COMMIT)
-      with LedgerSessionSQL(self.ledger) as s:
-          # Frozen cut at latest observation ts (same labels)
-          T_latest = _R._latest_observation_ts_rel(self.ledger)
+        # (1) Remaining writes batched in a single transaction (BEGIN...COMMIT)
+        with LedgerSessionSQL(self.ledger) as s:
+            # Frozen cut at latest observation ts (same labels)
+            T_latest = _R._latest_observation_ts_rel(self.ledger)
 
-          # Read previous snapshot (or zeros), design params, and looks as of the cut
-          S_prev = _R.latest_snapshot_before_tsrel(self.ledger, T_latest)
-          Dpars  = _R.design_params_before_tsrel(self.ledger, T_latest)
-          Looks  = _R.looks_from_design_before_tsrel(self.ledger, T_latest)
+            # Read previous snapshot (or zeros), design params, and looks as of the cut
+            S_prev = _R.latest_snapshot_before_tsrel(self.ledger, T_latest)
+            Dpars = _R.design_params_before_tsrel(self.ledger, T_latest)
+            Looks = _R.looks_from_design_before_tsrel(self.ledger, T_latest)
 
-          # Aggregate new observations between previous snapshot ts and the cut
-          T_from  = S_prev.select(S_prev.ts.name("ts"))
-          Obs_inc = _R.obs_sum_after_until_tsrel(self.ledger, T_from, T_latest)
+            # Aggregate new observations between previous snapshot ts and the cut
+            T_from = S_prev.select(S_prev.ts.name("ts"))
+            Obs_inc = _R.obs_sum_after_until_tsrel(self.ledger, T_from, T_latest)
 
-          # Accumulate counts to "now" (at the cut)
-          before = S_prev.cross_join(Obs_inc).select(
-              (S_prev.nA + Obs_inc.d_nA).name("nA_before"),
-              (S_prev.mA + Obs_inc.d_mA).name("mA_before"),
-              (S_prev.nB + Obs_inc.d_nB).name("nB_before"),
-              (S_prev.mB + Obs_inc.d_mB).name("mB_before"),
-          )
-          now = before.cross_join(Dpars).select(
-              before.nA_before.name("nA"),
-              before.mA_before.name("mA"),
-              before.nB_before.name("nB"),
-              before.mB_before.name("mB"),
-              (before.nA_before + before.nB_before).name("n_before"),
-              Dpars.Nmax.name("Nmax"),
-              Dpars.alpha.name("alpha"),
-              Dpars.family.name("family"),
-          )
+            # Accumulate counts to "now" (at the cut)
+            before = S_prev.cross_join(Obs_inc).select(
+                (S_prev.nA + Obs_inc.d_nA).name("nA_before"),
+                (S_prev.mA + Obs_inc.d_mA).name("mA_before"),
+                (S_prev.nB + Obs_inc.d_nB).name("nB_before"),
+                (S_prev.mB + Obs_inc.d_mB).name("mB_before"),
+            )
+            now = before.cross_join(Dpars).select(
+                before.nA_before.name("nA"),
+                before.mA_before.name("mA"),
+                before.nB_before.name("nB"),
+                before.mB_before.name("mB"),
+                (before.nA_before + before.nB_before).name("n_before"),
+                Dpars.Nmax.name("Nmax"),
+                Dpars.alpha.name("alpha"),
+                Dpars.family.name("family"),
+            )
 
-          # Snapshot at the cut
-          s.insert_from_select(now, "snapshot", {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB})
+            # Snapshot at the cut
+            s.insert_from_select(
+                now,
+                "snapshot",
+                {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB},
+            )
 
-          # Information times I0 (previous total) and I1 (current total)
-          I0_tbl = now.select((_safe_div(now.n_before, now.Nmax)).name("I0"))
-          I1_tbl = now.select((_safe_div(now.nA + now.nB, now.Nmax)).name("I1"))
-          s.insert_from_select(I1_tbl, "info", {"info_time": I1_tbl.I1})
+            # Information times I0 (previous total) and I1 (current total)
+            I0_tbl = now.select((_safe_div(now.n_before, now.Nmax)).name("I0"))
+            I1_tbl = now.select((_safe_div(now.nA + now.nB, now.Nmax)).name("I1"))
+            s.insert_from_select(I1_tbl, "info", {"info_time": I1_tbl.I1})
 
-          # Due detection: smallest planned_t with I0 < t <= I1
-          due_candidates = Looks.cross_join(I0_tbl).cross_join(I1_tbl).select(
-              Looks.look.name("look"),
-              Looks.planned_t.name("planned_t"),
-              I0_tbl.I0.name("I0"),
-              I1_tbl.I1.name("I1"),
-          ).filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
-          min_due = due_candidates.aggregate(min_planned_t=due_candidates.planned_t.min())
-          due = due_candidates.join(min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]).limit(1)
+            # Due detection: smallest planned_t with I0 < t <= I1
+            due_candidates = (
+                Looks.cross_join(I0_tbl)
+                .cross_join(I1_tbl)
+                .select(
+                    Looks.look.name("look"),
+                    Looks.planned_t.name("planned_t"),
+                    I0_tbl.I0.name("I0"),
+                    I1_tbl.I1.name("I1"),
+                )
+                .filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            )
+            min_due = due_candidates.aggregate(
+                min_planned_t=due_candidates.planned_t.min()
+            )
+            due = due_candidates.join(
+                min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]
+            ).limit(1)
 
-          # --- All stats and boundaries computed on a single base relation to avoid parent-mismatch ---
-          Zbase = now.cross_join(I0_tbl).cross_join(I1_tbl)
+            # --- All stats and boundaries computed on a single base relation to avoid parent-mismatch ---
+            Zbase = now.cross_join(I0_tbl).cross_join(I1_tbl)
 
-          # Wald z for two-sample binomial with pooled variance
-          pA = _safe_div(Zbase.mA, Zbase.nA)
-          pB = _safe_div(Zbase.mB, Zbase.nB)
-          p_all = _safe_div(Zbase.mA + Zbase.mB, Zbase.nA + Zbase.nB)
-          se = (p_all * (1.0 - p_all) * (_safe_inv(Zbase.nA) + _safe_inv(Zbase.nB))).sqrt()
-          z = ((pB - pA) / (se == 0).ifelse(ibis.null(), se)).name("z")
+            # Wald z for two-sample binomial with pooled variance
+            pA = _safe_div(Zbase.mA, Zbase.nA)
+            pB = _safe_div(Zbase.mB, Zbase.nB)
+            p_all = _safe_div(Zbase.mA + Zbase.mB, Zbase.nA + Zbase.nB)
+            se = (
+                p_all * (1.0 - p_all) * (_safe_inv(Zbase.nA) + _safe_inv(Zbase.nB))
+            ).sqrt()
+            z = ((pB - pA) / (se == 0).ifelse(ibis.null(), se)).name("z")
 
-          # Lan–DeMets local alpha and boundary
-          A1 = ibis_alpha_spent(Zbase.I1, Zbase.alpha, Zbase.family)
-          A0 = ibis_alpha_spent(Zbase.I0, Zbase.alpha, Zbase.family)
-          local_alpha = ibis.greatest(A1 - A0, 1e-16).name("local_alpha")
-          boundary = ibis_norm_ppf(1.0 - local_alpha / 2.0).name("boundary")
+            # Lan–DeMets local alpha and boundary
+            A1 = ibis_alpha_spent(Zbase.I1, Zbase.alpha, Zbase.family)
+            A0 = ibis_alpha_spent(Zbase.I0, Zbase.alpha, Zbase.family)
+            local_alpha = ibis.greatest(A1 - A0, 1e-16).name("local_alpha")
+            boundary = ibis_norm_ppf(1.0 - local_alpha / 2.0).name("boundary")
 
-          # Gaussian-approx e-value
-          e_gauss = ((z * z) / 2.0).exp().name("e_value")
+            # Gaussian-approx e-value
+            e_gauss = ((z * z) / 2.0).exp().name("e_value")
 
-          # Persist stat row
-          Zrow = Zbase.select(
-              z.name("z"),
-              local_alpha.name("local_alpha"),
-              boundary.name("boundary"),
-              e_gauss.name("e_value"),
-              Zbase.I1.name("info_time"),
-          )
-          s.insert_from_select(Zrow, "stat", {"z": Zrow.z, "e_value": Zrow.e_value})
+            # Persist stat row
+            Zrow = Zbase.select(
+                z.name("z"),
+                local_alpha.name("local_alpha"),
+                boundary.name("boundary"),
+                e_gauss.name("e_value"),
+                Zbase.I1.name("info_time"),
+            )
+            s.insert_from_select(Zrow, "stat", {"z": Zrow.z, "e_value": Zrow.e_value})
 
-          # Decision if a due look exists
-          Decision = Zrow.cross_join(due).select(
-              look=due.look,
-              planned_t=due.planned_t,
-              info_time=Zrow.info_time,
-              z=Zrow.z,
-              boundary=Zrow.boundary,
-              e_value=Zrow.e_value,
-              action=(Zrow.z.abs() >= Zrow.boundary).ifelse("stop_efficacy", "continue").name("action"),
-          )
-          s.insert_from_select(
-              Decision, "decision",
-              {
-                  "look": Decision.look,
-                  "planned_t": Decision.planned_t,
-                  "info_time": Decision.info_time,
-                  "z": Decision.z,
-                  "boundary": Decision.boundary,
-                  "e_value": Decision.e_value,
-                  "action": Decision.action,
-              },
-          )
+            # Decision if a due look exists
+            Decision = Zrow.cross_join(due).select(
+                look=due.look,
+                planned_t=due.planned_t,
+                info_time=Zrow.info_time,
+                z=Zrow.z,
+                boundary=Zrow.boundary,
+                e_value=Zrow.e_value,
+                action=(Zrow.z.abs() >= Zrow.boundary)
+                .ifelse("stop_efficacy", "continue")
+                .name("action"),
+            )
+            s.insert_from_select(
+                Decision,
+                "decision",
+                {
+                    "look": Decision.look,
+                    "planned_t": Decision.planned_t,
+                    "info_time": Decision.info_time,
+                    "z": Decision.z,
+                    "boundary": Decision.boundary,
+                    "e_value": Decision.e_value,
+                    "action": Decision.action,
+                },
+            )
+
 
 # ==========================
 # E-process: Normal mixture
 # ==========================
+
 
 class ENormalMixture:
     """Mixture-e martingale for N(0,1) vs {N(theta,1)} with fixed theta grid.
@@ -765,7 +820,7 @@ class ENormalMixture:
                 {
                     "alpha": ibis.literal(float(alpha)),
                     "thetas": ibis.array([ibis.literal(float(t)) for t in thetas]),
-                }
+                },
             )
 
     def update(self, *, x: float) -> None:
@@ -777,14 +832,21 @@ class ENormalMixture:
             ibis.literal(_PKG_VERSION).name("pkg_version"),
             ibis.literal("e_obs").name("payload_type"),
             ibis.struct({"x": ibis.literal(float(x)).cast("float64")}).name("payload"),
-            ibis.struct({k: ibis.literal(str(v)).cast("string") for k, v in self.ledger.labels.items()}).name("labels"),
+            ibis.struct(
+                {
+                    k: ibis.literal(str(v)).cast("string")
+                    for k, v in self.ledger.labels.items()
+                }
+            ).name("labels"),
         )
         row_sql = obs_row.compile()
-        self.ledger.con.raw_sql(f"""
+        self.ledger.con.raw_sql(
+            f"""
 INSERT INTO {self.ledger.table} (uuid, ts, pkg_version, payload_type, payload, labels)
 SELECT uuid, ts, pkg_version, payload_type, {_to_json_wrapper_sql(self.ledger.con, "payload")}, {_to_json_wrapper_sql(self.ledger.con, "labels")}
 FROM ({row_sql}) t
-""")
+"""
+        )
 
         # Compute e-state at latest cut and insert
         with LedgerSessionSQL(self.ledger):
@@ -833,23 +895,33 @@ FROM sagg
                 _now_ts().name("ts"),
                 ibis.literal(_PKG_VERSION).name("pkg_version"),
                 ibis.literal("e_state").name("payload_type"),
-                ibis.struct({
-                    "e_value": EM.e_value,
-                    "alarm": (EM.e_value >= (1.0 / EM.alpha)).ifelse(True, False),
-                }).name("payload"),
-                ibis.struct({k: ibis.literal(str(v)).cast("string") for k, v in self.ledger.labels.items()}).name("labels"),
+                ibis.struct(
+                    {
+                        "e_value": EM.e_value,
+                        "alarm": (EM.e_value >= (1.0 / EM.alpha)).ifelse(True, False),
+                    }
+                ).name("payload"),
+                ibis.struct(
+                    {
+                        k: ibis.literal(str(v)).cast("string")
+                        for k, v in self.ledger.labels.items()
+                    }
+                ).name("labels"),
             )
             ins_sql = ins.compile()
-            self.ledger.con.raw_sql(f"""
+            self.ledger.con.raw_sql(
+                f"""
 INSERT INTO {self.ledger.table} (uuid, ts, pkg_version, payload_type, payload, labels)
 SELECT uuid, ts, pkg_version, payload_type, {_to_json_wrapper_sql(self.ledger.con, "payload")}, {_to_json_wrapper_sql(self.ledger.con, "labels")}
 FROM ({ins_sql}) t
-""")
+"""
+            )
 
 
 # ==========================
 # Typed views for doctests
 # ==========================
+
 
 @dataclass
 class ABRowsBase:
@@ -935,6 +1007,7 @@ WHERE {where}
 # (Optional) profiling hook
 # ==========================
 
+
 def _ibis_depth(expr: ibis.Expr) -> int:
     """Best-effort estimate of an Ibis expression tree depth."""
     try:
@@ -951,7 +1024,9 @@ def _ibis_depth(expr: ibis.Expr) -> int:
             elif hasattr(a, "op"):
                 depths.append(_ibis_depth(a))
             elif isinstance(a, (list, tuple)):
-                depths.append(max((_ibis_depth(x) for x in a if hasattr(x, "op")), default=0))
+                depths.append(
+                    max((_ibis_depth(x) for x in a if hasattr(x, "op")), default=0)
+                )
             else:
                 depths.append(0)
         except Exception:
@@ -978,11 +1053,21 @@ def run_profile_demo(con: Any) -> str:
 
     pr.disable()
     s = io.StringIO()
-    pstats.Stats(pr, stream=s).strip_dirs().sort_stats("cumtime").print_stats(r"(raw_sql|insert|uuid|now)")
+    pstats.Stats(pr, stream=s).strip_dirs().sort_stats("cumtime").print_stats(
+        r"(raw_sql|insert|uuid|now)"
+    )
 
     V = base.view_json()
-    stat = V.filter(lambda r: r.payload_type == "stat").order_by(lambda r: r.ts.desc()).limit(1)
-    decision = V.filter(lambda r: r.payload_type == "decision").order_by(lambda r: r.ts.desc()).limit(1)
+    stat = (
+        V.filter(lambda r: r.payload_type == "stat")
+        .order_by(lambda r: r.ts.desc())
+        .limit(1)
+    )
+    decision = (
+        V.filter(lambda r: r.payload_type == "decision")
+        .order_by(lambda r: r.ts.desc())
+        .limit(1)
+    )
 
     z_expr = stat.payload["z"].cast("float64")
     e_expr = stat.payload["e_value"].cast("float64")
@@ -997,7 +1082,8 @@ def run_profile_demo(con: Any) -> str:
 
 if __name__ == "__main__":
     con = ibis.connect("duckdb://")
-    con.raw_sql("""
+    con.raw_sql(
+        """
         CREATE TABLE IF NOT EXISTS ledger (
           uuid         TEXT,
           ts           TIMESTAMP,
@@ -1006,5 +1092,6 @@ if __name__ == "__main__":
           payload      JSON,
           labels       JSON
         );
-    """)
+    """
+    )
     print(run_profile_demo(con))

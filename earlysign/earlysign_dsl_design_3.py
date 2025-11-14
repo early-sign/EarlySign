@@ -97,6 +97,7 @@ import ibis
 # Utilities
 # ============================================================================
 
+
 def _now_ts() -> ibis.Expr:
     """Consistent timestamp precision."""
     return ibis.now().cast("timestamp(6)")
@@ -111,7 +112,8 @@ def _json_from_kv(items: Dict[str, ibis.Expr]) -> ibis.Expr:
         key = ibis.literal(f'"{k}":')
         val = (
             ibis.literal('"') + v.cast("string") + ibis.literal('"')
-            if v.type().is_string() else v.cast("string")
+            if v.type().is_string()
+            else v.cast("string")
         )
         parts.append(key + val)
     combined = parts[0]
@@ -166,6 +168,7 @@ def _real_flat_view(con: ibis.Client, ledger: str, exp_id: str) -> ibis.Expr:
 # Staging (payload-agnostic)
 # ============================================================================
 
+
 @dataclass
 class _Staged:
     rows: List[ibis.Expr] = field(default_factory=list)
@@ -185,6 +188,7 @@ class _Staged:
 @dataclass
 class LedgerSession:
     """Transaction-local staging for (exp_id, ts, kind, payload(JSON)) only."""
+
     con: ibis.Client
     ledger: str
     exp_id: str
@@ -204,36 +208,53 @@ class LedgerSession:
         finally:
             self.staged = _Staged()
 
-    def write(self, kind: str, payload: Dict[str, Union[int, float, str]],
-              *, ts: Optional[ibis.Expr] = None) -> None:
+    def write(
+        self,
+        kind: str,
+        payload: Dict[str, Union[int, float, str]],
+        *,
+        ts: Optional[ibis.Expr] = None,
+    ) -> None:
         """Stage one JSON row with literal payload values (schema-free)."""
         ts = _now_ts() if ts is None else ts
         anchor = ibis.memtable([{"one": 1}])
         row = anchor.select(
-            exp_id = ibis.literal(self.exp_id),
-            ts     = ts.cast("timestamp(6)"),
-            kind   = ibis.literal(kind),
-            payload= _json_from_kv({k: ibis.literal(v) for k, v in payload.items()}),
+            exp_id=ibis.literal(self.exp_id),
+            ts=ts.cast("timestamp(6)"),
+            kind=ibis.literal(kind),
+            payload=_json_from_kv({k: ibis.literal(v) for k, v in payload.items()}),
         )
         self.staged.add(row)
 
-    def write_from(self, src: ibis.Expr, kind: str,
-                   payload: Dict[str, Union[int, float, str, ibis.Expr]],
-                   *, ts: ibis.Expr) -> None:
+    def write_from(
+        self,
+        src: ibis.Expr,
+        kind: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        ts: ibis.Expr,
+    ) -> None:
         """Stage a row produced from Ibis expressions."""
         row = src.select(
-            exp_id = ibis.literal(self.exp_id),
-            ts     = ts.cast("timestamp(6)"),
-            kind   = ibis.literal(kind),
-            payload= _json_from_kv({k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
-                                     for k, v in payload.items()}),
+            exp_id=ibis.literal(self.exp_id),
+            ts=ts.cast("timestamp(6)"),
+            kind=ibis.literal(kind),
+            payload=_json_from_kv(
+                {
+                    k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+                    for k, v in payload.items()
+                }
+            ),
         )
         self.staged.add(row)
 
     def view(self) -> ibis.Expr:
         """Return real ∪ staged JSON view (no typed projection here)."""
-        real = self.con.table(self.ledger).filter(lambda r: r.exp_id == self.exp_id) \
-                                         .select("exp_id", "ts", "kind", "payload")
+        real = (
+            self.con.table(self.ledger)
+            .filter(lambda r: r.exp_id == self.exp_id)
+            .select("exp_id", "ts", "kind", "payload")
+        )
         staged = self.staged.union()
         return real if staged is None else real.union(staged)
 
@@ -249,6 +270,7 @@ class LedgerSession:
 # ============================================================================
 # (A) Two-proportions Group-Sequential Test
 # ============================================================================
+
 
 class BinomialABTest:
     """Two-proportions group-sequential test (OF-like demo boundary).
@@ -273,7 +295,9 @@ class BinomialABTest:
             payload=_json_from_kv({"planned_max_n": ibis.literal(int(max_n))}),
         )
 
-        tbl = ibis.memtable([{"look": i+1, "planned_t": float(t)} for i, t in enumerate(looks)])
+        tbl = ibis.memtable(
+            [{"look": i + 1, "planned_t": float(t)} for i, t in enumerate(looks)]
+        )
         looks_rows = tbl.select(
             exp_id=ibis.literal(self.exp_id),
             ts=ts0,
@@ -307,22 +331,28 @@ class BinomialABTest:
             Vreal = _real_flat_view(self.con, self.ledger, self.exp_id)
 
             # Latest design (Nmax and next planned look)
-            design_ts = Vreal.filter(lambda r: r.kind.isin(("design_max_n","design_look"))) \
-                             .aggregate(ts_max=Vreal.ts.max())
+            design_ts = Vreal.filter(
+                lambda r: r.kind.isin(("design_max_n", "design_look"))
+            ).aggregate(ts_max=Vreal.ts.max())
 
-            Dmax = Vreal.filter(lambda r: r.kind == "design_max_n") \
-                        .join(design_ts, predicates=[Vreal.ts == design_ts.ts_max]) \
-                        .select(Nmax=Vreal.planned_max_n)
+            Dmax = (
+                Vreal.filter(lambda r: r.kind == "design_max_n")
+                .join(design_ts, predicates=[Vreal.ts == design_ts.ts_max])
+                .select(Nmax=Vreal.planned_max_n)
+            )
 
-            Looks = Vreal.filter(lambda r: r.kind == "design_look") \
-                         .join(design_ts, predicates=[Vreal.ts == design_ts.ts_max]) \
-                         .select(look=Vreal.look.cast("int64"), planned_t=Vreal.planned_t)
+            Looks = (
+                Vreal.filter(lambda r: r.kind == "design_look")
+                .join(design_ts, predicates=[Vreal.ts == design_ts.ts_max])
+                .select(look=Vreal.look.cast("int64"), planned_t=Vreal.planned_t)
+            )
 
             Dec = Vreal.filter(lambda r: r.kind == "decision")
             next_look_tbl = Dec.aggregate(next_look=(Dec.kind.count() + 1))
 
-            planned = Looks.join(next_look_tbl, predicates=[Looks.look == next_look_tbl.next_look]) \
-                           .select(look=Looks.look, planned_t=Looks.planned_t)
+            planned = Looks.join(
+                next_look_tbl, predicates=[Looks.look == next_look_tbl.next_look]
+            ).select(look=Looks.look, planned_t=Looks.planned_t)
 
             # Previous cumulative observations (before this update)
             Obs_prev = Vreal.filter(lambda r: r.kind == "observation")
@@ -334,19 +364,31 @@ class BinomialABTest:
             )
 
             # Build a one-row table of literals for current additions
-            add_tbl = ibis.memtable([{
-                "nA_add": nA_add, "mA_add": mA_add, "nB_add": nB_add, "mB_add": mB_add
-            }])
+            add_tbl = ibis.memtable(
+                [
+                    {
+                        "nA_add": nA_add,
+                        "mA_add": mA_add,
+                        "nB_add": nB_add,
+                        "mB_add": mB_add,
+                    }
+                ]
+            )
 
             # Base after current update = previous totals + additions
-            base = agg_prev.cross_join(add_tbl).cross_join(Dmax).cross_join(planned).select(
-                nA = (agg_prev.nA + add_tbl.nA_add),
-                mA = (agg_prev.mA + add_tbl.mA_add),
-                nB = (agg_prev.nB + add_tbl.nB_add),
-                mB = (agg_prev.mB + add_tbl.mB_add),
-                Nmax = Dmax.Nmax,
-                look = planned.look,
-                planned_t = planned.planned_t,
+            base = (
+                agg_prev.cross_join(add_tbl)
+                .cross_join(Dmax)
+                .cross_join(planned)
+                .select(
+                    nA=(agg_prev.nA + add_tbl.nA_add),
+                    mA=(agg_prev.mA + add_tbl.mA_add),
+                    nB=(agg_prev.nB + add_tbl.nB_add),
+                    mB=(agg_prev.mB + add_tbl.mB_add),
+                    Nmax=Dmax.Nmax,
+                    look=planned.look,
+                    planned_t=planned.planned_t,
+                )
             )
 
             # Information time before and after this update
@@ -354,8 +396,14 @@ class BinomialABTest:
                 ((agg_prev.nA + agg_prev.nB) / Dmax.Nmax.nullif(0)).name("I0")
             )
             X = base.cross_join(I0_tbl).select(
-                nA=base.nA, mA=base.mA, nB=base.nB, mB=base.mB,
-                Nmax=base.Nmax, look=base.look, planned_t=base.planned_t, I0=I0_tbl.I0
+                nA=base.nA,
+                mA=base.mA,
+                nB=base.nB,
+                mB=base.mB,
+                Nmax=base.Nmax,
+                look=base.look,
+                planned_t=base.planned_t,
+                I0=I0_tbl.I0,
             )
             I_expr = (X.nA + X.nB) / X.Nmax.nullif(0)
 
@@ -368,16 +416,19 @@ class BinomialABTest:
                 (I_expr <= 0.5, ibis.literal(2.963)),
                 (I_expr >= 1.0, ibis.literal(1.96)),
                 else_=ibis.literal(2.963)
-                      + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_expr - 0.5) / 0.5,
+                + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_expr - 0.5) / 0.5,
             )
 
             # Due if we cross the planned information time now
             is_due = (X.I0 < X.planned_t) & (X.planned_t <= I_expr)
 
             # (3) Emit derived rows
-            s.write_from(X, "snapshot", {
-                "nA": X.nA, "mA": X.mA, "nB": X.nB, "mB": X.mB
-            }, ts=ts_now)
+            s.write_from(
+                X,
+                "snapshot",
+                {"nA": X.nA, "mA": X.mA, "nB": X.nB, "mB": X.mB},
+                ts=ts_now,
+            )
 
             s.write_from(X, "stat", {"z": z_expr}, ts=ts_now)
             s.write_from(X, "info", {"info_time": I_expr}, ts=ts_now)
@@ -391,23 +442,29 @@ class BinomialABTest:
                 (I_due <= 0.5, ibis.literal(2.963)),
                 (I_due >= 1.0, ibis.literal(1.96)),
                 else_=ibis.literal(2.963)
-                      + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_due - 0.5) / 0.5,
+                + (ibis.literal(1.96) - ibis.literal(2.963)) * (I_due - 0.5) / 0.5,
             )
             action = (z_due.abs() >= bnd_due).ifelse("stop_efficacy", "continue")
 
-            s.write_from(due, "decision", {
-                "look": due.look,
-                "planned_t": due.planned_t,
-                "info_time": I_due,
-                "z": z_due,
-                "boundary": bnd_due,
-                "action": action,
-            }, ts=ts_now)
+            s.write_from(
+                due,
+                "decision",
+                {
+                    "look": due.look,
+                    "planned_t": due.planned_t,
+                    "info_time": I_due,
+                    "z": z_due,
+                    "boundary": bnd_due,
+                    "action": action,
+                },
+                ts=ts_now,
+            )
 
 
 # ============================================================================
 # (B) Normal-mixture E-process (expr-only; committed-read strategy)
 # ============================================================================
+
 
 class ENormalMixture:
     """
@@ -472,37 +529,54 @@ class ENormalMixture:
             Dcur = D.join(Dts, predicates=[D.ts == Dts.ts_max]).select(alpha=D.alpha)
 
             # Theta grid and K
-            Theta = Vreal.filter(lambda r: r.kind == "e_theta").select(theta=Vreal.theta)
+            Theta = Vreal.filter(lambda r: r.kind == "e_theta").select(
+                theta=Vreal.theta
+            )
             K = Theta.aggregate(k=Theta.theta.count())
 
             # Previous S and t (committed only)
             Eobs_prev = Vreal.filter(lambda r: r.kind == "e_obs").select(x_prev=Vreal.x)
-            Agg_prev = Eobs_prev.aggregate(S_prev=Eobs_prev.x_prev.sum().fill_null(0.0),
-                                           t_prev=Eobs_prev.x_prev.count())
+            Agg_prev = Eobs_prev.aggregate(
+                S_prev=Eobs_prev.x_prev.sum().fill_null(0.0),
+                t_prev=Eobs_prev.x_prev.count(),
+            )
 
             # Add current x (literal) to get S, t
             add_tbl = ibis.memtable([{"x_add": x_add, "one": 1}])
             Agg = Agg_prev.cross_join(add_tbl).select(
-                S = Agg_prev.S_prev + add_tbl.x_add,
-                t = Agg_prev.t_prev + add_tbl.one,
+                S=Agg_prev.S_prev + add_tbl.x_add,
+                t=Agg_prev.t_prev + add_tbl.one,
             )
 
             # Mixture E_t = (1/K) * Σ exp(theta*S - 0.5*theta^2*t)
-            parts = Theta.cross_join(Agg).cross_join(K).select(
-                term = ( (ibis.literal(1.0) / K.k.nullif(0))
-                         * ( (Theta.theta * Agg.S) - (0.5 * Theta.theta * Theta.theta * Agg.t) ).exp() )
+            parts = (
+                Theta.cross_join(Agg)
+                .cross_join(K)
+                .select(
+                    term=(
+                        (ibis.literal(1.0) / K.k.nullif(0))
+                        * (
+                            (Theta.theta * Agg.S)
+                            - (0.5 * Theta.theta * Theta.theta * Agg.t)
+                        ).exp()
+                    )
+                )
             )
-            E = parts.aggregate(e_value = parts.term.sum())
+            E = parts.aggregate(e_value=parts.term.sum())
 
             # Threshold 1/alpha and alarm flag
             Thr = Dcur.select(thr=(ibis.literal(1.0) / Dcur.alpha.nullif(0)))
             S_all = E.cross_join(Thr).select(
-                e_value=E.e_value,
-                alarm=(E.e_value >= Thr.thr)
+                e_value=E.e_value, alarm=(E.e_value >= Thr.thr)
             )
 
             # (3) Emit current state
-            s.write_from(S_all, "e_state", {
-                "e_value": S_all.e_value,
-                "alarm": S_all.alarm.cast("boolean"),
-            }, ts=ts_now)
+            s.write_from(
+                S_all,
+                "e_state",
+                {
+                    "e_value": S_all.e_value,
+                    "alarm": S_all.alarm.cast("boolean"),
+                },
+                ts=ts_now,
+            )

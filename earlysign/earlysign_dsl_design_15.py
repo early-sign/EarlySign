@@ -137,13 +137,15 @@ def _phi_inv_scalar(p: float) -> float:
         )
     if p > phigh:
         q = math.sqrt(-2.0 * math.log(1.0 - p))
-        return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-            ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0)
-        )
+        return -(
+            ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
+        ) / (((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0))
     q = p - 0.5
     r = q * q
-    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (
-        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0)
+    return (
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
+        / ((((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0))
     )
 
 
@@ -158,14 +160,18 @@ def _alpha_spent_scalar(t: float, alpha: float, family: str) -> float:
     raise ValueError(f"Unknown spending family: {family}")
 
 
-def _boundary_from_spending_scalar(I0: float, I1: float, *, alpha: float, family: str) -> float:
+def _boundary_from_spending_scalar(
+    I0: float, I1: float, *, alpha: float, family: str
+) -> float:
     A1 = _alpha_spent_scalar(I1, alpha, family)
     A0 = _alpha_spent_scalar(I0, alpha, family) if I0 > 0 else 0.0
     local = max(A1 - A0, 1e-16)
     return _phi_inv_scalar(1.0 - local / 2.0)
 
 
-def _pooled_z_expr(nA: FloatingValue, mA: FloatingValue, nB: FloatingValue, mB: FloatingValue) -> FloatingValue:
+def _pooled_z_expr(
+    nA: FloatingValue, mA: FloatingValue, nB: FloatingValue, mB: FloatingValue
+) -> FloatingValue:
     """Classic pooled two-proportion z-statistic expressed with ibis."""
 
     eps = ibis.literal(1e-9)
@@ -185,7 +191,9 @@ def _pooled_z_expr(nA: FloatingValue, mA: FloatingValue, nB: FloatingValue, mB: 
 class Ledger:
     """Ibis-backed ledger storing immutable JSON payloads."""
 
-    def __init__(self, con: BaseBackend, table_name: str, overwrite: bool = True) -> None:
+    def __init__(
+        self, con: BaseBackend, table_name: str, overwrite: bool = True
+    ) -> None:
         self.con = con
         self.table_name = table_name
         schema = ibis.schema(
@@ -239,7 +247,9 @@ class LedgerSession:
 
         self._jobs.append(_exec)
 
-    def insert(self, *, kind: str, labels: Dict[str, Any], payload: Dict[str, Any]) -> None:
+    def insert(
+        self, *, kind: str, labels: Dict[str, Any], payload: Dict[str, Any]
+    ) -> None:
         labels_expr = _json_literal({k: str(v) for k, v in labels.items()})
         payload_json = _json_literal(payload)
 
@@ -282,7 +292,9 @@ class BinomialABTest:
             sess.insert(kind="design", labels=self.labels, payload=design_payload)
             for idx, planned_t in enumerate(looks, start=1):
                 look_payload = dict(look=int(idx), planned_t=float(planned_t))
-                sess.insert(kind="design-look", labels=self.labels, payload=look_payload)
+                sess.insert(
+                    kind="design-look", labels=self.labels, payload=look_payload
+                )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -388,8 +400,12 @@ class BinomialABTest:
             total_now=lambda t: t.nA_now + t.nB_now,
         )
         state = state.mutate(
-            I0=lambda t: ibis.ifelse(t.planned_max_n > 0, t.total_prev / t.planned_max_n, 0.0),
-            I1=lambda t: ibis.ifelse(t.planned_max_n > 0, t.total_now / t.planned_max_n, 0.0),
+            I0=lambda t: ibis.ifelse(
+                t.planned_max_n > 0, t.total_prev / t.planned_max_n, 0.0
+            ),
+            I1=lambda t: ibis.ifelse(
+                t.planned_max_n > 0, t.total_now / t.planned_max_n, 0.0
+            ),
         )
         state = state.mutate(
             z_value=lambda t: _pooled_z_expr(t.nA_now, t.mA_now, t.nB_now, t.mB_now),
@@ -422,7 +438,11 @@ class BinomialABTest:
         due_candidates = looks.cross_join(state).filter(
             (looks.planned_t > state.I0) & (looks.planned_t <= state.I1)
         )
-        due_candidates = due_candidates.order_by(looks.planned_t).limit(1).mutate(selector=ibis.literal(1))
+        due_candidates = (
+            due_candidates.order_by(looks.planned_t)
+            .limit(1)
+            .mutate(selector=ibis.literal(1))
+        )
         due_candidates = due_candidates.select(
             *[due_candidates[col] for col in state_cols],
             due_look=due_candidates["look"],
@@ -499,7 +519,9 @@ class BinomialABTest:
             obs_payload = dict(nA=nA_add, mA=mA_add, nB=nB_add, mB=mB_add)
             sess.insert(kind="observation", labels=self.labels, payload=obs_payload)
 
-            snapshot_payload = dict(nA=float(nA_now), mA=float(mA_now), nB=float(nB_now), mB=float(mB_now))
+            snapshot_payload = dict(
+                nA=float(nA_now), mA=float(mA_now), nB=float(nB_now), mB=float(mB_now)
+            )
             sess.insert(kind="snapshot", labels=self.labels, payload=snapshot_payload)
 
             info_payload = dict(info_time=info_time)
@@ -517,7 +539,9 @@ class BinomialABTest:
                     boundary=float(boundary_val),
                     action=str(action_val),
                 )
-                sess.insert(kind="decision", labels=self.labels, payload=decision_payload)
+                sess.insert(
+                    kind="decision", labels=self.labels, payload=decision_payload
+                )
 
 
 def _ab_workload() -> BinomialABTest:

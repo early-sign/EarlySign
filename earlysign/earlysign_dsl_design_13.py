@@ -520,6 +520,7 @@ __version__ = "13.0.0"
 
 # ---------- Utilities ----------
 
+
 def json_get_str(j, key: str):
     """Return JSON string as string dtype using unwrap_as."""
     return j[key].unwrap_as("string")
@@ -539,11 +540,12 @@ def labels_pred(labels_col, labels: Dict[str, Any]):
     """Build conjunction of JSON label equalities with unwrap."""
     pred = ibis.literal(True)
     for k, v in labels.items():
-        pred &= (labels_col[k].unwrap_as("string") == ibis.literal(str(v)))
+        pred &= labels_col[k].unwrap_as("string") == ibis.literal(str(v))
     return pred
 
 
 # ---------- Ledger ----------
+
 
 class Ledger:
     """A minimal event ledger backed by an Ibis SQL backend.
@@ -557,7 +559,9 @@ class Ledger:
       - payload: json
     """
 
-    def __init__(self, con: ibis.backends.BaseBackend, table_name: str, overwrite: bool = True):
+    def __init__(
+        self, con: ibis.backends.BaseBackend, table_name: str, overwrite: bool = True
+    ):
         self.con = con
         self.table_name = table_name
         # Create or replace ledger table
@@ -632,13 +636,16 @@ class LedgerSession:
             ts=ibis.now(),
             pkg_version=ibis.literal(__version__),
             kind=ibis.literal(kind),
-            labels=ibis.struct({k: ibis.literal(v) for k, v in labels.items()}).cast("json"),
+            labels=ibis.struct({k: ibis.literal(v) for k, v in labels.items()}).cast(
+                "json"
+            ),
             payload=payload_expr.cast("json"),
         )
         self._enqueue_insert(row_select)
 
 
 # ---------- AB test workflow (agg -> z -> e -> decision) ----------
+
 
 class ABTest:
     """A/B test pipeline that writes intermediate records and reuses them later.
@@ -699,13 +706,13 @@ class ABTest:
         mB = self._latest_payload_f64("agg", "mB", 0.0)
 
         eps = ibis.literal(1e-9)
-        pA = (mA / (nA + eps))
-        pB = (mB / (nB + eps))
+        pA = mA / (nA + eps)
+        pB = mB / (nB + eps)
 
         # Pooled variance for difference in proportions
         m = mA + mB
         n = nA + nB
-        p_pool = (m / (n + eps))
+        p_pool = m / (n + eps)
         var = p_pool * (1 - p_pool) * (1 / (nA + eps) + 1 / (nB + eps)) + eps
         Z = (pB - pA) / var.sqrt()
 
@@ -724,7 +731,9 @@ class ABTest:
 
     def _insert_decision(self, sess: LedgerSession, thr: float = 1.96):
         z = self._latest_payload_f64("z", "z", 0.0)
-        decision = ibis.cases((z.abs() >= ibis.literal(thr), "efficacy"), else_="continue")
+        decision = ibis.cases(
+            (z.abs() >= ibis.literal(thr), "efficacy"), else_="continue"
+        )
         payload = ibis.struct(dict(decision=decision))
         sess.insert(kind="decision", labels=self.labels, payload_expr=payload)
 
@@ -751,6 +760,7 @@ class ABTest:
 
 
 # ---------- Demo / profiling ----------
+
 
 def _ab_workload() -> ABTest:
     con = ibis.duckdb.connect()

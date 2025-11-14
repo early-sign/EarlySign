@@ -119,7 +119,9 @@ import ibis
 _PKG_VERSION = "earlysign==dev"
 
 
-def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = None) -> ibis.Expr:
+def _json_from_kv(
+    items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = None
+) -> ibis.Expr:
     """Build a JSON object purely from Ibis expressions (no Python dumps)."""
     raw_keys = raw_keys or set()
     if not items:
@@ -130,7 +132,11 @@ def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = No
         if k in raw_keys:
             val = v.cast("string")
         else:
-            val = (ibis.literal('"') + v.cast("string") + ibis.literal('"')) if v.type().is_string() else v.cast("string")
+            val = (
+                (ibis.literal('"') + v.cast("string") + ibis.literal('"'))
+                if v.type().is_string()
+                else v.cast("string")
+            )
         parts.append(key + val)
     out = parts[0]
     for p in parts[1:]:
@@ -142,9 +148,11 @@ def _json_from_kv(items: Dict[str, ibis.Expr], *, raw_keys: set[str] | None = No
 # Ledger (bindable facade)
 # =========================
 
+
 @dataclass(frozen=True)
 class Ledger:
     """Append-only JSON ledger with bindable labels (scope)."""
+
     con: Any
     table: str = "ledger"
     labels: Dict[str, Union[str, int, float, bool]] = field(default_factory=dict)
@@ -179,6 +187,7 @@ class Ledger:
 # Per-row UUID/TS auto fillers (portable)
 # =======================================
 
+
 def _has_ibis_uuid() -> bool:
     return hasattr(ibis, "uuid")
 
@@ -195,7 +204,11 @@ def _uuid_multi(src: ibis.Expr) -> ibis.Expr:
     Return a multi-row UUID expression based on a scalar base + row_number suffix.
     This stays backend-agnostic and deterministic per `src` materialization.
     """
-    base = ibis.uuid().cast("string") if _has_ibis_uuid() else ibis.literal(_py_uuid.uuid4().hex)
+    base = (
+        ibis.uuid().cast("string")
+        if _has_ibis_uuid()
+        else ibis.literal(_py_uuid.uuid4().hex)
+    )
     first_col = src[list(src.schema().names)[0]]
     w = ibis.window(order_by=[first_col])
     rn = ibis.row_number().over(w)
@@ -206,6 +219,7 @@ def _uuid_multi(src: ibis.Expr) -> ibis.Expr:
 # ======================================
 # Transaction-local staging session DSL
 # ======================================
+
 
 @dataclass
 class _Staged:
@@ -226,6 +240,7 @@ class _Staged:
 @dataclass
 class LedgerSession:
     """Labels-bound staging session; INSERT happens only at flush/commit."""
+
     ledger: Ledger
     staged: _Staged = field(default_factory=_Staged)
 
@@ -243,42 +258,60 @@ class LedgerSession:
         finally:
             self.staged = _Staged()
 
-    def _labels_json_expr(self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None) -> ibis.Expr:
+    def _labels_json_expr(
+        self, extra: Optional[Dict[str, Union[str, int, float, bool]]] = None
+    ) -> ibis.Expr:
         merged = dict(self.ledger.labels)
         if extra:
             merged.update(extra)
         parts = {k: ibis.literal(str(v)) for k, v in merged.items()}
         return _json_from_kv(parts)
 
-    def write(self, payload_type: str, payload: Dict[str, Union[int, float, str, ibis.Expr]],
-              *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
-              raw_keys: set[str] | None = None) -> None:
+    def write(
+        self,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+        raw_keys: set[str] | None = None,
+    ) -> None:
         """Stage one row built from Python scalars / Ibis Expr values."""
         anchor = ibis.memtable([{"one": 1}])
-        items = {k: (v if isinstance(v, ibis.Expr) else ibis.literal(v)) for k, v in payload.items()}
+        items = {
+            k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+            for k, v in payload.items()
+        }
         row = anchor.select(
-            uuid         = _uuid_single(),
-            ts           = ibis.now().cast("timestamp(6)"),
-            pkg_version  = ibis.literal(_PKG_VERSION),
-            payload_type = ibis.literal(payload_type),
-            payload      = _json_from_kv(items, raw_keys=raw_keys or set()),
-            labels       = self._labels_json_expr(extra_labels),
+            uuid=_uuid_single(),
+            ts=ibis.now().cast("timestamp(6)"),
+            pkg_version=ibis.literal(_PKG_VERSION),
+            payload_type=ibis.literal(payload_type),
+            payload=_json_from_kv(items, raw_keys=raw_keys or set()),
+            labels=self._labels_json_expr(extra_labels),
         )
         self.staged.add(row)
 
-    def write_from(self, src: ibis.Expr, payload_type: str,
-                   payload: Dict[str, Union[int, float, str, ibis.Expr]],
-                   *, extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
-                   raw_keys: set[str] | None = None) -> None:
+    def write_from(
+        self,
+        src: ibis.Expr,
+        payload_type: str,
+        payload: Dict[str, Union[int, float, str, ibis.Expr]],
+        *,
+        extra_labels: Optional[Dict[str, Union[str, int, float, bool]]] = None,
+        raw_keys: set[str] | None = None,
+    ) -> None:
         """Stage 0..N rows derived from an Ibis source."""
-        items = {k: (v if isinstance(v, ibis.Expr) else ibis.literal(v)) for k, v in payload.items()}
+        items = {
+            k: (v if isinstance(v, ibis.Expr) else ibis.literal(v))
+            for k, v in payload.items()
+        }
         row = src.select(
-            uuid         = _uuid_multi(src),
-            ts           = ibis.now().cast("timestamp(6)"),
-            pkg_version  = ibis.literal(_PKG_VERSION),
-            payload_type = ibis.literal(payload_type),
-            payload      = _json_from_kv(items, raw_keys=raw_keys or set()),
-            labels       = self._labels_json_expr(extra_labels),
+            uuid=_uuid_multi(src),
+            ts=ibis.now().cast("timestamp(6)"),
+            pkg_version=ibis.literal(_PKG_VERSION),
+            payload_type=ibis.literal(payload_type),
+            payload=_json_from_kv(items, raw_keys=raw_keys or set()),
+            labels=self._labels_json_expr(extra_labels),
         )
         self.staged.add(row)
 
@@ -295,9 +328,11 @@ class LedgerSession:
 # Reader base + AB/E readers
 # =================================
 
+
 @dataclass(frozen=True)
 class LedgerReaderBase:
     """Base for typed/projected readers bound to a Ledger scope."""
+
     ledger: Ledger
 
     @staticmethod
@@ -332,7 +367,9 @@ LIMIT 1
 """
         return self.ledger.con.sql(sql)
 
-    def rows_since(self, payload_type: str, ts_expr: ibis.Expr, *, strict: bool = True) -> ibis.Expr:
+    def rows_since(
+        self, payload_type: str, ts_expr: ibis.Expr, *, strict: bool = True
+    ) -> ibis.Expr:
         """All rows of payload_type with ts > (or >=) given ts_expr (single-row table with 'ts')."""
         where_labels = self._labels_where_sql(self.ledger.labels)
         cmp = ">" if strict else ">="
@@ -355,6 +392,7 @@ WHERE {where_labels}
 
 class ABRowsBase(LedgerReaderBase):
     """Typed view for AB payloads (reused by multiple small readers)."""
+
     def typed_view(self) -> ibis.Expr:
         where_labels = self._labels_where_sql(self.ledger.labels)
         sql = f"""
@@ -382,6 +420,7 @@ FROM (
 
 class ABDesignLatest(LedgerReaderBase):
     """Latest design (planned_max_n, alpha, spending family, looks, ts)."""
+
     def latest(self) -> ibis.Expr:
         base = self.latest_row("design")
         sql = f"""
@@ -398,6 +437,7 @@ FROM ({base.compile()})
 
 class ABDesignLooks(LedgerReaderBase):
     """Explode 'looks' from latest design ts -> (look, planned_t)."""
+
     def table(self) -> ibis.Expr:
         D = ABDesignLatest(self.ledger).latest()
         where_labels = self._labels_where_sql(self.ledger.labels)
@@ -418,6 +458,7 @@ ORDER BY look
 
 class ABSnapshotLatest(LedgerReaderBase):
     """Latest snapshot row; if none, return a single 0-initialized row with epoch ts."""
+
     def latest(self) -> ibis.Expr:
         base = self.latest_row("snapshot")
         sql = f"""
@@ -441,6 +482,7 @@ WHERE NOT EXISTS (SELECT 1 FROM s)
 
 class ABObsSince(LedgerReaderBase):
     """Aggregate observations strictly after given ts0."""
+
     def sum_after(self, ts0: ibis.Expr) -> ibis.Expr:
         obs = self.rows_since("observation", ts0, strict=True)
         sql = f"""
@@ -458,6 +500,7 @@ FROM ({obs.compile()})
 # Alpha-spending helpers (pure Python math)
 # =========================================
 
+
 def _phi_inv(p: float) -> float:
     """Inverse CDF of standard normal Φ^{-1}(p), high-accuracy rational approx (Acklam)."""
     if not (0.0 < p < 1.0):
@@ -466,28 +509,54 @@ def _phi_inv(p: float) -> float:
         if p == 1.0:
             return float("inf")
         raise ValueError("p must be in (0,1)")
-    a = [ -3.969683028665376e+01,  2.209460984245205e+02, -2.759285104469687e+02,
-           1.383577518672690e+02, -3.066479806614716e+01,  2.506628277459239e+00 ]
-    b = [ -5.447609879822406e+01,  1.615858368580409e+02, -1.556989798598866e+02,
-           6.680131188771972e+01, -1.328068155288572e+01 ]
-    c = [ -7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
-          -2.549732539343734e+00,  4.374664141464968e+00,  2.938163982698783e+00 ]
-    d = [ 7.784695709041462e-03,  3.224671290700398e-01,  2.445134137142996e+00,
-          3.754408661907416e+00 ]
-    plow  = 0.02425
+    a = [
+        -3.969683028665376e01,
+        2.209460984245205e02,
+        -2.759285104469687e02,
+        1.383577518672690e02,
+        -3.066479806614716e01,
+        2.506628277459239e00,
+    ]
+    b = [
+        -5.447609879822406e01,
+        1.615858368580409e02,
+        -1.556989798598866e02,
+        6.680131188771972e01,
+        -1.328068155288572e01,
+    ]
+    c = [
+        -7.784894002430293e-03,
+        -3.223964580411365e-01,
+        -2.400758277161838e00,
+        -2.549732539343734e00,
+        4.374664141464968e00,
+        2.938163982698783e00,
+    ]
+    d = [
+        7.784695709041462e-03,
+        3.224671290700398e-01,
+        2.445134137142996e00,
+        3.754408661907416e00,
+    ]
+    plow = 0.02425
     phigh = 1 - plow
     if p < plow:
-        q = math.sqrt(-2*math.log(p))
-        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-               ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+        q = math.sqrt(-2 * math.log(p))
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
+            (((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1
+        )
     if phigh < p:
-        q = math.sqrt(-2*math.log(1 - p))
-        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / \
-                 ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+        q = math.sqrt(-2 * math.log(1 - p))
+        return -(
+            ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
+        ) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     q = p - 0.5
-    r = q*q
-    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5]) * q / \
-           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+    r = q * q
+    return (
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
+        / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+    )
 
 
 def _cdf_normal(x: float) -> float:
@@ -502,7 +571,7 @@ def _alpha_spent(t: float, alpha: float, family: str) -> float:
     if family in ["of", "obrien_fleming", "o'brien_fleming", "obrien-fleming"]:
         # Using the standard OF approximation (cumulative spending)
         # α(t) ≈ 2 - 2 Φ(z_{α/2} / sqrt(t))
-        z = _phi_inv(1 - alpha/2.0)
+        z = _phi_inv(1 - alpha / 2.0)
         return 2.0 - 2.0 * _cdf_normal(z / math.sqrt(t))
     elif family in ["pocock"]:
         # α(t) = α * ln(1 + (e - 1) t)
@@ -515,13 +584,21 @@ def _alpha_spent(t: float, alpha: float, family: str) -> float:
 # AB application (two-props)
 # ==========================
 
+
 class BinomialABTest:
     """Two-proportions group-seq test with on-the-fly alpha-spending boundaries."""
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def set_design(self, *, max_n: int, looks: Sequence[float], alpha: float = 0.05, spending: str = "obrien_fleming") -> None:
+    def set_design(
+        self,
+        *,
+        max_n: int,
+        looks: Sequence[float],
+        alpha: float = 0.05,
+        spending: str = "obrien_fleming",
+    ) -> None:
         """
         Write one 'design' record containing:
             {
@@ -534,7 +611,7 @@ class BinomialABTest:
         """
         looks = [float(x) for x in looks]
         looks_text = "[" + ",".join(str(u) for u in looks) + "]"
-        looks_json  = ibis.literal(looks_text)
+        looks_json = ibis.literal(looks_text)
         with LedgerSession(self.ledger) as s:
             s.write(
                 "design",
@@ -544,15 +621,17 @@ class BinomialABTest:
                     "alpha": float(alpha),
                     "spending_family": spending,
                 },
-                raw_keys={"looks"}
+                raw_keys={"looks"},
             )
 
-    def _boundary_from_spending(self, I0: float, I1: float, *, alpha: float, family: str) -> float:
+    def _boundary_from_spending(
+        self, I0: float, I1: float, *, alpha: float, family: str
+    ) -> float:
         """Two-sided single-look Z threshold from local spending Δα = α(I1) - α(I0)."""
         A1 = _alpha_spent(I1, alpha, family)
         A0 = _alpha_spent(I0, alpha, family) if I0 > 0 else 0.0
         local = max(A1 - A0, 1e-16)
-        return _phi_inv(1.0 - local/2.0)
+        return _phi_inv(1.0 - local / 2.0)
 
     def update(self, payload: Dict[str, int]) -> None:
         """
@@ -571,40 +650,57 @@ class BinomialABTest:
 
             # Readers
             D_latest = ABDesignLatest(self.ledger).latest()
-            Looks    = ABDesignLooks(self.ledger).table()
-            S_prev   = ABSnapshotLatest(self.ledger).latest()
-            Obs_since= ABObsSince(self.ledger).sum_after(S_prev.select("ts"))
+            Looks = ABDesignLooks(self.ledger).table()
+            S_prev = ABSnapshotLatest(self.ledger).latest()
+            Obs_since = ABObsSince(self.ledger).sum_after(S_prev.select("ts"))
 
             # Nmax, alpha, family from design
             Dpars = D_latest.select(
-                Nmax   = D_latest.planned_max_n,
-                alpha  = D_latest.alpha,
-                family = D_latest.spending_family
+                Nmax=D_latest.planned_max_n,
+                alpha=D_latest.alpha,
+                family=D_latest.spending_family,
             )
 
             # "before" cumulative (previous snapshot + obs since snapshot)
             before = S_prev.cross_join(Obs_since).select(
-                nA_before = S_prev.nA + Obs_since.d_nA,
-                mA_before = S_prev.mA + Obs_since.d_mA,
-                nB_before = S_prev.nB + Obs_since.d_nB,
-                mB_before = S_prev.mB + Obs_since.d_mB,
+                nA_before=S_prev.nA + Obs_since.d_nA,
+                mA_before=S_prev.mA + Obs_since.d_mA,
+                nB_before=S_prev.nB + Obs_since.d_nB,
+                mB_before=S_prev.mB + Obs_since.d_mB,
             )
 
             # Add current delta to get "now"
-            add_tbl = ibis.memtable([{"nA_add": nA_add, "mA_add": mA_add, "nB_add": nB_add, "mB_add": mB_add}])
-            now = before.cross_join(add_tbl).cross_join(Dpars).select(
-                nA = before.nA_before + add_tbl.nA_add,
-                mA = before.mA_before + add_tbl.mA_add,
-                nB = before.nB_before + add_tbl.nB_add,
-                mB = before.mB_before + add_tbl.mB_add,
-                Nmax = Dpars.Nmax,
-                alpha = Dpars.alpha,
-                family = Dpars.family,
-                n_before = before.nA_before + before.nB_before
+            add_tbl = ibis.memtable(
+                [
+                    {
+                        "nA_add": nA_add,
+                        "mA_add": mA_add,
+                        "nB_add": nB_add,
+                        "mB_add": mB_add,
+                    }
+                ]
+            )
+            now = (
+                before.cross_join(add_tbl)
+                .cross_join(Dpars)
+                .select(
+                    nA=before.nA_before + add_tbl.nA_add,
+                    mA=before.mA_before + add_tbl.mA_add,
+                    nB=before.nB_before + add_tbl.nB_add,
+                    mB=before.mB_before + add_tbl.mB_add,
+                    Nmax=Dpars.Nmax,
+                    alpha=Dpars.alpha,
+                    family=Dpars.family,
+                    n_before=before.nA_before + before.nB_before,
+                )
             )
 
             # (1) snapshot ALWAYS
-            s.write_from(now, "snapshot", {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB})
+            s.write_from(
+                now,
+                "snapshot",
+                {"nA": now.nA, "mA": now.mA, "nB": now.nB, "mB": now.mB},
+            )
 
             # (2) info ALWAYS (I1)
             I1 = (now.nA + now.nB) / now.Nmax.nullif(0)
@@ -612,41 +708,64 @@ class BinomialABTest:
 
             # (3) due detection I0 < t_i ≤ I1 using planned looks
             I0_tbl = now.select(I0=(now.n_before / now.Nmax.nullif(0)))
-            due_candidates = Looks.cross_join(I0_tbl).cross_join(now.select(I1=I1)).select(
-                look=Looks.look, planned_t=Looks.planned_t, I0=I0_tbl.I0, I1=I1
-            ).filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            due_candidates = (
+                Looks.cross_join(I0_tbl)
+                .cross_join(now.select(I1=I1))
+                .select(look=Looks.look, planned_t=Looks.planned_t, I0=I0_tbl.I0, I1=I1)
+                .filter(lambda r: (r.I0 < r.planned_t) & (r.planned_t <= r.I1))
+            )
 
-            min_due = due_candidates.aggregate(min_planned_t=due_candidates.planned_t.min())
-            due = due_candidates.join(min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]).limit(1)
+            min_due = due_candidates.aggregate(
+                min_planned_t=due_candidates.planned_t.min()
+            )
+            due = due_candidates.join(
+                min_due, predicates=[due_candidates.planned_t == min_due.min_planned_t]
+            ).limit(1)
 
             # (4) if due, compute Z and boundary ON THE FLY from spending at current I1 vs I0
-            p_all  = ((now.mA + now.mB) / (now.nA + now.nB))
+            p_all = (now.mA + now.mB) / (now.nA + now.nB)
             se_all = (p_all * (1 - p_all) * (1 / now.nA + 1 / now.nB)).sqrt().nullif(0)
-            z_all  = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
+            z_all = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
 
             # Compute boundary in Python via map over a single-row DataFrame:
             # Pull I0, I1, alpha, family via execute on tiny select to keep the DSL simple.
             df_params = self.ledger.con.execute(
-                now.cross_join(I0_tbl).select(I0=I0_tbl.I0, I1=I1, alpha=now.alpha, family=now.family).limit(1)
+                now.cross_join(I0_tbl)
+                .select(I0=I0_tbl.I0, I1=I1, alpha=now.alpha, family=now.family)
+                .limit(1)
             )
-            I0_val   = float(df_params.iloc[0]["I0"])
-            I1_val   = float(df_params.iloc[0]["I1"])
-            alpha_v  = float(df_params.iloc[0]["alpha"])
+            I0_val = float(df_params.iloc[0]["I0"])
+            I1_val = float(df_params.iloc[0]["I1"])
+            alpha_v = float(df_params.iloc[0]["alpha"])
             family_v = str(df_params.iloc[0]["family"])
-            bnd_val  = self._boundary_from_spending(I0_val, I1_val, alpha=alpha_v, family=family_v)
+            bnd_val = self._boundary_from_spending(
+                I0_val, I1_val, alpha=alpha_v, family=family_v
+            )
 
             # Use scalar boundary as a literal (valid for this single due look execution)
             Z_join = now.cross_join(due).select(
-                look=due.look, planned_t=due.planned_t, info_time=I1, z=z_all,
-                boundary=ibis.literal(float(bnd_val))
+                look=due.look,
+                planned_t=due.planned_t,
+                info_time=I1,
+                z=z_all,
+                boundary=ibis.literal(float(bnd_val)),
             )
-            action = (Z_join.z.abs() >= Z_join.boundary).ifelse("stop_efficacy", "continue")
+            action = (Z_join.z.abs() >= Z_join.boundary).ifelse(
+                "stop_efficacy", "continue"
+            )
 
             s.write_from(Z_join, "stat", {"z": Z_join.z})
             s.write_from(
-                Z_join, "decision",
-                {"look": Z_join.look, "planned_t": Z_join.planned_t, "info_time": Z_join.info_time,
-                 "z": Z_join.z, "boundary": Z_join.boundary, "action": action},
+                Z_join,
+                "decision",
+                {
+                    "look": Z_join.look,
+                    "planned_t": Z_join.planned_t,
+                    "info_time": Z_join.info_time,
+                    "z": Z_join.z,
+                    "boundary": Z_join.boundary,
+                    "action": action,
+                },
             )
 
 
@@ -654,8 +773,10 @@ class BinomialABTest:
 # E readers (inline SQL)
 # =========================
 
+
 class EBaseRows(LedgerReaderBase):
     """Project e_design/e_obs/e_state with only needed typed columns."""
+
     def typed_view(self) -> ibis.Expr:
         where_labels = self._labels_where_sql(self.ledger.labels)
         sql = f"""
@@ -676,6 +797,7 @@ FROM (
 
 class EThetas(LedgerReaderBase):
     """Explode theta grid from the single 'e_design' row -> (ts, theta)."""
+
     def grid(self) -> ibis.Expr:
         latest_design = self.latest_row("e_design")
         sql = f"""
@@ -695,6 +817,7 @@ WHERE {self._labels_where_sql(self.ledger.labels)} AND b.payload_type = 'e_desig
 # E-process application impl
 # ==========================
 
+
 class ENormalMixture:
     """Normal-mixture E-process (uniform over given thetas; single 'e_design' row)."""
 
@@ -706,7 +829,11 @@ class ENormalMixture:
         thetas_text = "[" + ",".join(str(float(t)) for t in thetas) + "]"
         thetas_json = ibis.literal(thetas_text)
         with LedgerSession(self.ledger) as s:
-            s.write("e_design", {"alpha": float(alpha), "thetas": thetas_json}, raw_keys={"thetas"})
+            s.write(
+                "e_design",
+                {"alpha": float(alpha), "thetas": thetas_json},
+                raw_keys={"thetas"},
+            )
 
     def update(self, *, x: float) -> None:
         """Record x; update running mixture E-value and write e_state with alarm."""
@@ -719,43 +846,61 @@ class ENormalMixture:
 
             # K and Obs aggregates before current delta (current delta not yet committed)
             K = Theta.aggregate(k=Theta.theta.count())
-            Obs_prev = Vb.filter(lambda r: r.payload_type == "e_obs").select(x_prev=Vb.x)
+            Obs_prev = Vb.filter(lambda r: r.payload_type == "e_obs").select(
+                x_prev=Vb.x
+            )
             Agg_prev = Obs_prev.aggregate(
                 S_prev=Obs_prev.x_prev.sum().fill_null(0.0),
-                t_prev=Obs_prev.x_prev.count()
+                t_prev=Obs_prev.x_prev.count(),
             )
 
             add_tbl = ibis.memtable([{"x_add": x_add, "one": 1}])
             Agg = Agg_prev.cross_join(add_tbl).select(
-                S = Agg_prev.S_prev + add_tbl.x_add,
-                t = Agg_prev.t_prev + add_tbl.one,
+                S=Agg_prev.S_prev + add_tbl.x_add,
+                t=Agg_prev.t_prev + add_tbl.one,
             )
 
-            parts = Theta.cross_join(Agg).cross_join(K).select(
-                term = ((ibis.literal(1.0) / K.k.nullif(0))
-                        * ((Theta.theta * Agg.S) - (0.5 * Theta.theta * Theta.theta * Agg.t)).exp())
+            parts = (
+                Theta.cross_join(Agg)
+                .cross_join(K)
+                .select(
+                    term=(
+                        (ibis.literal(1.0) / K.k.nullif(0))
+                        * (
+                            (Theta.theta * Agg.S)
+                            - (0.5 * Theta.theta * Theta.theta * Agg.t)
+                        ).exp()
+                    )
+                )
             )
             E = parts.aggregate(e_value=parts.term.sum())
 
             D_latest = LedgerReaderBase(self.ledger).latest_row("e_design")
-            Thr = self.ledger.con.sql(f"""
+            Thr = self.ledger.con.sql(
+                f"""
 SELECT (1.0 / TRY_CAST(json_extract(payload, '$.alpha') AS DOUBLE)) AS thr
 FROM ({D_latest.compile()})
-""")
-
-            S_all = E.cross_join(Thr).select(
-                e_value=E.e_value,
-                alarm=(E.e_value >= Thr.thr)
+"""
             )
 
-            s.write_from(S_all, "e_state", {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")})
+            S_all = E.cross_join(Thr).select(
+                e_value=E.e_value, alarm=(E.e_value >= Thr.thr)
+            )
+
+            s.write_from(
+                S_all,
+                "e_state",
+                {"e_value": S_all.e_value, "alarm": S_all.alarm.cast("boolean")},
+            )
 
     def latest_row(self, payload_type: str) -> ibis.Expr:
         return LedgerReaderBase(self.ledger).latest_row(payload_type)
 
+
 # ==========================
 # Profiling helper (callable)
 # ==========================
+
 
 def ibis_depth(expr: ibis.Expr) -> tuple[int, int]:
     """
@@ -839,8 +984,10 @@ def run_profile_demo(con: Any) -> str:
     # --- ここから Ibis式の深さ計測（9のロジックを再構成して式だけ作る） ---
     # 最新スナップショットとデザインを使って "now" を構築
     S_now = ABSnapshotLatest(prof_ledger).latest()
-    Dpars = ABDesignLatest(prof_ledger).latest().select(
-        Nmax=ABDesignLatest(prof_ledger).latest().planned_max_n
+    Dpars = (
+        ABDesignLatest(prof_ledger)
+        .latest()
+        .select(Nmax=ABDesignLatest(prof_ledger).latest().planned_max_n)
     )
     now = S_now.cross_join(Dpars).select(
         nA=S_now.nA, mA=S_now.mA, nB=S_now.nB, mB=S_now.mB, Nmax=Dpars.Nmax
@@ -848,17 +995,17 @@ def run_profile_demo(con: Any) -> str:
 
     # I1, z_all（Wald）を 9 と同形で組み立て
     I1 = (now.nA + now.nB) / now.Nmax.nullif(0)
-    p_all  = ((now.mA + now.mB) / (now.nA + now.nB))
+    p_all = (now.mA + now.mB) / (now.nA + now.nB)
     se_all = (p_all * (1 - p_all) * (1 / now.nA + 1 / now.nB)).sqrt().nullif(0)
-    z_all  = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
+    z_all = ((now.mB / now.nB) - (now.mA / now.nA)) / se_all
 
     # 9では boundary は Python スカラをリテラル注入。深さはリテラルで十分なので固定値でOK
     boundary_lit = ibis.literal(2.0)
     action = (z_all.abs() >= boundary_lit).ifelse("stop_efficacy", "continue")
 
     d_I1 = ibis_depth(I1)
-    d_z  = ibis_depth(z_all)
-    d_act= ibis_depth(action)
+    d_z = ibis_depth(z_all)
+    d_act = ibis_depth(action)
 
     depth_txt = (
         "=== Ibis Expression Depth (9: Python-side boundary literal) ===\n"
@@ -878,7 +1025,8 @@ if __name__ == "__main__":
     # When run as a script: create an in-memory DuckDB, ensure table, run profiling,
     # and print the pstats summary to stdout.
     con = ibis.connect("duckdb://")
-    con.raw_sql("""
+    con.raw_sql(
+        """
         CREATE TABLE IF NOT EXISTS ledger (
           uuid         TEXT,
           ts           TIMESTAMP,
@@ -887,7 +1035,8 @@ if __name__ == "__main__":
           payload      JSON,
           labels       JSON
         );
-    """)
+    """
+    )
     out = run_profile_demo(con)
     print("=== cProfile (filtered) ===")
     print("Ordered by: cumulative time")

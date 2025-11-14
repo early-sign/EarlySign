@@ -96,12 +96,26 @@ def _json_literal(data: Dict[str, Any]) -> JSONValue:
 
 
 class Ledger:
-    def __init__(self, con: BaseBackend, table_name: str, *, labels: Optional[Dict[str, Any]] = None, overwrite: bool = True):
+    def __init__(
+        self,
+        con: BaseBackend,
+        table_name: str,
+        *,
+        labels: Optional[Dict[str, Any]] = None,
+        overwrite: bool = True,
+    ):
         self.con = con
         self.table_name = table_name
         self.labels = dict(labels or {})
         schema = ibis.schema(
-            dict(id="uuid", ts="timestamp", pkg_version="string", kind="string", labels="json", payload="json")
+            dict(
+                id="uuid",
+                ts="timestamp",
+                pkg_version="string",
+                kind="string",
+                labels="json",
+                payload="json",
+            )
         )
         if overwrite:
             try:
@@ -141,7 +155,13 @@ class LedgerSession:
         for job in self._jobs:
             job()
 
-    def insert(self, *, kind: str, payload: Dict[str, Any], labels: Optional[Dict[str, Any]] = None) -> None:
+    def insert(
+        self,
+        *,
+        kind: str,
+        payload: Dict[str, Any],
+        labels: Optional[Dict[str, Any]] = None,
+    ) -> None:
         merged_labels = dict(self.ledger.labels)
         if labels:
             merged_labels.update(labels)
@@ -170,7 +190,8 @@ class LedgerReader:
             return tbl
         lbl = tbl["labels"]
         predicates = [
-            lbl[key].unwrap_as("string") == ibis.literal(str(value)) for key, value in self.ledger.labels.items()
+            lbl[key].unwrap_as("string") == ibis.literal(str(value))
+            for key, value in self.ledger.labels.items()
         ]
         return tbl.filter(predicates) if predicates else tbl
 
@@ -187,7 +208,10 @@ class LedgerReader:
         tbl = self.table_of_kind(kind)
         tbl = tbl.order_by(tbl.ts.desc()).limit(1)
         payload = tbl["payload"]
-        selects = [payload[field].unwrap_as(dtype).name(alias) for alias, (field, dtype) in mapping.items()]
+        selects = [
+            payload[field].unwrap_as(dtype).name(alias)
+            for alias, (field, dtype) in mapping.items()
+        ]
         if not selects:
             return dict(default) if default else {}
         df = self.ledger.con.execute(tbl.select(*selects))
@@ -210,7 +234,10 @@ class LedgerReader:
             else:
                 order_expr = tbl[order_by]
             tbl = tbl.order_by(order_expr)
-        selects = [payload[field].unwrap_as(dtype).name(alias) for alias, (field, dtype) in mapping.items()]
+        selects = [
+            payload[field].unwrap_as(dtype).name(alias)
+            for alias, (field, dtype) in mapping.items()
+        ]
         df = self.ledger.con.execute(tbl.select(*selects))
         return df.to_dict("records")
 
@@ -230,10 +257,35 @@ def _cdf_normal(x: float) -> float:
 
 
 def _phi_inv(p: float) -> float:
-    a = [-3.969683028665376e01, 2.209460984245205e02, -2.759285104469687e02, 1.383577518672690e02, -3.066479806614716e01, 2.506628277459239e00]
-    b = [-5.447609879822406e01, 1.615858368580409e02, -1.556989798598866e02, 6.680131188771972e01, -1.328068155288572e01]
-    c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e00, -2.549732539343734e00, 4.374664141464968e00, 2.938163982698783e00]
-    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e00, 3.754408661907416e00]
+    a = [
+        -3.969683028665376e01,
+        2.209460984245205e02,
+        -2.759285104469687e02,
+        1.383577518672690e02,
+        -3.066479806614716e01,
+        2.506628277459239e00,
+    ]
+    b = [
+        -5.447609879822406e01,
+        1.615858368580409e02,
+        -1.556989798598866e02,
+        6.680131188771972e01,
+        -1.328068155288572e01,
+    ]
+    c = [
+        -7.784894002430293e-03,
+        -3.223964580411365e-01,
+        -2.400758277161838e00,
+        -2.549732539343734e00,
+        4.374664141464968e00,
+        2.938163982698783e00,
+    ]
+    d = [
+        7.784695709041462e-03,
+        3.224671290700398e-01,
+        2.445134137142996e00,
+        3.754408661907416e00,
+    ]
     plow = 0.02425
     phigh = 1 - plow
     if p <= 0:
@@ -247,13 +299,15 @@ def _phi_inv(p: float) -> float:
         )
     if p > phigh:
         q = math.sqrt(-2.0 * math.log(1.0 - p))
-        return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / (
-            ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0)
-        )
+        return -(
+            ((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]
+        ) / (((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0))
     q = p - 0.5
     r = q * q
-    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (
-        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0)
+    return (
+        (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5])
+        * q
+        / ((((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0))
     )
 
 
@@ -268,7 +322,9 @@ def _alpha_spent(t: float, alpha: float, family: str) -> float:
     raise ValueError(f"Unknown spending family: {family}")
 
 
-def _boundary_from_spending(I0: float, I1: float, *, alpha: float, family: str) -> float:
+def _boundary_from_spending(
+    I0: float, I1: float, *, alpha: float, family: str
+) -> float:
     A1 = _alpha_spent(I1, alpha, family)
     A0 = _alpha_spent(I0, alpha, family) if I0 > 0 else 0.0
     local = max(A1 - A0, 1e-16)
@@ -283,7 +339,9 @@ def _pooled_z(nA: float, mA: float, nB: float, mB: float) -> float:
     pB = mB / max(nB, eps)
     total_n = nA + nB
     pooled = (mA + mB) / max(total_n, eps)
-    denom = math.sqrt(pooled * (1.0 - pooled) * (1.0 / max(nA, eps) + 1.0 / max(nB, eps)) + eps)
+    denom = math.sqrt(
+        pooled * (1.0 - pooled) * (1.0 / max(nA, eps) + 1.0 / max(nB, eps)) + eps
+    )
     if denom <= eps:
         return 0.0
     return (pB - pA) / denom
@@ -299,15 +357,24 @@ class BinomialABTestV22:
         self.ledger = ledger.bind(**labels)
         self.reader = self.ledger.reader()
 
-    def set_design(self, *, max_n: int, looks: Sequence[float], alpha: float, spending: str) -> None:
+    def set_design(
+        self, *, max_n: int, looks: Sequence[float], alpha: float, spending: str
+    ) -> None:
         looks = [float(x) for x in looks]
         with self.ledger.session() as sess:
             sess.insert(
                 kind="design",
-                payload=dict(planned_max_n=float(max_n), alpha=float(alpha), spending_family=str(spending)),
+                payload=dict(
+                    planned_max_n=float(max_n),
+                    alpha=float(alpha),
+                    spending_family=str(spending),
+                ),
             )
             for idx, planned_t in enumerate(looks, start=1):
-                sess.insert(kind="design-look", payload=dict(look=idx, planned_t=float(planned_t)))
+                sess.insert(
+                    kind="design-look",
+                    payload=dict(look=idx, planned_t=float(planned_t)),
+                )
 
     def _planned_looks(self) -> List[Tuple[int, float]]:
         rows = self.reader.list_json(
@@ -372,7 +439,9 @@ class BinomialABTestV22:
         mA_now = snapshot_prev["mA"] + obs_payload["mA"]
         nB_now = snapshot_prev["nB"] + obs_payload["nB"]
         mB_now = snapshot_prev["mB"] + obs_payload["mB"]
-        snapshot_now = dict(nA=float(nA_now), mA=float(mA_now), nB=float(nB_now), mB=float(mB_now))
+        snapshot_now = dict(
+            nA=float(nA_now), mA=float(mA_now), nB=float(nB_now), mB=float(mB_now)
+        )
         self._write_row("snapshot", snapshot_now)
 
         # 3) info row computed from latest snapshot (re-read ledger to avoid Python cache)
@@ -391,7 +460,9 @@ class BinomialABTestV22:
                 latest_snapshot["nB"],
                 latest_snapshot["mB"],
             )
-            boundary = _boundary_from_spending(I0, I1, alpha=design["alpha"], family=design["family"])
+            boundary = _boundary_from_spending(
+                I0, I1, alpha=design["alpha"], family=design["family"]
+            )
             action = "stop_efficacy" if abs(z_value) >= boundary else "continue"
             self._write_row("stat", dict(z=float(z_value)))
             decision_payload = dict(
@@ -435,12 +506,18 @@ class ENormalMixtureV22:
             "e_value": ("e_value", "float64"),
             "alarm": ("alarm", "int64"),
         }
-        state = self.reader.latest_json("e_state", fields, default={"sum_x": 0.0, "n_obs": 0, "e_value": 1.0, "alarm": 0})
+        state = self.reader.latest_json(
+            "e_state",
+            fields,
+            default={"sum_x": 0.0, "n_obs": 0, "e_value": 1.0, "alarm": 0},
+        )
         sum_x = state["sum_x"] + float(x)
         n_obs = int(state["n_obs"]) + 1
         thetas = self.design["thetas"]
         alpha = self.design["alpha"]
-        mix_terms = [math.exp(theta * sum_x - 0.5 * theta * theta * n_obs) for theta in thetas]
+        mix_terms = [
+            math.exp(theta * sum_x - 0.5 * theta * theta * n_obs) for theta in thetas
+        ]
         e_now = sum(mix_terms) / len(mix_terms)
         alarm = int(e_now >= 1 / alpha)
         self._write_row("e_observation", dict(x=float(x)))
@@ -459,7 +536,9 @@ def _ab_workload() -> BinomialABTestV22:
     con = ibis.duckdb.connect()
     ledger = Ledger(con, "ledger_v22_profile", overwrite=True)
     ab = BinomialABTestV22(ledger, labels={"experiment_id": "demo"})
-    ab.set_design(max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming")
+    ab.set_design(
+        max_n=1000, looks=[0.25, 0.5, 0.75, 1.0], alpha=0.05, spending="obrien_fleming"
+    )
     for batch in [
         {"nA": 100, "mA": 10, "nB": 100, "mB": 12},
         {"nA": 50, "mA": 5, "nB": 50, "mB": 6},
