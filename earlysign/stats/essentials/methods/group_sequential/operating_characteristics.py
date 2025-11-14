@@ -119,6 +119,20 @@ class Simulator(Protocol):
         ...
 
 
+@runtime_checkable
+class BatchSimulator(Simulator, Protocol):
+    """Optional extension that can evaluate multiple effect sizes in one call."""
+
+    def simulate_many(
+        self,
+        procedure: Procedure,
+        effect_sizes: Sequence[float],
+        n_simulations: Optional[int] = None,
+        rng_seed: Optional[int] = None,
+        **kwargs: Any,
+    ) -> Sequence[OCPointResult]: ...
+
+
 def compute_oc_curve(
     simulator: Simulator,
     procedure: Procedure,
@@ -148,17 +162,28 @@ def compute_oc_curve(
 
     results: List[OCPointResult] = []
 
+    base_kwargs = dict(simulator_kwargs or {})
+    base_kwargs.setdefault("n_simulations", int(n_simulations))
+
+    if isinstance(simulator, BatchSimulator):
+        batch_points = simulator.simulate_many(
+            procedure,
+            [float(es) for es in effect_sizes_arr],
+            **base_kwargs,
+        )
+        for es, point in zip(effect_sizes_arr, batch_points):
+            if not np.isclose(point.effect_size, float(es)):
+                point.effect_size = float(es)
+            results.append(point)
+        return results
+
     for es in effect_sizes_arr:
-        call_kwargs = dict(simulator_kwargs or {})
-        call_kwargs.setdefault("effect_size", float(es))
-        call_kwargs.setdefault("n_simulations", int(n_simulations))
+        call_kwargs = dict(base_kwargs)
+        call_kwargs["effect_size"] = float(es)
 
         point = simulator.simulate(procedure, **call_kwargs)
 
-        # Basic validation (make sure returned effect_size matches requested)
         if not np.isclose(point.effect_size, float(es)):
-            # If simulator returns a different effect size, prefer the
-            # requested value but keep the simulator-provided metadata.
             point.effect_size = float(es)
 
         results.append(point)

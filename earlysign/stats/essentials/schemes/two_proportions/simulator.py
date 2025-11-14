@@ -117,21 +117,37 @@ class TwoProportionsSimulator:
         max_total: Optional[int] = None,
         sampling: Optional[SamplingStrategy] = None,
     ) -> OCPointResult:
-        """Run Monte-Carlo replications and return operating characteristics.
+        effect = (
+            float(effect_size) if effect_size is not None else float(self.effect_size)
+        )
+        results = self.simulate_many(
+            procedure,
+            effect_sizes=[effect],
+            p_control=p_control,
+            n_simulations=n_simulations,
+            rng_seed=rng_seed,
+            max_total=max_total,
+            sampling=sampling,
+        )
+        return results[0]
 
-        The implementation is intentionally compact: each replication runs
-        incremental batches until ``max_total`` is reached or ``procedure``
-        requests to stop. Sampling behaviour is delegated to a
-        :class:`SamplingStrategy` so advanced flows can negotiate efficient
-        schedules (for example information-time aligned sampling) without
-        complicating the public API.
-        """
+    def simulate_many(
+        self,
+        procedure: Procedure,
+        *,
+        p_control: float,
+        effect_sizes: Sequence[float],
+        n_simulations: Optional[int] = None,
+        rng_seed: Optional[int] = None,
+        max_total: Optional[int] = None,
+        sampling: Optional[SamplingStrategy] = None,
+    ) -> Sequence[OCPointResult]:
+        effect_list = [float(es) for es in effect_sizes]
+        if not effect_list:
+            return []
 
         n_sim = (
             int(n_simulations) if n_simulations is not None else int(self.n_simulations)
-        )
-        effect = (
-            float(effect_size) if effect_size is not None else float(self.effect_size)
         )
         rng = np.random.default_rng(rng_seed)
 
@@ -151,32 +167,81 @@ class TwoProportionsSimulator:
                 "max_total must match the sampling strategy's maximum total"
             )
 
-        # stop_counts: map actual total sample size at stopping -> count
+        control_draws: List[np.ndarray] = []
+        treatment_uniforms: List[Optional[np.ndarray]] = []
+        for inc_a, inc_b in schedule:
+            if inc_a > 0:
+                control_draws.append(
+                    rng.binomial(int(inc_a), float(p_control), size=n_sim).astype(int)
+                )
+            else:
+                control_draws.append(np.zeros(n_sim, dtype=int))
+            if inc_b > 0:
+                treatment_uniforms.append(rng.random((n_sim, int(inc_b)), dtype=float))
+            else:
+                treatment_uniforms.append(None)
+
+        treatment_counts: List[List[np.ndarray]] = [
+            [np.zeros(n_sim, dtype=int) for _ in schedule] for _ in effect_list
+        ]
+        for look_idx, uniforms in enumerate(treatment_uniforms):
+            if uniforms is None:
+                continue
+            for eff_idx, effect in enumerate(effect_list):
+                threshold = float(np.clip(p_control + effect, 0.0, 1.0))
+                treatment_counts[eff_idx][look_idx] = (
+                    (uniforms < threshold).sum(axis=1).astype(int)
+                )
+
+        results: List[OCPointResult] = []
+        for eff_idx, effect in enumerate(effect_list):
+            count_result = self._simulate_from_counts(
+                procedure=procedure,
+                control_draws=control_draws,
+                treatment_draws=treatment_counts[eff_idx],
+                schedule=schedule,
+                strategy=strategy,
+                max_total=int(max_total),
+                n_sim=n_sim,
+                effect=effect,
+            )
+            results.append(count_result)
+        return results
+
+    def _simulate_from_counts(
+        self,
+        *,
+        procedure: Procedure,
+        control_draws: Sequence[np.ndarray],
+        treatment_draws: Sequence[np.ndarray],
+        schedule: Sequence[Tuple[int, int]],
+        strategy: SamplingStrategy,
+        max_total: int,
+        n_sim: int,
+        effect: float,
+    ) -> OCPointResult:
         stop_counts: Dict[int, int] = {}
         rejections = 0
         total_sample_sizes: List[int] = []
 
-        for _ in range(n_sim):
+        for sim_idx in range(n_sim):
             procedure.reset()
-
             totals: Dict[str, int] = {"cum_nA": 0, "cum_nB": 0, "look_idx": 0}
-            gen = _sampler_gen(
-                batch_size=strategy.batch_size,
-                allocation_ratio=float(self.allocation_ratio),
-                pA=float(p_control),
-                pB=float(p_control + effect),
-                rng=rng,
-                max_total=max_total,
-                totals=totals,
-                schedule=schedule,
-            )
-
             stopped = False
-            for data in gen:
+
+            for look_idx, (inc_a, inc_b) in enumerate(schedule):
+                data = {
+                    "nA": int(inc_a),
+                    "mA": int(control_draws[look_idx][sim_idx]),
+                    "nB": int(inc_b),
+                    "mB": int(treatment_draws[look_idx][sim_idx]),
+                }
                 procedure.ingest(data)
+                totals["cum_nA"] += int(inc_a)
+                totals["cum_nB"] += int(inc_b)
+                totals["look_idx"] += 1
                 decision = procedure.should_stop(totals["look_idx"])
                 if decision is not None:
-                    # Use the actual cumulative total sample size as the key
                     total_n = int(totals["cum_nA"] + totals["cum_nB"])
                     stop_counts.setdefault(total_n, 0)
                     stop_counts[total_n] += 1

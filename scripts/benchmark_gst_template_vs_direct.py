@@ -28,16 +28,19 @@ from earlysign.core.util.ibis_cache import CacheEntry, IbisCache
 from earlysign.stats.applications.design.group_sequential.initial_design.helpers.template_helpers import (
     build_template_procedure_factory,
 )
+from earlysign.stats.applications.design.group_sequential.initial_design.helpers.scheme import (
+    GSTSchemeHooks,
+)
 from earlysign.stats.applications.design.group_sequential.initial_design.scenarios.fst_to_gst import (
     AddInterimToFixedSampleTest,
-    _build_two_prop_procedure_factory,
-    _spending_factory,
-    _spending_family,
 )
 from earlysign.stats.essentials.methods.group_sequential.spending import (
     SpendingFunction,
+    get_spending_class,
 )
-from earlysign.stats.essentials.schemes.two_proportions.asn import build_asn_calculator
+from earlysign.stats.essentials.schemes.two_proportions.design import (
+    build_two_proportions_scheme,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -55,26 +58,6 @@ def _configure_logging(*, level: str, enable_tqdm: bool) -> None:
     LOGGER.setLevel(numeric_level)
 
 
-def _build_asn_factory(
-    *,
-    alpha: float,
-    power: float,
-    p_control: float,
-    delta: float,
-    allocation_ratio: float,
-    spending_obj: SpendingFunction,
-) -> Any:
-    return build_asn_calculator(
-        alpha=alpha,
-        beta=1.0 - power,
-        sided=2,
-        p_control=p_control,
-        effect_size=delta,
-        allocation_ratio=allocation_ratio,
-        spending=spending_obj,
-    )
-
-
 def _direct_compare_runtime(
     *,
     alpha: float,
@@ -82,7 +65,7 @@ def _direct_compare_runtime(
     power: float,
     p_control: float,
     allocation_ratio: float,
-    effect_sizes: Sequence[float],
+    effect_sizes: Optional[Sequence[float]],
     n_sim: int,
     batch_size: Optional[int],
     seed: int,
@@ -93,33 +76,29 @@ def _direct_compare_runtime(
         n_sim,
         k,
     )
-    spending_obj = _spending_factory("pocock", alpha=alpha)
-
-    def _asn_factory() -> Any:
-        return _build_asn_factory(
-            alpha=alpha,
-            power=power,
-            p_control=p_control,
-            delta=delta,
-            allocation_ratio=allocation_ratio,
-            spending_obj=spending_obj,
-        )
-
-    procedure_factory = _build_two_prop_procedure_factory(
-        spending_obj=spending_obj,
+    spending_cls = get_spending_class("pocock")
+    spending_obj = spending_cls(alpha=alpha)
+    scheme = build_two_proportions_scheme(
+        p_control=p_control,
+        target_effect=delta,
+        effect_sizes=effect_sizes or [delta],
         alpha=alpha,
+        power=power,
         allocation_ratio=allocation_ratio,
     )
+    resolved_scheme = scheme.with_effect_sizes(effect_sizes)
+    procedure_factory = resolved_scheme.procedure_factory_builder(
+        spending_obj, allocation_ratio
+    )
+    asn_factory = resolved_scheme.asn_factory_builder(spending_obj)
 
     inst = AddInterimToFixedSampleTest(
         alpha=alpha,
-        delta=delta,
         power=power,
-        p_control=p_control,
         allocation_ratio=allocation_ratio,
+        scheme=resolved_scheme,
         procedure_factory=procedure_factory,
-        asn_calculator_factory=_asn_factory,
-        effect_sizes=effect_sizes,
+        asn_calculator_factory=asn_factory,
         n_sim=n_sim,
         batch_size=batch_size,
         seed=seed,
@@ -158,7 +137,7 @@ def _template_compare_runtime_with_profile(
     power: float,
     p_control: float,
     allocation_ratio: float,
-    effect_sizes: Sequence[float],
+    effect_sizes: Optional[Sequence[float]],
     n_sim: int,
     batch_size: Optional[int],
     seed: int,
@@ -171,18 +150,19 @@ def _template_compare_runtime_with_profile(
         n_sim,
         k,
     )
-    spending_obj = _spending_factory("pocock", alpha=alpha)
-    spending_family = _spending_family(spending_obj)
-
-    def _asn_factory() -> Any:
-        return _build_asn_factory(
-            alpha=alpha,
-            power=power,
-            p_control=p_control,
-            delta=delta,
-            allocation_ratio=allocation_ratio,
-            spending_obj=spending_obj,
-        )
+    spending_cls = get_spending_class("pocock")
+    spending_obj = spending_cls(alpha=alpha)
+    spending_family = spending_obj.name
+    scheme = build_two_proportions_scheme(
+        p_control=p_control,
+        target_effect=delta,
+        effect_sizes=effect_sizes or [delta],
+        alpha=alpha,
+        power=power,
+        allocation_ratio=allocation_ratio,
+    )
+    resolved_scheme = scheme.with_effect_sizes(effect_sizes)
+    asn_factory = resolved_scheme.asn_factory_builder(spending_obj)
 
     template_cache_store: MutableMapping[str, CacheEntry] = {}
 
@@ -210,13 +190,11 @@ def _template_compare_runtime_with_profile(
 
     inst = AddInterimToFixedSampleTest(
         alpha=alpha,
-        delta=delta,
         power=power,
-        p_control=p_control,
         allocation_ratio=allocation_ratio,
+        scheme=resolved_scheme,
         procedure_factory=template_proc_factory,
-        asn_calculator_factory=_asn_factory,
-        effect_sizes=effect_sizes,
+        asn_calculator_factory=asn_factory,
         n_sim=n_sim,
         batch_size=batch_size,
         seed=seed,

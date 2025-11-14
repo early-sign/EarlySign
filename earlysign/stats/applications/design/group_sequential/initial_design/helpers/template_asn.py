@@ -9,7 +9,7 @@ layer. It allows the timing optimiser to work with ledger-backed templates.
 Examples
 --------
 >>> from earlysign.stats.applications.design.group_sequential.initial_design.helpers.template_asn import TemplateASNAdapter
->>> from earlysign.stats.applications.design.group_sequential.initial_design.scenarios.fst_to_gst import _build_two_prop_procedure_factory
+>>> from earlysign.stats.essentials.schemes.two_proportions.procedure import build_two_prop_procedure_factory
 >>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
 >>> from earlysign.stats.essentials.schemes.two_proportions.asn import build_asn_calculator
 >>> spending = OBFSpending(alpha=0.05, sided=2)
@@ -22,7 +22,7 @@ Examples
 ...     allocation_ratio=1.0,
 ...     spending=spending,
 ... )
->>> proc_factory = _build_two_prop_procedure_factory(
+>>> proc_factory = build_two_prop_procedure_factory(
 ...     spending_obj=spending,
 ...     alpha=0.05,
 ...     allocation_ratio=1.0,

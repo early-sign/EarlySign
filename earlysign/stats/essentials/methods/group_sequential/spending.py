@@ -39,7 +39,7 @@ Medicine, 9(12), 1439-1445.
 """
 
 import math
-from typing import Any, Protocol
+from typing import Any, Dict, Protocol, Type
 
 import numpy as np
 from numpy.typing import NDArray
@@ -57,6 +57,9 @@ class SpendingFunction(Protocol):
     boundaries_from_stage_alpha(stage_alpha) -> np.ndarray
         Convert per-stage α increments into one-sided z-critical values.
     """
+
+    @property
+    def name(self) -> str: ...
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]: ...
 
@@ -116,6 +119,10 @@ class OBFSpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
+    @property
+    def name(self) -> str:
+        return "obf"
+
 
 class PocockSpending(SpendingFunction):
     """Pocock-like spending (approximate continuous form).
@@ -142,6 +149,10 @@ class PocockSpending(SpendingFunction):
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
+
+    @property
+    def name(self) -> str:
+        return "pocock"
 
 
 class HSDSpending(SpendingFunction):
@@ -174,3 +185,26 @@ class HSDSpending(SpendingFunction):
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
+
+    @property
+    def name(self) -> str:
+        return "hsd"
+
+
+_SPENDING_REGISTRY: Dict[str, Type[SpendingFunction]] = {
+    "obrien_fleming": OBFSpending,
+    "pocock": PocockSpending,
+    "hsd": HSDSpending,
+}
+
+
+def get_spending_class(name: str) -> Type[SpendingFunction]:
+    """Return the spending class registered under ``name``."""
+
+    key = str(name).strip().lower()
+    if key not in _SPENDING_REGISTRY:
+        raise KeyError(
+            f"Unknown spending family '{name}'. "
+            f"Available: {sorted(_SPENDING_REGISTRY)}"
+        )
+    return _SPENDING_REGISTRY[key]

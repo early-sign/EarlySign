@@ -1,5 +1,16 @@
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+    cast,
+)
 
 import ibis
 import pandas as pd
@@ -10,6 +21,9 @@ from earlysign.core.ledger import Ledger
 from earlysign.core.util.ibis_cache import IbisCache
 from earlysign.framework import templates as tpl
 from earlysign.reporting.group_sequential import plot_design_boundaries
+from earlysign.stats.applications.design.group_sequential.initial_design.scenarios.fst_to_gst import (
+    AddInterimToFixedSampleTest,
+)
 from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
     DesignPayloadModel,
 )
@@ -37,6 +51,61 @@ from earlysign.stats.applications.execution.schemes.two_proportions.records impo
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
 )
+from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
+from earlysign.stats.essentials.methods.group_sequential.spending import (
+    SpendingFunction,
+    get_spending_class,
+)
+from earlysign.stats.essentials.schemes.two_proportions.asn import (
+    build_asn_calculator,
+)
+from earlysign.stats.essentials.schemes.two_proportions.design import (
+    build_two_proportions_scheme,
+)
+
+
+@dataclass
+class BinomialGSTDesignInterface:
+    """Structured accessor for the canonical binomial design helper."""
+
+    design: AddInterimToFixedSampleTest
+    spending: SpendingFunction
+    asn_calculator_factory: Callable[[], ASNCalculator] = field(repr=False)
+
+    def new_asn_calculator(self) -> ASNCalculator:
+        """Return a fresh ASN calculator using the stored factory."""
+
+        return self.asn_calculator_factory()
+
+    def spending_family(self) -> str:
+        """Return canonical spending-family key understood by payload builders."""
+
+        return self.spending.name
+
+    def build_design_payload(
+        self,
+        info_times: Sequence[float],
+        planned_max_n: int,
+        *,
+        metadata: Optional[Mapping[str, object]] = None,
+    ) -> MutableMapping[str, object]:
+        """Construct a minimal JSON-serialisable design payload."""
+
+        payload: MutableMapping[str, object] = {
+            "alpha": float(self.design.alpha),
+            "hypothesis": {"structure": "two_sided_symmetric"},
+            "statistic": {"kind": "wald_z", "scale": "z"},
+            "efficacy": {
+                "style": "alpha_spending",
+                "family": self.spending_family(),
+            },
+            "futility": {"mode": "none", "binding_mode": "non_binding"},
+            "planned_max_n": int(planned_max_n),
+            "planned_info_times": [float(x) for x in info_times],
+        }
+        if metadata:
+            payload["metadata"] = dict(metadata)
+        return payload
 
 
 @dataclass
@@ -267,6 +336,87 @@ class BinomialABTest(tpl.TemplateBase):
             out_id="decision",
         )
         decision_op.run()
+
+    @classmethod
+    def design_interface(
+        cls,
+        *,
+        alpha: float,
+        delta: float,
+        power: float,
+        p_control: float,
+        allocation_ratio: float = 1.0,
+        spending: Union[SpendingFunction, Type[SpendingFunction], str] = "pocock",
+        effect_sizes: Optional[Sequence[float]] = None,
+        n_sim: int = 200,
+        batch_size: Optional[int] = None,
+        seed: Optional[int] = None,
+        design_payload_builder: Optional[
+            Callable[[Sequence[float], int], Mapping[str, Any]]
+        ] = None,
+    ) -> BinomialGSTDesignInterface:
+        """Return a configured binomial GST design helper.
+
+        This surfaces the class-based ``AddInterimToFixedSampleTest`` flow
+        through a stable API so callers (including notebooks) no longer need
+        to replicate the spending/procedure wiring.
+        """
+
+        if hasattr(spending, "cumulative") and hasattr(
+            spending, "boundaries_from_stage_alpha"
+        ):
+            spending_obj = cast(SpendingFunction, spending)
+        else:
+            spending_cls = (
+                cast(Type[SpendingFunction], spending)
+                if isinstance(spending, type)
+                else get_spending_class(str(spending))
+            )
+            spending_obj = spending_cls(alpha=alpha)
+
+        base_scheme = build_two_proportions_scheme(
+            p_control=p_control,
+            target_effect=delta,
+            effect_sizes=effect_sizes or [delta],
+            alpha=alpha,
+            power=power,
+            allocation_ratio=allocation_ratio,
+        )
+        resolved_scheme = base_scheme.with_effect_sizes(effect_sizes)
+
+        def _asn_factory() -> ASNCalculator:
+            return build_asn_calculator(
+                alpha=alpha,
+                beta=1.0 - power,
+                sided=2,
+                p_control=p_control,
+                effect_size=delta,
+                allocation_ratio=allocation_ratio,
+                spending=spending_obj,
+            )
+
+        procedure_factory = resolved_scheme.procedure_factory_builder(
+            spending_obj, allocation_ratio
+        )
+
+        design = AddInterimToFixedSampleTest(
+            alpha=alpha,
+            power=power,
+            allocation_ratio=allocation_ratio,
+            scheme=resolved_scheme,
+            procedure_factory=procedure_factory,
+            asn_calculator_factory=_asn_factory,
+            n_sim=n_sim,
+            batch_size=batch_size,
+            seed=seed,
+            design_payload_builder=design_payload_builder,
+        )
+
+        return BinomialGSTDesignInterface(
+            design=design,
+            spending=spending_obj,
+            asn_calculator_factory=_asn_factory,
+        )
 
     def status(self) -> State:
         decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
