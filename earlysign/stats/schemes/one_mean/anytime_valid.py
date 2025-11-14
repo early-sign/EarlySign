@@ -105,7 +105,7 @@ class MixtureEProcessOneMeanKnownVar(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         summary: OneMeanSummaryRecord,
         out_id: str,
@@ -113,11 +113,11 @@ class MixtureEProcessOneMeanKnownVar(LedgerOp):
         tau2: float = 1.0,
     ):
         super().__init__(
-            scoped, summary=summary, out_id=out_id, sigma2=sigma2, tau2=tau2
+            ledger, summary=summary, out_id=out_id, sigma2=sigma2, tau2=tau2
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"eproc": EProcessRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.eproc
@@ -163,7 +163,7 @@ class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         summary: OneMeanSummaryRecord,
         out_id: str,
@@ -171,11 +171,11 @@ class OneSidedMixtureEProcessOneMeanKnownVar(LedgerOp):
         tau2: float = 1.0,
     ):
         super().__init__(
-            scoped, summary=summary, out_id=out_id, sigma2=sigma2, tau2=tau2
+            ledger, summary=summary, out_id=out_id, sigma2=sigma2, tau2=tau2
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"eproc": EProcessRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.eproc

@@ -49,13 +49,13 @@ class ZMeanKnownVar(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         summary: OneMeanSummaryRecord,
         out_id: str,
         sigma2: float,
     ):
-        super().__init__(scoped, summary=summary, out_id=out_id, sigma2=sigma2)
+        super().__init__(ledger, summary=summary, out_id=out_id, sigma2=sigma2)
 
     @dataclass(frozen=True)
     class Outputs(LedgerOpOutputs):
@@ -63,8 +63,8 @@ class ZMeanKnownVar(LedgerOp):
 
     outputs: Outputs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"z": ZMeanKnownVarRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"z": ZMeanKnownVarRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.z

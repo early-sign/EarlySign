@@ -47,42 +47,44 @@ class LedgerOpOutputs(ABCMapping[str, LedgerRecord]):
 @dataclass
 class LedgerOp:
     """
-    __init__(scoped, **inputs):
-      - scoped: Ledger
+    __init__(ledger, **inputs):
+      - ledger: Ledger
       - inputs: attached LedgerRecord(s) or required dependencies
-    Subclass must override:
-      - derived_records() -> Dict[str, LedgerRecord]  # unattached outputs
-      - run() -> dict                                 # no args; use self.outputs[...] to insert
+    Subclasses must override:
+      - build_outputs() -> Dict[str, LedgerRecord]  # ledger-attached outputs
+      - run() -> dict                               # no args; use self.outputs[...] to insert
     Note:
       - Store outputs only in self.outputs (do not add attributes)
     """
 
-    # Type annotation - subclasses can override with specific type
-    outputs: Any
+    outputs: Any  # subclasses override with typed Outputs
 
-    def __init__(self, scoped: Ledger, **inputs: Any):
-        self.scoped = scoped
+    def __init__(self, ledger: Ledger, **inputs: Any):
+        self.ledger = ledger
         for k, v in inputs.items():
             setattr(self, k, v)
 
+        built = self.build_outputs()
         outs: Dict[str, LedgerRecord] = {}
-        for name, rec in self.derived_records().items():
+        for name, rec in built.items():
             if rec.ledger is None:
-                rec = rec.attach(scoped)
+                raise RuntimeError(
+                    f"Output record '{name}' must be attached to a ledger before return."
+                )
             outs[name] = rec
 
-        # If subclass has Outputs class, create instance; otherwise use dict
         if hasattr(self.__class__, "Outputs"):
-            OutputsClass = getattr(self.__class__, "Outputs")
-            self.outputs = OutputsClass(**outs)
+            outputs_cls = getattr(self.__class__, "Outputs")
+            self.outputs = outputs_cls(**outs)
         else:
             self.outputs = outs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        """Return unattached output records.
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        """Return ledger-attached output records.
 
         Subclasses should override this and specify their own return type.
-        The return value should be a dict-like mapping of output names to LedgerRecord instances.
+        The return value must be a mapping of output names to LedgerRecord instances
+        that have already been attached to a ledger (typically `self.ledger`).
         """
         return {}
 

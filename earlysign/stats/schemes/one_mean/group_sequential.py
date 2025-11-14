@@ -60,7 +60,7 @@ class GSDecisionFromZMean(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         zstat: ZMeanKnownVarRecord,
         boundary: GroupSequentialBoundaryRecord,
@@ -69,7 +69,7 @@ class GSDecisionFromZMean(LedgerOp):
         info: Optional[InformationTimeRecord] = None,
     ):
         super().__init__(
-            scoped,
+            ledger,
             zstat=zstat,
             boundary=boundary,
             out_id=out_id,
@@ -83,8 +83,12 @@ class GSDecisionFromZMean(LedgerOp):
 
     outputs: Outputs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": GroupSequentialDecisionSignalRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {
+            "decision": GroupSequentialDecisionSignalRecord(
+                name=self.out_id, ledger=self.ledger
+            )
+        }
 
     def run(self) -> None:
         out = self.outputs.decision

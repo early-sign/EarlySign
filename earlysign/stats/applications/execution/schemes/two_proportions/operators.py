@@ -34,7 +34,7 @@ class InformationTime(LedgerOp):
 
     Parameters
     ----------
-    scoped : Ledger
+    ledger : Ledger
         Scoped ledger instance.
     out_id : str
         ID of InformationTimeRecord to create.
@@ -54,21 +54,21 @@ class InformationTime(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         cum_counts: Union[BinomialCountsRecord, BinomialCountsSnapshotRecord],
         planned_max_n: int,
     ):
         super().__init__(
-            scoped,
+            ledger,
             out_id=out_id,
             cum_counts=cum_counts,
             planned_max_n=planned_max_n,
         )
 
-    def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.scoped)}
+    def build_outputs(self) -> dict[str, LedgerRecord]:
+        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -105,10 +105,10 @@ class BinomialCountsSnapshot(LedgerOp):
     # Type annotation for outputs - enables type inference!
     outputs: Outputs
 
-    def derived_records(self) -> dict[str, LedgerRecord]:
+    def build_outputs(self) -> dict[str, LedgerRecord]:
         return {
             "snapshot": BinomialCountsSnapshotRecord(
-                name=self.out_id, ledger=self.scoped
+                name=self.out_id, ledger=self.ledger
             )
         }
 
@@ -159,8 +159,8 @@ class WaldZStatistic(LedgerOp):
     # Type annotation for outputs - enables type inference!
     outputs: Outputs
 
-    def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"wald": WaldZStatisticRecord(name=self.out_id, ledger=self.scoped)}
+    def build_outputs(self) -> dict[str, LedgerRecord]:
+        return {"wald": WaldZStatisticRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts
@@ -197,8 +197,8 @@ class ScoreZStatistic(LedgerOp):
     # Type annotation for outputs - enables type inference!
     outputs: Outputs
 
-    def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"score": ScoreZStatisticRecord(name=self.out_id, ledger=self.scoped)}
+    def build_outputs(self) -> dict[str, LedgerRecord]:
+        return {"score": ScoreZStatisticRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         cum_counts = self.cum_counts

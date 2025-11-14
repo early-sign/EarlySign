@@ -37,8 +37,8 @@ class SafeDesign(LedgerOp):
 
     outputs: Outputs
 
-    def derived_records(self) -> dict[str, LedgerRecord]:
-        return {"design": SafeDesignRecord(name=self.out_id)}
+    def build_outputs(self) -> dict[str, LedgerRecord]:
+        return {"design": SafeDesignRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         payload: Dict[str, Any] = {"alpha": float(self.alpha)}

@@ -127,7 +127,7 @@ class MixtureEProcessTwoProportions(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         counts: BinomialCountsRecord,
         out_id: str,
@@ -135,15 +135,15 @@ class MixtureEProcessTwoProportions(LedgerOp):
         prior_alt: Tuple[float, float] = (0.5, 0.5),
     ):
         super().__init__(
-            scoped,
+            ledger,
             counts=counts,
             out_id=out_id,
             prior_null=prior_null,
             prior_alt=prior_alt,
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"eproc": EProcessRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.eproc
@@ -194,7 +194,7 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         counts: BinomialCountsRecord,
         out_id: str,
@@ -203,7 +203,7 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
         prior_alt_B: Tuple[float, float] = (1.0, 0.5),
     ):
         super().__init__(
-            scoped,
+            ledger,
             counts=counts,
             out_id=out_id,
             prior_null=prior_null,
@@ -211,8 +211,8 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
             prior_alt_B=prior_alt_B,
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"eproc": EProcessRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.eproc

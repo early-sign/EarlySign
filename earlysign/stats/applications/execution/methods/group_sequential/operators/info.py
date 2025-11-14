@@ -30,7 +30,7 @@ class InformationTimeFromRatio(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         info_now: float,
@@ -38,11 +38,11 @@ class InformationTimeFromRatio(LedgerOp):
         look: Optional[int] = None,
     ):
         super().__init__(
-            scoped, out_id=out_id, info_now=info_now, info_max=info_max, look=look
+            ledger, out_id=out_id, info_now=info_now, info_max=info_max, look=look
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -69,7 +69,7 @@ class InformationTimeFromVariance(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         var_now: float,
@@ -77,11 +77,11 @@ class InformationTimeFromVariance(LedgerOp):
         look: Optional[int] = None,
     ):
         super().__init__(
-            scoped, out_id=out_id, var_now=var_now, var_target=var_target, look=look
+            ledger, out_id=out_id, var_now=var_now, var_target=var_target, look=look
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -108,7 +108,7 @@ class InformationTimeFromSD(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         sd_now: float,
@@ -116,11 +116,11 @@ class InformationTimeFromSD(LedgerOp):
         look: Optional[int] = None,
     ):
         super().__init__(
-            scoped, out_id=out_id, sd_now=sd_now, sd_target=sd_target, look=look
+            ledger, out_id=out_id, sd_now=sd_now, sd_target=sd_target, look=look
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.info
@@ -147,7 +147,7 @@ class InformationTimeFromFisher(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         fisher_now: float,
@@ -155,15 +155,15 @@ class InformationTimeFromFisher(LedgerOp):
         look: Optional[int] = None,
     ):
         super().__init__(
-            scoped,
+            ledger,
             out_id=out_id,
             fisher_now=fisher_now,
             fisher_max=fisher_max,
             look=look,
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"info": InformationTimeRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.info

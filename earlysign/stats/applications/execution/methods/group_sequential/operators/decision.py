@@ -74,7 +74,7 @@ class GSDecision(LedgerOp):
 
     Parameters
     ----------
-    scoped : Ledger
+    ledger : Ledger
         Scoped ledger instance.
     boundary : GroupSequentialBoundaryRecord (attached)
         Boundary record to compare against.
@@ -120,7 +120,7 @@ class GSDecision(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         boundary: GroupSequentialBoundaryRecord,
         out_id: str,
@@ -129,7 +129,7 @@ class GSDecision(LedgerOp):
         info: Optional[InformationTimeRecord] = None,
     ):
         super().__init__(
-            scoped,
+            ledger,
             boundary=boundary,
             out_id=out_id,
             value=value,
@@ -137,10 +137,10 @@ class GSDecision(LedgerOp):
             info=info,
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
         return {
             "decision": GroupSequentialDecisionSignalRecord(
-                name=self.out_id, ledger=self.scoped
+                name=self.out_id, ledger=self.ledger
             )
         }
 
@@ -224,7 +224,7 @@ class GSDecisionFromWaldZ(LedgerOp):
 
     Parameters
     ----------
-    scoped : Ledger
+    ledger : Ledger
         Scoped ledger instance.
     wald : LedgerRecord (attached)
         Record containing Wald Z-statistic in payload["z"].
@@ -265,7 +265,7 @@ class GSDecisionFromWaldZ(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         wald: WaldZStatisticRecord,
         boundary: GroupSequentialBoundaryRecord,
@@ -274,7 +274,7 @@ class GSDecisionFromWaldZ(LedgerOp):
         info: Optional[InformationTimeRecord] = None,
     ):
         super().__init__(
-            scoped,
+            ledger,
             wald=wald,
             boundary=boundary,
             out_id=out_id,
@@ -282,10 +282,10 @@ class GSDecisionFromWaldZ(LedgerOp):
             info=info,
         )
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
         return {
             "decision": GroupSequentialDecisionSignalRecord(
-                name=self.out_id, ledger=self.scoped
+                name=self.out_id, ledger=self.ledger
             )
         }
 
@@ -304,7 +304,7 @@ class GSDecisionFromWaldZ(LedgerOp):
 
         # Delegate to GSDecision
         gs_decision = GSDecision(
-            self.scoped,
+            self.ledger,
             boundary=boundary,
             out_id=self.out_id,
             value=z_val,

@@ -30,7 +30,7 @@ class BoundaryFromDesign(LedgerOp):
 
     Parameters
     ----------
-    scoped : Ledger
+    ledger : Ledger
         Scoped ledger instance.
     design : GroupSequentialDesignRecord (attached)
         Design record to read from.
@@ -98,10 +98,10 @@ class BoundaryFromDesign(LedgerOp):
 
     outputs: Outputs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
         return {
             "boundary": GroupSequentialBoundaryRecord(
-                name=self.out_id, ledger=self.scoped
+                name=self.out_id, ledger=self.ledger
             )
         }
 

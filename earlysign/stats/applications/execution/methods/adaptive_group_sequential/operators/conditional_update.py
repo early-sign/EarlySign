@@ -33,7 +33,7 @@ class ConditionalPowerCalculation(LedgerOp):
 
     Parameters
     ----------
-    scoped : Ledger
+    ledger : Ledger
         Scoped ledger instance.
     out_id : str
         ID of ConditionalPowerRecord to create.
@@ -74,7 +74,7 @@ class ConditionalPowerCalculation(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         observed_z_id: str,
@@ -85,7 +85,7 @@ class ConditionalPowerCalculation(LedgerOp):
         variance: float = 1.0,
     ):
         super().__init__(
-            scoped,
+            ledger,
             out_id=out_id,
             observed_z_id=observed_z_id,
             current_info_time=current_info_time,
@@ -101,16 +101,16 @@ class ConditionalPowerCalculation(LedgerOp):
 
     outputs: Outputs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"cp": ConditionalPowerRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {"cp": ConditionalPowerRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
         out = self.outputs.cp
 
         # Read observed Z-statistic from ledger
-        # Query the scoped table for the record with the specified ID
+        # Query the ledger table for the record with the specified ID
         obs_id = str(getattr(self, "observed_z_id"))
-        t = self.scoped.t
+        t = self.ledger.t
         result = (
             t.filter(t.labels["id"] == obs_id)
             .order_by(t.ts.desc())
@@ -153,7 +153,7 @@ class PromisingZoneDecision(LedgerOp):
 
     Parameters
     ----------
-    scoped : Ledger
+    ledger : Ledger
         Scoped ledger instance.
     out_id : str
         ID of DesignUpdateDecisionRecord to create.
@@ -200,7 +200,7 @@ class PromisingZoneDecision(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         observed_z_id: str,
@@ -213,7 +213,7 @@ class PromisingZoneDecision(LedgerOp):
         cp_threshold: float = 0.80,
     ):
         super().__init__(
-            scoped,
+            ledger,
             out_id=out_id,
             observed_z_id=observed_z_id,
             current_info_time=current_info_time,
@@ -231,15 +231,17 @@ class PromisingZoneDecision(LedgerOp):
 
     outputs: Outputs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"decision": DesignUpdateDecisionRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {
+            "decision": DesignUpdateDecisionRecord(name=self.out_id, ledger=self.ledger)
+        }
 
     def run(self) -> None:
         out = self.outputs.decision
 
         # Read observed Z-statistic from ledger
         obs_id = str(getattr(self, "observed_z_id"))
-        t = self.scoped.t
+        t = self.ledger.t
         result = (
             t.filter(t.labels["id"] == obs_id)
             .order_by(t.ts.desc())
@@ -286,7 +288,7 @@ class UpdateRemainingBoundaries(LedgerOp):
 
     Parameters
     ----------
-    scoped : Ledger
+    ledger : Ledger
         Scoped ledger instance.
     out_id : str
         ID of updated boundaries record to create.
@@ -326,7 +328,7 @@ class UpdateRemainingBoundaries(LedgerOp):
 
     def __init__(
         self,
-        scoped: Ledger,
+        ledger: Ledger,
         *,
         out_id: str,
         current_info_time: float,
@@ -337,7 +339,7 @@ class UpdateRemainingBoundaries(LedgerOp):
         binding_mode: str = "non_binding",
     ):
         super().__init__(
-            scoped,
+            ledger,
             out_id=out_id,
             current_info_time=current_info_time,
             remaining_info_times=remaining_info_times,
@@ -353,8 +355,12 @@ class UpdateRemainingBoundaries(LedgerOp):
 
     outputs: Outputs
 
-    def derived_records(self) -> Dict[str, LedgerRecord]:
-        return {"updated_boundaries": UpdatedBoundariesRecord(name=self.out_id)}
+    def build_outputs(self) -> Dict[str, LedgerRecord]:
+        return {
+            "updated_boundaries": UpdatedBoundariesRecord(
+                name=self.out_id, ledger=self.ledger
+            )
+        }
 
     def run(self) -> None:
         import numpy as np
