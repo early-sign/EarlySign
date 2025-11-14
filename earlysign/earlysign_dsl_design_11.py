@@ -629,51 +629,51 @@ class BinomialABTest:
                 },
             )
 
-        def update(self, payload: Dict[str, int]) -> None:
-            """Insert one observation and write derived rows using a frozen-past cut.
+    def update(self, payload: Dict[str, int]) -> None:
+        """Insert one observation and write derived rows using a frozen-past cut.
 
-            Semantics:
-            - Insert the observation immediately with ts evaluated on DB (now()).
-            - All subsequent reads in this call use a frozen cut at the latest
-                observation timestamp (same label scope): ts <= latest_observation_ts.
-            - Stats/boundaries are expressed purely in Ibis algebra.
-            - E-value (Gaussian approx) is also stored: e = exp(z^2 / 2).
-            """
-            nA_add = float(payload["nA"])
-            mA_add = float(payload["mA"])
-            nB_add = float(payload["nB"])
-            mB_add = float(payload["mB"])
+        Semantics:
+        - Insert the observation immediately with ts evaluated on DB (now()).
+        - All subsequent reads in this call use a frozen cut at the latest
+            observation timestamp (same label scope): ts <= latest_observation_ts.
+        - Stats/boundaries are expressed purely in Ibis algebra.
+        - E-value (Gaussian approx) is also stored: e = exp(z^2 / 2).
+        """
+        nA_add = float(payload["nA"])
+        mA_add = float(payload["mA"])
+        nB_add = float(payload["nB"])
+        mB_add = float(payload["mB"])
 
-            # (0) Insert the observation immediately (ts evaluated on DB)
-            anchor = self.ledger.view_json().limit(0)
-            obs_row = anchor.select(
-                _uuid_expr().name("uuid"),
-                _now_ts().name("ts"),
-                ibis.literal(_PKG_VERSION).name("pkg_version"),
-                ibis.literal("observation").name("payload_type"),
-                ibis.struct(
-                    {
-                        "nA": ibis.literal(nA_add).cast("float64"),
-                        "mA": ibis.literal(mA_add).cast("float64"),
-                        "nB": ibis.literal(nB_add).cast("float64"),
-                        "mB": ibis.literal(mB_add).cast("float64"),
-                    }
-                ).name("payload"),
-                ibis.struct(
-                    {
-                        k: ibis.literal(str(v)).cast("string")
-                        for k, v in self.ledger.labels.items()
-                    }
-                ).name("labels"),
-            )
-            row_sql = obs_row.compile()
-            self.ledger.con.raw_sql(
-                f"""
+        # (0) Insert the observation immediately (ts evaluated on DB)
+        anchor = self.ledger.view_json().limit(0)
+        obs_row = anchor.select(
+            _uuid_expr().name("uuid"),
+            _now_ts().name("ts"),
+            ibis.literal(_PKG_VERSION).name("pkg_version"),
+            ibis.literal("observation").name("payload_type"),
+            ibis.struct(
+                {
+                    "nA": ibis.literal(nA_add).cast("float64"),
+                    "mA": ibis.literal(mA_add).cast("float64"),
+                    "nB": ibis.literal(nB_add).cast("float64"),
+                    "mB": ibis.literal(mB_add).cast("float64"),
+                }
+            ).name("payload"),
+            ibis.struct(
+                {
+                    k: ibis.literal(str(v)).cast("string")
+                    for k, v in self.ledger.labels.items()
+                }
+            ).name("labels"),
+        )
+        row_sql = obs_row.compile()
+        self.ledger.con.raw_sql(
+            f"""
 INSERT INTO {self.ledger.table} (uuid, ts, pkg_version, payload_type, payload, labels)
 SELECT uuid, ts, pkg_version, payload_type, {_to_json_wrapper_sql(self.ledger.con, "payload")}, {_to_json_wrapper_sql(self.ledger.con, "labels")}
 FROM ({row_sql}) t
-  """
-            )
+"""
+        )
 
         # (1) Remaining writes batched in a single transaction (BEGIN...COMMIT)
         with LedgerSessionSQL(self.ledger) as s:

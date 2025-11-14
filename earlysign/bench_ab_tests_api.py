@@ -11,9 +11,11 @@ from __future__ import annotations
 import cProfile
 import json
 import pstats
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import ibis
+import pandas as pd
+from ibis.backends import BaseBackend
 
 from earlysign.api.ab_tests import BinomialABTest
 
@@ -42,7 +44,7 @@ UPDATES_BETA: List[Dict[str, int]] = [
 ]
 
 
-def run_workload():
+def run_workload() -> Tuple[BaseBackend, BinomialABTest, BinomialABTest]:
     con = ibis.duckdb.connect()
     con.raw_sql(f"DROP TABLE IF EXISTS {SHARED_TABLE}")
     test_a = BinomialABTest(con, "exp_alpha_api", table_name=SHARED_TABLE)
@@ -58,7 +60,7 @@ def run_workload():
     return con, test_a, test_b
 
 
-def _sorted_ledger_df(test: BinomialABTest):
+def _sorted_ledger_df(test: BinomialABTest) -> pd.DataFrame:
     df = test.ledger.show().copy()
     if "labels" in df.columns:
         df["labels_str"] = df["labels"].map(lambda x: json.dumps(x, sort_keys=True))
@@ -78,8 +80,6 @@ def main() -> None:
     pstats.Stats(profiler).strip_dirs().sort_stats("cumulative").print_stats(20)
     print("=== exp_alpha_api ===")
     # Ensure all columns are visible in the output for easier inspection
-    import pandas as pd
-
     pd.set_option("display.max_columns", None)
     # print(test_a.ledger.show().drop(columns=["payload_name", "labels"]).to_dict(orient="records"))
     # print(test_a.ledger.show())

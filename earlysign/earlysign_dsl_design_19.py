@@ -63,9 +63,7 @@ from ibis.expr.types import (
     IntegerValue,
     JSONValue,
     StringValue,
-)
-from ibis.expr.types import (
-    Table as IbisTable,
+    Table,
 )
 from sqlglot import expressions as sge
 
@@ -129,7 +127,7 @@ class Ledger:
             self.con.create_table(self.table_name, schema=schema)
 
     @property
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
     def bind(self, **labels: Any) -> "Ledger":
@@ -169,7 +167,7 @@ class LedgerSession:
         kind: str,
         payload: Optional[Dict[str, Any]] = None,
         payload_expr: Optional[ibis.Expr] = None,
-        source: Optional[IbisTable] = None,
+        source: Optional[Table] = None,
         labels: Optional[Dict[str, Any]] = None,
     ) -> None:
         if (payload is None) == (payload_expr is None):
@@ -217,7 +215,7 @@ class LedgerReader:
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         tbl = self.ledger.table
         if not self.ledger.labels:
             return tbl
@@ -228,7 +226,7 @@ class LedgerReader:
         ]
         return tbl.filter(predicates) if predicates else tbl
 
-    def table_of_kind(self, kind: str) -> IbisTable:
+    def table_of_kind(self, kind: str) -> Table:
         tbl = self.table()
         return tbl.filter(tbl["kind"] == kind)
 
@@ -547,7 +545,7 @@ class BinomialABTestV19:
         self._has_design = False
 
     # --- snapshot helpers -------------------------------------------------
-    def _scoped_kind(self, kind: str) -> IbisTable:
+    def _scoped_kind(self, kind: str) -> Table:
         tbl = self.ledger.table
         filtered = tbl.filter(tbl["kind"] == kind)
         if not self.ledger.labels:
@@ -559,7 +557,7 @@ class BinomialABTestV19:
         ]
         return filtered.filter(predicates) if predicates else filtered
 
-    def _snapshot_rows(self) -> IbisTable:
+    def _snapshot_rows(self) -> Table:
         tbl = self._scoped_kind("snapshot")
         payload = tbl["payload"]
         typed = tbl.select(
@@ -591,14 +589,14 @@ class BinomialABTestV19:
         )
         return typed.union(default)
 
-    def _snapshot_desc_rows(self) -> IbisTable:
+    def _snapshot_desc_rows(self) -> Table:
         return self._snapshot_rows().order_by(ibis.desc("ts_snapshot"))
 
-    def _snapshot_expr(self, offset: int = 0) -> IbisTable:
+    def _snapshot_expr(self, offset: int = 0) -> Table:
         rows = self._snapshot_desc_rows()
         return rows.limit(1, offset=offset)
 
-    def _latest_design_expr(self) -> IbisTable:
+    def _latest_design_expr(self) -> Table:
         tbl = self._scoped_kind("design")
         payload = tbl["payload"]
         typed = tbl.select(
@@ -630,7 +628,7 @@ class BinomialABTestV19:
         )
         return typed.union(default).order_by(ibis.desc("ts_design")).limit(1)
 
-    def _looks_table(self) -> IbisTable:
+    def _looks_table(self) -> Table:
         tbl = self._scoped_kind("design-look")
         payload = tbl["payload"]
         return tbl.select(
@@ -638,14 +636,14 @@ class BinomialABTestV19:
             planned_t=json_get_f64(payload, "planned_t").cast("float64"),
         ).order_by("planned_t")
 
-    def _info_expr(self) -> IbisTable:
+    def _info_expr(self) -> Table:
         snapshot = self._snapshot_expr(offset=0)
         design = self._latest_design_expr()
         return snapshot.cross_join(design).select(
             info_time=(snapshot.nA + snapshot.nB) / design.planned_max_n
         )
 
-    def _stat_expr(self) -> IbisTable:
+    def _stat_expr(self) -> Table:
         snapshots = self._snapshot_desc_rows()
         order_window = ibis.window(order_by=[snapshots.ts_snapshot.desc()])
         enriched = snapshots.mutate(
@@ -669,7 +667,7 @@ class BinomialABTestV19:
             ),
         )
 
-    def _latest_stat_expr(self) -> IbisTable:
+    def _latest_stat_expr(self) -> Table:
         tbl = self._scoped_kind("stat")
         payload = tbl["payload"]
         typed = tbl.select(
@@ -704,7 +702,7 @@ class BinomialABTestV19:
         )
         return typed.union(default).order_by(ibis.desc("ts_stat")).limit(1)
 
-    def _decision_expr(self) -> IbisTable:
+    def _decision_expr(self) -> Table:
         stat = self._latest_stat_expr()
         looks = self._looks_table()
         return (

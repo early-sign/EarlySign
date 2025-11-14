@@ -50,9 +50,7 @@ from ibis.expr.types import (
     IntegerValue,
     JSONValue,
     StringValue,
-)
-from ibis.expr.types import (
-    Table as IbisTable,
+    Table,
 )
 
 __version__ = "16.0.0"
@@ -82,7 +80,7 @@ def _json_literal(data: Dict[str, Any]) -> JSONValue:
     return ibis.literal(json.dumps(data, sort_keys=True), type="string").cast("json")
 
 
-def _label_predicates(table: IbisTable, labels: Dict[str, Any]) -> List[BooleanValue]:
+def _label_predicates(table: Table, labels: Dict[str, Any]) -> List[BooleanValue]:
     """Return boolean predicates matching the provided labels for the table."""
 
     labels_col = table["labels"]
@@ -218,7 +216,7 @@ class Ledger:
             self.con.create_table(self.table_name, schema=schema)
 
     @property
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
     def session(self) -> "LedgerSession":
@@ -241,7 +239,7 @@ class LedgerSession:
         for job in self._jobs:
             job()
 
-    def _enqueue_insert(self, select_expr: IbisTable) -> None:
+    def _enqueue_insert(self, select_expr: Table) -> None:
         con = self.ledger.con
         table_name = self.ledger.table_name
 
@@ -315,18 +313,18 @@ class BinomialABTest:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _apply_labels(self, table: IbisTable) -> IbisTable:
+    def _apply_labels(self, table: Table) -> Table:
         if not self.labels:
             return table
         predicates = _label_predicates(table, self.labels)
         return table.filter(predicates) if predicates else table
 
-    def _scoped_kind(self, kind: str) -> IbisTable:
+    def _scoped_kind(self, kind: str) -> Table:
         tbl = self.ledger.table
         filtered = tbl.filter(tbl["kind"] == ibis.literal(kind))
         return self._apply_labels(filtered)
 
-    def _latest_snapshot_expr(self) -> IbisTable:
+    def _latest_snapshot_expr(self) -> Table:
         tbl = self._scoped_kind("snapshot")
         payload = tbl["payload"]
         typed = tbl.select(
@@ -359,7 +357,7 @@ class BinomialABTest:
         union = typed.union(default_snapshot)
         return union.order_by(union.ts_snapshot.desc()).limit(1)
 
-    def _latest_design_expr(self) -> IbisTable:
+    def _latest_design_expr(self) -> Table:
         tbl = self._scoped_kind("design")
         payload = tbl["payload"]
         typed = tbl.select(
@@ -392,7 +390,7 @@ class BinomialABTest:
         union = typed.union(default_design)
         return union.order_by(union.has_design.desc(), union.ts_design.desc()).limit(1)
 
-    def _looks_table(self) -> IbisTable:
+    def _looks_table(self) -> Table:
         tbl = self._scoped_kind("design-look")
         payload = tbl["payload"]
         return tbl.select(
@@ -400,7 +398,7 @@ class BinomialABTest:
             planned_t=json_get_f64(payload, "planned_t").cast("float64"),
         ).order_by("planned_t")
 
-    def _state_with_due_frame(self, delta: IbisTable) -> IbisTable:
+    def _state_with_due_frame(self, delta: Table) -> Table:
         snapshot = self._latest_snapshot_expr()
         design = self._latest_design_expr()
         base = delta.cross_join(snapshot).cross_join(design)
@@ -487,7 +485,7 @@ class BinomialABTest:
             self._state_plan_op = expr.op()
         return self._state_plan_op
 
-    def _execute_state_plan(self, delta_expr: IbisTable) -> Dict[str, Any]:
+    def _execute_state_plan(self, delta_expr: Table) -> Dict[str, Any]:
         template = self._state_plan_op_cached()
         replaced = template.replace(
             {self._delta_placeholder.op(): delta_expr.op()}

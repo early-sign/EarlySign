@@ -22,8 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import ibis
 from ibis.backends import BaseBackend
-from ibis.expr.types import JSONValue
-from ibis.expr.types import Table as IbisTable
+from ibis.expr.types import JSONValue, Table
 
 __version__ = "23.0.0"
 
@@ -104,7 +103,7 @@ class Ledger:
         if self.table_name not in self.con.list_tables():
             raise RuntimeError(f"Ledger table {self.table_name} is missing")
 
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
     def bind(self, **labels: Any) -> Ledger:
@@ -162,7 +161,7 @@ class LedgerReader:
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def _scoped_table(self) -> IbisTable:
+    def _scoped_table(self) -> Table:
         tbl = self.ledger.table()
         if not self.ledger.labels:
             return tbl
@@ -173,7 +172,7 @@ class LedgerReader:
         ]
         return tbl.filter(predicates)
 
-    def table_of_kind(self, kind: str) -> IbisTable:
+    def table_of_kind(self, kind: str) -> Table:
         tbl = self._scoped_table()
         return tbl.filter(tbl["kind"] == kind)
 

@@ -513,7 +513,7 @@ import pstats
 from typing import Any, Callable, Dict, List
 
 import ibis
-from ibis.expr.types import Table as IbisTable
+from ibis.expr.types import Table
 
 __version__ = "13.0.0"
 
@@ -584,7 +584,7 @@ class Ledger:
             self.con.create_table(self.table_name, schema=schema)
 
     @property
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
     def session(self) -> "LedgerSession":

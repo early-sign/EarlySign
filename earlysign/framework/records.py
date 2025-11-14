@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import (
     Any,
     Dict,
+    Literal,
     Mapping,
     Optional,
     Protocol,
@@ -253,7 +254,24 @@ class LedgerRecord:
         """Validate payload against schema and return a plain dict."""
         model = self.schema_pydantic_model
         parsed = model.model_validate(dict(payload))
-        return cast(Dict[str, Any], parsed.model_dump())
+        dumped: Dict[str, Any] = parsed.model_dump()
+        return dumped
+
+    @overload
+    def latest_payload(
+        self,
+        *,
+        default: Optional[Mapping[str, Any]] = ...,
+        include_ts: Literal[False] = ...,
+    ) -> Dict[str, Any]: ...
+
+    @overload
+    def latest_payload(
+        self,
+        *,
+        default: Optional[Mapping[str, Any]] = ...,
+        include_ts: Literal[True],
+    ) -> tuple[Dict[str, Any], Any]: ...
 
     def latest_payload(
         self,

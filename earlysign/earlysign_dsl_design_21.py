@@ -74,9 +74,7 @@ from ibis.expr.types import (
     IntegerValue,
     JSONValue,
     StringValue,
-)
-from ibis.expr.types import (
-    Table as IbisTable,
+    Table,
 )
 
 __version__ = "21.0.0"
@@ -139,7 +137,7 @@ class Ledger:
             self.con.create_table(self.table_name, schema=schema)
 
     @property
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
     def bind(self, **labels: Any) -> "Ledger":
@@ -183,7 +181,7 @@ class LedgerSession:
         kind: str,
         payload: Optional[Dict[str, Any]] = None,
         payload_expr: Optional[ibis.Expr] = None,
-        source: Optional[IbisTable] = None,
+        source: Optional[Table] = None,
         labels: Optional[Dict[str, Any]] = None,
     ) -> None:
         if (payload is None) == (payload_expr is None):
@@ -263,12 +261,12 @@ class Stage:
                     sess.insert(kind=self.kind, payload=self.default_payload)
         self._seeded = True
 
-    def latest_expr(self) -> IbisTable:
+    def latest_expr(self) -> Table:
         self._ensure_seed()
         tbl = self._reader.table_of_kind(self.kind)
         return tbl.order_by(tbl.ts.desc()).limit(1)
 
-    def latest_values(self) -> IbisTable:
+    def latest_values(self) -> Table:
         tbl = self.latest_expr()
         payload = tbl["payload"]
         return tbl.select(
@@ -278,7 +276,7 @@ class Stage:
             }
         )
 
-    def emit_from_expr(self, sess: LedgerSession, expr: IbisTable) -> None:
+    def emit_from_expr(self, sess: LedgerSession, expr: Table) -> None:
         payload_struct = ibis.struct({alias: expr[alias] for alias in self.mapping})
         sess.insert(kind=self.kind, payload_expr=payload_struct, source=expr)
 
@@ -296,7 +294,7 @@ class LedgerReader:
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         tbl = self.ledger.table
         if not self.ledger.labels:
             return tbl
@@ -307,7 +305,7 @@ class LedgerReader:
         ]
         return tbl.filter(predicates) if predicates else tbl
 
-    def table_of_kind(self, kind: str) -> IbisTable:
+    def table_of_kind(self, kind: str) -> Table:
         tbl = self.table()
         return tbl.filter(tbl["kind"] == kind)
 
@@ -316,7 +314,7 @@ class LedgerReader:
         kind: str,
         mapping: Dict[str, Tuple[str, str]],
         default: Optional[Dict[str, Any]] = None,
-    ) -> IbisTable:
+    ) -> Table:
         tbl = self.table_of_kind(kind)
         payload = tbl["payload"]
         selects = {"ts_latest": tbl.ts}
@@ -707,10 +705,10 @@ class BinomialABTestV21:
             },
         )
 
-    def _latest_snapshot_expr(self) -> IbisTable:
+    def _latest_snapshot_expr(self) -> Table:
         return self.snapshot_stage.latest_values()
 
-    def _latest_design_expr(self) -> IbisTable:
+    def _latest_design_expr(self) -> Table:
         tbl = self.reader.table_of_kind("design")
         payload = tbl["payload"]
         typed = tbl.select(
@@ -739,7 +737,7 @@ class BinomialABTestV21:
         )
         return typed.union(default_tbl).order_by(ibis.desc("ts_design")).limit(1)
 
-    def _delta_expr(self, payload: Dict[str, int]) -> IbisTable:
+    def _delta_expr(self, payload: Dict[str, int]) -> Table:
         return ibis.memtable(
             [
                 dict(
@@ -919,7 +917,7 @@ class ENormalMixtureV21:
                     payload=dict(alpha=float(alpha), thetas=list(map(float, thetas))),
                 )
 
-    def _latest_state_expr(self) -> IbisTable:
+    def _latest_state_expr(self) -> Table:
         tbl = self.reader.table_of_kind("e_state")
         payload = tbl["payload"]
         typed = tbl.select(

@@ -46,9 +46,7 @@ from ibis.expr.types import (
     IntegerValue,
     JSONValue,
     StringValue,
-)
-from ibis.expr.types import (
-    Table as IbisTable,
+    Table,
 )
 
 __version__ = "14.0.0"
@@ -212,7 +210,7 @@ class Ledger:
             self.con.create_table(self.table_name, schema=schema)
 
     @property
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
     def session(self) -> "LedgerSession":
@@ -235,7 +233,7 @@ class LedgerSession:
         for job in self._jobs:
             job()
 
-    def _enqueue_insert(self, select_expr: IbisTable) -> None:
+    def _enqueue_insert(self, select_expr: Table) -> None:
         con = self.ledger.con
         table_name = self.ledger.table_name
 
@@ -297,7 +295,7 @@ class BinomialABTest:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _apply_labels(self, table: IbisTable) -> IbisTable:
+    def _apply_labels(self, table: Table) -> Table:
         if not self.labels:
             return table
         labels_col = table["labels"]
@@ -315,7 +313,7 @@ class BinomialABTest:
         count_expr = filtered.count()
         return bool(self.ledger.con.execute(count_expr))
 
-    def _latest_row(self, kind: str) -> IbisTable:
+    def _latest_row(self, kind: str) -> Table:
         tbl = self.ledger.table
         kind_pred = tbl["kind"] == ibis.literal(kind)
         filtered = tbl.filter(kind_pred)

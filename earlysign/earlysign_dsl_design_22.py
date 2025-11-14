@@ -60,12 +60,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 
 import ibis
 from ibis.backends import BaseBackend
-from ibis.expr.types import (
-    JSONValue,
-)
-from ibis.expr.types import (
-    Table as IbisTable,
-)
+from ibis.expr.types import JSONValue, Table
 
 __version__ = "22.0.0"
 
@@ -126,7 +121,7 @@ class Ledger:
             self.con.create_table(self.table_name, schema=schema)
 
     @property
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
     def bind(self, **labels: Any) -> "Ledger":
@@ -184,7 +179,7 @@ class LedgerReader:
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         tbl = self.ledger.table
         if not self.ledger.labels:
             return tbl
@@ -195,7 +190,7 @@ class LedgerReader:
         ]
         return tbl.filter(predicates) if predicates else tbl
 
-    def table_of_kind(self, kind: str) -> IbisTable:
+    def table_of_kind(self, kind: str) -> Table:
         tbl = self.table()
         return tbl.filter(tbl["kind"] == kind)
 

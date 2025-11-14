@@ -23,8 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import ibis
 from ibis.backends import BaseBackend
-from ibis.expr.types import JSONValue
-from ibis.expr.types import Table as IbisTable
+from ibis.expr.types import JSONValue, Table
 
 __version__ = "24.0.0"
 
@@ -106,10 +105,10 @@ class Ledger:
         merged.update(labels)
         return Ledger(self.con, self.table_name, labels=merged)
 
-    def table(self) -> IbisTable:
+    def table(self) -> Table:
         return self.con.table(self.table_name)
 
-    def scoped_table(self) -> IbisTable:
+    def scoped_table(self) -> Table:
         tbl = self.table()
         if not self.labels:
             return tbl
@@ -128,7 +127,7 @@ class Ledger:
         kind: str,
         payload: Dict[str, Any],
         labels: Optional[Dict[str, Any]] = None,
-    ) -> IbisTable:
+    ) -> Table:
         merged_labels = dict(self.labels)
         if labels:
             merged_labels.update(labels)
