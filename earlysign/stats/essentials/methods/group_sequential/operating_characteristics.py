@@ -12,7 +12,16 @@ an object that implements the Simulator protocol defined below.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol, Sequence, runtime_checkable
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    runtime_checkable,
+)
 
 import numpy as np
 
@@ -89,6 +98,33 @@ class Procedure(Protocol):
 
 
 @runtime_checkable
+class BatchedProcedure(Procedure, Protocol):
+    """Optional vectorized interface for simulators that operate on arrays."""
+
+    def reset_batch(self, n_simulations: int) -> None:
+        """Prepare internal state for a batch of `n_simulations` replications."""
+        ...
+
+    def ingest_batch(
+        self,
+        cumulative: Dict[str, np.ndarray],
+        *,
+        active_mask: np.ndarray,
+    ) -> None:
+        """Ingest batched cumulative data for all simulations at once."""
+        ...
+
+    def should_stop_batch(
+        self,
+        look: int,
+        *,
+        active_mask: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Return (stop_mask, reject_mask) for the current batch."""
+        ...
+
+
+@runtime_checkable
 class Simulator(Protocol):
     """Protocol for a simulator that drives data generation only.
 
@@ -105,87 +141,36 @@ class Simulator(Protocol):
     def simulate(
         self,
         procedure: Procedure,
-        effect_size: Optional[float] = None,
-        n_simulations: Optional[int] = None,
+        *,
+        requests: Sequence[Any],
         rng_seed: Optional[int] = None,
-    ) -> OCPointResult:
+        **kwargs: Any,
+    ) -> Sequence[OCPointResult]:
         """Run simulations for the given procedure.
 
         Parameters
-        - effect_size: effect size to simulate (if simulator has a default it may be overridden)
-        - n_simulations: overrides simulator's default number of simulations
+        - requests: scheme-specific request objects describing each scenario to run
         - rng_seed: optional RNG seed for reproducibility of this call
+        - kwargs: additional scheme-specific parameters shared across requests
         """
         ...
-
-
-@runtime_checkable
-class BatchSimulator(Simulator, Protocol):
-    """Optional extension that can evaluate multiple effect sizes in one call."""
-
-    def simulate_many(
-        self,
-        procedure: Procedure,
-        effect_sizes: Sequence[float],
-        n_simulations: Optional[int] = None,
-        rng_seed: Optional[int] = None,
-        **kwargs: Any,
-    ) -> Sequence[OCPointResult]: ...
 
 
 def compute_oc_curve(
     simulator: Simulator,
     procedure: Procedure,
-    effect_sizes: Sequence[float],
-    n_simulations: int = 2000,
+    *,
+    requests: Sequence[Any],
+    rng_seed: Optional[int] = None,
     simulator_kwargs: Optional[Dict[str, Any]] = None,
 ) -> List[OCPointResult]:
-    """Compute operating characteristics across effect sizes.
-
-    This function simply iterates over `effect_sizes`, delegates the
-    simulation work to the provided `simulator` by passing the same
-    `procedure`, and collects the returned per-effect results into an
-    `OCCurveResult`.
-
-    Args:
-        simulator: an object implementing the Simulator protocol
-        procedure: statistical procedure object to evaluate
-        effect_sizes: sequence of effect sizes to evaluate
-        n_simulations: number of Monte Carlo replications per effect size
-
-    Returns:
-        OCCurveResult
-    """
-
-    # Defensive copy to numpy array for convenience
-    effect_sizes_arr = np.asarray(effect_sizes, dtype=float)
-
-    results: List[OCPointResult] = []
+    """Delegate to ``simulator.simulate`` for a prepared list of requests."""
 
     base_kwargs = dict(simulator_kwargs or {})
-    base_kwargs.setdefault("n_simulations", int(n_simulations))
-
-    if isinstance(simulator, BatchSimulator):
-        batch_points = simulator.simulate_many(
-            procedure,
-            [float(es) for es in effect_sizes_arr],
-            **base_kwargs,
-        )
-        for es, point in zip(effect_sizes_arr, batch_points):
-            if not np.isclose(point.effect_size, float(es)):
-                point.effect_size = float(es)
-            results.append(point)
-        return results
-
-    for es in effect_sizes_arr:
-        call_kwargs = dict(base_kwargs)
-        call_kwargs["effect_size"] = float(es)
-
-        point = simulator.simulate(procedure, **call_kwargs)
-
-        if not np.isclose(point.effect_size, float(es)):
-            point.effect_size = float(es)
-
-        results.append(point)
-
-    return results
+    results = simulator.simulate(
+        procedure,
+        requests=requests,
+        rng_seed=rng_seed,
+        **base_kwargs,
+    )
+    return list(results)

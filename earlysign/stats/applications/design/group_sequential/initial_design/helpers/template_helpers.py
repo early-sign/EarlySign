@@ -20,15 +20,15 @@ if TYPE_CHECKING:
 def build_template_procedure_factory(
     *,
     template_factory: Callable[[Any, str, Optional[str]], "TemplateBase"],
-    terminate_fn: Callable[["TemplateBase", int], Optional[Dict[str, Any]]],
+    stop_decision_fn: Callable[["TemplateBase", int], Optional[Dict[str, Any]]],
     experiment_id: str,
     table_name: Optional[str] = None,
 ) -> ProcedureFactory:
     """Return a :class:`ProcedureFactory` that wraps ``TemplateProcedureAdapter``."""
 
     def _factory(
-        info_times: Sequence[float],
-        planned_max_n: int,
+        _info_times: Sequence[float],
+        _planned_max_n: int,
         design_payload: Optional[Mapping[str, Any]],
         rng_seed: Optional[int],
     ) -> ProcedureLike:
@@ -40,9 +40,7 @@ def build_template_procedure_factory(
             template_factory=template_factory,
             experiment_id=experiment_id,
             table_name=table_name,
-            terminate_fn=terminate_fn,
-            info_times=info_times,
-            planned_max_n=planned_max_n,
+            stop_decision_fn=stop_decision_fn,
             design_payload=design_payload,
             rng_seed=rng_seed,
         )

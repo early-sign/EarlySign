@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
+    BatchedProcedure,
     OCPointResult,
     Procedure,
 )
@@ -12,76 +13,15 @@ from earlysign.stats.essentials.methods.group_sequential.simulation import (
 )
 
 
-def _sampler_gen(
-    *,
-    batch_size: Optional[int],
-    allocation_ratio: float,
-    pA: float,
-    pB: float,
-    rng: np.random.Generator,
-    max_total: Optional[int],
-    totals: Dict[str, int],
-    schedule: Optional[Sequence[Tuple[int, int]]] = None,
-) -> Iterator[Dict[str, int]]:
-    """Simple generator yielding per-batch data and updating `totals`.
+@dataclass(frozen=True)
+class TwoProportionsSimulationRequest:
+    """Specification for a single two-proportions simulation scenario."""
 
-    totals is a mutable dict the caller can read at any time; it will
-    contain keys 'cum_nA', 'cum_nB' and 'look_idx'. This keeps the
-    sampler implementation minimal (yield + totals) as requested.
-    """
-
-    if schedule is not None:
-        for inc_a, inc_b in schedule:
-            if inc_a == 0 and inc_b == 0:
-                totals["look_idx"] += 1
-                yield {"nA": 0, "mA": 0, "nB": 0, "mB": 0}
-                continue
-            drawA = int(rng.binomial(int(inc_a), pA)) if inc_a else 0
-            drawB = int(rng.binomial(int(inc_b), pB)) if inc_b else 0
-
-            totals["cum_nA"] += int(inc_a)
-            totals["cum_nB"] += int(inc_b)
-            totals["look_idx"] += 1
-
-            yield {
-                "nA": int(inc_a),
-                "mA": drawA,
-                "nB": int(inc_b),
-                "mB": drawB,
-            }
-        return
-
-    if batch_size is None:
-        raise ValueError("batch_size must be provided when schedule is absent")
-
-    batch_total = int(batch_size + round(batch_size * allocation_ratio))
-    alloc = float(allocation_ratio)
-
-    while True:
-        # respect max_total: compute remaining samples allowed (both groups)
-        if max_total is not None:
-            consumed = int(totals.get("cum_nA", 0) + totals.get("cum_nB", 0))
-            remaining = int(max_total) - consumed
-            if remaining <= 0:
-                return
-            cur_batch_total = min(batch_total, remaining)
-        else:
-            cur_batch_total = batch_total
-
-        # decide batch sizes (fixed per-batch; will not overshoot max_total)
-        incA = int(round(cur_batch_total / (1.0 + alloc)))
-        incA = max(0, min(incA, cur_batch_total))
-        incB = cur_batch_total - incA
-        if incA == 0 and incB == 0:
-            return
-
-        drawA = int(rng.binomial(incA, pA)) if incA else 0
-        drawB = int(rng.binomial(incB, pB)) if incB else 0
-
-        totals["cum_nA"] += incA
-        totals["cum_nB"] += incB
-        totals["look_idx"] += 1
-        yield {"nA": incA, "mA": drawA, "nB": incB, "mB": drawB}
+    p_control: float
+    effect_size: float
+    n_simulations: int
+    max_total: int
+    sampling: SamplingStrategy
 
 
 @dataclass
@@ -94,7 +34,7 @@ class TwoProportionsSimulator:
     """
 
     effect_size: float
-    n_simulations: int = 2000
+    n_simulations: int = 200
     allocation_ratio: float = 1.0
     strategy: Optional[SamplingStrategy] = None
 
@@ -110,103 +50,135 @@ class TwoProportionsSimulator:
         self,
         procedure: Procedure,
         *,
-        p_control: float,
-        effect_size: Optional[float] = None,
-        n_simulations: Optional[int] = None,
+        requests: Optional[Sequence[TwoProportionsSimulationRequest]] = None,
         rng_seed: Optional[int] = None,
-        max_total: Optional[int] = None,
-        sampling: Optional[SamplingStrategy] = None,
-    ) -> OCPointResult:
-        effect = (
-            float(effect_size) if effect_size is not None else float(self.effect_size)
-        )
-        results = self.simulate_many(
-            procedure,
-            effect_sizes=[effect],
-            p_control=p_control,
-            n_simulations=n_simulations,
-            rng_seed=rng_seed,
-            max_total=max_total,
-            sampling=sampling,
-        )
-        return results[0]
+        **kwargs: Any,
+    ) -> Any:
+        """Run one or more simulation scenarios.
 
-    def simulate_many(
-        self,
-        procedure: Procedure,
-        *,
-        p_control: float,
-        effect_sizes: Sequence[float],
-        n_simulations: Optional[int] = None,
-        rng_seed: Optional[int] = None,
-        max_total: Optional[int] = None,
-        sampling: Optional[SamplingStrategy] = None,
-    ) -> Sequence[OCPointResult]:
-        effect_list = [float(es) for es in effect_sizes]
-        if not effect_list:
-            return []
+        When ``requests`` is provided the method returns a sequence of
+        :class:`OCPointResult` objects in the same order. When legacy
+        keyword arguments (``p_control``, ``effect_size`` …) are supplied,
+        the behaviour mirrors the historical API and returns a single
+        :class:`OCPointResult`.
+        """
 
-        n_sim = (
-            int(n_simulations) if n_simulations is not None else int(self.n_simulations)
-        )
+        if requests is not None:
+            request_list = list(requests)
+            legacy_mode = False
+        else:
+            try:
+                p_control = float(kwargs["p_control"])
+            except KeyError as exc:  # pragma: no cover - defensive legacy guard
+                raise TypeError(
+                    "p_control is required when requests are not provided"
+                ) from exc
+
+            effect = float(kwargs.get("effect_size", self.effect_size))
+            n_sim = int(kwargs.get("n_simulations", self.n_simulations))
+            strategy = kwargs.get("sampling") or self.strategy
+            if strategy is None:
+                raise ValueError("Provide a sampling strategy to the simulator")
+            max_total = int(kwargs.get("max_total", strategy.max_total))
+            legacy_request = TwoProportionsSimulationRequest(
+                p_control=p_control,
+                effect_size=effect,
+                n_simulations=n_sim,
+                max_total=max_total,
+                sampling=strategy,
+            )
+            request_list = [legacy_request]
+            legacy_mode = True
+
+        if not request_list:
+            return [] if not legacy_mode else []
+
+        request_infos: List[
+            Tuple[
+                TwoProportionsSimulationRequest,
+                SamplingStrategy,
+                Tuple[Tuple[int, int], ...],
+            ]
+        ] = []
+        for req in request_list:
+            strategy = req.sampling
+            schedule = tuple(strategy.schedule)
+            request_infos.append((req, strategy, schedule))
         rng = np.random.default_rng(rng_seed)
 
-        strategy = sampling or self.strategy
-        if strategy is None:
-            raise ValueError("Provide a sampling strategy to the simulator")
+        grouped: Dict[Tuple[int, Tuple[Tuple[int, int], ...]], List[int]] = {}
+        for idx, (req, _, schedule) in enumerate(request_infos):
+            key = (req.n_simulations, schedule)
+            grouped.setdefault(key, []).append(idx)
 
-        schedule = list(strategy.schedule)
-        if not schedule:
-            raise ValueError("Sampling strategy produced an empty schedule")
+        results: List[Optional[OCPointResult]] = [None] * len(request_infos)
 
-        strategy_total = int(strategy.max_total)
-        if max_total is None:
-            max_total = strategy_total
-        elif int(max_total) != strategy_total:
-            raise ValueError(
-                "max_total must match the sampling strategy's maximum total"
+        for (n_sim, schedule), indices in grouped.items():
+            schedule_arr = np.asarray(schedule, dtype=int)
+            n_looks = schedule_arr.shape[0]
+            inc_a = schedule_arr[:, 0] if n_looks else np.zeros(0, dtype=int)
+            inc_b = schedule_arr[:, 1] if n_looks else np.zeros(0, dtype=int)
+
+            reqs = [request_infos[i][0] for i in indices]
+            control_probs = np.asarray([req.p_control for req in reqs], dtype=float)
+            treatment_probs = np.asarray(
+                [req.p_control + req.effect_size for req in reqs], dtype=float
             )
 
-        control_draws: List[np.ndarray] = []
-        treatment_uniforms: List[Optional[np.ndarray]] = []
-        for inc_a, inc_b in schedule:
-            if inc_a > 0:
-                control_draws.append(
-                    rng.binomial(int(inc_a), float(p_control), size=n_sim).astype(int)
-                )
-            else:
-                control_draws.append(np.zeros(n_sim, dtype=int))
-            if inc_b > 0:
-                treatment_uniforms.append(rng.random((n_sim, int(inc_b)), dtype=float))
-            else:
-                treatment_uniforms.append(None)
-
-        treatment_counts: List[List[np.ndarray]] = [
-            [np.zeros(n_sim, dtype=int) for _ in schedule] for _ in effect_list
-        ]
-        for look_idx, uniforms in enumerate(treatment_uniforms):
-            if uniforms is None:
-                continue
-            for eff_idx, effect in enumerate(effect_list):
-                threshold = float(np.clip(p_control + effect, 0.0, 1.0))
-                treatment_counts[eff_idx][look_idx] = (
-                    (uniforms < threshold).sum(axis=1).astype(int)
-                )
-
-        results: List[OCPointResult] = []
-        for eff_idx, effect in enumerate(effect_list):
-            count_result = self._simulate_from_counts(
-                procedure=procedure,
-                control_draws=control_draws,
-                treatment_draws=treatment_counts[eff_idx],
-                schedule=schedule,
-                strategy=strategy,
-                max_total=int(max_total),
-                n_sim=n_sim,
-                effect=effect,
+            control_samples = _sample_group_counts(
+                rng=rng,
+                n_simulations=n_sim,
+                increments=inc_a,
+                probabilities=control_probs,
             )
-            results.append(count_result)
-        return results
+            treatment_samples = _sample_group_counts(
+                rng=rng,
+                n_simulations=n_sim,
+                increments=inc_b,
+                probabilities=treatment_probs,
+            )
+
+            for local_idx, req_idx in enumerate(indices):
+                req, strategy, _ = request_infos[req_idx]
+                if isinstance(procedure, BatchedProcedure):
+                    control_block = control_samples[:, local_idx, :]
+                    treatment_block = treatment_samples[:, local_idx, :]
+                    results[req_idx] = self._simulate_with_batched_procedure(
+                        procedure=procedure,
+                        control_counts=control_block,
+                        treatment_counts=treatment_block,
+                        schedule=schedule,
+                        strategy=strategy,
+                        max_total=req.max_total,
+                        n_sim=req.n_simulations,
+                        effect=req.effect_size,
+                    )
+                else:
+                    control_draws = tuple(
+                        control_samples[:, local_idx, look_idx]
+                        for look_idx in range(n_looks)
+                    )
+                    treatment_draws = tuple(
+                        treatment_samples[:, local_idx, look_idx]
+                        for look_idx in range(n_looks)
+                    )
+                    results[req_idx] = self._simulate_from_counts(
+                        procedure=procedure,
+                        control_draws=control_draws,
+                        treatment_draws=treatment_draws,
+                        schedule=schedule,
+                        strategy=strategy,
+                        max_total=req.max_total,
+                        n_sim=req.n_simulations,
+                        effect=req.effect_size,
+                    )
+
+        cleaned = [res for res in results if res is not None]
+        if legacy_mode:
+            if not cleaned:
+                raise RuntimeError("Simulator returned no results for the legacy call")
+            return cleaned[0]
+        return cleaned
 
     def _simulate_from_counts(
         self,
@@ -285,3 +257,129 @@ class TwoProportionsSimulator:
             stop_distribution=stop_counts,
             metadata=metadata,
         )
+
+    def _simulate_with_batched_procedure(
+        self,
+        *,
+        procedure: BatchedProcedure,
+        control_counts: np.ndarray,
+        treatment_counts: np.ndarray,
+        schedule: Sequence[Tuple[int, int]],
+        strategy: SamplingStrategy,
+        max_total: int,
+        n_sim: int,
+        effect: float,
+    ) -> OCPointResult:
+        """Vectorized helper for :class:`BatchedProcedure` implementations."""
+
+        n_simulations, n_looks = control_counts.shape
+        procedure.reset_batch(n_simulations)
+
+        active = np.ones(n_simulations, dtype=bool)
+        total_n = np.zeros(n_simulations, dtype=int)
+        rejections = np.zeros(n_simulations, dtype=bool)
+        total_sample_sizes: List[int] = []
+        stop_counts: Dict[int, int] = {}
+
+        for look_idx, (inc_a, inc_b) in enumerate(schedule):
+            if not np.any(active):
+                break
+
+            payload = {
+                "nA": np.full(n_simulations, int(inc_a), dtype=int),
+                "mA": control_counts[:, look_idx],
+                "nB": np.full(n_simulations, int(inc_b), dtype=int),
+                "mB": treatment_counts[:, look_idx],
+            }
+            procedure.ingest_batch(payload, active_mask=active)
+            total_n[active] += int(inc_a + inc_b)
+
+            stop_mask, reject_mask = procedure.should_stop_batch(
+                look_idx + 1, active_mask=active
+            )
+            stop_mask = np.asarray(stop_mask, dtype=bool) & active
+            if not np.any(stop_mask):
+                continue
+
+            reject_mask = np.asarray(reject_mask, dtype=bool) & stop_mask
+            stopped_totals = total_n[stop_mask]
+            unique_totals, counts = np.unique(stopped_totals, return_counts=True)
+            for value, count in zip(unique_totals.tolist(), counts.tolist()):
+                stop_counts[value] = stop_counts.get(value, 0) + count
+            total_sample_sizes.extend(stopped_totals.tolist())
+            rejections |= reject_mask
+            active[stop_mask] = False
+
+        if np.any(active):
+            remaining_totals = total_n[active]
+            unique_totals, counts = np.unique(remaining_totals, return_counts=True)
+            for value, count in zip(unique_totals.tolist(), counts.tolist()):
+                stop_counts[value] = stop_counts.get(value, 0) + count
+            total_sample_sizes.extend(remaining_totals.tolist())
+
+        expected_sample_size = (
+            float(np.mean(total_sample_sizes)) if total_sample_sizes else 0.0
+        )
+        power = float(np.count_nonzero(rejections)) / float(max(1, n_sim))
+
+        metadata: Dict[str, Any] = {
+            "n_simulations": int(n_sim),
+            "allocation_ratio": float(self.allocation_ratio),
+            "sampling_strategy": strategy.description,
+            "batched": True,
+        }
+        if strategy.batch_size is not None:
+            metadata["batch_size"] = int(strategy.batch_size)
+
+        strategy_meta = dict(strategy.metadata())
+        metadata.update(strategy_meta)
+        if "schedule" not in metadata:
+            metadata["schedule"] = [
+                (int(inc_a), int(inc_b)) for inc_a, inc_b in schedule
+            ]
+
+        return OCPointResult(
+            effect_size=effect,
+            expected_sample_size=expected_sample_size,
+            power=power,
+            max_sample_size=float(int(max_total)),
+            stop_distribution=stop_counts,
+            metadata=metadata,
+        )
+
+
+def _sample_group_counts(
+    *,
+    rng: np.random.Generator,
+    n_simulations: int,
+    increments: np.ndarray,
+    probabilities: np.ndarray,
+) -> np.ndarray:
+    """Draw binomial counts for ``n_simulations``×``len(probabilities)`` requests.
+
+    The function relies on NumPy broadcasting to construct the per-look
+    ``n`` and ``p`` matrices before drawing all replications in one call.
+
+    >>> counts = _sample_group_counts(
+    ...     rng=np.random.default_rng(0),
+    ...     n_simulations=2,
+    ...     increments=np.array([1, 2]),
+    ...     probabilities=np.array([0.5, 0.25]),
+    ... )
+    >>> counts.shape
+    (2, 2, 2)
+    >>> counts
+    array([[[1, 1],
+            [0, 0]],
+           [[1, 2],
+            [0, 1]]])
+    """
+
+    num_requests = int(probabilities.shape[0])
+    n_looks = int(increments.shape[0])
+    n_matrix = np.broadcast_to(increments, (num_requests, n_looks))
+    p_matrix = np.broadcast_to(probabilities[:, None], (num_requests, n_looks))
+    n_full = np.broadcast_to(n_matrix, (n_simulations, num_requests, n_looks))
+    p_full = np.broadcast_to(p_matrix, (n_simulations, num_requests, n_looks))
+    samples = rng.binomial(n=n_full, p=p_full)
+    return samples.astype(int)

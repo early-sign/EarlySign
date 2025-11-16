@@ -4,7 +4,7 @@ Scheme adaptor for two-proportions group-sequential designs.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Sequence, cast
+from typing import Callable, Dict, Optional, Sequence, cast
 
 from earlysign.stats.applications.design.group_sequential.initial_design.helpers.scheme import (
     GSTSchemeHooks,
@@ -24,9 +24,10 @@ from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
     TwoProportionsEffectSizeCalculator,
 )
 from earlysign.stats.essentials.schemes.two_proportions.procedure import (
-    build_two_prop_procedure_factory,
+    TwoProportionsProcedure,
 )
 from earlysign.stats.essentials.schemes.two_proportions.simulator import (
+    TwoProportionsSimulationRequest,
     TwoProportionsSimulator,
 )
 
@@ -66,17 +67,36 @@ def build_two_proportions_scheme(
             ),
         )
 
-    def simulator_kwargs_builder(
+    def simulator_request_builder(
         effect_size: float,
         planned_max_n: int,
         sampling_strategy: simulation.SamplingStrategy,
-    ) -> Dict[str, object]:
-        return {
-            "p_control": float(p_control),
-            "effect_size": float(effect_size),
-            "max_total": int(planned_max_n),
-            "sampling": sampling_strategy,
-        }
+        n_simulations: int,
+    ) -> TwoProportionsSimulationRequest:
+        return TwoProportionsSimulationRequest(
+            p_control=float(p_control),
+            effect_size=float(effect_size),
+            n_simulations=int(n_simulations),
+            max_total=int(planned_max_n),
+            sampling=sampling_strategy,
+        )
+
+    def sampling_strategy_builder(
+        info_times: Sequence[float],
+        planned_max_n: int,
+        batch_size: Optional[int],
+    ) -> simulation.SamplingStrategy:
+        if batch_size is None:
+            return simulation.InfoTimeSampling(
+                info_times=list(info_times),
+                planned_max_n=int(planned_max_n),
+                allocation_ratio=float(allocation_ratio),
+            )
+        return simulation.FixedBatchSampling(
+            size=int(batch_size),
+            allocation_ratio=float(allocation_ratio),
+            total=int(planned_max_n),
+        )
 
     def asn_factory_builder(
         spending_obj: SpendingFunction,
@@ -101,9 +121,10 @@ def build_two_proportions_scheme(
         null_reference=float(p_control),
         fsd_planner=fsd_planner,
         simulator_factory=simulator_factory,
-        simulator_kwargs_builder=simulator_kwargs_builder,
+        simulation_request_builder=simulator_request_builder,
+        sampling_strategy_builder=sampling_strategy_builder,
         asn_factory_builder=asn_factory_builder,
-        procedure_factory_builder=lambda s, alloc: build_two_prop_procedure_factory(
+        procedure_factory_builder=lambda s, alloc: TwoProportionsProcedure.factory_builder(
             spending_obj=s,
             alpha=float(alpha),
             allocation_ratio=float(alloc),

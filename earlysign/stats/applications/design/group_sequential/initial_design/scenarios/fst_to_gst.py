@@ -1,26 +1,22 @@
 """Convert a fixed-sample two-proportion design into group-sequential procedures.
 
-This module provides two high-level scenario functions used by the tutorial
-and UI flows. Both functions are intentionally generic but the concrete
-implementation below targets the two-proportions scheme using the
+This module focuses on :class:`AddInterimToFixedSampleTest`, a helper class used
+throughout the tutorials and APIs. The class is intentionally generic but the
+concrete implementation below targets the two-proportions scheme using the
 essentials/applications building blocks in the repository.
 
-Implemented functions
----------------------
-- add_interim(...)
-    Build k-look group-sequential procedures taking the fixed-sample-design
-    (FSD) sample size as the maximum sample size. For each k the function
-    optimizes information timing (using the MinimizeASN workflow via the
-    two-proportions normal approximation), forms a boundary + Procedure, runs
-    Monte-Carlo operating-characteristic simulations and returns the OC curve
-    results together with the realized power at the target effect (δ).
+Depending on the ``keep_power`` flag supplied to the class constructor,
+each instance operates in one of two modes:
 
-- add_interim_keep_power(...)
-    Instead of fixing the GST maximum sample size to the FSD total, this
-    scenario finds (for each k) the minimal maximum sample size that still
-    attains the target power at the specified effect δ. Timing is optimized
-    first (same optimizer) and then a small binary search over maximum sample
-    size is used to locate the required budget.
+- ``keep_power=False``: build k-look GSTs that adopt the fixed-sample
+  design budget as the maximum sample size. The helper optimizes information
+  timing (via ``MinimizeASNOptimizer``), constructs the procedure/boundaries,
+  and runs Monte-Carlo OC simulations at the requested effect sizes.
+- ``keep_power=True``: after optimizing timing the helper performs a
+  binary search over candidate maximum sample sizes to locate the minimal budget
+  that still attains the target power at the design effect. Each candidate is
+  evaluated through the simulator and the search stops once the tolerance band
+  is satisfied.
 
 Notes
 -----
@@ -41,23 +37,21 @@ exported functions below.
 """
 
 import logging
-import os
-from contextlib import contextmanager
+from contextlib import nullcontext
 from typing import (
     Any,
     Callable,
     Dict,
-    Iterable,
-    Iterator,
+    List,
     Mapping,
     Optional,
     Sequence,
-    Type,
-    Union,
-    cast,
+    Tuple,
 )
 
 import ibis
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from earlysign.framework.templates import TemplateBase
 from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
@@ -75,91 +69,12 @@ from earlysign.stats.applications.report.group_sequential.plot_oc_curve import (
 )
 from earlysign.stats.essentials.methods.group_sequential import simulation
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.essentials.methods.group_sequential.spending import (
-    SpendingFunction,
-    get_spending_class,
+from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
+    OCPointResult,
 )
 
 # Module logger - consumers should configure logging for the project (handlers/formatters)
 logger = logging.getLogger(__name__)
-
-try:
-    from tqdm.auto import tqdm as _tqdm_impl
-    from tqdm.contrib.logging import (
-        logging_redirect_tqdm as _logging_redirect_tqdm_impl,
-    )
-except Exception:  # pragma: no cover
-    _tqdm_impl = None
-    _logging_redirect_tqdm_impl = None
-
-_FORCE_ENABLE_TQDM = os.environ.get("EARLYSIGN_ENABLE_TQDM") == "1"
-_FORCE_DISABLE_TQDM = os.environ.get("EARLYSIGN_DISABLE_TQDM") == "1"
-_TQDM_AVAILABLE = _tqdm_impl is not None
-
-
-def _progress_enabled() -> bool:
-    if _FORCE_DISABLE_TQDM:
-        return False
-    if not _TQDM_AVAILABLE:
-        return False
-    if _FORCE_ENABLE_TQDM:
-        return True
-    return logger.isEnabledFor(logging.INFO)
-
-
-def _iter_with_progress(
-    iterable: Iterable[Any], *, desc: str, unit: str, leave: bool = False
-) -> Iterable[Any]:
-    if not _progress_enabled():
-        return iterable
-    if _tqdm_impl is None:
-        return iterable
-    return cast(Iterable[Any], _tqdm_impl(iterable, desc=desc, unit=unit, leave=leave))
-
-
-@contextmanager
-def _tqdm_logging(loggers: Sequence[logging.Logger]) -> Iterator[None]:
-    if not _progress_enabled():
-        yield
-        return
-    if _logging_redirect_tqdm_impl is None:
-        yield
-        return
-    with _logging_redirect_tqdm_impl(loggers=loggers):
-        yield
-
-
-def _create_progress_bar(*args: Any, **kwargs: Any) -> Any:
-    if not _progress_enabled():
-        return None
-    if _tqdm_impl is None:
-        return None
-    return _tqdm_impl(*args, **kwargs)
-
-
-def _update_progress(bar: Any, *, n: int = 1) -> None:
-    if bar is not None:
-        bar.update(n)
-
-
-def _close_progress(bar: Any) -> None:
-    if bar is not None:
-        bar.close()
-
-
-def _materialize_spending(
-    spending: Union[str, SpendingFunction, Type[SpendingFunction]], *, alpha: float
-) -> SpendingFunction:
-    if hasattr(spending, "cumulative") and hasattr(
-        spending, "boundaries_from_stage_alpha"
-    ):
-        return cast(SpendingFunction, spending)
-    if isinstance(spending, type):
-        spending_cls = cast(Type[SpendingFunction], spending)
-    else:
-        spending_cls = get_spending_class(str(spending))
-    ctor = cast(Any, spending_cls)
-    return cast(SpendingFunction, ctor(alpha=alpha))
 
 
 class TemplateProcedureAdapter:
@@ -172,7 +87,7 @@ class TemplateProcedureAdapter:
         optional table name.
     - experiment_id, table_name: passed to the factory when creating the
         template instance.
-    - terminate_fn: Callable[[TemplateBase, int], Optional[Dict[str, Any]]]
+    - stop_decision_fn: Callable[[TemplateBase, int], Optional[Dict[str, Any]]]
         Function that inspects the template instance and the current look
         index and returns None to continue or a dict describing the stop
         decision (for example {'reject': True}). This predicate must be
@@ -183,7 +98,7 @@ class TemplateProcedureAdapter:
     - reset(): create a new in-memory DuckDB ibis backend and instantiate a
       fresh TemplateBase through the provided factory.
     - ingest(cumulative): delegate to template.update(payload)
-    - should_stop(look): call terminate_fn(template, look) and return its
+    - should_stop(look): call stop_decision_fn(template, look) and return its
       result (None or a dict). The adapter does not attempt to interpret
       template internals.
     """
@@ -193,34 +108,35 @@ class TemplateProcedureAdapter:
         template_factory: Callable[[Any, str, Optional[str]], TemplateBase],
         experiment_id: str,
         table_name: Optional[str],
-        terminate_fn: Callable[[TemplateBase, int], Optional[Dict[str, Any]]],
-        info_times: Sequence[float],
-        planned_max_n: int,
-        design_payload: Optional[Mapping[str, Any]],
-        rng_seed: Optional[int],
+        stop_decision_fn: Callable[[TemplateBase, int], Optional[Dict[str, Any]]],
+        design_payload: Optional[Mapping[str, Any]] = None,
+        rng_seed: Optional[int] = None,
     ) -> None:
-        if terminate_fn is None:
-            raise ValueError("terminate_fn must be provided")
-        self._factory = template_factory
-        self._experiment_id = experiment_id
-        self._table_name = table_name
-        self._terminate_fn = terminate_fn
-        self._info_times = [float(x) for x in info_times]
-        self._planned_max_n = int(planned_max_n)
-        self._design_payload = dict(design_payload or {})
-        self._rng_seed = rng_seed
+        self.template_factory = template_factory
+        self.experiment_id = experiment_id
+        self.table_name = table_name
+        self.stop_decision_fn = stop_decision_fn
+        payload: Dict[str, Any] = dict(design_payload or {})
+        info_times_raw = payload.get("info_times")
+        if info_times_raw is None:
+            raise ValueError("design_payload must include 'info_times'")
+        payload["info_times"] = [float(x) for x in info_times_raw]
+        planned_raw = payload.get("planned_max_n")
+        if planned_raw is None:
+            raise ValueError("design_payload must include 'planned_max_n'")
+        payload["planned_max_n"] = int(planned_raw)
+        self.design_payload: Dict[str, Any] = payload
+        self.rng_seed = rng_seed
 
-        self._backend: Optional[Any] = None
-        self._template: Optional[TemplateBase] = None
+        self.backend: Optional[Any] = None
+        self.template: Optional[TemplateBase] = None
 
         self.reset()
 
     def _initial_design_payload(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = dict(self._design_payload)
-        payload.setdefault("info_times", list(self._info_times))
-        payload.setdefault("planned_max_n", int(self._planned_max_n))
-        if self._rng_seed is not None:
-            payload.setdefault("rng_seed", int(self._rng_seed))
+        payload: Dict[str, Any] = dict(self.design_payload)
+        if self.rng_seed is not None:
+            payload.setdefault("rng_seed", int(self.rng_seed))
         return payload
 
     def reset(self) -> None:
@@ -229,43 +145,37 @@ class TemplateProcedureAdapter:
         except Exception:
             backend = ":memory:"
 
-        self._backend = backend
-        self._template = self._factory(backend, self._experiment_id, self._table_name)
-        if self._template is not None:
+        self.backend = backend
+        self.template = self.template_factory(
+            backend, self.experiment_id, self.table_name
+        )
+        if self.template is not None:
             try:
-                self._template.set_design(self._initial_design_payload())
+                self.template.set_design(self._initial_design_payload())
             except Exception:
                 pass
 
     def ingest(self, cumulative: Mapping[str, Any]) -> None:
-        if self._template is None:
+        if self.template is None:
             raise RuntimeError("Template not initialized; call reset() first")
-        self._template.update(dict(cumulative))
+        self.template.update(dict(cumulative))
 
     def should_stop(self, look: int) -> Optional[Dict[str, Any]]:
-        if self._template is None:
+        if self.template is None:
             raise RuntimeError("Template not initialized; call reset() first")
-        return self._terminate_fn(self._template, look)
+        return self.stop_decision_fn(self.template, look)
 
     def snapshot_metadata(self) -> Dict[str, Any]:
         metadata: Dict[str, Any] = {
-            "info_times": list(self._info_times),
-            "planned_max_n": int(self._planned_max_n),
-            "design_payload": dict(self._design_payload),
+            "design_payload": dict(self.design_payload),
         }
-        if self._template is not None:
+        if self.template is not None:
             try:
-                status = self._template.status()
+                status = self.template.status()
                 metadata["template_status"] = status
             except Exception:
                 metadata["template_status"] = None
         return metadata
-
-    @property
-    def template(self) -> TemplateBase:
-        if self._template is None:
-            raise RuntimeError("Template not initialized; call reset() first")
-        return self._template
 
 
 class AddInterimToFixedSampleTest:
@@ -276,14 +186,16 @@ class AddInterimToFixedSampleTest:
         *,
         alpha: float,
         power: float,
-        allocation_ratio: float,
         scheme: GSTSchemeHooks,
         procedure_factory: ProcedureFactory,
         asn_calculator_factory: Callable[[], ASNCalculator],
+        simulator: Any,
         effect_sizes: Optional[Sequence[float]] = None,
         target_effect: Optional[float] = None,
         null_reference: Optional[float] = None,
-        n_sim: int = 200,
+        keep_power: bool = False,
+        max_multiplier: int = 4,
+        tol: float = 0.01,
         batch_size: Optional[int] = None,
         seed: Optional[int] = None,
         design_payload_builder: Optional[
@@ -292,7 +204,6 @@ class AddInterimToFixedSampleTest:
     ) -> None:
         self.alpha = float(alpha)
         self.power = float(power)
-        self.allocation_ratio = float(allocation_ratio)
         self.scheme = scheme
         self.target_effect = (
             float(target_effect)
@@ -316,25 +227,25 @@ class AddInterimToFixedSampleTest:
         if not resolved_effects:
             raise ValueError("effect_sizes must contain at least one value")
         self.effect_sizes = [float(x) for x in resolved_effects]
-        self.n_sim = int(n_sim)
         self.batch_size = None if batch_size is None else int(batch_size)
         self.seed = seed
-        self._procedure_factory = procedure_factory
-        self._asn_calculator_factory = asn_calculator_factory
-        self._design_payload_builder = design_payload_builder
-        self._fsd_planner = scheme.fsd_planner
-        self._simulator_factory = scheme.simulator_factory
-        self._simulator_kwargs_builder = scheme.simulator_kwargs_builder
+        self.procedure_factory = procedure_factory
+        self.asn_calculator_factory = asn_calculator_factory
+        self.design_payload_builder = design_payload_builder
+        self.simulator = simulator
+        self.keep_power = bool(keep_power)
+        self.max_multiplier = max(2, int(max_multiplier))
+        self.power_tolerance = float(tol)
 
         # placeholders set by design_fst()
         self.planned_max_n: Optional[int] = None
-        self._fsd_metadata: Dict[str, Any] = {}
+        self.fsd_metadata: Dict[str, Any] = {}
 
         logger.debug(
             "Initialized AddInterimToFixedSampleTest: alpha=%s power=%s n_sim=%s scheme=%s",
             self.alpha,
             self.power,
-            self.n_sim,
+            self.n_simulations,
             scheme.name,
         )
 
@@ -343,21 +254,31 @@ class AddInterimToFixedSampleTest:
 
         Returns a dict with keys 'n_fsd_per_group' and 'planned_max_n'.
         """
-        fsd_result = dict(self._fsd_planner())
+        fsd_result = dict(self.scheme.fsd_planner())
         planned_max_n = int(fsd_result.get("planned_max_n", 0))
         if planned_max_n <= 0:
             raise ValueError("fsd_planner must return a positive planned_max_n")
         fsd_result.setdefault("fsd_total", planned_max_n)
-        self._fsd_metadata = dict(fsd_result)
+        self.fsd_metadata = dict(fsd_result)
         self.planned_max_n = planned_max_n
         logger.info(
             "Computed FSD metadata: %s",
-            self._fsd_metadata,
+            self.fsd_metadata,
         )
-        return dict(self._fsd_metadata)
+        return dict(self.fsd_metadata)
+
+    @property
+    def n_simulations(self) -> int:
+        value = getattr(self.simulator, "n_simulations", None)
+        if value is None:
+            raise AttributeError("Simulator must expose an 'n_simulations' attribute")
+        count = int(value)
+        if count <= 0:
+            raise ValueError("Simulator n_simulations must be positive")
+        return count
 
     def _optimize_info_times(self, k: int) -> Sequence[float]:
-        asn_calc = self._asn_calculator_factory()
+        asn_calc = self.asn_calculator_factory()
         optimizer = MinimizeASNOptimizer(
             calculator=asn_calc,
             k_max=int(k),
@@ -372,13 +293,13 @@ class AddInterimToFixedSampleTest:
     def _build_design_payload(
         self, info_times: Sequence[float], planned_max_n: int
     ) -> Mapping[str, Any]:
-        if self._design_payload_builder is None:
+        if self.design_payload_builder is None:
             raw_payload: Mapping[str, Any] = {
                 "info_times": list(map(float, info_times)),
                 "planned_max_n": int(planned_max_n),
             }
         else:
-            raw_payload = self._design_payload_builder(info_times, planned_max_n)
+            raw_payload = self.design_payload_builder(info_times, planned_max_n)
         return {str(key): value for key, value in dict(raw_payload).items()}
 
     def _make_procedure(
@@ -387,51 +308,84 @@ class AddInterimToFixedSampleTest:
         planned_max_n: int,
         payload: Mapping[str, Any],
     ) -> ProcedureLike:
-        return self._procedure_factory(
+        return self.procedure_factory(
             info_times, int(planned_max_n), payload, self.seed
         )
 
-    def _build_simulator(self) -> Any:
-        return self._simulator_factory(self.n_sim, self.allocation_ratio)
+    def _build_sampling_strategy(
+        self,
+        info_times: Sequence[float],
+        planned_max_n: int,
+    ) -> Tuple[simulation.SamplingStrategy, List[int]]:
+        builder = getattr(self.scheme, "sampling_strategy_builder", None)
+        if builder is None:
+            raise AttributeError("Scheme does not provide a sampling strategy builder")
+        rates = [float(x) for x in info_times]
+        strategy = builder(
+            rates,
+            int(planned_max_n),
+            self.batch_size,
+        )
+        metadata = strategy.metadata()
+        sample_sizes = metadata.get("cumulative_sizes")
+        if sample_sizes is None:
+            sample_sizes = simulation.compute_cumulative_sample_sizes(
+                rates, int(planned_max_n)
+            )
+        return strategy, [int(x) for x in sample_sizes]
 
-    def _build_simulator_kwargs(
+    def _build_simulation_request(
         self,
         *,
         effect_size: float,
         planned_max_n: int,
         sampling_strategy: simulation.SamplingStrategy,
-    ) -> Dict[str, Any]:
+    ) -> Any:
+        builder = getattr(self.scheme, "simulation_request_builder", None)
+        if builder is not None:
+            return builder(
+                float(effect_size),
+                int(planned_max_n),
+                sampling_strategy,
+                int(self.n_simulations),
+            )
+
+        legacy_builder = getattr(self.scheme, "_simulator_kwargs_builder", None)
+        if legacy_builder is None:
+            raise AttributeError(
+                "No simulation request builder available on the scheme hooks"
+            )
         kwargs = dict(
-            self._simulator_kwargs_builder(
-                float(effect_size), int(planned_max_n), sampling_strategy
+            legacy_builder(
+                float(effect_size),
+                int(planned_max_n),
+                sampling_strategy,
             )
         )
         kwargs.setdefault("effect_size", float(effect_size))
-        kwargs.setdefault("n_simulations", int(self.n_sim))
-        if self.seed is not None:
-            kwargs.setdefault("rng_seed", self.seed)
+        kwargs.setdefault("n_simulations", int(self.n_simulations))
         kwargs.setdefault("max_total", int(planned_max_n))
         kwargs.setdefault("sampling", sampling_strategy)
-        return kwargs
+        from earlysign.stats.essentials.schemes.two_proportions.simulator import (
+            TwoProportionsSimulationRequest,
+        )
+
+        return TwoProportionsSimulationRequest(
+            p_control=float(kwargs["p_control"]),
+            effect_size=float(kwargs["effect_size"]),
+            n_simulations=int(kwargs["n_simulations"]),
+            max_total=int(kwargs["max_total"]),
+            sampling=kwargs["sampling"],
+        )
 
     def _estimate_power(self, info_times: Sequence[float], planned_max_n: int) -> float:
         design_payload = self._build_design_payload(info_times, planned_max_n)
         procedure = self._make_procedure(info_times, planned_max_n, design_payload)
         procedure.reset()
         info_times_list = [float(x) for x in info_times]
-        sampling_strategy: simulation.SamplingStrategy
-        if self.batch_size is None:
-            sampling_strategy = simulation.InfoTimeSampling(
-                info_times=info_times_list,
-                planned_max_n=int(planned_max_n),
-                allocation_ratio=float(self.allocation_ratio),
-            )
-        else:
-            sampling_strategy = simulation.FixedBatchSampling(
-                size=int(self.batch_size),
-                allocation_ratio=float(self.allocation_ratio),
-                total=int(planned_max_n),
-            )
+        sampling_strategy, _ = self._build_sampling_strategy(
+            info_times_list, planned_max_n
+        )
         try:
             meta_before = sampling_strategy.metadata()
         except Exception:
@@ -443,16 +397,20 @@ class AddInterimToFixedSampleTest:
             meta_before,
         )
 
-        simulator = self._build_simulator()
-        kwargs = self._build_simulator_kwargs(
+        simulator = self.simulator
+        request = self._build_simulation_request(
             effect_size=self.target_effect,
             planned_max_n=planned_max_n,
             sampling_strategy=sampling_strategy,
         )
-        point = simulator.simulate(
+        points = simulator.simulate(
             procedure,
-            **kwargs,
+            requests=[request],
+            rng_seed=self.seed,
         )
+        if not points:
+            raise RuntimeError("Simulator returned no results during power estimation")
+        point = points[0]
         logger.info(
             "Estimated power (planned_max_n=%s) -> %s",
             planned_max_n,
@@ -460,25 +418,77 @@ class AddInterimToFixedSampleTest:
         )
         return float(point.power)
 
+    def _find_planned_max_n_preserving_power(
+        self,
+        info_times: Sequence[float],
+        *,
+        k: int,
+    ) -> int:
+        if self.planned_max_n is None:
+            raise RuntimeError("Call design_fst() before searching for planned_max_n")
+        fsd_total = int(self.planned_max_n)
+        lo = 2 * int(k)
+        hi = max(2 * int(k), int(self.max_multiplier * fsd_total))
+        best_n = hi
+        target_power = float(self.power)
+        progress_active = tqdm is not None and logger.isEnabledFor(logging.INFO)
+        search_bar = (
+            tqdm(
+                total=None,
+                desc=f"Power search (k={k})",
+                unit="candidate",
+                leave=False,
+            )
+            if progress_active
+            else None
+        )
+        log_context = (
+            logging_redirect_tqdm(loggers=[logger])
+            if progress_active
+            else nullcontext()
+        )
+        try:
+            with log_context:
+                while lo <= hi:
+                    if search_bar is not None:
+                        search_bar.update()
+                    mid = (lo + hi) // 2
+                    achieved = self._estimate_power(info_times, int(mid))
+                    if target_power <= achieved <= target_power + self.power_tolerance:
+                        best_n = int(mid)
+                        logger.info(
+                            "Accepting planned_max_n=%s with achieved power=%s within [%s, %s] (early-stop)",
+                            int(mid),
+                            achieved,
+                            target_power,
+                            target_power + self.power_tolerance,
+                        )
+                        break
+                    if achieved < target_power:
+                        lo = mid + 1
+                    else:
+                        hi = mid - 1
+        finally:
+            if search_bar is not None:
+                search_bar.close()
+
+        return int(best_n)
+
     def compare_interim(
         self,
         k: int,
-        keep_power_at_H1: bool = False,
         plot_options: Optional[Dict[str, Any]] = None,
-        *,
-        max_multiplier: int = 4,
-        tol: float = 0.01,
     ) -> Dict[str, Any]:
         """Compute OC curve and related metadata for a given k.
 
-        If `keep_power_at_H1` is False, the GST uses the FSD total as the
+        If the instance is configured with ``keep_power=False`` the GST uses the FSD total as the
         planned maximum (power may change). If True, the method searches for
         the minimal `planned_max_n` that preserves power at the design H1
         (self.target_effect) approximately.
 
         Note on the search behaviour and reproducibility
         -----------------------------------------------
-        When `keep_power_at_H1=True` the method performs a small binary
+        When ``keep_power=True`` the method performs a small binary
         search over candidate budgets. It uses an early-stop strategy: the
         first candidate `planned_max_n` whose estimated power falls in the
         acceptance interval [target, target + tol] will be accepted and the
@@ -491,154 +501,109 @@ class AddInterimToFixedSampleTest:
         if self.planned_max_n is None:
             raise RuntimeError("Call design_fst() before compare_interim()")
 
+        keep_power = self.keep_power
         logger.info(
-            "Starting compare_interim(k=%s, keep_power_at_H1=%s)", k, keep_power_at_H1
+            "Starting compare_interim(k=%s, keep_power=%s)",
+            k,
+            keep_power,
         )
         # When searching for a budget that preserves the target power, log the
         # requested target and tolerance so the Monte-Carlo estimates can be
         # interpreted relative to the goal.
-        if keep_power_at_H1:
+        if keep_power:
             logger.info(
                 "Target power=%s, tolerance=%s (accept range: [target, target+tol])",
                 float(self.power),
-                float(tol),
+                float(self.power_tolerance),
             )
 
         info_times = self._optimize_info_times(int(k))
 
-        if keep_power_at_H1 is False:
+        if keep_power is False:
             planned_max_n = int(self.planned_max_n)
         else:
-            fsd_total = int(self.planned_max_n)
-            lo = 2 * int(k)
-            hi = max(2 * int(k), int(max_multiplier * fsd_total))
-            best_n = hi
-            # Binary search for the minimal planned_max_n that attains the
-            # target power. Accept a configuration when the estimated power
-            # lies in [target_power, target_power + tol]. If the estimate is
-            # below the target, increase lower bound; if it's greater than
-            # target + tol, reduce the upper bound to try a smaller budget.
-            target_power = float(self.power)
-            search_bar = _create_progress_bar(
-                total=None,
-                desc=f"Power search (k={k})",
-                unit="candidate",
-                leave=False,
+            planned_max_n = self._find_planned_max_n_preserving_power(
+                info_times, k=int(k)
             )
-            try:
-                with _tqdm_logging([logger]):
-                    while lo <= hi:
-                        _update_progress(search_bar)
-                        mid = (lo + hi) // 2
-                        achieved = self._estimate_power(info_times, int(mid))
-                        # If achieved is within [target, target + tol], accept this mid
-                        if (
-                            achieved >= target_power
-                            and achieved <= target_power + float(tol)
-                        ):
-                            best_n = int(mid)
-                            logger.info(
-                                "Accepting planned_max_n=%s with achieved power=%s within [%s, %s] (early-stop)",
-                                int(mid),
-                                achieved,
-                                target_power,
-                                target_power + float(tol),
-                            )
-                            # Early-stop: accept the first candidate that meets the
-                            # acceptance interval and terminate the search. This makes
-                            # the behaviour deterministic w.r.t. the mid evaluation
-                            # order and relies on caller-managed RNG seed for
-                            # reproducibility.
-                            break
-                        elif achieved < target_power:
-                            # Not enough power, increase budget
-                            lo = mid + 1
-                        else:
-                            # Achieved > target + tol: we might be able to reduce budget
-                            hi = mid - 1
-            finally:
-                _close_progress(search_bar)
-
-            planned_max_n = int(best_n)
 
         logger.info("Using planned_max_n=%s for k=%s", planned_max_n, k)
 
         design_payload = self._build_design_payload(info_times, planned_max_n)
 
         info_times_list = [float(x) for x in info_times]
-        sampling_strategy: simulation.SamplingStrategy
-        if self.batch_size is None:
-            sample_sizes = simulation.compute_cumulative_sample_sizes(
-                info_times_list, planned_max_n
-            )
-            sampling_strategy = simulation.InfoTimeSampling(
-                info_times=info_times_list,
-                planned_max_n=int(planned_max_n),
-                allocation_ratio=float(self.allocation_ratio),
-            )
-        else:
-            sampling_strategy = simulation.FixedBatchSampling(
-                size=int(self.batch_size),
-                allocation_ratio=float(self.allocation_ratio),
-                total=int(planned_max_n),
-            )
-            sample_sizes = sampling_strategy.metadata().get("cumulative_sizes", [])
+        sampling_strategy, sample_sizes = self._build_sampling_strategy(
+            info_times_list, planned_max_n
+        )
+        sampling_metadata = sampling_strategy.metadata()
         base_proc = self._make_procedure(info_times, planned_max_n, design_payload)
-        base_proc_for_loop: Optional[ProcedureLike] = base_proc
         raw_metadata = base_proc.snapshot_metadata()
         base_metadata: Dict[str, Any] = {
             str(key): value for key, value in raw_metadata.items()
         }
         base_metadata.setdefault("info_times", info_times_list)
         base_metadata.setdefault("planned_max_n", int(planned_max_n))
-        base_metadata.setdefault("allocation_ratio", float(self.allocation_ratio))
-        if "n_fsd_per_group" in self._fsd_metadata:
+        if isinstance(sampling_metadata, Mapping):
+            alloc_meta = sampling_metadata.get("allocation_ratio")
+            if alloc_meta is not None:
+                base_metadata.setdefault("allocation_ratio", float(alloc_meta))
+        base_metadata.setdefault("sample_sizes", list(sample_sizes))
+        if "n_fsd_per_group" in self.fsd_metadata:
             base_metadata.setdefault(
-                "n_fsd_per_group", int(self._fsd_metadata["n_fsd_per_group"])
+                "n_fsd_per_group", int(self.fsd_metadata["n_fsd_per_group"])
             )
-        if "fsd_total" in self._fsd_metadata:
-            base_metadata.setdefault("fsd_total", int(self._fsd_metadata["fsd_total"]))
+        if "fsd_total" in self.fsd_metadata:
+            base_metadata.setdefault("fsd_total", int(self.fsd_metadata["fsd_total"]))
         base_metadata.setdefault("target_power", float(self.power))
         base_metadata.setdefault("target_effect", float(self.target_effect))
         base_metadata.setdefault("alpha", float(self.alpha))
-        base_metadata.setdefault("sample_sizes", list(sample_sizes))
 
-        oc_results = []
-        effect_grid = list(self.effect_sizes)
-        effect_iterable = _iter_with_progress(
-            effect_grid,
-            desc=f"Simulating effect sizes (k={k})",
-            unit="effect",
-            leave=False,
-        )
-        with _tqdm_logging([logger]):
-            for idx, es in enumerate(effect_iterable):
-                procedure = (
-                    base_proc_for_loop
-                    if base_proc_for_loop is not None
-                    else self._make_procedure(info_times, planned_max_n, design_payload)
-                )
-                procedure.reset()
-                logger.debug(
-                    "Simulating effect_size=%s (idx=%s) with planned_max_n=%s",
-                    es,
-                    idx,
-                    planned_max_n,
-                )
-                simulator = self._build_simulator()
-                kwargs = self._build_simulator_kwargs(
+        effect_grid = [float(es) for es in self.effect_sizes]
+        oc_results: List[OCPointResult] = []
+        if effect_grid:
+            simulator = self.simulator
+            procedure = base_proc
+            procedure.reset()
+            requests = [
+                self._build_simulation_request(
                     effect_size=float(es),
                     planned_max_n=planned_max_n,
                     sampling_strategy=sampling_strategy,
                 )
-                point = simulator.simulate(
+                for es in effect_grid
+            ]
+            progress_active = tqdm is not None and logger.isEnabledFor(logging.INFO)
+            log_context = (
+                logging_redirect_tqdm(loggers=[logger])
+                if progress_active
+                else nullcontext()
+            )
+            with log_context:
+                points = simulator.simulate(
                     procedure,
-                    **kwargs,
+                    requests=requests,
+                    rng_seed=self.seed,
                 )
+            if len(points) != len(effect_grid):
+                raise RuntimeError("Simulator returned an unexpected number of results")
+            paired = list(zip(effect_grid, points))
+            effect_iterable = (
+                tqdm(
+                    paired,
+                    desc=f"Simulating effect sizes (k={k})",
+                    unit="effect",
+                    leave=False,
+                )
+                if progress_active
+                else paired
+            )
+            for idx, (es, point) in enumerate(effect_iterable):
                 logger.debug(
-                    "Simulated effect_size=%s -> power=%s", es, float(point.power)
+                    "Simulated effect_size=%s (idx=%s) with planned_max_n=%s -> power=%s",
+                    es,
+                    idx,
+                    planned_max_n,
+                    float(point.power),
                 )
-                base_proc_for_loop = None
                 merged_md = dict(base_metadata)
                 if point.metadata:
                     merged_md.update(
@@ -675,8 +640,8 @@ class AddInterimToFixedSampleTest:
             plot_err = repr(e)
             logger.exception("Failed to plot OC curve: %s", e)
 
-        per_group_total = planned_max_n / (1.0 + float(self.allocation_ratio))
-        n_per_analysis = max(1, int(round(per_group_total / max(1, k))))
+        per_analysis_total = planned_max_n / max(1, k)
+        n_per_analysis = max(1, int(round(per_analysis_total)))
 
         return {
             "info_times": list(map(float, info_times)),
@@ -690,113 +655,3 @@ class AddInterimToFixedSampleTest:
             "planned_max_n": int(planned_max_n),
             "plot_error": plot_err,
         }
-
-
-def add_interim(
-    *,
-    alpha: float,
-    power: float,
-    ks: Sequence[int],
-    spending: Any,
-    scheme: GSTSchemeHooks,
-    allocation_ratio: float,
-    effect_sizes: Optional[Sequence[float]] = None,
-    n_sim: int = 200,
-    batch_size: Optional[int] = None,
-    seed: Optional[int] = None,
-    plot_options: Optional[Dict[str, Any]] = None,
-) -> Dict[int, Dict[str, Any]]:
-    """Scenario A: build GSTs using the fixed-sample budget as the maximum."""
-    spending_obj = _materialize_spending(spending, alpha=alpha)
-    resolved_scheme = scheme.with_effect_sizes(effect_sizes)
-    procedure_factory = resolved_scheme.procedure_factory_builder(
-        spending_obj, allocation_ratio
-    )
-    asn_calculator_factory = resolved_scheme.asn_factory_builder(spending_obj)
-
-    inst = AddInterimToFixedSampleTest(
-        alpha=alpha,
-        power=power,
-        allocation_ratio=allocation_ratio,
-        scheme=resolved_scheme,
-        procedure_factory=procedure_factory,
-        asn_calculator_factory=asn_calculator_factory,
-        n_sim=n_sim,
-        batch_size=batch_size,
-        seed=seed,
-    )
-    inst.design_fst()
-
-    results: Dict[int, Dict[str, Any]] = {}
-    ks_iterable = [int(value) for value in ks]
-    with _tqdm_logging([logger]):
-        for k_value in _iter_with_progress(
-            ks_iterable,
-            desc="compare_interim (fixed budget)",
-            unit="design",
-            leave=False,
-        ):
-            logger.debug("Running compare_interim for k=%s (fixed budget)", k_value)
-            results[int(k_value)] = inst.compare_interim(
-                k=int(k_value), keep_power_at_H1=False, plot_options=plot_options
-            )
-
-    return results
-
-
-def add_interim_keep_power(
-    *,
-    alpha: float,
-    power: float,
-    ks: Sequence[int],
-    spending: Any,
-    scheme: GSTSchemeHooks,
-    allocation_ratio: float,
-    effect_sizes: Optional[Sequence[float]] = None,
-    n_sim: int = 200,
-    batch_size: Optional[int] = None,
-    seed: Optional[int] = None,
-    max_multiplier: int = 4,
-    tol: float = 0.01,
-    plot_options: Optional[Dict[str, Any]] = None,
-) -> Dict[int, Dict[str, Any]]:
-    """Scenario B: search for the minimal budget that preserves target power."""
-    spending_obj = _materialize_spending(spending, alpha=alpha)
-    resolved_scheme = scheme.with_effect_sizes(effect_sizes)
-    procedure_factory = resolved_scheme.procedure_factory_builder(
-        spending_obj, allocation_ratio
-    )
-    asn_calculator_factory = resolved_scheme.asn_factory_builder(spending_obj)
-
-    inst = AddInterimToFixedSampleTest(
-        alpha=alpha,
-        power=power,
-        allocation_ratio=allocation_ratio,
-        scheme=resolved_scheme,
-        procedure_factory=procedure_factory,
-        asn_calculator_factory=asn_calculator_factory,
-        n_sim=n_sim,
-        batch_size=batch_size,
-        seed=seed,
-    )
-    inst.design_fst()
-
-    results: Dict[int, Dict[str, Any]] = {}
-    ks_iterable = [int(value) for value in ks]
-    with _tqdm_logging([logger]):
-        for k_value in _iter_with_progress(
-            ks_iterable,
-            desc="compare_interim (keep power)",
-            unit="design",
-            leave=False,
-        ):
-            logger.debug("Running compare_interim for k=%s (keep power)", k_value)
-            results[int(k_value)] = inst.compare_interim(
-                k=int(k_value),
-                keep_power_at_H1=True,
-                plot_options=plot_options,
-                max_multiplier=max_multiplier,
-                tol=tol,
-            )
-
-    return results

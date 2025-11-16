@@ -402,11 +402,12 @@ class BinomialABTest(tpl.TemplateBase):
         design = AddInterimToFixedSampleTest(
             alpha=alpha,
             power=power,
-            allocation_ratio=allocation_ratio,
             scheme=resolved_scheme,
             procedure_factory=procedure_factory,
             asn_calculator_factory=_asn_factory,
-            n_sim=n_sim,
+            simulator=resolved_scheme.simulator_factory(
+                int(n_sim), float(allocation_ratio)
+            ),
             batch_size=batch_size,
             seed=seed,
             design_payload_builder=design_payload_builder,

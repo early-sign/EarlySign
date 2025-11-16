@@ -2,7 +2,7 @@
 """Benchmark direct GST design helpers against the ledger-backed template adapter.
 
 This script compares the runtime of the classic `_TwoPropProcedure` workflow
-(add_interim via `AddInterimToFixedSampleTest`) and the template-backed
+(driven directly via `AddInterimToFixedSampleTest`) and the template-backed
 `TemplateProcedureAdapter`. It keeps the Monte-Carlo simulation counts small so
 it finishes quickly while still showcasing the relative slowdown seen in the
 ledger-backed path. A lightweight cProfile report for the template path is
@@ -95,11 +95,10 @@ def _direct_compare_runtime(
     inst = AddInterimToFixedSampleTest(
         alpha=alpha,
         power=power,
-        allocation_ratio=allocation_ratio,
         scheme=resolved_scheme,
         procedure_factory=procedure_factory,
         asn_calculator_factory=asn_factory,
-        n_sim=n_sim,
+        simulator=resolved_scheme.simulator_factory(n_sim, allocation_ratio),
         batch_size=batch_size,
         seed=seed,
     )
@@ -107,7 +106,7 @@ def _direct_compare_runtime(
 
     start = time.perf_counter()
     LOGGER.debug("Direct flow: calling compare_interim")
-    inst.compare_interim(k=k, keep_power_at_H1=False, plot_options=None)
+    inst.compare_interim(k=k, plot_options=None)
     return time.perf_counter() - start
 
 
@@ -175,7 +174,7 @@ def _template_compare_runtime_with_profile(
             ibis_cache=ibis_cache,
         )
 
-    def _terminate_fn(template: Any, look: int) -> Optional[Dict[str, Any]]:
+    def _stop_decision_fn(template: Any, look: int) -> Optional[Dict[str, Any]]:
         status = template.status()
         if getattr(status, "stop_recommended", False):
             return {"reject": True, "reason": "template_stop", "look": int(look)}
@@ -183,7 +182,7 @@ def _template_compare_runtime_with_profile(
 
     template_proc_factory = build_template_procedure_factory(
         template_factory=_template_factory,
-        terminate_fn=_terminate_fn,
+        stop_decision_fn=_stop_decision_fn,
         experiment_id="benchmark_exp",
         table_name=None,
     )
@@ -191,11 +190,10 @@ def _template_compare_runtime_with_profile(
     inst = AddInterimToFixedSampleTest(
         alpha=alpha,
         power=power,
-        allocation_ratio=allocation_ratio,
         scheme=resolved_scheme,
         procedure_factory=template_proc_factory,
         asn_calculator_factory=asn_factory,
-        n_sim=n_sim,
+        simulator=resolved_scheme.simulator_factory(n_sim, allocation_ratio),
         batch_size=batch_size,
         seed=seed,
         design_payload_builder=lambda info_times, planned_max_n: _template_payload(
@@ -214,7 +212,7 @@ def _template_compare_runtime_with_profile(
     else:
         profiler = None
     start = time.perf_counter()
-    inst.compare_interim(k=k, keep_power_at_H1=False, plot_options=None)
+    inst.compare_interim(k=k, plot_options=None)
     elapsed = time.perf_counter() - start
     if profiler is None:
         return elapsed, None

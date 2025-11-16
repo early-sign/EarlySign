@@ -7,7 +7,7 @@ agnostic to the underlying statistical family.
 """
 
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence
 
 from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
@@ -23,11 +23,16 @@ from earlysign.stats.essentials.methods.group_sequential.spending import (
 
 FSDPlanner = Callable[[], Dict[str, int]]
 SimulatorFactory = Callable[[int, float], Simulator]
-SimulatorKwargsBuilder = Callable[
-    [float, int, simulation.SamplingStrategy], Dict[str, object]
+SimulationRequestBuilder = Callable[
+    [float, int, simulation.SamplingStrategy, int],
+    Any,
 ]
 ASNFactoryBuilder = Callable[[SpendingFunction], Callable[[], ASNCalculator]]
 ProcedureFactoryBuilder = Callable[[SpendingFunction, float], ProcedureFactory]
+SamplingStrategyBuilder = Callable[
+    [Sequence[float], int, Optional[int]],
+    simulation.SamplingStrategy,
+]
 
 
 @dataclass(frozen=True)
@@ -40,7 +45,8 @@ class GSTSchemeHooks:
     null_reference: Optional[float]
     fsd_planner: FSDPlanner
     simulator_factory: SimulatorFactory
-    simulator_kwargs_builder: SimulatorKwargsBuilder
+    simulation_request_builder: SimulationRequestBuilder
+    sampling_strategy_builder: SamplingStrategyBuilder
     asn_factory_builder: ASNFactoryBuilder
     procedure_factory_builder: ProcedureFactoryBuilder
 
@@ -56,7 +62,8 @@ class GSTSchemeHooks:
             null_reference=self.null_reference,
             fsd_planner=self.fsd_planner,
             simulator_factory=self.simulator_factory,
-            simulator_kwargs_builder=self.simulator_kwargs_builder,
+            simulation_request_builder=self.simulation_request_builder,
+            sampling_strategy_builder=self.sampling_strategy_builder,
             asn_factory_builder=self.asn_factory_builder,
             procedure_factory_builder=self.procedure_factory_builder,
         )

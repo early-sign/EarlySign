@@ -9,7 +9,7 @@ layer. It allows the timing optimiser to work with ledger-backed templates.
 Examples
 --------
 >>> from earlysign.stats.applications.design.group_sequential.initial_design.helpers.template_asn import TemplateASNAdapter
->>> from earlysign.stats.essentials.schemes.two_proportions.procedure import build_two_prop_procedure_factory
+>>> from earlysign.stats.essentials.schemes.two_proportions.procedure import TwoProportionsProcedure
 >>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
 >>> from earlysign.stats.essentials.schemes.two_proportions.asn import build_asn_calculator
 >>> spending = OBFSpending(alpha=0.05, sided=2)
@@ -22,7 +22,7 @@ Examples
 ...     allocation_ratio=1.0,
 ...     spending=spending,
 ... )
->>> proc_factory = build_two_prop_procedure_factory(
+>>> proc_factory = TwoProportionsProcedure.factory_builder(
 ...     spending_obj=spending,
 ...     alpha=0.05,
 ...     allocation_ratio=1.0,
@@ -37,7 +37,7 @@ Examples
 ...     seed=1234,
 ... )
 >>> adapter.evaluate([0.5, 1.0])
-195.0
+190.0
 """
 
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
@@ -50,6 +50,7 @@ from earlysign.stats.applications.design.group_sequential.initial_design.helpers
 from earlysign.stats.essentials.methods.group_sequential import simulation
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.essentials.schemes.two_proportions.simulator import (
+    TwoProportionsSimulationRequest,
     TwoProportionsSimulator,
 )
 
@@ -123,16 +124,21 @@ class TemplateASNAdapter(ASNCalculator):
                 allocation_ratio=float(self.allocation_ratio),
                 total=int(self._planned_max_n),
             )
-        result = self._simulator.simulate(
-            procedure,
-            p_control=self._p_control,
+        request = TwoProportionsSimulationRequest(
+            p_control=float(self._p_control),
             effect_size=float(self.alternative),
             n_simulations=self._n_sim,
-            rng_seed=self._seed,
-            max_total=self._planned_max_n,
+            max_total=int(self._planned_max_n),
             sampling=sampling_strategy,
         )
-        return float(result.expected_sample_size)
+        points = self._simulator.simulate(
+            procedure,
+            requests=[request],
+            rng_seed=self._seed,
+        )
+        if not points:
+            raise RuntimeError("Simulator returned no results for ASN evaluation")
+        return float(points[0].expected_sample_size)
 
     def _validate_information_rates(self, info: Sequence[float]) -> List[float]:
         validated = np.asarray(
