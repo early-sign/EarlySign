@@ -1,7 +1,9 @@
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
     BatchedProcedure,
@@ -11,6 +13,8 @@ from earlysign.stats.essentials.methods.group_sequential.operating_characteristi
 from earlysign.stats.essentials.methods.group_sequential.simulation import (
     SamplingStrategy,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -62,7 +66,29 @@ class TwoProportionsSimulator:
         the behaviour mirrors the historical API and returns a single
         :class:`OCPointResult`.
         """
+        if logger.isEnabledFor(logging.INFO):
+            with logging_redirect_tqdm(loggers=[logger]):
+                return self._simulate_impl(
+                    procedure=procedure,
+                    requests=requests,
+                    rng_seed=rng_seed,
+                    **kwargs,
+                )
+        return self._simulate_impl(
+            procedure=procedure,
+            requests=requests,
+            rng_seed=rng_seed,
+            **kwargs,
+        )
 
+    def _simulate_impl(
+        self,
+        *,
+        procedure: Procedure,
+        requests: Optional[Sequence[TwoProportionsSimulationRequest]],
+        rng_seed: Optional[int],
+        **kwargs: Any,
+    ) -> Any:
         if requests is not None:
             request_list = list(requests)
             legacy_mode = False

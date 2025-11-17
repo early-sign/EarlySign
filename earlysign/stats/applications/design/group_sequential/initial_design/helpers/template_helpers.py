@@ -41,7 +41,7 @@ def build_template_procedure_factory(
             experiment_id=experiment_id,
             table_name=table_name,
             stop_decision_fn=stop_decision_fn,
-            design_payload=design_payload,
+            design_payload=dict(design_payload or {}),
             rng_seed=rng_seed,
         )
 

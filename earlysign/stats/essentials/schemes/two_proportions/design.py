@@ -53,7 +53,7 @@ def build_two_proportions_scheme(
         planned_total = int(round((1.0 + float(allocation_ratio)) * n_per_group))
         return {
             "n_fsd_per_group": int(n_per_group),
-            "planned_max_n": int(planned_total),
+            "sample_size": int(planned_total),
         }
 
     def simulator_factory(n_sim: int, alloc_ratio: float) -> Simulator:

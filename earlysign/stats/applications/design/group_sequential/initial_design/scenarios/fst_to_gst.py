@@ -37,8 +37,8 @@ exported functions below.
 """
 
 import logging
-from contextlib import nullcontext
 from dataclasses import dataclass
+from functools import cached_property
 from typing import (
     Any,
     Callable,
@@ -51,7 +51,6 @@ from typing import (
 
 import ibis
 from tqdm.auto import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
 
 from earlysign.framework.templates import TemplateBase
 from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
@@ -65,6 +64,7 @@ from earlysign.stats.applications.design.group_sequential.initial_design.workflo
     MinimizeASNOptimizer,
 )
 from earlysign.stats.applications.design.group_sequential.initial_design.workflows.plan_max_sample_size import (
+    MonteCarloPowerEstimator,
     PlanMaxSampleSizeWorkflow,
 )
 from earlysign.stats.applications.report.group_sequential.plot_oc_curve import (
@@ -74,6 +74,7 @@ from earlysign.stats.essentials.methods.group_sequential import simulation
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
     OCPointResult,
+    Simulator,
 )
 
 # Module logger - consumers should configure logging for the project (handlers/formatters)
@@ -134,16 +135,14 @@ class TemplateProcedureAdapter:
         experiment_id: str,
         table_name: Optional[str],
         stop_decision_fn: Callable[[TemplateBase, int], Optional[Dict[str, Any]]],
-        design_payload: Optional[Mapping[str, Any]] = None,
+        design_payload: Mapping[str, Any],
         rng_seed: Optional[int] = None,
     ) -> None:
         self.template_factory = template_factory
         self.experiment_id = experiment_id
         self.table_name = table_name
         self.stop_decision_fn = stop_decision_fn
-        if design_payload is None:
-            raise ValueError("design_payload must be provided")
-        self.design_payload: Dict[str, Any] = dict(design_payload)
+        self.design_payload: Dict[str, Any] = dict(design_payload or {})
         self.rng_seed = rng_seed
 
         self.backend: Optional[Any] = None
@@ -153,8 +152,8 @@ class TemplateProcedureAdapter:
 
     def _initial_design_payload(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = dict(self.design_payload)
-        if self.rng_seed is not None:
-            payload.setdefault("rng_seed", int(self.rng_seed))
+        if self.rng_seed is not None and "rng_seed" not in payload:
+            payload["rng_seed"] = int(self.rng_seed)
         return payload
 
     def reset(self) -> None:
@@ -196,110 +195,55 @@ class TemplateProcedureAdapter:
         return metadata
 
 
+@dataclass
 class AddInterimToFixedSampleTest:
     """Class-based API to convert a generic fixed design into GST designs."""
 
-    def __init__(
-        self,
-        *,
-        alpha: float,
-        power: float,
-        scheme: GSTSchemeHooks,
-        procedure_factory: ProcedureFactory,
-        asn_calculator_factory: Callable[[], ASNCalculator],
-        simulator: Any,
-        target_effect: Optional[float] = None,
-        null_reference: Optional[float] = None,
-        keep_power: bool = False,
-        max_multiplier: int = 4,
-        tol: float = 0.01,
-        batch_size: Optional[int] = None,
-        seed: Optional[int] = None,
-        design_payload_builder: Optional[
-            Callable[[Sequence[float], int], Mapping[str, Any]]
-        ] = None,
-    ) -> None:
-        self.alpha = float(alpha)
-        self.power = float(power)
-        effect_grid = list(scheme.effect_sizes)
-        if not effect_grid:
-            raise ValueError(
-                "Scheme must provide at least one effect size; call scheme.with_effect_sizes(...) if needed"
+    alpha: float
+    power: float
+    scheme: GSTSchemeHooks
+    procedure_factory: ProcedureFactory
+    asn_calculator_factory: Callable[[], ASNCalculator]
+    simulator: Simulator
+    keep_power: bool = False
+    max_multiplier: int = 4
+    tol: float = 0.01
+    batch_size: Optional[int] = None
+    seed: Optional[int] = None
+    design_payload_builder: Optional[
+        Callable[[Sequence[float], int], Mapping[str, Any]]
+    ] = None
+    power_estimator: Optional[Callable[[Sequence[float], int], float]] = None
+
+    def __post_init__(self) -> None:
+        self.batch_size = None if self.batch_size is None else int(self.batch_size)
+        self.max_multiplier = max(2, int(self.max_multiplier))
+        self.power_tolerance = float(self.tol)
+        if self.power_estimator is None:
+            self.power_estimator = MonteCarloPowerEstimator(
+                build_design_context=self._build_design_context,
+                build_design_payload=self._build_design_payload,
+                make_procedure=self._make_procedure,
+                build_simulation_request=lambda effect, n, strategy: self._build_simulation_request(
+                    effect_size=effect,
+                    planned_max_n=n,
+                    sampling_strategy=strategy,
+                ),
+                simulator=self.simulator,
+                target_effect=float(self.scheme.target_effect),
+                seed=self.seed,
+                logger=logger,
             )
-        self.effect_sizes = [float(x) for x in effect_grid]
-        self.scheme = scheme
-        self.target_effect = float(scheme.target_effect)
-        if scheme.null_reference is None:
-            raise ValueError("scheme.null_reference must not be None")
-        self.null_reference = float(scheme.null_reference)
-        self.batch_size = None if batch_size is None else int(batch_size)
-        self.seed = seed
-        self.procedure_factory = procedure_factory
-        self.asn_calculator_factory = asn_calculator_factory
-        self.design_payload_builder = design_payload_builder
-        self.simulator = simulator
-        self.keep_power = bool(keep_power)
-        self.max_multiplier = max(2, int(max_multiplier))
-        self.power_tolerance = float(tol)
         self.power_searcher = PlanMaxSampleSizeWorkflow(
-            estimate_power=lambda info, n: self._estimate_power(info, n),
+            estimate_power=self.power_estimator,
             target_power=float(self.power),
             tolerance=self.power_tolerance,
             max_multiplier=self.max_multiplier,
         )
 
-        # placeholders set by design_fst()
-        self.planned_max_n: Optional[int] = None
-        self.fsd_metadata: Dict[str, Any] = {}
-
-        logger.debug(
-            "Initialized AddInterimToFixedSampleTest: alpha=%s power=%s n_sim=%s scheme=%s",
-            self.alpha,
-            self.power,
-            self.n_simulations,
-            scheme.name,
-        )
-
-    def design_fst(self) -> Dict[str, int]:
-        """Compute fixed-sample (FSD) per-group sample size and set planned_max_n.
-
-        Returns a dict with keys 'n_fsd_per_group' and 'planned_max_n'.
-        """
-        fsd_result = dict(self.scheme.fsd_planner())
-        planned_max_n = int(fsd_result.get("planned_max_n", 0))
-        if planned_max_n <= 0:
-            raise ValueError("fsd_planner must return a positive planned_max_n")
-        fsd_result.setdefault("fsd_total", planned_max_n)
-        self.fsd_metadata = dict(fsd_result)
-        self.planned_max_n = planned_max_n
-        logger.info(
-            "Computed FSD metadata: %s",
-            self.fsd_metadata,
-        )
-        return dict(self.fsd_metadata)
-
-    @property
-    def n_simulations(self) -> int:
-        value = getattr(self.simulator, "n_simulations", None)
-        if value is None:
-            raise AttributeError("Simulator must expose an 'n_simulations' attribute")
-        count = int(value)
-        if count <= 0:
-            raise ValueError("Simulator n_simulations must be positive")
-        return count
-
-    def _optimize_info_times(self, k: int) -> Sequence[float]:
-        asn_calc = self.asn_calculator_factory()
-        optimizer = MinimizeASNOptimizer(
-            calculator=asn_calc,
-            k_max=int(k),
-            seed=self.seed,
-        )
-        info_times = optimizer.minimize()
-        if not info_times:
-            raise RuntimeError("Timing optimisation failed to produce info_times")
-        logger.info("Timing optimisation (k=%s) -> info_times=%s", k, info_times)
-        return info_times
+    @cached_property
+    def fsd_design(self) -> Dict[str, Any]:
+        return dict(self.scheme.fsd_planner())
 
     def _build_design_payload(
         self, info_times: Sequence[float], planned_max_n: int
@@ -328,9 +272,7 @@ class AddInterimToFixedSampleTest:
         info_times: Sequence[float],
         planned_max_n: int,
     ) -> SamplingPlan:
-        builder = getattr(self.scheme, "sampling_strategy_builder", None)
-        if builder is None:
-            raise AttributeError("Scheme does not provide a sampling strategy builder")
+        builder = self.scheme.sampling_strategy_builder
         rates = [float(x) for x in info_times]
         strategy = builder(
             rates,
@@ -338,18 +280,19 @@ class AddInterimToFixedSampleTest:
             self.batch_size,
         )
         metadata_raw = strategy.metadata()
-        metadata: Dict[str, Any]
-        if isinstance(metadata_raw, Mapping):
-            metadata = {str(key): value for key, value in metadata_raw.items()}
-        else:
-            metadata = {}
+        metadata: Dict[str, Any] = (
+            {str(key): value for key, value in metadata_raw.items()}
+            if isinstance(metadata_raw, Mapping)
+            else {}
+        )
         sample_sizes = metadata.get("cumulative_sizes")
         if sample_sizes is None:
             sample_sizes = simulation.compute_cumulative_sample_sizes(
                 rates, int(planned_max_n)
             )
         sample_size_list = [int(x) for x in sample_sizes]
-        metadata.setdefault("cumulative_sizes", sample_size_list)
+        if "cumulative_sizes" not in metadata:
+            metadata["cumulative_sizes"] = sample_size_list
         return SamplingPlan(
             strategy=strategy, sample_sizes=sample_size_list, metadata=metadata
         )
@@ -372,81 +315,18 @@ class AddInterimToFixedSampleTest:
         planned_max_n: int,
         sampling_strategy: simulation.SamplingStrategy,
     ) -> Any:
-        builder = getattr(self.scheme, "simulation_request_builder", None)
-        if builder is not None:
-            return builder(
-                float(effect_size),
-                int(planned_max_n),
-                sampling_strategy,
-                int(self.n_simulations),
-            )
-
-        legacy_builder = getattr(self.scheme, "_simulator_kwargs_builder", None)
-        if legacy_builder is None:
-            raise AttributeError(
-                "No simulation request builder available on the scheme hooks"
-            )
-        kwargs = dict(
-            legacy_builder(
-                float(effect_size),
-                int(planned_max_n),
-                sampling_strategy,
-            )
+        return self.scheme.simulation_request_builder(
+            float(effect_size),
+            int(planned_max_n),
+            sampling_strategy,
+            int(
+                getattr(
+                    self.simulator,
+                    "n_simulations",
+                    getattr(self.scheme, "n_simulations", 1),
+                )
+            ),
         )
-        kwargs.setdefault("effect_size", float(effect_size))
-        kwargs.setdefault("n_simulations", int(self.n_simulations))
-        kwargs.setdefault("max_total", int(planned_max_n))
-        kwargs.setdefault("sampling", sampling_strategy)
-        from earlysign.stats.essentials.schemes.two_proportions.simulator import (
-            TwoProportionsSimulationRequest,
-        )
-
-        return TwoProportionsSimulationRequest(
-            p_control=float(kwargs["p_control"]),
-            effect_size=float(kwargs["effect_size"]),
-            n_simulations=int(kwargs["n_simulations"]),
-            max_total=int(kwargs["max_total"]),
-            sampling=kwargs["sampling"],
-        )
-
-    def _estimate_power(self, info_times: Sequence[float], planned_max_n: int) -> float:
-        context = self._build_design_context(info_times, planned_max_n)
-        design_payload = self._build_design_payload(
-            context.info_times, context.planned_max_n
-        )
-        procedure = self._make_procedure(
-            context.info_times, context.planned_max_n, design_payload
-        )
-        procedure.reset()
-        sampling_plan = context.sampling_plan
-        meta_before: Optional[Mapping[str, Any]] = sampling_plan.metadata or None
-        logger.info(
-            "Estimating power (planned_max_n=%s, info_times=%s, sampling_meta=%s)",
-            context.planned_max_n,
-            context.info_times,
-            meta_before,
-        )
-
-        simulator = self.simulator
-        request = self._build_simulation_request(
-            effect_size=self.target_effect,
-            planned_max_n=context.planned_max_n,
-            sampling_strategy=sampling_plan.strategy,
-        )
-        points = simulator.simulate(
-            procedure,
-            requests=[request],
-            rng_seed=self.seed,
-        )
-        if not points:
-            raise RuntimeError("Simulator returned no results during power estimation")
-        point = points[0]
-        logger.info(
-            "Estimated power (planned_max_n=%s) -> %s",
-            planned_max_n,
-            float(point.power),
-        )
-        return float(point.power)
 
     def compare_interim(
         self,
@@ -458,7 +338,7 @@ class AddInterimToFixedSampleTest:
         If the instance is configured with ``keep_power=False`` the GST uses the FSD total as the
         planned maximum (power may change). If True, the method searches for
         the minimal `planned_max_n` that preserves power at the design H1
-        (self.target_effect) approximately.
+        (`scheme.target_effect`) approximately.
 
         Note on the search behaviour and reproducibility
         -----------------------------------------------
@@ -472,34 +352,34 @@ class AddInterimToFixedSampleTest:
         Monte-Carlo RNG. For reproducible results callers should provide and
         manage `seed` consistently across runs.
         """
-        if self.planned_max_n is None:
-            raise RuntimeError("Call design_fst() before compare_interim()")
-
-        keep_power = self.keep_power
         logger.info(
             "Starting compare_interim(k=%s, keep_power=%s)",
             k,
-            keep_power,
+            self.keep_power,
         )
         # When searching for a budget that preserves the target power, log the
         # requested target and tolerance so the Monte-Carlo estimates can be
         # interpreted relative to the goal.
-        if keep_power:
+        if self.keep_power:
             logger.info(
                 "Target power=%s, tolerance=%s (accept range: [target, target+tol])",
                 float(self.power),
                 float(self.power_tolerance),
             )
 
-        optimized_info_times = self._optimize_info_times(int(k))
+        optimized_info_times = MinimizeASNOptimizer(
+            calculator=self.asn_calculator_factory(),
+            k_max=int(k),
+            seed=self.seed,
+        ).minimize()
 
-        if keep_power is False:
-            planned_max_n = int(self.planned_max_n)
+        if self.keep_power is False:
+            planned_max_n = int(self.fsd_design["sample_size"])
         else:
             planned_max_n = self.power_searcher.search(
                 info_times=optimized_info_times,
                 k=int(k),
-                fsd_total=int(self.planned_max_n),
+                fsd_total=int(self.fsd_design["sample_size"]),
             )
 
         logger.info("Using planned_max_n=%s for k=%s", planned_max_n, k)
@@ -513,27 +393,29 @@ class AddInterimToFixedSampleTest:
         base_proc = self._make_procedure(
             context.info_times, context.planned_max_n, design_payload
         )
-        raw_metadata = base_proc.snapshot_metadata()
-        base_metadata: Dict[str, Any] = {
-            str(key): value for key, value in raw_metadata.items()
+        raw_metadata = {
+            str(key): value for key, value in base_proc.snapshot_metadata().items()
         }
-        base_metadata.setdefault("info_times", list(context.info_times))
-        base_metadata.setdefault("planned_max_n", int(context.planned_max_n))
+        default_metadata: Dict[str, Any] = {
+            "info_times": list(context.info_times),
+            "planned_max_n": int(context.planned_max_n),
+            "sample_size": int(self.fsd_design["sample_size"]),
+            "sample_sizes": list(sampling_plan.sample_sizes),
+            "target_power": float(self.power),
+            "target_effect": float(self.scheme.target_effect),
+            "alpha": float(self.alpha),
+        }
+        if "n_fsd_per_group" in self.fsd_design:
+            default_metadata["n_fsd_per_group"] = int(
+                self.fsd_design["n_fsd_per_group"]
+            )
         alloc_meta = sampling_plan.allocation_ratio()
         if alloc_meta is not None:
-            base_metadata.setdefault("allocation_ratio", alloc_meta)
-        base_metadata.setdefault("sample_sizes", list(sampling_plan.sample_sizes))
-        if "n_fsd_per_group" in self.fsd_metadata:
-            base_metadata.setdefault(
-                "n_fsd_per_group", int(self.fsd_metadata["n_fsd_per_group"])
-            )
-        if "fsd_total" in self.fsd_metadata:
-            base_metadata.setdefault("fsd_total", int(self.fsd_metadata["fsd_total"]))
-        base_metadata.setdefault("target_power", float(self.power))
-        base_metadata.setdefault("target_effect", float(self.target_effect))
-        base_metadata.setdefault("alpha", float(self.alpha))
+            default_metadata["allocation_ratio"] = alloc_meta
+        base_metadata = dict(default_metadata)
+        base_metadata.update(raw_metadata)
 
-        effect_grid = [float(es) for es in self.effect_sizes]
+        effect_grid = [float(es) for es in self.scheme.effect_sizes]
         oc_results: List[OCPointResult] = []
         if effect_grid:
             simulator = self.simulator
@@ -548,31 +430,25 @@ class AddInterimToFixedSampleTest:
                 for es in effect_grid
             ]
             progress_active = tqdm is not None and logger.isEnabledFor(logging.INFO)
-            log_context = (
-                logging_redirect_tqdm(loggers=[logger])
-                if progress_active
-                else nullcontext()
+            points = simulator.simulate(
+                procedure,
+                requests=requests,
+                rng_seed=self.seed,
             )
-            with log_context:
-                points = simulator.simulate(
-                    procedure,
-                    requests=requests,
-                    rng_seed=self.seed,
-                )
             if len(points) != len(effect_grid):
                 raise RuntimeError("Simulator returned an unexpected number of results")
-            paired = list(zip(effect_grid, points))
-            effect_iterable = (
+            effect_iterable = list(zip(effect_grid, points))
+            iterable = (
                 tqdm(
-                    paired,
+                    effect_iterable,
                     desc=f"Simulating effect sizes (k={k})",
                     unit="effect",
                     leave=False,
                 )
                 if progress_active
-                else paired
+                else effect_iterable
             )
-            for idx, (es, point) in enumerate(effect_iterable):
+            for idx, (es, point) in enumerate(iterable):
                 logger.debug(
                     "Simulated effect_size=%s (idx=%s) with planned_max_n=%s -> power=%s",
                     es,
@@ -580,31 +456,36 @@ class AddInterimToFixedSampleTest:
                     context.planned_max_n,
                     float(point.power),
                 )
-                merged_md = dict(base_metadata)
-                if point.metadata:
-                    merged_md.update(
+                point.metadata = {
+                    **base_metadata,
+                    **(
                         {str(key): value for key, value in point.metadata.items()}
-                    )
-                merged_md.setdefault("sample_sizes", base_metadata.get("sample_sizes"))
-                merged_md["effect_size"] = float(es)
-                merged_md["n_looks"] = int(len(context.info_times))
-                merged_md["planned_max_n"] = int(context.planned_max_n)
-                point.metadata = merged_md
+                        if point.metadata
+                        else {}
+                    ),
+                    "sample_sizes": base_metadata.get("sample_sizes"),
+                    "effect_size": float(es),
+                    "n_looks": len(context.info_times),
+                    "planned_max_n": int(context.planned_max_n),
+                }
                 oc_results.append(point)
 
         closest = min(
-            oc_results, key=lambda r: abs(r.effect_size - float(self.target_effect))
+            oc_results,
+            key=lambda r: abs(r.effect_size - float(self.scheme.target_effect)),
         )
 
         plotter = OCCurvePlotter()
         plot_err: Optional[str] = None
         try:
+            if self.scheme.null_reference is None:
+                raise ValueError("scheme.null_reference must not be None")
             plot_kwargs: Dict[str, Any] = {
-                "null_value": float(self.null_reference),
+                "null_value": float(self.scheme.null_reference),
             }
             ax = plotter.plot_oc_curve(
                 oc_results,
-                target_effect=float(self.target_effect),
+                target_effect=float(self.scheme.target_effect),
                 plot_options=plot_options,
                 **plot_kwargs,
             )

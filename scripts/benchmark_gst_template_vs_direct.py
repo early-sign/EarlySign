@@ -102,8 +102,6 @@ def _direct_compare_runtime(
         batch_size=batch_size,
         seed=seed,
     )
-    inst.design_fst()
-
     start = time.perf_counter()
     LOGGER.debug("Direct flow: calling compare_interim")
     inst.compare_interim(k=k, plot_options=None)
@@ -203,8 +201,6 @@ def _template_compare_runtime_with_profile(
             spending_family=spending_family,
         ),
     )
-    inst.design_fst()
-
     profiler: Optional[cProfile.Profile]
     if enable_profile:
         profiler = cProfile.Profile()
