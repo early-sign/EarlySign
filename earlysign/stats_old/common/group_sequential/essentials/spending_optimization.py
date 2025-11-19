@@ -55,8 +55,10 @@ from typing import Any, Dict, Literal, Optional, Tuple, cast
 import numpy as np
 from scipy.optimize import OptimizeResult, minimize_scalar
 
-from earlysign.stats_old.common.group_sequential.essentials.performance import performance
 from earlysign.stats.methods.group_sequential import boundary
+from earlysign.stats_old.common.group_sequential.essentials.performance import (
+    performance,
+)
 
 BindingMode = Literal["binding", "non_binding"]
 

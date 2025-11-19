@@ -41,10 +41,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from earlysign.stats.methods.group_sequential import boundary
 from earlysign.stats_old.common.group_sequential.essentials import (
     performance,
 )
-from earlysign.stats.methods.group_sequential import boundary
 
 # =============================================================================
 # Type Aliases

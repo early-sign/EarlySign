@@ -28,7 +28,9 @@ from earlysign.stats_old.design.gst.widgets.nmax_fixed_min_mde import (
     NMaxFixedMinMDEDesigner,
 )
 from earlysign.stats_old.design.gst.widgets.optimize_asn import OptimizeASNDesigner
-from earlysign.stats_old.design.gst.widgets.optimize_design import OptimizeDesignDesigner
+from earlysign.stats_old.design.gst.widgets.optimize_design import (
+    OptimizeDesignDesigner,
+)
 
 
 class ModeController(Protocol):
