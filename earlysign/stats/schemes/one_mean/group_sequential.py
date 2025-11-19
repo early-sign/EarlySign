@@ -13,9 +13,6 @@ import math
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
-from earlysign.framework.records import LedgerRecord
 from earlysign.applications.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
 )
@@ -25,6 +22,9 @@ from earlysign.applications.execution.methods.group_sequential.records.decision 
 from earlysign.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
+from earlysign.core.ledger import Ledger
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
+from earlysign.framework.records import LedgerRecord
 from earlysign.stats.essentials.methods.group_sequential.boundary import (
     convert_statistic_scale,
 )

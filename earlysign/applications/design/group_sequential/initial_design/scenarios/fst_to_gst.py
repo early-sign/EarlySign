@@ -44,7 +44,6 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 import ibis
 from tqdm.auto import tqdm
 
-from earlysign.framework.templates import TemplateBase
 from earlysign.applications.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
     ProcedureLike,
@@ -62,6 +61,7 @@ from earlysign.applications.design.group_sequential.initial_design.workflows.pla
 from earlysign.applications.report.group_sequential.plot_oc_curve import (
     OCCurvePlotter,
 )
+from earlysign.framework.templates import TemplateBase
 from earlysign.stats.essentials.methods.group_sequential import simulation
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (

@@ -17,10 +17,6 @@ import pandas as pd
 from ibis import BaseBackend
 from matplotlib.figure import Figure
 
-from earlysign.core.ledger import Ledger
-from earlysign.core.util.ibis_cache import IbisCache
-from earlysign.framework import templates as tpl
-from earlysign.reporting.group_sequential import plot_design_boundaries
 from earlysign.applications.design.group_sequential.initial_design.scenarios.fst_to_gst import (
     AddInterimToFixedSampleTest,
 )
@@ -51,6 +47,10 @@ from earlysign.applications.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
 )
+from earlysign.core.ledger import Ledger
+from earlysign.core.util.ibis_cache import IbisCache
+from earlysign.framework import templates as tpl
+from earlysign.reporting.group_sequential import plot_design_boundaries
 from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.essentials.methods.group_sequential.spending import (
     SpendingFunction,
