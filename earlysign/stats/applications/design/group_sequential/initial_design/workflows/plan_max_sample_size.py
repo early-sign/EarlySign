@@ -31,8 +31,12 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+import numpy as np
+from scipy.stats import multivariate_normal
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
+
+from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -239,3 +243,57 @@ class MonteCarloPowerEstimator:
             power_value,
         )
         return power_value
+
+
+@dataclass
+class CanonicalJointPowerEstimator:
+    """
+    Estimate GST power under the canonical joint distribution.
+
+    This adapter follows the Jennison & Turnbull (2000) presentation of
+    group-sequential Z-statistics as a Brownian motion with drift observed
+    at cumulative information fractions.  Instead of simulating ledger
+    trajectories it instantiates the scheme's ASN calculator, computes the
+    implied upper boundaries and evaluates the multivariate normal CDF to
+    obtain ``P(Z_1 < b_1, ..., Z_k < b_k | H_1)``.  Power is ``1 - beta``,
+    where ``beta`` denotes the probability of never crossing an efficacy
+    boundary by the final look.
+    """
+
+    asn_calculator_factory: Callable[[], ASNCalculator]
+
+    def __call__(self, info_times: Sequence[float], planned_max_n: int) -> float:
+        if planned_max_n <= 0:
+            raise ValueError("planned_max_n must be positive for canonical power")
+
+        calculator = self.asn_calculator_factory()
+        info_seq = [float(x) for x in info_times]
+        rates = np.asarray(
+            calculator._validate_information_rates(info_seq), dtype=float
+        )
+        per_stage = calculator._per_stage_alpha(rates)
+        boundaries = np.asarray(calculator._z_boundaries(per_stage), dtype=float)
+
+        allocation = float(calculator.allocation_ratio)
+        if allocation <= 0.0:
+            raise ValueError("allocation_ratio must be positive for canonical power")
+        sigma_eff = float(calculator.st_dev) * np.sqrt(1.0 + 1.0 / allocation)
+        alternative = float(calculator.alternative)
+        n_max = float(planned_max_n)
+        kappa = (alternative / sigma_eff) * np.sqrt(n_max)
+        means = kappa * np.sqrt(rates)
+
+        cov = np.sqrt(np.minimum.outer(rates, rates) / np.maximum.outer(rates, rates))
+        np.fill_diagonal(cov, 1.0)
+
+        beta = float(multivariate_normal.cdf(boundaries, mean=means, cov=cov))
+        if not np.isfinite(beta):
+            raise RuntimeError("Canonical CDF evaluation returned a non-finite value")
+        power_estimate = float(np.clip(1.0 - beta, 0.0, 1.0))
+        logger.info(
+            "Canonical power estimate (planned_max_n=%s, info_times=%s) -> %s",
+            planned_max_n,
+            info_times,
+            power_estimate,
+        )
+        return power_estimate

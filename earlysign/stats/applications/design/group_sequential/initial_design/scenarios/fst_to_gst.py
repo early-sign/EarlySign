@@ -39,15 +39,7 @@ exported functions below.
 import logging
 from dataclasses import dataclass
 from functools import cached_property
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-)
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import ibis
 from tqdm.auto import tqdm
