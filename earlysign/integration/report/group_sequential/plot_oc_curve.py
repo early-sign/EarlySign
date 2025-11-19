@@ -2,8 +2,8 @@
 
 This module provides a small plotting class that accepts the output of
 `compute_oc_curve` (a sequence of OCPointResult) and draws curves
-and stopping-distribution markers using the visual style from
-`earlysign.stats.design.gst.common.visualization`.
+and stopping-distribution markers using the visual style carried over from
+the legacy design notebooks.
 
 The implementation is intentionally lightweight so it can be used in
 reporting code paths without pulling in the heavier scenario result

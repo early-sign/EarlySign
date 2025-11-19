@@ -1,260 +1,129 @@
 """
-GST Design Tutorial - Operating Characteristics Curves
+Integration-style checks for the binomial GST design helper.
 
-This demonstrates the operating characteristics (expected sample size vs. effect size)
-for different group sequential designs using the new scenario abstractions.
+These tests exercise :meth:`BinomialGSTDesignInterface.design.compare_interim`
+to ensure it returns sensible OC curves and that the lightweight plotting
+utilities in ``earlysign.integration.report`` consume the results.
 """
+
+import matplotlib
+
+# Force a non-interactive backend so pyplot calls work in CI.
+matplotlib.use("Agg")
 
 import numpy as np
 import pytest
 
-from earlysign.stats.design.gst.common.visualization import (
+from earlysign.api.ab_tests import BinomialABTest
+from earlysign.integration.report.group_sequential.plot_oc_curve import (
     OCCurvePlotter,
-    print_scenario_summary,
-)
-from earlysign.stats.design.gst.scenarios import (
-    run_scenario_a,
-    run_scenario_b,
-)
-from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
-    TwoProportionsEffectSizeCalculator,
 )
 
-# Fix random seed for reproducibility
-np.random.seed(42)
+
+def _run_compare_interim(
+    *,
+    alpha: float,
+    delta: float,
+    power: float,
+    p_control: float,
+    effect_sizes: list[float],
+    k: int,
+    n_sim: int = 40,
+    seed: int = 123,
+):
+    interface = BinomialABTest.design_interface(
+        alpha=alpha,
+        delta=delta,
+        power=power,
+        p_control=p_control,
+        effect_sizes=list(effect_sizes),
+        n_sim=n_sim,
+        seed=seed,
+    )
+    return interface.design.compare_interim(k=k)
 
 
 @pytest.mark.basic
-@pytest.mark.parametrize(
-    "alpha, power, p0, effect_size_target",
-    [
-        (0.05, 0.8, 0.2, 0.1),
-    ],
-)
-def test_gst_operating_characteristics(alpha, power, p0, effect_size_target):
-    """GST operating characteristics curves across effect sizes."""
+def test_gst_operating_characteristics() -> None:
+    """Compare-interim returns monotonic power and plots without error."""
 
-    print("\n" + "=" * 80)
-    print("GST OPERATING CHARACTERISTICS")
-    print("=" * 80)
-
-    p1_target = p0 + effect_size_target
-
-    # 1. Setup calculator
-    print("\n1. Setup: Two-Proportion Test")
-    print(f"   Control (p0):    {p0:.2f}")
-    print(f"   Treatment (p1):  {p1_target:.2f}")
-    print(f"   Effect size:     {effect_size_target:.2f}")
-    print(f"   Alpha:           {alpha:.3f}")
-    print(f"   Power:           {power:.2f}")
-
-    calculator = TwoProportionsEffectSizeCalculator(p_control=p0)
-
-    # Calculate fixed design sample size
-    n_per_group = calculator.calculate_sample_size(effect_size_target, alpha, power)
-    n_total = n_per_group * 2
-
-    print("\n   Fixed design sample size:")
-    print(f"   - Per group: {n_per_group:,}")
-    print(f"   - Total:     {n_total:,}")
-
-    # 2. Define range of effect sizes to evaluate (as differences, not absolute p1)
-    effect_size_min = 0.02  # Minimum detectable difference
-    effect_size_max = min(0.35, 0.95 - p0)  # Extended range
-    effect_sizes = np.linspace(effect_size_min, effect_size_max, 50)
-
-    p1_min = p0 + effect_size_min
-    p1_max = p0 + effect_size_max
-
-    print("\n2. Evaluating operating characteristics")
-    print(f"   Treatment p1 range:   {p1_min:.3f} to {p1_max:.3f}")
-    print(f"   Effect size range:    {effect_size_min:.3f} to {effect_size_max:.3f}")
-    print(f"   Number of points:     {len(effect_sizes)}")
-
-    # 3. Run Scenario A: Fixed Max N
-    print(f"\n3. Running Scenario A: Fixed Max N = {n_total}")
-
-    n_interim_list = [1, 2]
-    result_a = run_scenario_a(
-        calculator=calculator,
-        target_effect=effect_size_target,
-        effect_sizes=effect_sizes,
-        alpha=alpha,
-        power=power,
-        n_interim_list=n_interim_list,
-    )
-
-    print_scenario_summary(
-        result=result_a,
-        target_effect=effect_size_target,
-        null_value=p0,
-        scenario_name="A",
-    )
-
-    # 4. Run Scenario B: Fixed Power at target δ
-    print(f"\n4. Running Scenario B: Fixed Power ≈ {power} at target")
-
-    result_b = run_scenario_b(
-        calculator=calculator,
-        target_effect=effect_size_target,
-        effect_sizes=effect_sizes,
-        alpha=alpha,
-        power=power,
-        n_interim_list=n_interim_list,
-        inflation_factor=1.15,
-    )
-
-    print_scenario_summary(
-        result=result_b,
-        target_effect=effect_size_target,
-        null_value=p0,
-        scenario_name="B",
-    )
-
-    # 5. Visualization
-    print("\n5. Creating operating characteristics plots...")
-
-    plotter = OCCurvePlotter(figsize=(16, 6))
-
-    # Combined plot
-    plotter.plot_comparison(
-        result_a=result_a,
-        result_b=result_b,
-        target_effect=effect_size_target,
-        null_value=p0,
-        effect_label="Treatment Proportion (p1)",
-    )
-
-    print("\n" + "=" * 80)
-    print("COMPLETE")
-    print("=" * 80)
-
-
-@pytest.mark.basic
-def test_gst_operating_characteristics_realistic_ctr():
-    """GST operating characteristics with realistic CTR (0.5% vs 0.7%)."""
-
-    print("\n" + "=" * 80)
-    print("GST OPERATING CHARACTERISTICS - REALISTIC CTR")
-    print("=" * 80)
-
-    # Realistic click-through rate scenario
-    p0 = 0.005  # 0.5% baseline
-    p1 = 0.007  # 0.7% target
-    effect_size_target = p1 - p0
     alpha = 0.05
-    power = 0.80
+    power = 0.8
+    p0 = 0.2
+    delta = 0.1
+    effect_sizes = np.linspace(0.02, 0.12, 6).tolist()
 
-    print("\n1. Setup: Realistic Click-Through Rate Test")
-    print(f"   Control CTR (p0):    {p0*100:.2f}%")
-    print(f"   Treatment CTR (p1):  {p1*100:.2f}%")
-    print(f"   Effect size:         {effect_size_target*100:.2f} pp")
-    print(f"   Relative lift:       {(p1/p0 - 1)*100:.0f}%")
-    print(f"   Alpha:               {alpha:.3f}")
-    print(f"   Power:               {power:.2f}")
-
-    calculator = TwoProportionsEffectSizeCalculator(p_control=p0)
-
-    # Calculate fixed design sample size
-    n_per_group = calculator.calculate_sample_size(effect_size_target, alpha, power)
-    n_total = n_per_group * 2
-
-    print("\n   Fixed design sample size:")
-    print(f"   - Per group: {n_per_group:,}")
-    print(f"   - Total:     {n_total:,}")
-
-    # 2. Define range of effect sizes (as differences, not absolute p1)
-    effect_size_min = 0.0001  # Minimum detectable difference
-    effect_size_max = min(0.005, 0.015 - p0)  # Up to 1.5% absolute or +0.5pp
-    effect_sizes = np.linspace(effect_size_min, effect_size_max, 30)
-
-    p1_min = p0 + effect_size_min
-    p1_max = p0 + effect_size_max
-
-    print("\n2. Evaluating operating characteristics")
-    print(f"   CTR range:         {p1_min*100:.3f}% to {p1_max*100:.3f}%")
-    print(
-        f"   Effect size range: {effect_size_min*100:.3f}pp to {effect_size_max*100:.3f}pp"
-    )
-    print(f"   Number of points:  {len(effect_sizes)}")
-
-    # 3. Run scenarios
-    n_interim_list = [1, 2]
-
-    print(f"\n3. Running Scenario A: Fixed Max N = {n_total:,}")
-    result_a = run_scenario_a(
-        calculator=calculator,
-        target_effect=effect_size_target,
-        effect_sizes=effect_sizes,
+    comparison = _run_compare_interim(
         alpha=alpha,
+        delta=delta,
         power=power,
-        n_interim_list=n_interim_list,
-    )
-
-    print(f"\n4. Running Scenario B: Fixed Power ≈ {power}")
-    result_b = run_scenario_b(
-        calculator=calculator,
-        target_effect=effect_size_target,
+        p_control=p0,
         effect_sizes=effect_sizes,
+        k=2,
+        n_sim=50,
+        seed=321,
+    )
+
+    oc_results = comparison["oc_results"]
+    assert len(oc_results) == len(effect_sizes)
+
+    powers = [point.power for point in oc_results]
+    # Allow a small tolerance because the simulation is stochastic.
+    assert all(
+        powers[i] <= powers[i + 1] + 0.05 for i in range(len(powers) - 1)
+    ), powers
+
+    ess = [point.expected_sample_size for point in oc_results]
+    assert ess[-1] <= comparison["planned_max_n"]
+    assert (
+        comparison["planned_max_n"] >= comparison["procedure_metadata"]["sample_size"]
+    )
+    assert comparison["plot_error"] is None
+
+    plotter = OCCurvePlotter(figsize=(6, 4))
+    ax = plotter.plot_oc_curve(
+        oc_results,
+        target_effect=delta,
+        null_value=p0,
+    )
+    # With a non-zero null reference the plot should relabel the axis.
+    assert ax.get_xlabel() == "Treated proportion"
+
+
+@pytest.mark.basic
+def test_gst_operating_characteristics_realistic_ctr() -> None:
+    """Low-CTR scenarios still emit OC curves and usable metadata."""
+
+    p0 = 0.005  # 0.5% baseline CTR
+    delta = 0.002  # aim for +0.2pp
+    alpha = 0.05
+    power = 0.8
+    effect_sizes = [0.0002, 0.0005, 0.001, delta]
+
+    comparison = _run_compare_interim(
         alpha=alpha,
+        delta=delta,
         power=power,
-        n_interim_list=n_interim_list,
-        inflation_factor=1.15,
+        p_control=p0,
+        effect_sizes=effect_sizes,
+        k=3,
+        n_sim=40,
+        seed=99,
     )
 
-    # 5. Visualization
-    print("\n5. Creating plots...")
+    oc_results = comparison["oc_results"]
+    assert len(oc_results) == len(effect_sizes)
+    assert comparison["planned_max_n"] > 0
 
-    plotter = OCCurvePlotter(figsize=(16, 6))
+    # At least one effect size should contain non-empty stop-distribution info.
+    assert any(point.stop_distribution for point in oc_results)
 
-    # Scenario A only
-    print("\n   Plotting Scenario A...")
-    plotter.plot_scenario_a(
-        result=result_a,
-        target_effect=effect_size_target,
+    plotter = OCCurvePlotter(figsize=(5, 4))
+    ax = plotter.plot_oc_curve(
+        oc_results,
+        target_effect=delta,
         null_value=p0,
-        effect_label="Treatment CTR (%)",
+        plot_options={"y_bottom": comparison["planned_max_n"] * 0.5},
     )
-
-    # Scenario B only
-    print("\n   Plotting Scenario B...")
-    plotter.plot_scenario_b(
-        result=result_b,
-        target_effect=effect_size_target,
-        null_value=p0,
-        effect_label="Treatment CTR (%)",
-    )
-
-    # Both scenarios
-    print("\n   Plotting comparison...")
-    plotter.plot_comparison(
-        result_a=result_a,
-        result_b=result_b,
-        target_effect=effect_size_target,
-        null_value=p0,
-        effect_label="Treatment CTR (%)",
-    )
-
-    # Print summaries
-    print_scenario_summary(
-        result=result_a,
-        target_effect=effect_size_target,
-        null_value=p0,
-        scenario_name="A (Fixed Max N)",
-    )
-
-    print_scenario_summary(
-        result=result_b,
-        target_effect=effect_size_target,
-        null_value=p0,
-        scenario_name="B (Fixed Power)",
-    )
-
-    print("\n" + "=" * 80)
-    print("COMPLETE - Realistic CTR Scenario")
-    print("=" * 80)
-    print("\nKey Insights:")
-    print("  • With low baseline CTR (0.5%), large sample sizes are needed")
-    print("  • GST can still provide savings through early stopping")
-    print("  • Multiple interim analyses offer flexibility without much penalty")
-    print("=" * 80)
+    bottom, top = ax.get_ylim()
+    assert bottom <= comparison["planned_max_n"] <= top

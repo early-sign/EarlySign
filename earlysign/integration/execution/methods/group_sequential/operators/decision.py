@@ -7,6 +7,9 @@ Compares statistics against boundaries and emits stop/continue signals.
 from dataclasses import dataclass
 from typing import Dict, Literal, Optional, Tuple
 
+from earlysign.core.ledger import Ledger
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
+from earlysign.framework.records import LedgerRecord
 from earlysign.integration.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
 )
@@ -19,9 +22,6 @@ from earlysign.integration.execution.methods.group_sequential.records.info impor
 from earlysign.integration.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
-from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
-from earlysign.framework.records import LedgerRecord
 from earlysign.stats.essentials.methods.group_sequential.boundary import (
     convert_statistic_scale,
 )

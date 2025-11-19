@@ -8,6 +8,9 @@ Two-proportions scheme operator(s).
 from dataclasses import dataclass
 from typing import Union
 
+from earlysign.core.ledger import Ledger
+from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
+from earlysign.framework.records import LedgerRecord
 from earlysign.integration.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
@@ -19,9 +22,6 @@ from earlysign.integration.execution.schemes.two_proportions.records import (
     BinomialCountsSnapshotRecord,
     ScoreZStatisticRecord,
 )
-from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
-from earlysign.framework.records import LedgerRecord
 from earlysign.stats.essentials.methods.group_sequential.info_time import (
     info_time_from_sample_size,
 )

@@ -17,6 +17,7 @@ from typing import Any, Dict, Literal, Optional, Union
 import ibis
 from matplotlib.figure import Figure
 
+from earlysign.core.ledger import Ledger
 from earlysign.integration.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
 )
@@ -32,7 +33,6 @@ from earlysign.integration.execution.methods.group_sequential.records.statistics
 from earlysign.integration.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
 )
-from earlysign.core.ledger import Ledger
 from earlysign.reporting.reportkit import (
     ReporterBase,
     compose_markdown,
