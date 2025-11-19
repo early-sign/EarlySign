@@ -6,7 +6,7 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
+from earlysign.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
 from earlysign.stats.essentials.methods.group_sequential.info_time import (

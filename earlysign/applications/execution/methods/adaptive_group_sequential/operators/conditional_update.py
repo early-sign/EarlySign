@@ -11,7 +11,7 @@ from typing import Dict
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.applications.execution.methods.adaptive_group_sequential.records.conditional import (
+from earlysign.applications.execution.methods.adaptive_group_sequential.records.conditional import (
     ConditionalPowerRecord,
     DesignUpdateDecisionRecord,
     UpdatedBoundariesRecord,

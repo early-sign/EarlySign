@@ -9,7 +9,7 @@ agnostic to the underlying statistical family.
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Sequence
 
-from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
+from earlysign.applications.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
 )
 from earlysign.stats.essentials.methods.group_sequential import simulation

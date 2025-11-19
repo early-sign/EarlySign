@@ -39,13 +39,13 @@ Examples
 from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
-from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
+from earlysign.applications.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     BalancedDesign,
     DesignObjective,
     MaximizePower,
     MinimizeASN,
 )
-from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.optimizer import (
+from earlysign.applications.design.group_sequential.initial_design.workflows.optimize_timing.optimizer import (
     DesignOptimizer,
 )
 from earlysign.stats.design.gst.common.config import ProportionsDesignSpec

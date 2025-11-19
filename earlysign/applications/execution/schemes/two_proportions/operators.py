@@ -11,13 +11,13 @@ from typing import Union
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
+from earlysign.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.statistics import (
+from earlysign.applications.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
-from earlysign.stats.applications.execution.schemes.two_proportions.records import (
+from earlysign.applications.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
     ScoreZStatisticRecord,

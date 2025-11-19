@@ -10,16 +10,16 @@ from typing import Dict, Literal, Optional, Tuple
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import (
+from earlysign.applications.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.decision import (
+from earlysign.applications.execution.methods.group_sequential.records.decision import (
     GroupSequentialDecisionSignalRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
+from earlysign.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.statistics import (
+from earlysign.applications.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
 from earlysign.stats.essentials.methods.group_sequential.boundary import (
@@ -91,7 +91,7 @@ class GSDecision(LedgerOp):
     --------
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import (
+    >>> from earlysign.applications.execution.methods.group_sequential.records.boundary import (
     ...     GroupSequentialBoundaryRecord
     ... )
     >>> con = ibis.duckdb.connect(":memory:")
@@ -237,7 +237,7 @@ class GSDecisionFromWaldZ(LedgerOp):
     --------
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
+    >>> from earlysign.applications.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events")
     >>> ledger.ensure()

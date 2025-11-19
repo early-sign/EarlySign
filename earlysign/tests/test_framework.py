@@ -12,16 +12,16 @@ Steps:
 
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
->>> from earlysign.stats.applications.execution.schemes.two_proportions.records import BinomialCountsRecord
->>> from earlysign.stats.applications.execution.methods.group_sequential.records.statistics import WaldZStatisticRecord
->>> from earlysign.stats.applications.execution.schemes.two_proportions.operators import WaldZStatistic
->>> from earlysign.stats.applications.execution.methods.group_sequential.operators.decision import GSDecisionFromWaldZ
->>> from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
->>> from earlysign.stats.applications.execution.methods.group_sequential.records.decision import GroupSequentialDecisionSignalRecord
->>> from earlysign.stats.applications.execution.methods.group_sequential.records.design import GroupSequentialDesignRecord
->>> from earlysign.stats.applications.execution.methods.group_sequential.records.info import InformationTimeRecord
->>> from earlysign.stats.applications.execution.schemes.two_proportions.operators import InformationTime
->>> from earlysign.stats.applications.execution.methods.group_sequential.operators.boundary import BoundaryFromDesign
+>>> from earlysign.applications.execution.schemes.two_proportions.records import BinomialCountsRecord
+>>> from earlysign.applications.execution.methods.group_sequential.records.statistics import WaldZStatisticRecord
+>>> from earlysign.applications.execution.schemes.two_proportions.operators import WaldZStatistic
+>>> from earlysign.applications.execution.methods.group_sequential.operators.decision import GSDecisionFromWaldZ
+>>> from earlysign.applications.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
+>>> from earlysign.applications.execution.methods.group_sequential.records.decision import GroupSequentialDecisionSignalRecord
+>>> from earlysign.applications.execution.methods.group_sequential.records.design import GroupSequentialDesignRecord
+>>> from earlysign.applications.execution.methods.group_sequential.records.info import InformationTimeRecord
+>>> from earlysign.applications.execution.schemes.two_proportions.operators import InformationTime
+>>> from earlysign.applications.execution.methods.group_sequential.operators.boundary import BoundaryFromDesign
 
 
 # --- Setup in-memory ledger ---------------------------------------------------

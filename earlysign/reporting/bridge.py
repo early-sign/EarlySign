@@ -15,7 +15,7 @@ Examples
 --------
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
->>> from earlysign.stats.applications.execution.schemes.two_proportions.records import BinomialCountsRecord
+>>> from earlysign.applications.execution.schemes.two_proportions.records import BinomialCountsRecord
 >>> from earlysign.stats.common.anytime_valid.records import (
 ...     EProcessRecord, SafeDesignRecord, SafeDecisionRecord
 ... )

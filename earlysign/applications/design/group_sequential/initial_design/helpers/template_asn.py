@@ -8,7 +8,7 @@ layer. It allows the timing optimiser to work with ledger-backed templates.
 
 Examples
 --------
->>> from earlysign.stats.applications.design.group_sequential.initial_design.helpers.template_asn import TemplateASNAdapter
+>>> from earlysign.applications.design.group_sequential.initial_design.helpers.template_asn import TemplateASNAdapter
 >>> from earlysign.stats.essentials.schemes.two_proportions.procedure import TwoProportionsProcedure
 >>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
 >>> from earlysign.stats.essentials.schemes.two_proportions.asn import build_asn_calculator
@@ -44,7 +44,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
 
-from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
+from earlysign.applications.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
 )
 from earlysign.stats.essentials.methods.group_sequential import simulation

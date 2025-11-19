@@ -9,16 +9,16 @@ from typing import Dict, Optional
 
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
+from earlysign.applications.design.group_sequential.initial_design.schema import (
     DesignPayloadModel,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.boundary import (
+from earlysign.applications.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.design import (
+from earlysign.applications.execution.methods.group_sequential.records.design import (
     GroupSequentialDesignRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
+from earlysign.applications.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
 from earlysign.stats.essentials.methods.group_sequential import boundary
@@ -44,13 +44,13 @@ class BoundaryFromDesign(LedgerOp):
     Examples
     --------
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.stats.applications.execution.methods.group_sequential.operators.boundary import (
+    >>> from earlysign.applications.execution.methods.group_sequential.operators.boundary import (
     ...     BoundaryFromDesign
     ... )
-    >>> from earlysign.stats.applications.execution.methods.group_sequential.records.design import (
+    >>> from earlysign.applications.execution.methods.group_sequential.records.design import (
     ...     GroupSequentialDesignRecord
     ... )
-    >>> from earlysign.stats.applications.execution.methods.group_sequential.records.info import (
+    >>> from earlysign.applications.execution.methods.group_sequential.records.info import (
     ...     InformationTimeRecord
     ... )
     >>> import ibis

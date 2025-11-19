@@ -6,7 +6,7 @@ This single file mirrors the intended package layout:
 * ``earlysign.framework``   → strongly-typed ``Record`` classes that derive their``kind``
                               from the payload schema/class name (similar to
                               ``earlysign.framework.records``).
-* ``earlysign.stats.applications.execution`` → composed procedures (here inlined via helpers)
+* ``earlysign.applications.execution`` → composed procedures (here inlined via helpers)
 * ``earlysign.api``         → ``BinomialABTest`` (public surface identical to the real API)
 
 Multiple experiments can share a single physical ledger table: each ``BinomialABTest``

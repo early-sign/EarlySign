@@ -21,33 +21,33 @@ from earlysign.core.ledger import Ledger
 from earlysign.core.util.ibis_cache import IbisCache
 from earlysign.framework import templates as tpl
 from earlysign.reporting.group_sequential import plot_design_boundaries
-from earlysign.stats.applications.design.group_sequential.initial_design.scenarios.fst_to_gst import (
+from earlysign.applications.design.group_sequential.initial_design.scenarios.fst_to_gst import (
     AddInterimToFixedSampleTest,
 )
-from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
+from earlysign.applications.design.group_sequential.initial_design.schema import (
     DesignPayloadModel,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.operators.boundary import (
+from earlysign.applications.execution.methods.group_sequential.operators.boundary import (
     BoundaryFromDesign,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.operators.decision import (
+from earlysign.applications.execution.methods.group_sequential.operators.decision import (
     GSDecisionFromWaldZ,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.decision import (
+from earlysign.applications.execution.methods.group_sequential.records.decision import (
     GroupSequentialDecisionSignalRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.design import (
+from earlysign.applications.execution.methods.group_sequential.records.design import (
     GroupSequentialDesignRecord,
 )
-from earlysign.stats.applications.execution.methods.group_sequential.records.statistics import (
+from earlysign.applications.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
-from earlysign.stats.applications.execution.schemes.two_proportions.operators import (
+from earlysign.applications.execution.schemes.two_proportions.operators import (
     BinomialCountsSnapshot,
     InformationTime,
     WaldZStatistic,
 )
-from earlysign.stats.applications.execution.schemes.two_proportions.records import (
+from earlysign.applications.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
 )

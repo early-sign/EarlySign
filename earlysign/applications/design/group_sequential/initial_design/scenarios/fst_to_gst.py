@@ -21,7 +21,7 @@ each instance operates in one of two modes:
 Notes
 -----
 All imports are restricted to modules under
-``earlysign.stats.essentials`` and ``earlysign.stats.applications`` as
+``earlysign.stats.essentials`` and ``earlysign.applications`` as
 requested. The implementations prefer existing building blocks:
 
 - timing optimizer: ``MinimizeASNOptimizer`` (applications/.../minimize_asn.py)
@@ -45,21 +45,21 @@ import ibis
 from tqdm.auto import tqdm
 
 from earlysign.framework.templates import TemplateBase
-from earlysign.stats.applications.design.group_sequential.initial_design.helpers.protocols import (
+from earlysign.applications.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
     ProcedureLike,
 )
-from earlysign.stats.applications.design.group_sequential.initial_design.helpers.scheme import (
+from earlysign.applications.design.group_sequential.initial_design.helpers.scheme import (
     GSTSchemeHooks,
 )
-from earlysign.stats.applications.design.group_sequential.initial_design.workflows.optimize_timing.minimize_asn import (
+from earlysign.applications.design.group_sequential.initial_design.workflows.optimize_timing.minimize_asn import (
     MinimizeASNOptimizer,
 )
-from earlysign.stats.applications.design.group_sequential.initial_design.workflows.plan_max_sample_size import (
+from earlysign.applications.design.group_sequential.initial_design.workflows.plan_max_sample_size import (
     MonteCarloPowerEstimator,
     PlanMaxSampleSizeWorkflow,
 )
-from earlysign.stats.applications.report.group_sequential.plot_oc_curve import (
+from earlysign.applications.report.group_sequential.plot_oc_curve import (
     OCCurvePlotter,
 )
 from earlysign.stats.essentials.methods.group_sequential import simulation

@@ -3,7 +3,7 @@
 from typing import Type
 
 from earlysign.framework.records import LedgerRecord, QueryMixin
-from earlysign.stats.applications.design.group_sequential.initial_design.schema import (
+from earlysign.applications.design.group_sequential.initial_design.schema import (
     DesignPayloadModel,
 )
 
