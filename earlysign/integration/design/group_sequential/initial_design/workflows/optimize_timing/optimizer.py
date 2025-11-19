@@ -7,10 +7,10 @@ from typing import Any, Tuple
 
 import numpy as np
 
-from earlysign.applications.design.group_sequential.initial_design.workflows.optimize_timing.minimize_asn import (
+from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.minimize_asn import (
     MinimizeASNOptimizer,
 )
-from earlysign.applications.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
+from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     DesignObjective,
 )
 from earlysign.stats.design.gst.common.config import DesignSpec

@@ -8,13 +8,13 @@ Two-proportions scheme operator(s).
 from dataclasses import dataclass
 from typing import Union
 
-from earlysign.applications.execution.methods.group_sequential.records.info import (
+from earlysign.integration.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
-from earlysign.applications.execution.methods.group_sequential.records.statistics import (
+from earlysign.integration.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
-from earlysign.applications.execution.schemes.two_proportions.records import (
+from earlysign.integration.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
     ScoreZStatisticRecord,

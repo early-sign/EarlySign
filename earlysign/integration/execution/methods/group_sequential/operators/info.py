@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-from earlysign.applications.execution.methods.group_sequential.records.info import (
+from earlysign.integration.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
 from earlysign.core.ledger import Ledger

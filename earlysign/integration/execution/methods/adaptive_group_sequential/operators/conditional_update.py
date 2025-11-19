@@ -8,7 +8,7 @@ based on interim analysis results and conditional power calculations.
 from dataclasses import dataclass
 from typing import Dict
 
-from earlysign.applications.execution.methods.adaptive_group_sequential.records.conditional import (
+from earlysign.integration.execution.methods.adaptive_group_sequential.records.conditional import (
     ConditionalPowerRecord,
     DesignUpdateDecisionRecord,
     UpdatedBoundariesRecord,

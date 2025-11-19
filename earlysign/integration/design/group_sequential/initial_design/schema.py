@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from earlysign.applications.design.group_sequential.initial_design.constants import (
+from earlysign.integration.design.group_sequential.initial_design.constants import (
     BindingMode,
     BoundaryScale,
     EfficacyStyle,

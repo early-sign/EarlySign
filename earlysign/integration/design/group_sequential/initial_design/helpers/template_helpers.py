@@ -8,7 +8,7 @@ turns a template factory into a :class:`ProcedureFactory`.
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Optional, Sequence
 
-from earlysign.applications.design.group_sequential.initial_design.helpers.protocols import (
+from earlysign.integration.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
     ProcedureLike,
 )
@@ -32,7 +32,7 @@ def build_template_procedure_factory(
         design_payload: Optional[Mapping[str, Any]],
         rng_seed: Optional[int],
     ) -> ProcedureLike:
-        from earlysign.applications.design.group_sequential.initial_design.scenarios.fst_to_gst import (
+        from earlysign.integration.design.group_sequential.initial_design.scenarios.fst_to_gst import (
             TemplateProcedureAdapter,
         )
 

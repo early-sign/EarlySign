@@ -26,7 +26,7 @@ from typing import Any, Dict, Tuple
 
 from scipy.special import betaln
 
-from earlysign.applications.execution.schemes.two_proportions.records import (
+from earlysign.integration.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
 )
 from earlysign.core.ledger import Ledger

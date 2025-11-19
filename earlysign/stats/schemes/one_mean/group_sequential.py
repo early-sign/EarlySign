@@ -13,13 +13,13 @@ import math
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-from earlysign.applications.execution.methods.group_sequential.records.boundary import (
+from earlysign.integration.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
 )
-from earlysign.applications.execution.methods.group_sequential.records.decision import (
+from earlysign.integration.execution.methods.group_sequential.records.decision import (
     GroupSequentialDecisionSignalRecord,
 )
-from earlysign.applications.execution.methods.group_sequential.records.info import (
+from earlysign.integration.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
 from earlysign.core.ledger import Ledger
