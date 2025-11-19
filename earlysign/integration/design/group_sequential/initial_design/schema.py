@@ -20,15 +20,15 @@ from earlysign.integration.design.group_sequential.initial_design.constants impo
     StatisticType,
     normalize_spending_family,
 )
-from earlysign.stats.essentials.schemes.survival.effect_size import (
+from earlysign.stats.schemes.survival.effect_size import (
     TimeToEventEffect,
     TimeToEventSampleSize,
 )
-from earlysign.stats.essentials.schemes.two_means.effect_size import (
+from earlysign.stats.schemes.two_means.effect_size import (
     MeansEffect,
     MeansSampleSize,
 )
-from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
+from earlysign.stats.schemes.two_proportions.effect_size import (
     ProportionsEffect,
     ProportionsSampleSize,
 )

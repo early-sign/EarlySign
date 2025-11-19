@@ -21,7 +21,7 @@ from earlysign.integration.execution.methods.group_sequential.records.design imp
 from earlysign.integration.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
-from earlysign.stats.essentials.methods.group_sequential import boundary
+from earlysign.stats.methods.group_sequential import boundary
 
 
 class BoundaryFromDesign(LedgerOp):

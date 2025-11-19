@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 
-from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
+from earlysign.stats.methods.group_sequential.operating_characteristics import (
     OCPointResult,
 )
 
@@ -60,7 +60,7 @@ class OCCurvePlotter:
     >>> import matplotlib
     >>> matplotlib.use('Agg')
     >>> from matplotlib.axes import Axes
-    >>> from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
+    >>> from earlysign.stats.methods.group_sequential.operating_characteristics import (
     ...     OCPointResult,
     ... )
     >>> # Create two minimal OCPointResult instances

@@ -57,7 +57,7 @@ def get_reporter(
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.integration.execution.schemes.two_proportions.records import BinomialCountsRecord
-    >>> from earlysign.stats.common.anytime_valid.records import EProcessRecord, SafeDesignRecord, SafeDecisionRecord
+    >>> from earlysign.stats_old.common.anytime_valid.records import EProcessRecord, SafeDesignRecord, SafeDecisionRecord
     >>> con = ibis.duckdb.connect(":memory:")
     >>> scoped = Ledger(con, "events").bind(experiment_id="demoF"); scoped.ensure()
     >>> # minimal Safe-mode rows

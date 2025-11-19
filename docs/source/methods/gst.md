@@ -328,4 +328,4 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 
 **Legend**: ✅ Implemented
 
-**Module locations**: Core `essentials` live in `earlysign.stats.essentials.methods.group_sequential.<module>` with adaptive-routine implementations in `earlysign.stats.essentials.methods.adaptive_group_sequential.conditional_update`. Execution-layer operators live in `earlysign.integration.execution.methods.group_sequential.operators.<module>` and adaptive operators in `earlysign.integration.execution.methods.adaptive_group_sequential.operators.conditional_update`.
+**Module locations**: Core `essentials` live in `earlysign.stats.methods.group_sequential.<module>` with adaptive-routine implementations in `earlysign.stats.methods.adaptive_group_sequential.conditional_update`. Execution-layer operators live in `earlysign.integration.execution.methods.group_sequential.operators.<module>` and adaptive operators in `earlysign.integration.execution.methods.adaptive_group_sequential.operators.conditional_update`.

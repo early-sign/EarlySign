@@ -22,7 +22,7 @@ from earlysign.integration.execution.methods.group_sequential.records.info impor
 from earlysign.integration.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
-from earlysign.stats.essentials.methods.group_sequential.boundary import (
+from earlysign.stats.methods.group_sequential.boundary import (
     convert_statistic_scale,
 )
 

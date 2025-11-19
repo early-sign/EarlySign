@@ -34,11 +34,11 @@ from earlysign.integration.design.group_sequential.initial_design.helpers.scheme
 from earlysign.integration.design.group_sequential.initial_design.scenarios.fst_to_gst import (
     AddInterimToFixedSampleTest,
 )
-from earlysign.stats.essentials.methods.group_sequential.spending import (
+from earlysign.stats.methods.group_sequential.spending import (
     SpendingFunction,
     get_spending_class,
 )
-from earlysign.stats.essentials.schemes.two_proportions.design import (
+from earlysign.stats.schemes.two_proportions.design import (
     build_two_proportions_scheme,
 )
 

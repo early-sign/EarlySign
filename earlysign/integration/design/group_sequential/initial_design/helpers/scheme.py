@@ -12,12 +12,12 @@ from typing import Any, Callable, Dict, Optional, Sequence
 from earlysign.integration.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
 )
-from earlysign.stats.essentials.methods.group_sequential import simulation
-from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
+from earlysign.stats.methods.group_sequential import simulation
+from earlysign.stats.methods.group_sequential.asn import ASNCalculator
+from earlysign.stats.methods.group_sequential.operating_characteristics import (
     Simulator,
 )
-from earlysign.stats.essentials.methods.group_sequential.spending import (
+from earlysign.stats.methods.group_sequential.spending import (
     SpendingFunction,
 )
 

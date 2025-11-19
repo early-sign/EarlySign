@@ -22,10 +22,10 @@ from earlysign.integration.execution.schemes.two_proportions.records import (
     BinomialCountsSnapshotRecord,
     ScoreZStatisticRecord,
 )
-from earlysign.stats.essentials.methods.group_sequential.info_time import (
+from earlysign.stats.methods.group_sequential.info_time import (
     info_time_from_sample_size,
 )
-from earlysign.stats.essentials.schemes.two_proportions.wald_z import compute_wald_z
+from earlysign.stats.schemes.two_proportions.wald_z import compute_wald_z
 
 
 class InformationTime(LedgerOp):

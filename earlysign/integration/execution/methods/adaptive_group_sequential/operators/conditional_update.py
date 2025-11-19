@@ -16,7 +16,7 @@ from earlysign.integration.execution.methods.adaptive_group_sequential.records.c
     DesignUpdateDecisionRecord,
     UpdatedBoundariesRecord,
 )
-from earlysign.stats.essentials.methods.adaptive_group_sequential.conditional_update import (
+from earlysign.stats.methods.adaptive_group_sequential.conditional_update import (
     BindingMode,
     conditional_power,
     promising_zone_decision,

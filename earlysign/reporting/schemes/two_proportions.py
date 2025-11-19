@@ -40,7 +40,7 @@ from earlysign.reporting.reportkit import (
     to_pandas_tables,
     to_sql_dict,
 )
-from earlysign.stats.common.anytime_valid.records import (
+from earlysign.stats_old.common.anytime_valid.records import (
     EProcessRecord,
     SafeDecisionRecord,
     SafeDesignRecord,

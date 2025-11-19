@@ -51,15 +51,15 @@ from earlysign.integration.execution.schemes.two_proportions.records import (
     BinomialCountsSnapshotRecord,
 )
 from earlysign.reporting.group_sequential import plot_design_boundaries
-from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.essentials.methods.group_sequential.spending import (
+from earlysign.stats.methods.group_sequential.asn import ASNCalculator
+from earlysign.stats.methods.group_sequential.spending import (
     SpendingFunction,
     get_spending_class,
 )
-from earlysign.stats.essentials.schemes.two_proportions.asn import (
+from earlysign.stats.schemes.two_proportions.asn import (
     build_asn_calculator,
 )
-from earlysign.stats.essentials.schemes.two_proportions.design import (
+from earlysign.stats.schemes.two_proportions.design import (
     build_two_proportions_scheme,
 )
 

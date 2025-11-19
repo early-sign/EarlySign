@@ -158,7 +158,7 @@ class LedgerRecord:
         Auto-generated payload type from module path and class name.
 
         Returns dot-separated module path and class name.
-        Example: earlysign.stats.common.anytime_valid.records.EProcessRecord
+        Example: earlysign.stats_old.common.anytime_valid.records.EProcessRecord
                  -> stats.common.anytime_valid.records.EProcessRecord
         """
         module = cls.__module__

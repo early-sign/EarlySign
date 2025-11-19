@@ -2,16 +2,16 @@
 Monte-Carlo-backed ASN adapter for template procedures.
 
 This module provides :class:`TemplateASNAdapter`, a thin wrapper that exposes
-the :class:`~earlysign.stats.essentials.methods.group_sequential.asn.ASNCalculator`
+the :class:`~earlysign.stats.methods.group_sequential.asn.ASNCalculator`
 interface while delegating expected-sample-size evaluation to the simulator
 layer. It allows the timing optimiser to work with ledger-backed templates.
 
 Examples
 --------
 >>> from earlysign.integration.design.group_sequential.initial_design.helpers.template_asn import TemplateASNAdapter
->>> from earlysign.stats.essentials.schemes.two_proportions.procedure import TwoProportionsProcedure
->>> from earlysign.stats.essentials.methods.group_sequential.spending import OBFSpending
->>> from earlysign.stats.essentials.schemes.two_proportions.asn import build_asn_calculator
+>>> from earlysign.stats.schemes.two_proportions.procedure import TwoProportionsProcedure
+>>> from earlysign.stats.methods.group_sequential.spending import OBFSpending
+>>> from earlysign.stats.schemes.two_proportions.asn import build_asn_calculator
 >>> spending = OBFSpending(alpha=0.05, sided=2)
 >>> calc = build_asn_calculator(
 ...     alpha=0.05,
@@ -47,9 +47,9 @@ import numpy as np
 from earlysign.integration.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
 )
-from earlysign.stats.essentials.methods.group_sequential import simulation
-from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.essentials.schemes.two_proportions.simulator import (
+from earlysign.stats.methods.group_sequential import simulation
+from earlysign.stats.methods.group_sequential.asn import ASNCalculator
+from earlysign.stats.schemes.two_proportions.simulator import (
     TwoProportionsSimulationRequest,
     TwoProportionsSimulator,
 )

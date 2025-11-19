@@ -371,7 +371,7 @@ all_events = list(ledger.reader().iter_rows())
 ### Experiment Modules
 ```python
 from earlysign.runtime.experiment_template import ExperimentTemplate, AnalysisResult
-from earlysign.stats.schemes.two_proportions.statistics import (
+from earlysign.stats_old.schemes.two_proportions.statistics import (
     WaldZStatistic, LanDeMetsBoundary, PeekSignaler
 )
 

@@ -2,7 +2,7 @@
 Design-spec evaluation helpers for legacy GST UI/API flows.
 
 This module replaces the old ``DesignLab``/``SimulationEngine`` helpers so
-callers no longer need to reach into ``earlysign.stats.design.gst.common``.
+callers no longer need to reach into ``earlysign.stats_old.design.gst.common``.
 It keeps a compatible surface (compute boundaries, run simulations, plot
 summaries) while delegating to the canonical essentials-layer components.
 """
@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-import earlysign.stats.essentials.methods.group_sequential.boundary as boundary_mod
+import earlysign.stats.methods.group_sequential.boundary as boundary_mod
 from earlysign.integration.design.group_sequential.initial_design.schema import (
     DesignSpec,
     MeansDesignSpec,
@@ -23,20 +23,20 @@ from earlysign.integration.design.group_sequential.initial_design.schema import 
     SpendingFunction,
     TimeToEventDesignSpec,
 )
-from earlysign.stats.essentials.methods.group_sequential import spending as spending_mod
-from earlysign.stats.essentials.methods.group_sequential.boundary import (
+from earlysign.stats.methods.group_sequential import spending as spending_mod
+from earlysign.stats.methods.group_sequential.boundary import (
     BoundaryCalculatorSpec,
     EfficacySpec,
     FutilitySpec,
 )
-from earlysign.stats.essentials.schemes.protocols import EffectSizeCalculator
-from earlysign.stats.essentials.schemes.survival.effect_size import (
+from earlysign.stats.schemes.protocols import EffectSizeCalculator
+from earlysign.stats.schemes.survival.effect_size import (
     TimeToEventEffectSizeCalculator,
 )
-from earlysign.stats.essentials.schemes.two_means.effect_size import (
+from earlysign.stats.schemes.two_means.effect_size import (
     MeansEffectSizeCalculator,
 )
-from earlysign.stats.essentials.schemes.two_proportions.effect_size import (
+from earlysign.stats.schemes.two_proportions.effect_size import (
     TwoProportionsEffectSizeCalculator,
 )
 

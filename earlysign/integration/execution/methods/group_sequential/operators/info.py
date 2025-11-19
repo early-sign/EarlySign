@@ -9,7 +9,7 @@ from earlysign.framework.records import LedgerRecord
 from earlysign.integration.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
-from earlysign.stats.essentials.methods.group_sequential.info_time import (
+from earlysign.stats.methods.group_sequential.info_time import (
     info_time_from_fisher,
     info_time_from_ratio,
     info_time_from_sd,

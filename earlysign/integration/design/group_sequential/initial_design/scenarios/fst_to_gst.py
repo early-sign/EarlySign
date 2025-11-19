@@ -21,7 +21,7 @@ each instance operates in one of two modes:
 Notes
 -----
 All imports are restricted to modules under
-``earlysign.stats.essentials`` and ``earlysign.integration`` as
+``earlysign.stats`` and ``earlysign.integration`` as
 requested. The implementations prefer existing building blocks:
 
 - timing optimizer: ``MinimizeASNOptimizer`` (applications/.../minimize_asn.py)
@@ -62,9 +62,9 @@ from earlysign.integration.design.group_sequential.initial_design.workflows.plan
 from earlysign.integration.report.group_sequential.plot_oc_curve import (
     OCCurvePlotter,
 )
-from earlysign.stats.essentials.methods.group_sequential import simulation
-from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.essentials.methods.group_sequential.operating_characteristics import (
+from earlysign.stats.methods.group_sequential import simulation
+from earlysign.stats.methods.group_sequential.asn import ASNCalculator
+from earlysign.stats.methods.group_sequential.operating_characteristics import (
     OCPointResult,
     Simulator,
 )

@@ -16,8 +16,8 @@ from earlysign.integration.design.group_sequential.initial_design.workflows.opti
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     DesignObjective,
 )
-from earlysign.stats.essentials.methods.group_sequential import spending as spending_mod
-from earlysign.stats.essentials.schemes.two_means.asn import NormalMeansASNCalculator
+from earlysign.stats.methods.group_sequential import spending as spending_mod
+from earlysign.stats.schemes.two_means.asn import NormalMeansASNCalculator
 
 DesignSpec = design_schema.DesignSpec
 InformationSpacing = design_schema.InformationSpacing

@@ -36,7 +36,7 @@ from scipy.stats import multivariate_normal
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from earlysign.stats.essentials.methods.group_sequential.asn import ASNCalculator
+from earlysign.stats.methods.group_sequential.asn import ASNCalculator
 
 logger = logging.getLogger(__name__)
 
