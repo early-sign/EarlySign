@@ -7,16 +7,16 @@ Compares statistics against boundaries and emits stop/continue signals.
 from dataclasses import dataclass
 from typing import Dict, Literal, Optional, Tuple
 
-from earlysign.applications.execution.methods.group_sequential.records.boundary import (
+from earlysign.integration.execution.methods.group_sequential.records.boundary import (
     GroupSequentialBoundaryRecord,
 )
-from earlysign.applications.execution.methods.group_sequential.records.decision import (
+from earlysign.integration.execution.methods.group_sequential.records.decision import (
     GroupSequentialDecisionSignalRecord,
 )
-from earlysign.applications.execution.methods.group_sequential.records.info import (
+from earlysign.integration.execution.methods.group_sequential.records.info import (
     InformationTimeRecord,
 )
-from earlysign.applications.execution.methods.group_sequential.records.statistics import (
+from earlysign.integration.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
 from earlysign.core.ledger import Ledger
@@ -91,7 +91,7 @@ class GSDecision(LedgerOp):
     --------
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.applications.execution.methods.group_sequential.records.boundary import (
+    >>> from earlysign.integration.execution.methods.group_sequential.records.boundary import (
     ...     GroupSequentialBoundaryRecord
     ... )
     >>> con = ibis.duckdb.connect(":memory:")
@@ -237,7 +237,7 @@ class GSDecisionFromWaldZ(LedgerOp):
     --------
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.applications.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
+    >>> from earlysign.integration.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events")
     >>> ledger.ensure()
