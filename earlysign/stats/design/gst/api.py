@@ -39,6 +39,11 @@ Examples
 from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
+from earlysign.integration.design.group_sequential.initial_design.schema import (
+    InformationSpacing,
+    ProportionsDesignSpec,
+    SpendingFunction,
+)
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     BalancedDesign,
     DesignObjective,
@@ -48,9 +53,9 @@ from earlysign.integration.design.group_sequential.initial_design.workflows.opti
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.optimizer import (
     DesignOptimizer,
 )
-from earlysign.stats.design.gst.common.config import ProportionsDesignSpec
-from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.types import InformationSpacing, SpendingFunction
+from earlysign.integration.design.group_sequential.initial_design.workflows.spec_analysis import (
+    DesignSpecAnalyzer,
+)
 
 
 @dataclass
@@ -61,14 +66,14 @@ class DesignResult:
     ----------
     spec : ProportionsDesignSpec
         The design specification used.
-    lab : DesignLab
-        The design lab with computed boundaries and simulation results.
+    lab : DesignSpecAnalyzer
+        Analyzer with computed boundaries and simulation results.
     extra : dict
         Additional metadata or results.
     """
 
     spec: ProportionsDesignSpec
-    lab: DesignLab
+    lab: DesignSpecAnalyzer
     extra: dict[str, Any]
 
 
@@ -151,7 +156,7 @@ class GSTDesign:
         spec.sequential.info_spacing = InformationSpacing.CUSTOM
         spec.sample_size.n_per_analysis = n_per_analysis
 
-        lab = DesignLab(spec)
+        lab = DesignSpecAnalyzer(spec)
         lab.compute_boundaries()
 
         return DesignResult(spec=spec, lab=lab, extra={})
@@ -208,7 +213,7 @@ class GSTDesign:
         spec.effect.p_control = p_control
         spec.effect.effect_size = effect_size
 
-        lab = DesignLab(spec)
+        lab = DesignSpecAnalyzer(spec)
         lab.compute_boundaries()
 
         return DesignResult(spec=spec, lab=lab, extra={})
@@ -259,7 +264,7 @@ class GSTDesign:
         n_per_group_total = max_n_total // 2
         spec.sample_size.n_per_analysis = n_per_group_total // n_analyses
 
-        lab = DesignLab(spec)
+        lab = DesignSpecAnalyzer(spec)
         lab.compute_boundaries()
 
         return DesignResult(
@@ -346,7 +351,7 @@ class GSTDesign:
         optimizer = DesignOptimizer(spec, objective_inst)
         optimized_spec = optimizer.optimize_comprehensive()
 
-        lab = DesignLab(optimized_spec)
+        lab = DesignSpecAnalyzer(optimized_spec)
         lab.compute_boundaries()
 
         from typing import cast
@@ -436,18 +441,16 @@ class GSTDesign:
             spec.sample_size.n_per_analysis = n_max // n_analyses
 
             try:
-                lab = DesignLab(spec)
+                lab = DesignSpecAnalyzer(spec)
                 lab.compute_boundaries()
                 lab.run_simulations()
 
-                # Get achieved power
                 power_summary = lab.get_power_summary()
                 achieved_power_str = str(power_summary.get("Overall Power (H1)", "0.0"))
                 achieved_power = (
                     float(achieved_power_str.replace("%", "").strip()) / 100.0
                 )
 
-                # Check feasibility
                 if lab.boundaries is not None:
                     info_fractions = lab.boundaries["info_times"]
                     actual_max_n = (
@@ -460,19 +463,15 @@ class GSTDesign:
 
                 feasible = actual_max_n <= n_max
 
-                # Binary search logic
                 if feasible and achieved_power >= power:
-                    # Can achieve power with this MDE, try smaller
                     mde_high = mde_test
                     best_mde = mde_test
                     best_lab = lab
                     best_spec = spec
                 else:
-                    # Cannot achieve power, need larger MDE
                     mde_low = mde_test
 
             except Exception:
-                # If computation fails, assume not feasible
                 mde_low = mde_test
 
             iteration += 1
@@ -533,7 +532,7 @@ class GSTDesign:
         spec.sequential.info_spacing = InformationSpacing.CUSTOM
         n_per_group_total = max_n_total // 2
         spec.sample_size.n_per_analysis = n_per_group_total // n_analyses
-        lab = DesignLab(spec)
+        lab = DesignSpecAnalyzer(spec)
         lab.compute_boundaries()
         return DesignResult(
             spec=spec,

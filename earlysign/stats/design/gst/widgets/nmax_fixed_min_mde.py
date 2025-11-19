@@ -40,12 +40,15 @@ import ipywidgets as widgets
 import matplotlib.pyplot as plt
 from IPython.display import HTML, clear_output, display
 
-from earlysign.stats.design.gst.common.config import DesignSpec, ProportionsDesignSpec
-from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.types import (
+from earlysign.integration.design.group_sequential.initial_design.schema import (
     DesignMode,
+    DesignSpec,
     InformationSpacing,
+    ProportionsDesignSpec,
     SpendingFunction,
+)
+from earlysign.integration.design.group_sequential.initial_design.workflows.spec_analysis import (
+    DesignSpecAnalyzer,
 )
 
 
@@ -381,7 +384,7 @@ class NMaxFixedMinMDEDesigner:
         -------
         - self._found_mde : float
             Minimum detectable effect that meets constraints
-        - ui.lab : DesignLab
+        - ui.lab : DesignSpecAnalyzer
             Lab instance with optimal design for MDE★
         """
         # Get parameters
@@ -427,7 +430,7 @@ class NMaxFixedMinMDEDesigner:
 
             # Try to compute boundaries and check power
             try:
-                lab = DesignLab(ui.spec)
+                lab = DesignSpecAnalyzer(ui.spec)
                 lab.compute_boundaries()
                 lab.run_simulations()
 

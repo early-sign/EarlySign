@@ -11,9 +11,15 @@ import ipywidgets as widgets
 import matplotlib.pyplot as plt
 from IPython.display import HTML, clear_output, display
 
-from earlysign.stats.design.gst.common.config import DesignSpec, ProportionsDesignSpec
-from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.types import DesignMode, SpendingFunction
+from earlysign.integration.design.group_sequential.initial_design.schema import (
+    DesignMode,
+    DesignSpec,
+    ProportionsDesignSpec,
+    SpendingFunction,
+)
+from earlysign.integration.design.group_sequential.initial_design.workflows.spec_analysis import (
+    DesignSpecAnalyzer,
+)
 
 
 class FixedPowerDesigner:
@@ -134,7 +140,7 @@ class FixedPowerDesigner:
 
             # Update spec and compute boundaries
             self.update_spec(ui.spec, ui)
-            ui.lab = DesignLab(ui.spec)
+            ui.lab = DesignSpecAnalyzer(ui.spec)
             ui.lab.compute_boundaries()
 
             # Run simulation

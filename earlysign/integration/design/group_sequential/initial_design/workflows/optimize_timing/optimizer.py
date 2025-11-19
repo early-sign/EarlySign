@@ -7,38 +7,33 @@ from typing import Any, Tuple
 
 import numpy as np
 
+from earlysign.integration.design.group_sequential.initial_design import (
+    schema as design_schema,
+)
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.minimize_asn import (
     MinimizeASNOptimizer,
 )
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     DesignObjective,
 )
-from earlysign.stats.design.gst.common.config import DesignSpec
-from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.types import InformationSpacing
-from earlysign.stats.essentials.methods.group_sequential.spending import (
-    HSDSpending,
-    OBFSpending,
-    PocockSpending,
-    SpendingFunction,
-)
-from earlysign.stats.essentials.schemes.two_means.asn import (
-    NormalMeansASNCalculator,
-)
+from earlysign.stats.essentials.methods.group_sequential import spending as spending_mod
+from earlysign.stats.essentials.schemes.two_means.asn import NormalMeansASNCalculator
+
+DesignSpec = design_schema.DesignSpec
+InformationSpacing = design_schema.InformationSpacing
+SpendingStrategy = spending_mod.SpendingFunction
 
 
-def _spec_to_spending_strategy(spec: DesignSpec) -> SpendingFunction:
-    from earlysign.stats.design.gst.common.types import SpendingFunction as SpecSpending
-
+def _spec_to_spending_strategy(spec: DesignSpec) -> SpendingStrategy:
     spending_type = spec.boundary.spending_function
     alpha = spec.test.alpha
     sided = 2 if spec.test.sided == "two" else 1
 
-    if spending_type == SpecSpending.POCOCK:
-        return PocockSpending(alpha=alpha)
-    if spending_type == SpecSpending.HSD:
-        return HSDSpending(alpha=alpha, gamma=spec.boundary.hsd_gamma)
-    return OBFSpending(alpha=alpha, sided=sided)
+    if spending_type == design_schema.SpendingFunction.POCOCK:
+        return spending_mod.PocockSpending(alpha=alpha)
+    if spending_type == design_schema.SpendingFunction.HSD:
+        return spending_mod.HSDSpending(alpha=alpha, gamma=spec.boundary.hsd_gamma)
+    return spending_mod.OBFSpending(alpha=alpha, sided=sided)
 
 
 class DesignOptimizer:
@@ -126,8 +121,7 @@ class DesignOptimizer:
                 spec.sequential.n_analyses = k
                 spec.sequential.info_times = info_times.tolist()
                 spec.sequential.info_spacing = InformationSpacing.CUSTOM
-                lab = DesignLab(spec)
-                score = self.objective.evaluate(spec, lab)
+                score = self.objective.evaluate(spec)
                 if score < best_score:
                     best_score = score
                     best_k = k

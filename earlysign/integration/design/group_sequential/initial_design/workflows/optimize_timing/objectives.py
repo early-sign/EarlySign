@@ -5,15 +5,19 @@ Optimization objectives for group sequential timing workflows.
 from abc import ABC, abstractmethod
 from typing import Any
 
-from earlysign.stats.design.gst.common.config import DesignSpec
-from earlysign.stats.design.gst.common.lab import DesignLab
+from earlysign.integration.design.group_sequential.initial_design.schema import (
+    DesignSpec,
+)
+from earlysign.integration.design.group_sequential.initial_design.workflows.spec_analysis import (
+    DesignSpecAnalyzer,
+)
 
 
 class DesignObjective(ABC):
     """Abstract base class for group sequential design optimization objectives."""
 
     @abstractmethod
-    def evaluate(self, spec: DesignSpec, lab: DesignLab) -> float:
+    def evaluate(self, spec: DesignSpec) -> float:
         """Return scalar objective (lower is better)."""
 
     @abstractmethod
@@ -28,8 +32,9 @@ class MinimizeASN(DesignObjective):
         self.planned_max_n = planned_max_n
         self.target_power = target_power
 
-    def evaluate(self, spec: DesignSpec, lab: DesignLab) -> float:
+    def evaluate(self, spec: DesignSpec) -> float:
         try:
+            lab = DesignSpecAnalyzer(spec)
             lab.compute_boundaries()
             lab.run_simulations()
             assert lab.simulation_results is not None
@@ -60,8 +65,9 @@ class MaximizePower(DesignObjective):
     def __init__(self, planned_max_n: int):
         self.planned_max_n = planned_max_n
 
-    def evaluate(self, spec: DesignSpec, lab: DesignLab) -> float:
+    def evaluate(self, spec: DesignSpec) -> float:
         try:
+            lab = DesignSpecAnalyzer(spec)
             lab.compute_boundaries()
             lab.run_simulations()
             assert lab.simulation_results is not None
@@ -95,8 +101,9 @@ class BalancedDesign(DesignObjective):
         self.target_power = target_power
         self.target_n = target_n
 
-    def evaluate(self, spec: DesignSpec, lab: DesignLab) -> float:
+    def evaluate(self, spec: DesignSpec) -> float:
         try:
+            lab = DesignSpecAnalyzer(spec)
             lab.compute_boundaries()
             lab.run_simulations()
             assert lab.simulation_results is not None

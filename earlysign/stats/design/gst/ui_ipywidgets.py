@@ -11,12 +11,17 @@ from typing import Any, Optional, Protocol
 import ipywidgets as widgets
 from IPython.display import clear_output, display
 
+from earlysign.integration.design.group_sequential.initial_design.schema import (
+    DesignMode,
+    DesignSpec,
+    ProportionsDesignSpec,
+)
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.optimizer import (
     DesignOptimizer,
 )
-from earlysign.stats.design.gst.common.config import DesignSpec, ProportionsDesignSpec
-from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.types import DesignMode
+from earlysign.integration.design.group_sequential.initial_design.workflows.spec_analysis import (
+    DesignSpecAnalyzer,
+)
 from earlysign.stats.design.gst.widgets.fixed_power import FixedPowerDesigner
 from earlysign.stats.design.gst.widgets.fixed_timing import FixedTimingDesigner
 from earlysign.stats.design.gst.widgets.nmax_fixed_min_mde import (
@@ -120,7 +125,7 @@ class GSTDesignUI:
             Initial design specification. Defaults to ProportionsDesignSpec.
         """
         self.spec = initial_spec or ProportionsDesignSpec()
-        self.lab = DesignLab(self.spec)
+        self.lab = DesignSpecAnalyzer(self.spec)
         self.optimizer: Optional[DesignOptimizer] = None
         self.current_mode = DesignMode.NMAX_FIXED_MIN_MDE
 
@@ -235,7 +240,7 @@ class GSTDesignUI:
         controller = self._controllers[self.current_mode]
         controller.update_spec(self.spec, self)
         try:
-            self.lab = DesignLab(self.spec)
+            self.lab = DesignSpecAnalyzer(self.spec)
             self.lab.compute_boundaries()
             # Initial display is handled by per-mode actions; we avoid global outputs.
         except Exception:

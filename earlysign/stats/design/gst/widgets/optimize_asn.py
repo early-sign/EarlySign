@@ -12,6 +12,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import HTML, clear_output, display
 
+from earlysign.integration.design.group_sequential.initial_design.schema import (
+    DesignMode,
+    DesignSpec,
+    InformationSpacing,
+    ProportionsDesignSpec,
+    SpendingFunction,
+)
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.objectives import (
     DesignObjective,
     MinimizeASN,
@@ -19,15 +26,8 @@ from earlysign.integration.design.group_sequential.initial_design.workflows.opti
 from earlysign.integration.design.group_sequential.initial_design.workflows.optimize_timing.optimizer import (
     DesignOptimizer,
 )
-from earlysign.stats.design.gst.common.config import (
-    DesignSpec,
-    ProportionsDesignSpec,
-)
-from earlysign.stats.design.gst.common.lab import DesignLab
-from earlysign.stats.design.gst.common.types import (
-    DesignMode,
-    InformationSpacing,
-    SpendingFunction,
+from earlysign.integration.design.group_sequential.initial_design.workflows.spec_analysis import (
+    DesignSpecAnalyzer,
 )
 
 
@@ -225,7 +225,7 @@ class OptimizeASNDesigner:
                 n_per_group_total // ui.spec.sequential.n_analyses
             )
 
-        ui.lab = DesignLab(ui.spec)
+        ui.lab = DesignSpecAnalyzer(ui.spec)
         ui.lab.compute_boundaries()
         ui.lab.run_simulations()
 
