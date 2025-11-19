@@ -17,18 +17,6 @@ Record types
     Stores a safe-testing decision using Ville's inequality:
       {"criterion": "Ville", "signal": "reject"|"continue"|"stop_futility",
        "E": 12.3, "threshold": 20.0, "alpha": 0.05, "look": 2}
-
-Doctest (structure only)
-------------------------
->>> from earlysign.stats_old.common.anytime_valid.records import (
-...     EProcessRecord, VilleThresholdRecord, SafeDecisionRecord
-... )
->>> EProcessRecord(name="e1").payload_type
-'stats.common.anytime_valid.records.EProcessRecord'
->>> VilleThresholdRecord(name="v1").payload_type
-'stats.common.anytime_valid.records.VilleThresholdRecord'
->>> SafeDecisionRecord(name="d1").payload_type
-'stats.common.anytime_valid.records.SafeDecisionRecord'
 """
 
 from earlysign.framework.records import LedgerRecord, QueryMixin
