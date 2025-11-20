@@ -89,7 +89,7 @@ disallow_untyped_decorators = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 exclude = [
-    "earlysign/api/.*",
+    "earlysign/templates/.*",
     "earlysign/tests/.*",
 ]
 
