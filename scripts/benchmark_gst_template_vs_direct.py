@@ -23,7 +23,7 @@ import ibis
 import numpy as np
 import pstats
 
-from earlysign.api.ab_tests import BinomialABTest
+from earlysign.templates.ab_tests import BinomialABTest
 from earlysign.core.util.ibis_cache import CacheEntry, IbisCache
 from earlysign.integration.design.group_sequential.initial_design.helpers.template_helpers import (
     build_template_procedure_factory,

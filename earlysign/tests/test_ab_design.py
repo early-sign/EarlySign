@@ -3,7 +3,7 @@ Doctest coverage for the binomial GST design helper and OC plotter.
 
 >>> import matplotlib
 >>> matplotlib.use("Agg")
->>> from earlysign.api.ab_tests import BinomialABTest
+>>> from earlysign.templates.ab_tests import BinomialABTest
 >>> from earlysign.integration.report.group_sequential.plot_oc_curve import (
 ...     OCCurvePlotter,
 ... )

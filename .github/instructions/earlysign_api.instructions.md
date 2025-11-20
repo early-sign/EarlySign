@@ -12,9 +12,9 @@ applyTo: "earlysign/api/**"
 - **Avoid technical implementation details**: No `multi_metric`, `statistic_collection`, etc.
 
 ### Preferred API Modules
-- ✅ `earlysign.api.ab_test` - A/B testing experiments
-- ❌ `earlysign.api.multi_metric` - Too technical, use domain concepts instead
-- ❌ `earlysign.api.statistics` - Implementation detail, not user-facing
+- ✅ `earlysign.templates.ab_test` - A/B testing experiments
+- ❌ `earlysign.templates.multi_metric` - Too technical, use domain concepts instead
+- ❌ `earlysign.templates.statistics` - Implementation detail, not user-facing
 
 ### Class Naming Conventions
 - **Experiment Types**: `ABTest`, `GuardrailExperiment`, `AdaptiveExperiment`

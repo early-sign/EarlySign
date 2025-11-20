@@ -1,4 +1,4 @@
-"""Benchmarks current earlysign.api.ab_tests.BinomialABTest.
+"""Benchmarks current earlysign.templates.ab_tests.BinomialABTest.
 
 This script mirrors the workload from earlysign_dsl_design_26.py so we can
 compare runtime/ledger output between the production implementation and the
@@ -17,7 +17,7 @@ import ibis
 import pandas as pd
 from ibis.backends import BaseBackend
 
-from earlysign.api.ab_tests import BinomialABTest
+from earlysign.templates.ab_tests import BinomialABTest
 
 SHARED_TABLE = "ledger_api_bench_shared"
 DESIGN_PAYLOAD: Dict[str, object] = {

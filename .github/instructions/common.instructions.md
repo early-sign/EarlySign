@@ -36,7 +36,7 @@ EarlySign is built around an **event-sourcing** architecture with a typed, appen
 ## Core Components
 
 - **Ledger** (`earlysign.core.ledger`): Central event store using ibis-framework for backend-agnostic data operations. Supports DuckDB, Polars, and other ibis backends
-- **API Layer** (`earlysign.api`): Business-oriented facade using domain terminology (e.g., `interim_analysis()`, `guardrail_monitoring()`)
+- **API Layer** (`earlysign.templates`): Business-oriented facade using domain terminology (e.g., `interim_analysis()`, `guardrail_monitoring()`)
 - **Stats Engine** (`earlysign.stats`): Statistical methods organized as `schemes/` (experiment types) and `methods/` (algorithms)
 - **Components** (`earlysign.core.components`): Base classes for statistics, criteria, signalers, and observers
 - **Runtime** (`earlysign.runtime`): Execution environments and experiment templates
@@ -54,7 +54,7 @@ All operations are **pull-based**: components read from the ledger through typed
 - **Multi-backend testing**: Use parametrized fixtures for DuckDB/Polars: `@pytest.fixture(params=["duckdb", "polars"])`
 - **Namespace organization**: Components use enum-based namespaces (`earlysign.core.names.Namespace`)
 - **Template pattern**: Experiments inherit from `ExperimentTemplate` with `setup()`, `step()`, `analyze()` methods
-- **API first**: User-facing functionality in `earlysign.api.*` using business terminology
+- **API first**: User-facing functionality in `earlysign.templates.*` using business terminology
 - **Type safety**: Strict mypy with API layer excluded (`exclude = ["earlysign/api/.*"]`)
 
 ## Common Patterns

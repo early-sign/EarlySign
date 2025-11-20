@@ -148,7 +148,7 @@ The repository is organized as a small stack of layers:
   procedure combining several stats operators (similar in spirit to
   the examples in ``test_framework.py``).
 
-- ``earlysign.api``:
+- ``earlysign.templates``:
   Ready-to-use facades. Public vocabulary here follows domain phrasing:
   - **Interim Analysis** for Group Sequential procedures
   - **Safe Testing** for Anytime-Valid (Ville) procedures
@@ -208,7 +208,7 @@ Directory Tree (Essentials)
 Vocabulary and Naming
 =====================
 
-- In ``earlysign.api``:
+- In ``earlysign.templates``:
   - Use **Interim Analysis** (IA) to refer to Group Sequential methods.
   - Use **Safe Testing** to refer to Anytime-Valid (Ville) methods.
 

@@ -1,5 +1,5 @@
 """
-earlysign.api - User-Friendly Facade
+earlysign.templates - User-Friendly Facade
 ====================================
 
 This module provides an off-the-shelf usage interface for using this package,
@@ -14,7 +14,7 @@ The API is designed to be:
 
 Unified Interface
 -----------------
-All A/B testing functionality is consolidated in `earlysign.api.ab_test`:
+All A/B testing functionality is consolidated in `earlysign.templates.ab_test`:
 - `interim_analysis()`: A/B tests with planned interim looks
 - `fixed_sample_test()`: Traditional fixed-sample A/B tests
 - `guardrail_monitoring()`: Safety monitoring with e-values

@@ -14,7 +14,7 @@ matplotlib.use("Agg")
 import numpy as np
 import pytest
 
-from earlysign.api.ab_tests import BinomialABTest
+from earlysign.templates.ab_tests import BinomialABTest
 from earlysign.integration.report.group_sequential.plot_oc_curve import (
     OCCurvePlotter,
 )

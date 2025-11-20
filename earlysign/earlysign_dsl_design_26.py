@@ -7,7 +7,7 @@ This single file mirrors the intended package layout:
                               from the payload schema/class name (similar to
                               ``earlysign.framework.records``).
 * ``earlysign.integration.execution`` → composed procedures (here inlined via helpers)
-* ``earlysign.api``         → ``BinomialABTest`` (public surface identical to the real API)
+* ``earlysign.templates``         → ``BinomialABTest`` (public surface identical to the real API)
 
 Multiple experiments can share a single physical ledger table: each ``BinomialABTest``
 binds to a label scope (``experiment_id`` here), and the core layer ensures that all
@@ -318,7 +318,7 @@ def _build_records(ledger: Ledger) -> Dict[str, RecordBase]:
 
 
 # ---------------------------------------------------------------------------
-# API layer (conceptually earlysign.api.ab_tests)
+# API layer (conceptually earlysign.templates.ab_tests)
 # ---------------------------------------------------------------------------
 
 

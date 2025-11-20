@@ -426,7 +426,7 @@ if result.should_stop:
 
 ### Business-Friendly Interfaces
 ```python
-from earlysign.api.ab_test import interim_analysis, guardrail_monitoring
+from earlysign.templates.ab_test import interim_analysis, guardrail_monitoring
 
 # High-level A/B testing API
 experiment = interim_analysis(
@@ -446,7 +446,7 @@ guardrail = guardrail_monitoring(
 ### Compatibility Layer
 ```python
 # Support for common A/B testing tools
-from earlysign.api.compatibility import from_optimizely_config, to_statsig_format
+from earlysign.templates.compatibility import from_optimizely_config, to_statsig_format
 
 config = from_optimizely_config(optimizely_experiment_json)
 experiment = interim_analysis(**config)
