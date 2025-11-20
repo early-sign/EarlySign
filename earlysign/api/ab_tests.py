@@ -50,7 +50,9 @@ from earlysign.integration.execution.schemes.two_proportions.records import (
     BinomialCountsRecord,
     BinomialCountsSnapshotRecord,
 )
-from earlysign.reporting.group_sequential import plot_design_boundaries
+from earlysign.integration.report.group_sequential.plot_design_boundaries import (
+    plot_design_boundaries,
+)
 from earlysign.stats.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.methods.group_sequential.spending import (
     SpendingFunction,
