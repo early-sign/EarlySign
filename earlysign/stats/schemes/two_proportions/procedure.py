@@ -72,8 +72,8 @@ from earlysign.stats.methods.group_sequential.spending import (
     SpendingFunction,
 )
 from earlysign.stats.schemes.two_proportions.wald_z import (
-    compute_wald_z,
-    compute_wald_z_array,
+    compute_binomial_wald_z,
+    compute_binomial_wald_z_array,
 )
 
 ProcedureFactory = Callable[
@@ -222,7 +222,7 @@ class TwoProportionsProcedure:
             return None
 
         for analysis in range(self._last_checked_idx + 1, idx + 1):
-            z = compute_wald_z(
+            z = compute_binomial_wald_z(
                 nA=self._cum_nA,
                 mA=self._cum_mA,
                 nB=self._cum_nB,
@@ -369,7 +369,7 @@ class TwoProportionsBatchedProcedure(BatchedProcedure):
         if not np.any(mask):
             return stop_mask, reject_mask
 
-        z_vals = compute_wald_z_array(
+        z_vals = compute_binomial_wald_z_array(
             self._batch_cum_nA,
             self._batch_cum_mA,
             self._batch_cum_nB,

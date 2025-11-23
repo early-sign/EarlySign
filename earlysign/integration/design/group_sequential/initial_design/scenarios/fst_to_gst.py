@@ -26,7 +26,7 @@ requested. The implementations prefer existing building blocks:
 
 - timing optimizer: ``MinimizeASNOptimizer`` (applications/.../minimize_asn.py)
 - two-proportions ASN factory: ``build_asn_calculator`` (essentials/.../asn.py)
-- Wald Z computation: ``compute_wald_z`` (essentials schemes two_proportions)
+- Wald Z computation: ``compute_binomial_wald_z`` (essentials schemes two_proportions)
 - simulator: ``TwoProportionsSimulator`` (essentials/schemes/two_proportions)
 - plotting: ``OCCurvePlotter`` (applications/report/group_sequential)
 

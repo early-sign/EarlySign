@@ -49,8 +49,10 @@ class TwoProportionsWaldZ(WaldStatistic):
         return diff / math.sqrt(var)
 
 
-def compute_wald_z(nA: int, mA: int, nB: int, mB: int, *, pooled: bool = True) -> float:
-    """Compute Wald Z-statistic for difference in proportions.
+def compute_binomial_wald_z(
+    nA: int, mA: int, nB: int, mB: int, *, pooled: bool = True
+) -> float:
+    """Compute Wald Z-statistic for difference in proportions (binomial arms).
 
     Parameters
     ----------
@@ -68,9 +70,9 @@ def compute_wald_z(nA: int, mA: int, nB: int, mB: int, *, pooled: bool = True) -
 
     Examples
     --------
-    >>> round(compute_wald_z(100, 40, 100, 55, pooled=True), 6)
+    >>> round(compute_binomial_wald_z(100, 40, 100, 55, pooled=True), 6)
     2.123977
-    >>> round(compute_wald_z(100, 40, 100, 55, pooled=False), 6)
+    >>> round(compute_binomial_wald_z(100, 40, 100, 55, pooled=False), 6)
     2.148345
     """
 
@@ -83,7 +85,7 @@ def compute_wald_z(nA: int, mA: int, nB: int, mB: int, *, pooled: bool = True) -
     ).value()
 
 
-def compute_wald_z_array(
+def compute_binomial_wald_z_array(
     nA: np.ndarray,
     mA: np.ndarray,
     nB: np.ndarray,
@@ -108,7 +110,7 @@ def compute_wald_z_array(
     Examples
     --------
     >>> import numpy as np
-    >>> z = compute_wald_z_array(
+    >>> z = compute_binomial_wald_z_array(
     ...     nA=np.array([50, 60]),
     ...     mA=np.array([20, 24]),
     ...     nB=np.array([50, 60]),
@@ -148,3 +150,8 @@ def compute_wald_z_array(
     z[~positive & (diff < 0)] = -np.inf
     z[~positive & (diff == 0)] = 0.0
     return np.asarray(z, dtype=float)
+
+
+# Backwards-compatible aliases
+compute_wald_z = compute_binomial_wald_z
+compute_wald_z_array = compute_binomial_wald_z_array

@@ -52,6 +52,9 @@ class InformationTime(LedgerOp):
     """
 
     out_id: str
+    control: BinomialArmSnapshot
+    variants: tuple[BinomialArmSnapshot, ...]
+    planned_max_n: int
 
     @dataclass(frozen=True)
     class Outputs(LedgerOpOutputs):
@@ -81,26 +84,17 @@ class InformationTime(LedgerOp):
 
     def run(self) -> None:
         out = self.outputs.info
-        control_record: BinomialArmSnapshot = getattr(self, "control")
-        variant_records: tuple[BinomialArmSnapshot, ...] = getattr(self, "variants")
-        planned_max_n = getattr(self, "planned_max_n")
-
-        if not variant_records:
+        if not self.variants:
             raise ValueError("At least one variant record is required.")
 
-        control_df = (
-            control_record.latest(explode=True).select("trial", "success").execute()
-        )
-        variant_dfs = [
-            rec.latest(explode=True).select("trial", "success").execute()
-            for rec in variant_records
-        ]
+        control_payload = self.control.latest_payload()
+        variant_payloads = [rec.latest_payload() for rec in self.variants]
 
-        trial_control = int(control_df.iloc[0]["trial"])
-        trial_variants = sum(int(df.iloc[0]["trial"]) for df in variant_dfs)
+        trial_control = int(control_payload["trial"])
+        trial_variants = sum(int(payload["trial"]) for payload in variant_payloads)
         n_total = trial_control + trial_variants
 
-        t = info_time_from_sample_size(n_current=n_total, n_max=planned_max_n)
+        t = info_time_from_sample_size(n_current=n_total, n_max=int(self.planned_max_n))
         out.insert({"info_time": float(t)})
 
 
