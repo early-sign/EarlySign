@@ -104,7 +104,7 @@ Each component type follows the **single responsibility principle** and operates
 - Read: Design + observation events
 - Write: Statistic events
 - Responsibility: Transform raw data into inferential statistics
-- Examples: `WaldZStatistic`, `LogLikelihoodRatio`, `BetaBinomialEValue`
+- Examples: `BinomialWaldZ`, `LogLikelihoodRatio`, `BetaBinomialEValue`
 
 **Criteria Components**
 - Read: Design + statistic events

@@ -207,7 +207,6 @@ class GSDecision(LedgerOp):
             payload["statistic_scale"] = statistic_scale
         if t is not None:
             payload["info_time"] = float(t)
-
         out.insert(payload)
 
 

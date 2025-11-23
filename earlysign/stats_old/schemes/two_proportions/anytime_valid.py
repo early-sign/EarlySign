@@ -30,7 +30,7 @@ from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.integration.execution.schemes.two_proportions.records import (
-    BinomialCountsRecord,
+    BinomialArmSnapshot,
 )
 from earlysign.stats_old.common.anytime_valid.records import EProcessRecord
 
@@ -117,7 +117,8 @@ class MixtureEProcessTwoProportions(LedgerOp):
     """Insert symmetric-alt mixture e-process row for two-proportions."""
 
     out_id: str
-    counts: BinomialCountsRecord
+    control: BinomialArmSnapshot
+    variant: BinomialArmSnapshot
 
     @dataclass(frozen=True)
     class Outputs(LedgerOpOutputs):
@@ -129,14 +130,16 @@ class MixtureEProcessTwoProportions(LedgerOp):
         self,
         ledger: Ledger,
         *,
-        counts: BinomialCountsRecord,
+        control: BinomialArmSnapshot,
+        variant: BinomialArmSnapshot,
         out_id: str,
         prior_null: Tuple[float, float] = (0.5, 0.5),
         prior_alt: Tuple[float, float] = (0.5, 0.5),
     ):
         super().__init__(
             ledger,
-            counts=counts,
+            control=control,
+            variant=variant,
             out_id=out_id,
             prior_null=prior_null,
             prior_alt=prior_alt,
@@ -147,25 +150,17 @@ class MixtureEProcessTwoProportions(LedgerOp):
 
     def run(self) -> None:
         out = self.outputs.eproc
-        counts: BinomialCountsRecord = self.counts
+        control: BinomialArmSnapshot = self.control
+        variant: BinomialArmSnapshot = self.variant
         prior_null = tuple(getattr(self, "prior_null"))
         prior_alt = tuple(getattr(self, "prior_alt"))
 
-        cdf = (
-            counts.latest()
-            .select(
-                nA=counts.t.payload["nA"].cast("int64"),
-                mA=counts.t.payload["mA"].cast("int64"),
-                nB=counts.t.payload["nB"].cast("int64"),
-                mB=counts.t.payload["mB"].cast("int64"),
-                look=counts.t.payload["look"].cast("int64"),
-            )
-            .execute()
-        )
-        if len(cdf) == 0:
-            return
-
-        nA, mA, nB, mB = map(int, cdf.iloc[0][["nA", "mA", "nB", "mB"]])
+        control_payload = control.latest_payload()
+        variant_payload = variant.latest_payload()
+        nA = int(control_payload["trial"])
+        mA = int(control_payload["success"])
+        nB = int(variant_payload["trial"])
+        mB = int(variant_payload["success"])
         E = mixture_e_two_proportions(
             nA, mA, nB, mB, prior_null=prior_null, prior_alt=prior_alt
         )
@@ -173,9 +168,6 @@ class MixtureEProcessTwoProportions(LedgerOp):
             "E": float(E),
             "logE": float(math.log(max(E, 1e-300))),
         }
-        look = cdf.iloc[0]["look"]
-        if look is not None:
-            payload["look"] = int(look)
         payload["priors"] = {"null": list(prior_null), "alt": list(prior_alt)}
         out.insert(payload)
 
@@ -184,7 +176,8 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
     """Insert skewed-alt mixture e-process row for two-proportions."""
 
     out_id: str
-    counts: BinomialCountsRecord
+    control: BinomialArmSnapshot
+    variant: BinomialArmSnapshot
 
     @dataclass(frozen=True)
     class Outputs(LedgerOpOutputs):
@@ -196,7 +189,8 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
         self,
         ledger: Ledger,
         *,
-        counts: BinomialCountsRecord,
+        control: BinomialArmSnapshot,
+        variant: BinomialArmSnapshot,
         out_id: str,
         prior_null: Tuple[float, float] = (0.5, 0.5),
         prior_alt_A: Tuple[float, float] = (0.5, 0.5),
@@ -204,7 +198,8 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
     ):
         super().__init__(
             ledger,
-            counts=counts,
+            control=control,
+            variant=variant,
             out_id=out_id,
             prior_null=prior_null,
             prior_alt_A=prior_alt_A,
@@ -216,26 +211,18 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
 
     def run(self) -> None:
         out = self.outputs.eproc
-        counts: BinomialCountsRecord = self.counts
+        control: BinomialArmSnapshot = self.control
+        variant: BinomialArmSnapshot = self.variant
         prior_null = tuple(getattr(self, "prior_null"))
         prior_alt_A = tuple(getattr(self, "prior_alt_A"))
         prior_alt_B = tuple(getattr(self, "prior_alt_B"))
 
-        cdf = (
-            counts.latest()
-            .select(
-                nA=counts.t.payload["nA"].cast("int64"),
-                mA=counts.t.payload["mA"].cast("int64"),
-                nB=counts.t.payload["nB"].cast("int64"),
-                mB=counts.t.payload["mB"].cast("int64"),
-                look=counts.t.payload["look"].cast("int64"),
-            )
-            .execute()
-        )
-        if len(cdf) == 0:
-            return
-
-        nA, mA, nB, mB = map(int, cdf.iloc[0][["nA", "mA", "nB", "mB"]])
+        control_payload = control.latest_payload()
+        variant_payload = variant.latest_payload()
+        nA = int(control_payload["trial"])
+        mA = int(control_payload["success"])
+        nB = int(variant_payload["trial"])
+        mB = int(variant_payload["success"])
         E = mixture_e_two_proportions_skew(
             nA,
             mA,
@@ -249,7 +236,6 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
             "E": float(E),
             "logE": float(math.log(max(E, 1e-300))),
         }
-        payload["look"] = int(cdf.iloc[0]["look"])
         payload["priors"] = {
             "null": list(prior_null),
             "alt_A": list(prior_alt_A),

@@ -8,6 +8,7 @@ from typing import (
     Optional,
     Sequence,
     Type,
+    TypeVar,
     Union,
     cast,
 )
@@ -38,17 +39,19 @@ from earlysign.integration.execution.methods.group_sequential.records.decision i
 from earlysign.integration.execution.methods.group_sequential.records.design import (
     GroupSequentialDesignRecord,
 )
+from earlysign.integration.execution.methods.group_sequential.records.info import (
+    InformationTimeRecord,
+)
 from earlysign.integration.execution.methods.group_sequential.records.statistics import (
     WaldZStatisticRecord,
 )
 from earlysign.integration.execution.schemes.two_proportions.operators import (
-    BinomialCountsSnapshot,
+    BinomialWaldZ,
     InformationTime,
-    WaldZStatistic,
 )
 from earlysign.integration.execution.schemes.two_proportions.records import (
-    BinomialCountsRecord,
-    BinomialCountsSnapshotRecord,
+    BinomialArmResultRecord,
+    BinomialArmSnapshot,
 )
 from earlysign.integration.report.group_sequential.plot_design_boundaries import (
     plot_design_boundaries,
@@ -64,6 +67,8 @@ from earlysign.stats.schemes.two_proportions.asn import (
 from earlysign.stats.schemes.two_proportions.design import (
     build_two_proportions_scheme,
 )
+
+ArmRecordT = TypeVar("ArmRecordT", BinomialArmResultRecord, BinomialArmSnapshot)
 
 
 @dataclass
@@ -258,18 +263,54 @@ class BinomialABTest(tpl.TemplateBase):
         >>> # Second update may trigger first look (info_time >= 0.5)
         >>> test.update({"nA": 150, "mA": 15, "nB": 150, "mB": 18})
         """
-        ## Record incremental observation (delta)
-        obs = BinomialCountsRecord("observation").attach(self.ledger)
-        obs.insert(**payload)
+        if not {"nA", "mA", "nB", "mB"}.issubset(payload.keys()):
+            raise ValueError(
+                "Payload must include counts for control (nA, mA) and variant (nB, mB)."
+            )
 
-        ## Compute cumulative snapshot
-        snapshot_op = BinomialCountsSnapshot(self.ledger, obs=obs, out_id="snapshot")
-        snapshot_op.run()
-        snapshot_record = snapshot_op.outputs.snapshot
+        control_trials = int(payload["nA"])
+        control_successes = int(payload["mA"])
+        variant_trials = int(payload["nB"])
+        variant_successes = int(payload["mB"])
+
+        ## Record incremental observation (delta) per arm
+        control_obs = BinomialArmResultRecord(name="observation_A").attach(self.ledger)
+        variant_obs = BinomialArmResultRecord(name="observation_B").attach(self.ledger)
+        control_obs.insert(
+            trial=control_trials,
+            success=control_successes,
+            labels={"arm_name": "A"},
+        )
+        variant_obs.insert(
+            trial=variant_trials,
+            success=variant_successes,
+            labels={"arm_name": "B"},
+        )
+
+        ## Compute cumulative snapshots for each arm
+        control_snapshot_record = BinomialArmSnapshot(
+            name="snapshot_A",
+            ledger=self.ledger,
+            obs=control_obs,
+            arm_name="A",
+        )
+        control_snapshot_record.run()
+
+        variant_snapshot_record = BinomialArmSnapshot(
+            name="snapshot_B",
+            ledger=self.ledger,
+            obs=variant_obs,
+            arm_name="B",
+        )
+        variant_snapshot_record.run()
 
         ## Compute statistic (using snapshot)
-        stat_op = WaldZStatistic(
-            self.ledger, cum_counts=snapshot_record, pooled=True, out_id="statistic"
+        stat_op = BinomialWaldZ(
+            self.ledger,
+            control=control_snapshot_record,
+            variant=variant_snapshot_record,
+            pooled=True,
+            out_id="statistic",
         )
         stat_op.run()
         stat_record = stat_op.outputs.wald
@@ -288,7 +329,8 @@ class BinomialABTest(tpl.TemplateBase):
         info_op = InformationTime(
             self.ledger,
             out_id="info_time",
-            cum_counts=snapshot_record,
+            control=control_snapshot_record,
+            variants=[variant_snapshot_record],
             planned_max_n=planned_max_n,
         )
         info_op.run()
@@ -478,37 +520,99 @@ class BinomialABTest(tpl.TemplateBase):
         >>> history = test.get_history()  # doctest: +SKIP
         >>> print(history)  # doctest: +SKIP
         """
-        # Get all records with exploded payloads as ibis expressions
-        snapshot_rec = BinomialCountsSnapshotRecord("snapshot").attach(self.ledger)
+        control_snapshot_rec = BinomialArmSnapshot(name="snapshot_A").attach(
+            self.ledger
+        )
+        treatment_snapshot_rec = BinomialArmSnapshot(name="snapshot_B").attach(
+            self.ledger
+        )
         stat_rec = WaldZStatisticRecord("statistic").attach(self.ledger)
+        info_rec = InformationTimeRecord("info_time").attach(self.ledger)
         decision_rec = GroupSequentialDecisionSignalRecord("decision").attach(
             self.ledger
         )
 
-        # Use ibis to join the tables by timestamp and uuid
-        snapshots = snapshot_rec.order_by_ts(ascending=True, explode=True)
-        stats = stat_rec.order_by_ts(ascending=True, explode=True)
-        decisions = decision_rec.order_by_ts(ascending=True, explode=True)
+        control_snapshots = control_snapshot_rec.order_by_ts(
+            ascending=True, explode=True
+        )
+        control_indexed = control_snapshots.mutate(
+            look_index=ibis.row_number().over(order_by="ts")
+        )
+        control_view = control_indexed.select(
+            look=control_indexed.look_index,
+            nA_cum=control_indexed.trial,
+            mA_cum=control_indexed.success,
+            ts=control_indexed.ts,
+        )
 
-        # Join, compute, and select - all in one chain
-        # Note: Type ignores needed due to mypy not fully understanding ibis column operations
+        treatment_snapshots = treatment_snapshot_rec.order_by_ts(
+            ascending=True, explode=True
+        )
+        treatment_indexed = treatment_snapshots.mutate(
+            look_index=ibis.row_number().over(order_by="ts")
+        )
+        treatment_view = treatment_indexed.select(
+            look=treatment_indexed.look_index,
+            nB_cum=treatment_indexed.trial,
+            mB_cum=treatment_indexed.success,
+            ts=treatment_indexed.ts,
+        )
+
+        snapshots_view = control_view.inner_join(
+            treatment_view, [control_view.look == treatment_view.look]
+        ).select(
+            look=control_view.look,
+            nA_cum=control_view.nA_cum,
+            mA_cum=control_view.mA_cum,
+            nB_cum=treatment_view.nB_cum,
+            mB_cum=treatment_view.mB_cum,
+            ts=ibis.greatest(control_view.ts, treatment_view.ts),
+        )
+
+        stats_table = stat_rec.order_by_ts(ascending=True, explode=True)
+        stats_indexed = stats_table.mutate(
+            look_index=ibis.row_number().over(order_by="ts")
+        )
+        stats_view = stats_indexed.select(
+            look=stats_indexed.look_index,
+            wald_z=stats_indexed.wald_z,
+            ts=stats_indexed.ts,
+        )
+
+        info_table = info_rec.order_by_ts(ascending=True, explode=True)
+        info_indexed = info_table.mutate(
+            look_index=ibis.row_number().over(order_by="ts")
+        )
+        info_view = info_indexed.select(
+            look=info_indexed.look_index,
+            info_time=info_indexed.info_time,
+        )
+
+        decisions_table = decision_rec.order_by_ts(ascending=True, explode=True)
+        decisions_indexed = decisions_table.mutate(
+            look_index=ibis.row_number().over(order_by="ts")
+        )
+        decisions_view = decisions_indexed.select(
+            look=decisions_indexed.look_index,
+            signal=decisions_indexed.signal,
+        )
+
         result = (
-            snapshots.inner_join(
-                stats, [snapshots.ts == stats.ts, snapshots.uuid == stats.uuid]
+            snapshots_view.inner_join(
+                stats_view, [snapshots_view.look == stats_view.look]
             )
-            .inner_join(
-                decisions,
-                [snapshots.ts == decisions.ts, snapshots.uuid == decisions.uuid],
-            )
+            .inner_join(info_view, [snapshots_view.look == info_view.look])
+            .inner_join(decisions_view, [snapshots_view.look == decisions_view.look])
             .select(
-                nA_cum=snapshots.nA,
-                mA_cum=snapshots.mA,
-                nB_cum=snapshots.nB,
-                mB_cum=snapshots.mB,
-                wald_z=stats.wald_z,
-                info_time=decisions.info_time,
-                signal=decisions.signal,
-                ts=snapshots.ts,
+                snapshots_view.look,
+                "nA_cum",
+                "mA_cum",
+                "nB_cum",
+                "mB_cum",
+                wald_z=stats_view.wald_z,
+                info_time=info_view.info_time,
+                signal=decisions_view.signal,
+                ts=snapshots_view.ts,
             )
             .order_by("ts")
             .mutate(
@@ -516,7 +620,6 @@ class BinomialABTest(tpl.TemplateBase):
                 pB=(lambda t: (t.mB_cum / t.nB_cum).fill_null(0.0)),  # type: ignore[operator]
             )
             .mutate(diff=lambda t: t.pB - t.pA)  # type: ignore[operator]
-            .mutate(look=ibis.row_number().over(order_by="ts"))
             .select(
                 "look",
                 "nA_cum",

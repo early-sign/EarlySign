@@ -308,3 +308,68 @@ class LedgerRecord:
         if include_ts:
             return data, ts_value
         return data
+
+
+class SnapshotLedgerRecord(LedgerRecord, QueryMixin):
+    """Ledger record that represents snapshots of another record's state."""
+
+    snapshot_of: type[LedgerRecord] | None = None
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        ledger: Optional[Ledger] = None,
+        snapshot_of: type[LedgerRecord] | None = None,
+    ):
+        super().__init__(name, ledger=ledger)
+        if snapshot_of is not None:
+            self.snapshot_of = snapshot_of
+
+    def source_class(self) -> type[LedgerRecord]:
+        """Return the LedgerRecord class this snapshot represents."""
+
+        if self.snapshot_of is None:
+            raise RuntimeError(
+                "Snapshot record does not define a source class. Set 'snapshot_of'."
+            )
+        return self.snapshot_of
+
+    def latest_snapshot_ts(self) -> Any | None:
+        """Return the timestamp of the latest snapshot row, if any."""
+
+        tbl = self.t.order_by(self.t.ts.desc(), self.t.uuid.desc()).limit(1)
+        df = tbl.select(tbl.ts).execute()
+        if df.empty:
+            return None
+        return df.iloc[0]["ts"]
+
+    def diff_since_last_snapshot(
+        self,
+        source: LedgerRecord,
+        *,
+        include_equal_ts: bool = False,
+    ) -> TableExpr:
+        """Return source rows added since the last snapshot.
+
+        Parameters
+        ----------
+        source : LedgerRecord
+            The record whose rows are being snapshotted.
+        include_equal_ts : bool, default False
+            When True, include rows whose timestamps equal the snapshot timestamp.
+        """
+
+        if source.ledger is None:
+            raise RuntimeError("Source record must be attached to a ledger.")
+
+        if self.snapshot_of is not None and not isinstance(source, self.snapshot_of):
+            raise TypeError("Source record does not match snapshot_of class.")
+
+        t = source.t
+        last_ts = self.latest_snapshot_ts()
+        if last_ts is None:
+            return t
+        if include_equal_ts:
+            return t.filter(t.ts >= last_ts)
+        return t.filter(t.ts > last_ts)

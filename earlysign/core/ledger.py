@@ -30,15 +30,15 @@ Doctests
 >>> ledger = Ledger(con, "events"); ledger.ensure()
 
 # Bind two labels, then drop one (exact key)
->>> scoped = ledger.bind(experiment_id="exp1", env="prod")
->>> scoped.labels == {"experiment_id": "exp1", "env": "prod"}
+>>> experiment_ledger = ledger.bind(experiment_id="exp1", env="prod")
+>>> experiment_ledger.labels == {"experiment_id": "exp1", "env": "prod"}
 True
->>> scoped2 = scoped.unbind("env")
->>> scoped2.labels == {"experiment_id": "exp1"}
+>>> reduced_ledger = experiment_ledger.unbind("env")
+>>> reduced_ledger.labels == {"experiment_id": "exp1"}
 True
 
 # Insert with only remaining bound label applied
->>> _ = scoped2.insert(payload_type="X", payload={"a": 1})
+>>> _ = reduced_ledger.insert(payload_type="X", payload={"a": 1})
 
 # Some backends differ in JSON key equality semantics; materialize and check in Python.
 >>> df = ledger.t.execute()
@@ -46,24 +46,24 @@ True
 True
 
 # Regex unbind: drop all keys starting with 'site_'
->>> scoped3 = scoped.bind(site_eu=True, site_us=True)
->>> scoped3.labels == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
+>>> geo_ledger = experiment_ledger.bind(site_eu=True, site_us=True)
+>>> geo_ledger.labels == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
 True
->>> scoped4 = scoped3.unbind(r"^site_.*")
->>> "site_eu" in scoped4.labels or "site_us" in scoped4.labels
+>>> trimmed_ledger = geo_ledger.unbind(r"^site_.*")
+>>> "site_eu" in trimmed_ledger.labels or "site_us" in trimmed_ledger.labels
 False
->>> set(scoped4.labels.keys()) == {"experiment_id", "env"}
+>>> set(trimmed_ledger.labels.keys()) == {"experiment_id", "env"}
 True
 
 # Regex unbind with compiled pattern
 >>> p = re.compile(r"^exp.*")
->>> scoped5 = scoped4.unbind(p)
->>> "experiment_id" in scoped5.labels
+>>> no_exp_ledger = trimmed_ledger.unbind(p)
+>>> "experiment_id" in no_exp_ledger.labels
 False
 
 # Drop all bound labels
->>> unscoped = scoped.unbind()
->>> unscoped.labels
+>>> unbound_ledger = experiment_ledger.unbind()
+>>> unbound_ledger.labels
 {'experiment_id': 'exp1', 'env': 'prod'}
 """
 
@@ -145,18 +145,18 @@ class Ledger:
         >>> import ibis, duckdb, re
         >>> con = ibis.duckdb.connect(":memory:")
         >>> base = Ledger(con, "events"); base.ensure()
-        >>> scoped = base.bind(experiment_id="exp1", env="prod")
-        >>> _ = scoped.insert(payload_type="X", payload={"a": 1})
+        >>> experiment_ledger = base.bind(experiment_id="exp1", env="prod")
+        >>> _ = experiment_ledger.insert(payload_type="X", payload={"a": 1})
         >>> df = base.t.execute()
         >>> any(rec["labels"].get("experiment_id") == "exp1" for rec in df.to_dict("records"))
         True
 
         # Regex unbind: drop all keys starting with 'site_'
-        >>> scoped3 = scoped.bind(site_eu=True, site_us=True)
-        >>> scoped3.labels == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
+        >>> geo_ledger = experiment_ledger.bind(site_eu=True, site_us=True)
+        >>> geo_ledger.labels == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
         True
-        >>> scoped4 = scoped3.unbind(r"^site_.*")
-        >>> "site_eu" in scoped4.labels or "site_us" in scoped4.labels
+        >>> trimmed_ledger = geo_ledger.unbind(r"^site_.*")
+        >>> "site_eu" in trimmed_ledger.labels or "site_us" in trimmed_ledger.labels
         False
         """
         if not patterns:

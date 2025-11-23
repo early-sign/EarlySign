@@ -15,7 +15,7 @@ class LedgerOpOutputs(ABCMapping[str, LedgerRecord]):
     Usage:
         @dataclass(frozen=True)
         class Outputs(LedgerOpOutputs):
-            snapshot: BinomialCountsSnapshotRecord
+            snapshot: MySnapshotRecord
 
     This enables:
     - Type-safe attribute access: self.outputs.snapshot

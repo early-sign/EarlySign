@@ -63,6 +63,7 @@ The conceptual decisions are stored and updated in docs/source/reference/ADR.
 - **Clean commits**: Ensure production code doesn't contain debug prints or temporary code
 - **Consistent formatting**: Follow project formatting standards (enforced via `make format`)
 - **Exports & language features**: Avoid `__all__` exports (except the top-level version string) and do not rely on `from __future__ import annotations`; code should run without future-import shims.
+- **Exception style**: Prefer control flow or helper queries instead of `try`/`except` blocks when checking for record existence (e.g., query for rows and branch on emptiness rather than catching `LookupError`).
 
 ### Type Safety
 - **Type hints**: Use comprehensive type annotations for all public APIs

@@ -23,14 +23,14 @@ from earlysign.integration.execution.methods.group_sequential.records.statistics
 
 
 def interim_plotdata(
-    scoped: Ledger,
+    ledger: Ledger,
     *,
     wald_id: str,
     boundary_id: str,
 ) -> Dict[str, Any]:
     """Return tidy data for a single interim snapshot (wald vs. boundary)."""
-    w = WaldZStatisticRecord(name=wald_id).attach(scoped)
-    b = GroupSequentialBoundaryRecord(name=boundary_id).attach(scoped)
+    w = WaldZStatisticRecord(name=wald_id).attach(ledger)
+    b = GroupSequentialBoundaryRecord(name=boundary_id).attach(ledger)
 
     wdf = w.latest().select(
         look=ibis.literal(1).cast("int64"),
@@ -52,7 +52,7 @@ def interim_plotdata(
 
 
 def interim_summary_exprs(
-    scoped: Ledger,
+    ledger: Ledger,
     *,
     boundary_id: str,
     info_id: str,
@@ -60,10 +60,10 @@ def interim_summary_exprs(
     decision_id: str,
 ) -> Dict[str, Any]:
     """Build Ibis expressions for the GST progress (history) plot."""
-    b = GroupSequentialBoundaryRecord(name=boundary_id).attach(scoped)
-    i = InformationTimeRecord(name=info_id).attach(scoped)
-    w = WaldZStatisticRecord(name=wald_id).attach(scoped)
-    d = GroupSequentialDecisionSignalRecord(name=decision_id).attach(scoped)
+    b = GroupSequentialBoundaryRecord(name=boundary_id).attach(ledger)
+    i = InformationTimeRecord(name=info_id).attach(ledger)
+    w = WaldZStatisticRecord(name=wald_id).attach(ledger)
+    d = GroupSequentialDecisionSignalRecord(name=decision_id).attach(ledger)
 
     info = i.t.select(ts=i.t.ts, t=i.t.payload["t"].cast("float64"))
     wwin = ibis.window(order_by="ts")
@@ -116,7 +116,7 @@ def interim_summary_exprs(
 
 
 def interim_summary_plot(
-    scoped: Ledger,
+    ledger: Ledger,
     *,
     boundary_id: str,
     info_id: str,
@@ -126,7 +126,7 @@ def interim_summary_plot(
 ) -> Figure:
     """Render the GST progress plot from tidy data."""
     tidy_expr = interim_summary_exprs(
-        scoped,
+        ledger,
         boundary_id=boundary_id,
         info_id=info_id,
         wald_id=wald_id,

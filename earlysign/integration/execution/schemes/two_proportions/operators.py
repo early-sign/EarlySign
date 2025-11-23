@@ -1,12 +1,12 @@
 """
 Two-proportions scheme operator(s).
 
-- WaldZStatistic  : Z for (pB - pA) with optional pooled variance
+- BinomialWaldZ  : Z for (pB - pA) with optional pooled variance
 - ScoreZStatistic : Z for (pB - pA) using pooled variance under H0 (score test)
 """
 
 from dataclasses import dataclass
-from typing import Union
+from typing import Sequence
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
@@ -18,14 +18,15 @@ from earlysign.integration.execution.methods.group_sequential.records.statistics
     WaldZStatisticRecord,
 )
 from earlysign.integration.execution.schemes.two_proportions.records import (
-    BinomialCountsRecord,
-    BinomialCountsSnapshotRecord,
+    BinomialArmSnapshot,
     ScoreZStatisticRecord,
 )
 from earlysign.stats.methods.group_sequential.info_time import (
     info_time_from_sample_size,
 )
 from earlysign.stats.schemes.two_proportions.wald_z import compute_wald_z
+
+ArmRecord = BinomialArmSnapshot
 
 
 class InformationTime(LedgerOp):
@@ -38,8 +39,10 @@ class InformationTime(LedgerOp):
         Scoped ledger instance.
     out_id : str
         ID of InformationTimeRecord to create.
-    cum_counts : BinomialCountsRecord | BinomialCountsSnapshotRecord (attached)
-        Record containing cumulative binomial counts.
+    control : BinomialArmSnapshot
+        Record containing cumulative counts for the control arm.
+    variants : Sequence[BinomialArmSnapshot]
+        Record(s) containing cumulative counts for the comparison arm(s).
     planned_max_n : int
         Maximum total sample size.
     """
@@ -57,13 +60,15 @@ class InformationTime(LedgerOp):
         ledger: Ledger,
         *,
         out_id: str,
-        cum_counts: Union[BinomialCountsRecord, BinomialCountsSnapshotRecord],
+        control: BinomialArmSnapshot,
+        variants: BinomialArmSnapshot | Sequence[BinomialArmSnapshot],
         planned_max_n: int,
     ):
         super().__init__(
             ledger,
             out_id=out_id,
-            cum_counts=cum_counts,
+            control=control,
+            variants=tuple(variants) if isinstance(variants, Sequence) else (variants,),
             planned_max_n=planned_max_n,
         )
 
@@ -72,81 +77,34 @@ class InformationTime(LedgerOp):
 
     def run(self) -> None:
         out = self.outputs.info
-        cum_counts = getattr(self, "cum_counts")
+        control_record: ArmRecord = getattr(self, "control")
+        variant_records: tuple[ArmRecord, ...] = getattr(self, "variants")
         planned_max_n = getattr(self, "planned_max_n")
 
-        try:
-            latest = cum_counts.latest_payload()
-        except LookupError as exc:
-            raise ValueError("No counts data available") from exc
-        n_total = int(latest["nA"]) + int(latest["nB"])
+        if not variant_records:
+            raise ValueError("At least one variant record is required.")
+
+        control_df = (
+            control_record.latest(explode=True).select("trial", "success").execute()
+        )
+        variant_dfs = [
+            rec.latest(explode=True).select("trial", "success").execute()
+            for rec in variant_records
+        ]
+
+        trial_control = int(control_df.iloc[0]["trial"])
+        trial_variants = sum(int(df.iloc[0]["trial"]) for df in variant_dfs)
+        n_total = trial_control + trial_variants
 
         t = info_time_from_sample_size(n_current=n_total, n_max=planned_max_n)
         out.insert({"info_time": float(t)})
 
 
-class BinomialCountsSnapshot(LedgerOp):
-    """Compute cumulative snapshot from incremental observations.
+class BinomialWaldZ(LedgerOp):
+    """Compute Wald Z for two arms and insert one row."""
 
-    Reads the latest incremental observation from BinomialCountsRecord,
-    adds it to the previous snapshot (or initializes if first observation),
-    and writes the new cumulative snapshot to BinomialCountsSnapshotRecord.
-    """
-
-    obs: BinomialCountsRecord
-    out_id: str
-
-    @dataclass(frozen=True)
-    class Outputs(LedgerOpOutputs):
-        """Outputs for this operator."""
-
-        snapshot: BinomialCountsSnapshotRecord
-
-    # Type annotation for outputs - enables type inference!
-    outputs: Outputs
-
-    def build_outputs(self) -> dict[str, LedgerRecord]:
-        return {
-            "snapshot": BinomialCountsSnapshotRecord(
-                name=self.out_id, ledger=self.ledger
-            )
-        }
-
-    def run(self) -> None:
-        obs_rec = self.obs
-        snapshot_rec = self.outputs.snapshot
-        latest_obs = obs_rec.latest_payload()
-        delta_nA = int(latest_obs["nA"])
-        delta_mA = int(latest_obs["mA"])
-        delta_nB = int(latest_obs["nB"])
-        delta_mB = int(latest_obs["mB"])
-
-        prev_snapshot = snapshot_rec.latest_payload(
-            default={"nA": 0, "mA": 0, "nB": 0, "mB": 0}
-        )
-        prev_nA = int(prev_snapshot["nA"])
-        prev_mA = int(prev_snapshot["mA"])
-        prev_nB = int(prev_snapshot["nB"])
-        prev_mB = int(prev_snapshot["mB"])
-
-        # Compute cumulative snapshot
-        new_nA = prev_nA + delta_nA
-        new_mA = prev_mA + delta_mA
-        new_nB = prev_nB + delta_nB
-        new_mB = prev_mB + delta_mB
-
-        # Insert new snapshot
-        snapshot_rec.insert(nA=new_nA, mA=new_mA, nB=new_nB, mB=new_mB)
-
-
-class WaldZStatistic(LedgerOp):
-    """Compute Wald Z and insert one row.
-
-    Accepts either BinomialCountsRecord or BinomialCountsSnapshotRecord.
-    Both have the same schema structure (nA, mA, nB, mB).
-    """
-
-    cum_counts: Union[BinomialCountsRecord, BinomialCountsSnapshotRecord]
+    control: BinomialArmSnapshot
+    variant: BinomialArmSnapshot
     pooled: bool
     out_id: str
 
@@ -163,29 +121,28 @@ class WaldZStatistic(LedgerOp):
         return {"wald": WaldZStatisticRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
-        cum_counts = self.cum_counts
+        control: ArmRecord = self.control
+        variant: ArmRecord = self.variant
         out = self.outputs.wald
         pooled = bool(getattr(self, "pooled", True))
 
-        latest = cum_counts.latest_payload()
-        nA = int(latest["nA"])
-        mA = int(latest["mA"])
-        nB = int(latest["nB"])
-        mB = int(latest["mB"])
+        control_df = control.latest(explode=True).select("trial", "success").execute()
+        variant_df = variant.latest(explode=True).select("trial", "success").execute()
+
+        nA = int(control_df.iloc[0]["trial"])
+        mA = int(control_df.iloc[0]["success"])
+        nB = int(variant_df.iloc[0]["trial"])
+        mB = int(variant_df.iloc[0]["success"])
         z = compute_wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=pooled)
 
-        payload = {"wald_z": float(z)}
-        out.insert(payload)
+        out.insert({"wald_z": float(z)})
 
 
 class ScoreZStatistic(LedgerOp):
-    """Compute score Z (pooled variance) and insert one row.
+    """Compute score Z (pooled variance) and insert one row."""
 
-    Accepts either BinomialCountsRecord or BinomialCountsSnapshotRecord.
-    Both have the same schema structure (nA, mA, nB, mB).
-    """
-
-    cum_counts: Union[BinomialCountsRecord, BinomialCountsSnapshotRecord]
+    control: BinomialArmSnapshot
+    variant: BinomialArmSnapshot
     out_id: str
 
     @dataclass(frozen=True)
@@ -201,15 +158,16 @@ class ScoreZStatistic(LedgerOp):
         return {"score": ScoreZStatisticRecord(name=self.out_id, ledger=self.ledger)}
 
     def run(self) -> None:
-        cum_counts = self.cum_counts
+        control: ArmRecord = self.control
+        variant: ArmRecord = self.variant
         out = self.outputs.score
 
-        latest = cum_counts.latest_payload()
-
-        nA = int(latest["nA"])
-        mA = int(latest["mA"])
-        nB = int(latest["nB"])
-        mB = int(latest["mB"])
+        control_df = control.latest(explode=True).select("trial", "success").execute()
+        variant_df = variant.latest(explode=True).select("trial", "success").execute()
+        nA = int(control_df.iloc[0]["trial"])
+        mA = int(control_df.iloc[0]["success"])
+        nB = int(variant_df.iloc[0]["trial"])
+        mB = int(variant_df.iloc[0]["success"])
         # Score Z is equivalent to Wald Z with pooled variance
         z = compute_wald_z(nA=nA, mA=mA, nB=nB, mB=mB, pooled=True)
 

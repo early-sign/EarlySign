@@ -13,7 +13,7 @@ from earlysign.stats_old.common.anytime_valid.records import (
 
 
 def safe_snapshot_tables(
-    scoped: Ledger,
+    ledger: Ledger,
     *,
     eproc_id: Optional[str] = None,
     design_id: Optional[str] = None,
@@ -27,20 +27,20 @@ def safe_snapshot_tables(
     tables: Dict[str, Any] = {}
 
     if eproc_id:
-        e = EProcessRecord(name=eproc_id).attach(scoped)
+        e = EProcessRecord(name=eproc_id).attach(ledger)
         tables["snapshot_eproc"] = e.latest().select(
             E=e.t.payload["E"].cast("float64"),
             logE=e.t.payload["logE"].cast("float64"),
         )
 
     if design_id:
-        dsg = SafeDesignRecord(name=design_id).attach(scoped)
+        dsg = SafeDesignRecord(name=design_id).attach(ledger)
         tables["snapshot_design"] = dsg.latest().select(
             alpha=dsg.t.payload["alpha"].cast("float64")
         )
 
     if decision_id:
-        dec = SafeDecisionRecord(name=decision_id).attach(scoped)
+        dec = SafeDecisionRecord(name=decision_id).attach(ledger)
         tables["snapshot_decision"] = dec.latest().select(
             signal=dec.t.payload["signal"],
             reason=dec.t.payload["reason"],
@@ -51,14 +51,14 @@ def safe_snapshot_tables(
 
 
 def safe_plotdata(
-    scoped: Ledger,
+    ledger: Ledger,
     *,
     eproc_id: str,
     design_id: str,
 ) -> Dict[str, Any]:
     """Return tidy tables for plotting an E-value snapshot."""
-    e = EProcessRecord(name=eproc_id).attach(scoped)
-    d = SafeDesignRecord(name=design_id).attach(scoped)
+    e = EProcessRecord(name=eproc_id).attach(ledger)
+    d = SafeDesignRecord(name=design_id).attach(ledger)
     e_tbl = e.latest().select(
         x=ibis.literal("E"),
         value=e.t.payload["E"].cast("float64"),
