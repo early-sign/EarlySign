@@ -17,7 +17,10 @@ class ArmStatus(str, Enum):
 
 
 class ArmLifecycleRecord(LedgerRecord, QueryMixin):
-    """Record lifecycle transitions (add, pause, retire) for experiment arms."""
+    """Record lifecycle transitions (add, pause, retire) for experiment arms.
+
+    Likely unnecessary in two-arm trials where there are only "stop" or "continue".
+    """
 
     schema = {
         "arm_id": (str, ...),

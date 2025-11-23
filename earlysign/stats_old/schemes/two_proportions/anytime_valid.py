@@ -29,7 +29,7 @@ from scipy.special import betaln
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.integration.execution.schemes.two_proportions.records import (
+from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
     BinomialArmSnapshot,
 )
 from earlysign.stats_old.common.anytime_valid.records import EProcessRecord

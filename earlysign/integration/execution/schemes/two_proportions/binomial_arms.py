@@ -1,7 +1,6 @@
-"""Records for the two-proportions scheme."""
+"""Binomial arm records and snapshot utilities for two-proportion experiments."""
 
 from earlysign.core.ledger import Ledger
-from earlysign.framework.operator import LedgerOp
 from earlysign.framework.records import LedgerRecord, QueryMixin, SnapshotLedgerRecord
 
 
@@ -14,12 +13,11 @@ class BinomialArmResultRecord(LedgerRecord, QueryMixin):
     }
 
 
-class BinomialArmSnapshot(SnapshotLedgerRecord, LedgerOp):  # type: ignore[misc]
+class BinomialArmSnapshot(SnapshotLedgerRecord):
     """
     Cumulative totals for a single arm.
 
-    When initialised with ``obs`` and ``arm_name`` it can be used as an operator:
-    ``run()`` will read the latest observation delta and append an updated snapshot.
+    Use ``update_from_obs`` to append a new cumulative snapshot from an observation.
     """
 
     schema = {
@@ -28,30 +26,24 @@ class BinomialArmSnapshot(SnapshotLedgerRecord, LedgerOp):  # type: ignore[misc]
     }
     snapshot_of = BinomialArmResultRecord
 
-    def __init__(
-        self,
-        name: str,
-        *,
-        ledger: Ledger | None = None,
-        obs: BinomialArmResultRecord | None = None,
-        arm_name: str | None = None,
-    ):
+    def __init__(self, name: str, *, ledger: Ledger | None = None):
         super().__init__(name, ledger=ledger, snapshot_of=BinomialArmResultRecord)
-        self.obs = obs
-        self.arm_name = arm_name
 
-    def run(self) -> None:
-        obs = self.obs
-        if obs is None:
-            raise RuntimeError("BinomialArmSnapshot.run() requires 'obs'.")
+    def update_from_obs(self, obs: BinomialArmResultRecord, *, arm_name: str) -> None:
+        """
+        Append a cumulative snapshot using the latest observation record.
 
-        arm_name = self.arm_name
-        if arm_name is None:
-            raise RuntimeError("BinomialArmSnapshot.run() requires 'arm_name'.")
+        Parameters
+        ----------
+        obs : BinomialArmResultRecord
+            Observation record containing the latest delta for this arm.
+        arm_name : str
+            Identifier for the arm, stored in the snapshot labels.
+        """
 
         ledger = self.ledger or obs.ledger
         if ledger is None:
-            raise RuntimeError("Ledger must be attached before running snapshot.")
+            raise RuntimeError("Ledger must be attached before updating snapshot.")
         if self.ledger is None:
             self.attach(ledger)
         elif obs.ledger is not None and obs.ledger is not self.ledger:
@@ -71,10 +63,6 @@ class BinomialArmSnapshot(SnapshotLedgerRecord, LedgerOp):  # type: ignore[misc]
             labels={"arm_name": str(arm_name)},
         )
 
-
-class ScoreZStatisticRecord(LedgerRecord, QueryMixin):
-    """Score Z statistic record for two-proportions."""
-
-    schema = {
-        "score_z": (float, ...),
-    }
+    # Backwards-compatible alias
+    def run(self, obs: BinomialArmResultRecord, *, arm_name: str) -> None:
+        self.update_from_obs(obs, arm_name=arm_name)

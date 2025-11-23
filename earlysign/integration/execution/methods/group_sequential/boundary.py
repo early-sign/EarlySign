@@ -1,27 +1,43 @@
-"""
-Boundary operator for group sequential testing.
-
-Reads Design and InfoTime records, computes boundaries using essentials functions.
-"""
+"""Boundary record and operator for group sequential testing."""
 
 from dataclasses import dataclass
 from typing import Dict, Optional
 
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
-from earlysign.framework.records import LedgerRecord
+from earlysign.framework.records import LedgerRecord, QueryMixin
 from earlysign.integration.design.group_sequential.initial_design.schema import (
     DesignPayloadModel,
 )
-from earlysign.integration.execution.methods.group_sequential.records.boundary import (
-    GroupSequentialBoundaryRecord,
+from earlysign.integration.execution.methods.group_sequential.information_time import (
+    InformationTimeRecord,
 )
 from earlysign.integration.execution.methods.group_sequential.records.design import (
     GroupSequentialDesignRecord,
 )
-from earlysign.integration.execution.methods.group_sequential.records.info import (
-    InformationTimeRecord,
-)
 from earlysign.stats.methods.group_sequential import boundary
+
+
+class GroupSequentialBoundaryRecord(LedgerRecord, QueryMixin):
+    """
+    Nominal boundaries resolved from a GS design.
+
+    Stores efficacy and futility boundaries resolved at a given
+    information time, plus design metadata.
+    """
+
+    schema = {
+        "upper": float,
+        "lower": float,
+        "efficacy": (dict | None, None),
+        "futility": (dict | None, None),
+        "scale": str,
+        "statistic_type": (str | None, None),
+        "statistic_scale": (str | None, None),
+        "alpha": (float | None, None),
+        "tails": (int | None, None),
+        "info_time": (float | None, None),
+        "look": (int | None, None),
+    }
 
 
 class BoundaryFromDesign(LedgerOp):
@@ -40,51 +56,6 @@ class BoundaryFromDesign(LedgerOp):
         ID of boundary record to create.
     look : int, optional
         Look number (1-indexed), required for significance_level style.
-
-    Examples
-    --------
-    >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.integration.execution.methods.group_sequential.operators.boundary import (
-    ...     BoundaryFromDesign
-    ... )
-    >>> from earlysign.integration.execution.methods.group_sequential.records.design import (
-    ...     GroupSequentialDesignRecord
-    ... )
-    >>> from earlysign.integration.execution.methods.group_sequential.records.info import (
-    ...     InformationTimeRecord
-    ... )
-    >>> import ibis
-    >>> con = ibis.duckdb.connect(":memory:")
-    >>> ledger = Ledger(con, "events")
-    >>> ledger.ensure()
-    >>>
-    >>> # Write design
-    >>> design_rec = GroupSequentialDesignRecord(name="design1").attach(ledger)
-    >>> design_rec.insert(
-    ...     {
-    ...         "alpha": 0.05,
-    ...         "hypothesis": {"structure": "two_sided_symmetric"},
-    ...         "statistic": {"kind": "wald_z", "scale": "z"},
-    ...         "efficacy": {"style": "alpha_spending", "family": "obf"},
-    ...         "futility": {"mode": "none", "binding_mode": "non_binding"},
-    ...         "planned_max_n": 1000,
-    ...         "planned_info_times": [0.5, 1.0],
-    ...     }
-    ... )
-    >>>
-    >>> # Write info time
-    >>> info_rec = InformationTimeRecord(name="info1").attach(ledger)
-    >>> info_rec.insert({"info_time": 0.5})
-    >>>
-    >>> # Compute boundary
-    >>> boundary_op = BoundaryFromDesign(
-    ...     ledger,
-    ...     design=GroupSequentialDesignRecord(name="design1").attach(ledger),
-    ...     info=info_rec,
-    ...     out_id="bound1",
-    ...     look=2
-    ... )
-    >>> boundary_op.run()
     """
 
     design: GroupSequentialDesignRecord
@@ -132,10 +103,8 @@ class BoundaryFromDesign(LedgerOp):
 
         # Compose payload
         payload = {
-            # Flat fields for easy consumption
             "upper": float(up),
             "lower": float(lo),
-            # Structured fields for richer consumers
             "efficacy": {"upper": float(up)},
             "futility": {
                 "lower": float(lo),

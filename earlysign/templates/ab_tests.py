@@ -27,31 +27,27 @@ from earlysign.integration.design.group_sequential.initial_design.scenarios.fst_
 from earlysign.integration.design.group_sequential.initial_design.schema import (
     DesignPayloadModel,
 )
-from earlysign.integration.execution.methods.group_sequential.operators.boundary import (
+from earlysign.integration.execution.methods.group_sequential.boundary import (
     BoundaryFromDesign,
 )
-from earlysign.integration.execution.methods.group_sequential.operators.decision import (
+from earlysign.integration.execution.methods.group_sequential.decision import (
+    GroupSequentialDecisionSignalRecord,
     GSDecisionFromWaldZ,
 )
-from earlysign.integration.execution.methods.group_sequential.records.decision import (
-    GroupSequentialDecisionSignalRecord,
+from earlysign.integration.execution.methods.group_sequential.information_time import (
+    InformationTime,
+    InformationTimeRecord,
 )
 from earlysign.integration.execution.methods.group_sequential.records.design import (
     GroupSequentialDesignRecord,
 )
-from earlysign.integration.execution.methods.group_sequential.records.info import (
-    InformationTimeRecord,
-)
-from earlysign.integration.execution.methods.group_sequential.records.statistics import (
-    WaldZStatisticRecord,
-)
-from earlysign.integration.execution.schemes.two_proportions.operators import (
-    BinomialWaldZ,
-    InformationTime,
-)
-from earlysign.integration.execution.schemes.two_proportions.records import (
+from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
     BinomialArmResultRecord,
     BinomialArmSnapshot,
+)
+from earlysign.integration.execution.schemes.two_proportions.wald_z import (
+    BinomialWaldZ,
+    WaldZStatisticRecord,
 )
 from earlysign.integration.report.group_sequential.plot_design_boundaries import (
     plot_design_boundaries,
@@ -291,18 +287,14 @@ class BinomialABTest(tpl.TemplateBase):
         control_snapshot_record = BinomialArmSnapshot(
             name="snapshot_A",
             ledger=self.ledger,
-            obs=control_obs,
-            arm_name="A",
         )
-        control_snapshot_record.run()
+        control_snapshot_record.update_from_obs(control_obs, arm_name="A")
 
         variant_snapshot_record = BinomialArmSnapshot(
             name="snapshot_B",
             ledger=self.ledger,
-            obs=variant_obs,
-            arm_name="B",
         )
-        variant_snapshot_record.run()
+        variant_snapshot_record.update_from_obs(variant_obs, arm_name="B")
 
         ## Compute statistic (using snapshot)
         stat_op = BinomialWaldZ(

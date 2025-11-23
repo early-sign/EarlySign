@@ -43,7 +43,7 @@ The resulting internal structure will look as follows::
                 ├── group_sequential.py
                 └── e_process.py
 
-In this design, a file like `stats/applications/execution/methods/group_sequential/operators/decision.py` imports the generic algorithm from `stats/essentials/methods/group_sequential/boundary.py` and applies it with the specific statistical formulas and data structures relevant to the two-proportions scenario.
+In this design, a file like `stats/applications/execution/methods/group_sequential/decision.py` imports the generic algorithm from `stats/essentials/methods/group_sequential/boundary.py` and applies it with the specific statistical formulas and data structures relevant to the two-proportions scenario.
 
 ✨ Consequences
 -----------------

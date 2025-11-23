@@ -69,3 +69,4 @@ The conceptual decisions are stored and updated in docs/source/reference/ADR.
 - **Type hints**: Use comprehensive type annotations for all public APIs
 - **TypedDict**: Use for structured payloads and configuration objects
 - **Protocol compliance**: Ensure components implement required protocols correctly
+- **Optional arguments**: Do not annotate parameters as optional if passing `None` is not supported; require non-`None` inputs or provide a dedicated helper/factory for the optional flow.

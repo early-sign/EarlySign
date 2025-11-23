@@ -12,16 +12,20 @@ Steps:
 
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
->>> from earlysign.integration.execution.schemes.two_proportions.records import BinomialArmSnapshot
->>> from earlysign.integration.execution.methods.group_sequential.records.statistics import WaldZStatisticRecord
->>> from earlysign.integration.execution.schemes.two_proportions.operators import BinomialWaldZ
->>> from earlysign.integration.execution.methods.group_sequential.operators.decision import GSDecisionFromWaldZ
->>> from earlysign.integration.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
->>> from earlysign.integration.execution.methods.group_sequential.records.decision import GroupSequentialDecisionSignalRecord
+>>> from earlysign.integration.execution.schemes.two_proportions.binomial_arms import BinomialArmSnapshot
+>>> from earlysign.integration.execution.schemes.two_proportions.wald_z import (
+...     BinomialWaldZ,
+...     WaldZStatisticRecord,
+... )
+>>> from earlysign.integration.execution.methods.group_sequential.decision import GSDecisionFromWaldZ
+>>> from earlysign.integration.execution.methods.group_sequential.boundary import GroupSequentialBoundaryRecord
+>>> from earlysign.integration.execution.methods.group_sequential.decision import GroupSequentialDecisionSignalRecord
 >>> from earlysign.integration.execution.methods.group_sequential.records.design import GroupSequentialDesignRecord
->>> from earlysign.integration.execution.methods.group_sequential.records.info import InformationTimeRecord
->>> from earlysign.integration.execution.schemes.two_proportions.operators import InformationTime
->>> from earlysign.integration.execution.methods.group_sequential.operators.boundary import BoundaryFromDesign
+>>> from earlysign.integration.execution.methods.group_sequential.information_time import (
+...     InformationTime,
+...     InformationTimeRecord,
+... )
+>>> from earlysign.integration.execution.methods.group_sequential.boundary import BoundaryFromDesign
 
 
 # --- Setup in-memory ledger ---------------------------------------------------

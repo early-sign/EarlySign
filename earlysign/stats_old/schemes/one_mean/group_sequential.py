@@ -16,13 +16,13 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.integration.execution.methods.group_sequential.records.boundary import (
+from earlysign.integration.execution.methods.group_sequential.boundary import (
     GroupSequentialBoundaryRecord,
 )
-from earlysign.integration.execution.methods.group_sequential.records.decision import (
+from earlysign.integration.execution.methods.group_sequential.decision import (
     GroupSequentialDecisionSignalRecord,
 )
-from earlysign.integration.execution.methods.group_sequential.records.info import (
+from earlysign.integration.execution.methods.group_sequential.information_time import (
     InformationTimeRecord,
 )
 from earlysign.stats.methods.group_sequential.boundary import (

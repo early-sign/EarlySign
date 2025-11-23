@@ -1,20 +1,107 @@
-"""Information time operators for generic group sequential workflows."""
+"""Information time record and operators for group sequential workflows."""
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
-from earlysign.framework.records import LedgerRecord
-from earlysign.integration.execution.methods.group_sequential.records.info import (
-    InformationTimeRecord,
+from earlysign.framework.records import LedgerRecord, QueryMixin
+from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
+    BinomialArmSnapshot,
 )
 from earlysign.stats.methods.group_sequential.info_time import (
     info_time_from_fisher,
     info_time_from_ratio,
+    info_time_from_sample_size,
     info_time_from_sd,
     info_time_from_variance,
 )
+
+
+class InformationTimeRecord(LedgerRecord, QueryMixin):
+    """
+    Information time snapshots (scheme-agnostic).
+
+    Stores information time t in [0, 1].
+
+    Payload example:
+      {"info_time": 0.5}
+    """
+
+    schema = {
+        "info_time": float,
+    }
+
+
+class InformationTime(LedgerOp):
+    """
+    Insert information-time record from sample counts.
+
+    Parameters
+    ----------
+    ledger : Ledger
+        Scoped ledger instance.
+    out_id : str
+        ID of InformationTimeRecord to create.
+    control : BinomialArmSnapshot
+        Record containing cumulative counts for the control arm.
+    variants : Sequence[BinomialArmSnapshot]
+        Record(s) containing cumulative counts for the comparison arm(s).
+    planned_max_n : int
+        Maximum total sample size.
+    """
+
+    out_id: str
+
+    @dataclass(frozen=True)
+    class Outputs(LedgerOpOutputs):
+        info: InformationTimeRecord
+
+    outputs: Outputs
+
+    def __init__(
+        self,
+        ledger: Ledger,
+        *,
+        out_id: str,
+        control: BinomialArmSnapshot,
+        variants: BinomialArmSnapshot | Sequence[BinomialArmSnapshot],
+        planned_max_n: int,
+    ):
+        super().__init__(
+            ledger,
+            out_id=out_id,
+            control=control,
+            variants=tuple(variants) if isinstance(variants, Sequence) else (variants,),
+            planned_max_n=planned_max_n,
+        )
+
+    def build_outputs(self) -> dict[str, LedgerRecord]:
+        return {"info": InformationTimeRecord(name=self.out_id, ledger=self.ledger)}
+
+    def run(self) -> None:
+        out = self.outputs.info
+        control_record: BinomialArmSnapshot = getattr(self, "control")
+        variant_records: tuple[BinomialArmSnapshot, ...] = getattr(self, "variants")
+        planned_max_n = getattr(self, "planned_max_n")
+
+        if not variant_records:
+            raise ValueError("At least one variant record is required.")
+
+        control_df = (
+            control_record.latest(explode=True).select("trial", "success").execute()
+        )
+        variant_dfs = [
+            rec.latest(explode=True).select("trial", "success").execute()
+            for rec in variant_records
+        ]
+
+        trial_control = int(control_df.iloc[0]["trial"])
+        trial_variants = sum(int(df.iloc[0]["trial"]) for df in variant_dfs)
+        n_total = trial_control + trial_variants
+
+        t = info_time_from_sample_size(n_current=n_total, n_max=planned_max_n)
+        out.insert({"info_time": float(t)})
 
 
 class InformationTimeFromRatio(LedgerOp):

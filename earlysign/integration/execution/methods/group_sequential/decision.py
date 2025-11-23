@@ -1,25 +1,18 @@
-"""
-Decision operators for group sequential testing.
-
-Compares statistics against boundaries and emits stop/continue signals.
-"""
+"""Decision records and operators for group sequential testing."""
 
 from dataclasses import dataclass
 from typing import Dict, Literal, Optional, Tuple
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
-from earlysign.framework.records import LedgerRecord
-from earlysign.integration.execution.methods.group_sequential.records.boundary import (
+from earlysign.framework.records import LedgerRecord, QueryMixin
+from earlysign.integration.execution.methods.group_sequential.boundary import (
     GroupSequentialBoundaryRecord,
 )
-from earlysign.integration.execution.methods.group_sequential.records.decision import (
-    GroupSequentialDecisionSignalRecord,
-)
-from earlysign.integration.execution.methods.group_sequential.records.info import (
+from earlysign.integration.execution.methods.group_sequential.information_time import (
     InformationTimeRecord,
 )
-from earlysign.integration.execution.methods.group_sequential.records.statistics import (
+from earlysign.integration.execution.schemes.two_proportions.wald_z import (
     WaldZStatisticRecord,
 )
 from earlysign.stats.methods.group_sequential.boundary import (
@@ -27,37 +20,27 @@ from earlysign.stats.methods.group_sequential.boundary import (
 )
 
 
+class GroupSequentialDecisionSignalRecord(LedgerRecord, QueryMixin):
+    """Stop/continue signal produced by comparing a statistic to boundaries."""
+
+    schema = {
+        "signal": str,
+        "reason": str,
+        "value": (float | None, None),
+        "value_scale": (str | None, None),
+        "upper": (float | None, None),
+        "lower": (float | None, None),
+        "scale": (str | None, None),
+        "statistic_type": (str | None, None),
+        "statistic_scale": (str | None, None),
+        "info_time": (float | None, None),
+    }
+
+
 def _decide(
     value: float, upper: float, lower: float
 ) -> Tuple[str, Literal["efficacy", "futility", "none"]]:
-    """
-    Compare value to boundaries and return signal and reason.
-
-    Parameters
-    ----------
-    value : float
-        Test statistic value (on boundary scale).
-    upper : float
-        Upper (efficacy) boundary.
-    lower : float
-        Lower (futility) boundary.
-
-    Returns
-    -------
-    signal : str
-        "stop_efficacy", "stop_futility", or "continue"
-    reason : str
-        "efficacy", "futility", or "none"
-
-    Examples
-    --------
-    >>> _decide(3.0, upper=2.5, lower=-2.5)
-    ('stop_efficacy', 'efficacy')
-    >>> _decide(-3.0, upper=2.5, lower=-2.5)
-    ('stop_futility', 'futility')
-    >>> _decide(0.0, upper=2.5, lower=-2.5)
-    ('continue', 'none')
-    """
+    """Compare value to boundaries and return (signal, reason)."""
     if value >= upper:
         return "stop_efficacy", "efficacy"
     if value <= lower:
@@ -66,44 +49,7 @@ def _decide(
 
 
 class GSDecision(LedgerOp):
-    """
-    Scale-aware decision against a GroupSequentialBoundaryRecord.
-
-    Compares a statistic value to efficacy and futility boundaries,
-    handling scale conversions automatically.
-
-    Parameters
-    ----------
-    ledger : Ledger
-        Scoped ledger instance.
-    boundary : GroupSequentialBoundaryRecord (attached)
-        Boundary record to compare against.
-    out_id : str
-        ID of decision signal record to create.
-    value : float
-        Test statistic value.
-    value_scale : {"z", "bm"}, default="z"
-        Scale of the input value.
-    info : InformationTimeRecord, optional (attached)
-        Information time record (used if boundary doesn't contain info_time).
-
-    Examples
-    --------
-    >>> import ibis
-    >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.integration.execution.methods.group_sequential.records.boundary import (
-    ...     GroupSequentialBoundaryRecord
-    ... )
-    >>> con = ibis.duckdb.connect(":memory:")
-    >>> ledger = Ledger(con, "events")
-    >>> ledger.ensure()
-    >>> boundary = GroupSequentialBoundaryRecord(name="bound1").attach(ledger)
-    >>> boundary.insert({"upper": 2.5, "lower": -2.5, "scale": "z", "info_time": 0.5,
-    ...                  "alpha": 0.05, "tails": 2})
-    >>> op = GSDecision(ledger, boundary=boundary, out_id="decision1",
-    ...                 value=3.0, value_scale="z")
-    >>> op.run()
-    """
+    """Scale-aware decision against a GroupSequentialBoundaryRecord."""
 
     out_id: str
     boundary: GroupSequentialBoundaryRecord
@@ -111,11 +57,8 @@ class GSDecision(LedgerOp):
 
     @dataclass(frozen=True)
     class Outputs(LedgerOpOutputs):
-        """Outputs for this operator."""
-
         decision: GroupSequentialDecisionSignalRecord
 
-    # Type annotation for outputs - enables type inference!
     outputs: Outputs
 
     def __init__(
@@ -215,39 +158,7 @@ Decision = GSDecision
 
 
 class GSDecisionFromWaldZ(LedgerOp):
-    """
-    Decision operator that reads Wald Z-statistic from a record.
-
-    Convenience operator for the common case where the test statistic
-    is a Wald Z already in the ledger.
-
-    Parameters
-    ----------
-    ledger : Ledger
-        Scoped ledger instance.
-    wald : LedgerRecord (attached)
-        Record containing Wald Z-statistic in payload["z"].
-    boundary : GroupSequentialBoundaryRecord (attached)
-        Boundary record to compare against.
-    out_id : str
-        ID of decision signal record to create.
-
-    Examples
-    --------
-    >>> import ibis
-    >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.integration.execution.methods.group_sequential.records.boundary import GroupSequentialBoundaryRecord
-    >>> con = ibis.duckdb.connect(":memory:")
-    >>> ledger = Ledger(con, "events")
-    >>> ledger.ensure()
-    >>> wald_rec = WaldZStatisticRecord(name="wald1").attach(ledger)
-    >>> wald_rec.insert({"wald_z": 3.0})
-    >>> boundary = GroupSequentialBoundaryRecord(name="bound1").attach(ledger)
-    >>> boundary.insert({"upper": 2.5, "lower": -2.5, "scale": "z",
-    ...                  "info_time": 0.5, "alpha": 0.05, "tails": 2})
-    >>> op = GSDecisionFromWaldZ(ledger, wald=wald_rec, boundary=boundary, out_id="decision1")
-    >>> op.run()
-    """
+    """Decision operator that reads Wald Z-statistic from a record."""
 
     out_id: str
     wald: WaldZStatisticRecord
@@ -259,7 +170,6 @@ class GSDecisionFromWaldZ(LedgerOp):
 
         decision: GroupSequentialDecisionSignalRecord
 
-    # Type annotation for outputs - enables type inference!
     outputs: Outputs
 
     def __init__(
