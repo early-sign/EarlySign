@@ -8,7 +8,6 @@ from typing import (
     Optional,
     Sequence,
     Type,
-    TypeVar,
     Union,
     cast,
 )
@@ -63,8 +62,6 @@ from earlysign.stats.schemes.two_proportions.asn import (
 from earlysign.stats.schemes.two_proportions.design import (
     build_two_proportions_scheme,
 )
-
-ArmRecordT = TypeVar("ArmRecordT", BinomialArmResultRecord, BinomialArmSnapshot)
 
 
 @dataclass
