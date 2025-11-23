@@ -13,8 +13,7 @@ class ArmStatus(str, Enum):
     """Allowed lifecycle states for an arm."""
 
     ACTIVE = "active"
-    RETIRED = "retired"
-    PAUSED = "paused"
+    DROPPED = "dropped"
 
 
 class ArmLifecycleRecord(LedgerRecord, QueryMixin):
@@ -22,7 +21,7 @@ class ArmLifecycleRecord(LedgerRecord, QueryMixin):
 
     schema = {
         "arm_id": (str, ...),
-        "status": (str, ...),  # e.g., "active", "retired", "paused"
+        "status": (str, ...),  # e.g., "active", "dropped"
     }
 
 
