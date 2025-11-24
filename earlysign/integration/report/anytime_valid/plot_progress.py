@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 import ibis
 
 from earlysign.core.ledger import Ledger
-from earlysign.stats_old.common.anytime_valid.records import (
+from earlysign.integration.execution.methods.anytime_valid.records import (
     EProcessRecord,
     SafeDecisionRecord,
     SafeDesignRecord,

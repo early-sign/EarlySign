@@ -7,7 +7,9 @@ from earlysign.framework.records import LedgerRecord, QueryMixin
 from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
     BinomialArmSnapshot,
 )
-from earlysign.stats.schemes.two_proportions.wald_z import compute_binomial_wald_z
+from earlysign.stats.schemes.two_proportions.statistic.wald_z import (
+    compute_binomial_wald_z,
+)
 
 
 class WaldZStatisticRecord(LedgerRecord, QueryMixin):

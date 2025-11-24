@@ -1,16 +1,4 @@
-"""
-Ville's inequality utilities and operators (scheme-agnostic).
-
-- ville_threshold(alpha) -> 1/alpha
-- VilleThreshold        : persist {"alpha", "threshold"}
-- VilleDecision         : compare latest E to threshold (with optional futility)
-
-Futility policy
----------------
-futility_mode: "none" | "fixed"
-  - "none" : never produce futility stops
-  - "fixed": stop_futility if E <= futility_tau (0 < tau < 1 suggested)
-"""
+"""Operators for Ville thresholds and decisions (anytime-valid safe testing)."""
 
 from dataclasses import dataclass
 from typing import Dict, Optional
@@ -18,37 +6,17 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats_old.common.anytime_valid.records import (
+from earlysign.integration.execution.methods.anytime_valid.records import (
     EProcessRecord,
     SafeDecisionRecord,
     SafeDesignRecord,
     VilleThresholdRecord,
 )
-
-
-def ville_threshold(alpha: float) -> float:
-    """
-    Compute the Ville threshold: 1/alpha.
-
-    Examples
-    --------
-    >>> ville_threshold(0.05)
-    20.0
-    """
-    if not (0.0 < alpha < 1.0):
-        raise ValueError("`alpha` must be in (0,1).")
-    return 1.0 / float(alpha)
+from earlysign.stats.methods.anytime_valid.boundary import ville_threshold
 
 
 class VilleThreshold(LedgerOp):
-    """
-    Insert a Ville threshold row: {"alpha": alpha, "threshold": 1/alpha}.
-
-    __init__ parameters
-    -------------------
-    out_id : str
-    alpha  : float in (0,1)
-    """
+    """Insert a Ville threshold row: {'alpha': alpha, 'threshold': 1/alpha}."""
 
     out_id: str
 
@@ -72,17 +40,7 @@ class VilleThreshold(LedgerOp):
 
 
 class VilleDecision(LedgerOp):
-    """
-    Compare the latest E-process value to a Ville threshold.
-
-    __init__ parameters
-    -------------------
-    eproc          : EProcessRecord              # attached input
-    alpha          : float
-    threshold_rec  : Optional[VilleThresholdRecord] = None
-    futility_mode  : str = "none"                # "none" | "fixed"
-    futility_tau   : Optional[float] = None      # used only when mode == "fixed"
-    """
+    """Compare the latest E-process value to a Ville threshold."""
 
     out_id: str
     eproc: EProcessRecord
@@ -113,7 +71,6 @@ class VilleDecision(LedgerOp):
             eproc.latest()
             .select(
                 E=eproc.t.payload["E"].cast("float64"),
-                look=eproc.t.payload["look"],
             )
             .execute()
         )
@@ -121,7 +78,7 @@ class VilleDecision(LedgerOp):
             return
         E = float(edf.iloc[0]["E"])
 
-        # --- resolve threshold ---
+        # resolve threshold
         if threshold_rec is not None:
             tdf = (
                 threshold_rec.latest()
@@ -153,7 +110,6 @@ class VilleDecision(LedgerOp):
         else:
             raise ValueError("Provide `design_rec`, or `threshold_rec`, or `alpha`.")
 
-        # --- futility policy ---
         mode = str(getattr(self, "futility_mode", "none")).lower()
         tau = getattr(self, "futility_tau", None)
         signal, reason = "continue", "none"
@@ -175,8 +131,5 @@ class VilleDecision(LedgerOp):
             "threshold": float(T),
             "alpha": float(a),
         }
-        look = edf.iloc[0]["look"]
-        if look is not None:
-            payload["look"] = int(look)
 
         out.insert(payload)

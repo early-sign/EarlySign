@@ -1,17 +1,8 @@
-"""
-Group Sequential (Interim Analysis) glue for one-mean (Gaussian).
-
-Use together with:
-- OneMeanSummaryRecord (+ your own loader to insert n/mean snapshots)
-- ZMeanKnownVar (to compute Z from summary)
-- InformationTime* (to write info_time)
-- GroupSequentialDesignRecord + BoundaryFromDesign (to obtain boundaries)
-- Decision (scale-aware; compares Z/BM value to boundary)
-"""
+"""Group sequential decision wrapper for one-mean (Gaussian, known variance)."""
 
 import math
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
@@ -25,13 +16,13 @@ from earlysign.integration.execution.methods.group_sequential.decision import (
 from earlysign.integration.execution.methods.group_sequential.information_time import (
     InformationTimeRecord,
 )
-from earlysign.stats.methods.group_sequential.boundary import (
-    convert_statistic_scale,
+from earlysign.integration.execution.schemes.one_mean.records import (
+    ZMeanKnownVarRecord,
 )
-from earlysign.stats_old.schemes.one_mean.records import ZMeanKnownVarRecord
+from earlysign.stats.methods.group_sequential.boundary import convert_statistic_scale
 
 
-def _decide(value: float, upper: float, lower: float) -> tuple[str, str]:
+def _decide(value: float, upper: float, lower: float) -> Tuple[str, str]:
     """Compare value to (upper, lower) and return (signal, reason)."""
     if value >= upper:
         return "stop_efficacy", "efficacy"

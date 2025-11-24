@@ -24,6 +24,7 @@ applyTo: "**"
 - We use `poetry`. So the commands usually need to be run as `poetry run python ...` etc.
 - At the end of the edits, make sure to run `make format` to ensure the code is compliant to the formatting standards of this repository.
 - Also run `make check-lite` occasionally to make sure the code passes the tests and lint checks.
+- Notebook regressions (`make check-lite` runs nbregression) sometimes need permission to start Jupyter kernels/bind ports; request the necessary execution/port-binding approval when prompted so the tests can run.
 - Whenever you are adding a dependency, use `poetry add`. Do not try to specify versions unless that is absolutely necessary, so that poetry can do the version resolution for you. Do not write them directly edit `pyproject.toml` for this purpose.
     - You can edit `pyproject.toml` after adding the packages for formatting purposes.
 

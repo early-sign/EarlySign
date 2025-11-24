@@ -1,36 +1,16 @@
-"""
-Operators for the "one-mean (Gaussian)" scheme.
-"""
+"""Z-statistic operator for one-mean with known variance."""
 
-import math
 from dataclasses import dataclass
 from typing import Dict
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.stats_old.schemes.one_mean.records import (
+from earlysign.integration.execution.schemes.one_mean.records import (
     OneMeanSummaryRecord,
     ZMeanKnownVarRecord,
 )
-
-
-def compute_z_mean_known_var(n: int, mean: float, sigma2: float) -> float:
-    """
-    Z for testing mu=0 with known variance sigma^2 (two-sided by default upstream).
-
-    Z = mean * sqrt(n) / sqrt(sigma^2)
-
-    Examples
-    --------
-    >>> round(compute_z_mean_known_var(100, 0.2, 1.0), 3)
-    2.0
-    """
-    if n <= 0:
-        raise ValueError("n must be positive.")
-    if sigma2 <= 0.0:
-        raise ValueError("sigma^2 must be positive.")
-    return float(mean) * math.sqrt(float(n) / float(sigma2))
+from earlysign.stats.schemes.one_mean.z import compute_z_mean_known_var
 
 
 class ZMeanKnownVar(LedgerOp):
@@ -42,6 +22,19 @@ class ZMeanKnownVar(LedgerOp):
     summary : OneMeanSummaryRecord   # attached input
     out_id  : str
     sigma2  : float                   # known variance
+
+    Examples
+    --------
+    >>> import ibis
+    >>> from earlysign.core.ledger import Ledger
+    >>> con = ibis.duckdb.connect(":memory:")
+    >>> ledger = Ledger(con, "events"); _ = ledger.ensure(); ledger = ledger.bind(experiment_id="demo")
+    >>> summary = OneMeanSummaryRecord("s").attach(ledger)
+    >>> _ = summary.insert({"n": 20, "mean": 0.1, "look": 1})
+    >>> _ = ZMeanKnownVar(ledger, summary=summary, out_id="z1", sigma2=1.0).run()
+    >>> zrec = ZMeanKnownVarRecord("z1").attach(ledger)
+    >>> len(zrec.latest().execute()) == 1
+    True
     """
 
     out_id: str

@@ -71,7 +71,7 @@ from earlysign.stats.methods.group_sequential.operating_characteristics import (
 from earlysign.stats.methods.group_sequential.spending import (
     SpendingFunction,
 )
-from earlysign.stats.schemes.two_proportions.wald_z import (
+from earlysign.stats.schemes.two_proportions.statistic.wald_z import (
     compute_binomial_wald_z,
     compute_binomial_wald_z_array,
 )
