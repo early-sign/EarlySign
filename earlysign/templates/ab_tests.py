@@ -23,9 +23,6 @@ from earlysign.framework import templates as tpl
 from earlysign.integration.design.group_sequential.initial_design.scenarios.fst_to_gst import (
     AddInterimToFixedSampleTest,
 )
-from earlysign.integration.design.group_sequential.initial_design.schema import (
-    DesignPayloadModel,
-)
 from earlysign.integration.execution.methods.group_sequential.boundary import (
     BoundaryFromDesign,
 )
@@ -38,6 +35,7 @@ from earlysign.integration.execution.methods.group_sequential.information_time i
     InformationTimeRecord,
 )
 from earlysign.integration.execution.methods.group_sequential.records.design import (
+    DesignPayloadModel,
     GroupSequentialDesignRecord,
 )
 from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
@@ -178,7 +176,7 @@ class BinomialABTest(tpl.TemplateBase):
                     "alpha": 0.05,
                     "hypothesis": {"structure": "two_sided_symmetric"},
                     "statistic": {"kind": "wald_z", "scale": "z"},
-                    "efficacy": {"style": "alpha_spending", "family": "obf"},
+                    "efficacy": {"style": "alpha_spending", "family": "obrien_fleming"},
                     "futility": {"mode": "none", "binding_mode": "non_binding"},
                     "planned_max_n": 1000,
                     "planned_info_times": [0.33, 0.67, 1.0]

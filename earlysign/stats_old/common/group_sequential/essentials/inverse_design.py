@@ -97,7 +97,7 @@ def inverse_design_from_power(
     alpha: float = 0.05,
     beta: Optional[float] = None,
     tails: int = 2,
-    spending_family: str = "obf",
+    spending_family: str = "obrien_fleming",
     info_spacing: str = "equal",
     max_iterations: int = 20,
     n_simulations: int = 5000,
@@ -126,8 +126,8 @@ def inverse_design_from_power(
         Type II error rate for futility boundaries (1 - target_power)
     tails : int, default=2
         Number of tails (1 or 2)
-    spending_family : str, default="obf"
-        Spending function family: "obf", "pocock", or "hsd"
+    spending_family : str, default="obrien_fleming"
+        Spending function family: "obrien_fleming", "pocock", or "hsd"
     info_spacing : str, default="equal"
         Information time spacing: "equal" or "user"
     max_iterations : int, default=20
@@ -240,7 +240,7 @@ def inverse_design_from_mde(
     alpha: float = 0.05,
     power: float = 0.8,
     tails: int = 2,
-    spending_family: str = "obf",
+    spending_family: str = "obrien_fleming",
     max_iterations: int = 20,
     n_simulations: int = 5000,
     seed: Optional[int] = None,
@@ -266,7 +266,7 @@ def inverse_design_from_mde(
         Target power at the MDE
     tails : int, default=2
         Number of tails (1 or 2)
-    spending_family : str, default="obf"
+    spending_family : str, default="obrien_fleming"
         Spending function family
     max_iterations : int, default=20
         Maximum iterations for search
@@ -347,7 +347,7 @@ def optimize_sample_size_for_power(
     n_looks: int,
     alpha: float = 0.05,
     tails: int = 2,
-    spending_family: str = "obf",
+    spending_family: str = "obrien_fleming",
     n_simulations: int = 5000,
     seed: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -369,7 +369,7 @@ def optimize_sample_size_for_power(
         Significance level
     tails : int, default=2
         Number of tails
-    spending_family : str, default="obf"
+    spending_family : str, default="obrien_fleming"
         Spending function family
     n_simulations : int, default=5000
         Simulations for power estimation

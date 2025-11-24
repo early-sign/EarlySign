@@ -265,7 +265,7 @@ def fit_spending_function(
         Spending function family to fit:
         - "power": α(t) = budget * t^γ
         - "linear": α(t) = budget * t
-        - "obf": O'Brien-Fleming-like
+        - "obrien_fleming": O'Brien-Fleming-like
 
     Returns
     -------

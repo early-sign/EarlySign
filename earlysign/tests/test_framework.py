@@ -76,7 +76,7 @@ Steps:
 ...     "alpha": 0.05,
 ...     "hypothesis": {"structure": "two_sided_symmetric"},
 ...     "statistic": {"kind": "wald_z", "scale": "z"},
-...     "efficacy": {"style": "alpha_spending", "family": "obf"},
+...     "efficacy": {"style": "alpha_spending", "family": "obrien_fleming"},
 ...     "futility": {"mode": "symmetric", "binding_mode": "non_binding"},
 ...     "planned_max_n": 600,
 ...     "planned_info_times": [0.5, 1.0],

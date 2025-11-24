@@ -5,13 +5,11 @@ from typing import Dict, Optional
 
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord, QueryMixin
-from earlysign.integration.design.group_sequential.initial_design.schema import (
-    DesignPayloadModel,
-)
 from earlysign.integration.execution.methods.group_sequential.information_time import (
     InformationTimeRecord,
 )
 from earlysign.integration.execution.methods.group_sequential.records.design import (
+    DesignPayloadModel,
     GroupSequentialDesignRecord,
 )
 from earlysign.stats.methods.group_sequential import boundary

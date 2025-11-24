@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib.figure import Figure
 from pydantic import ValidationError
 
-from earlysign.integration.design.group_sequential.initial_design.schema import (
+from earlysign.integration.execution.methods.group_sequential.records.design import (
     DesignPayloadModel,
 )
 from earlysign.stats.methods.group_sequential.boundary import BoundaryCalculator

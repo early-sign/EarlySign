@@ -121,7 +121,7 @@ class OBFSpending(SpendingFunction):
 
     @property
     def name(self) -> str:
-        return "obf"
+        return "obrien_fleming"
 
 
 class PocockSpending(SpendingFunction):

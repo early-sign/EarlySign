@@ -1,7 +1,7 @@
 """Shared enums and lookup tables for group sequential design payloads."""
 
 from enum import Enum
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 
 class BindingMode(str, Enum):
@@ -57,7 +57,7 @@ class StatisticType(str, Enum):
 class SpendingFamily(str, Enum):
     """Canonical spending families."""
 
-    OBF = "obf"
+    OBF = "obrien_fleming"
     POCOCK = "pocock"
     HSD = "hsd"
 
@@ -68,26 +68,3 @@ STATISTIC_DEFAULT_SCALES: Dict[StatisticType, Optional[BoundaryScale]] = {
     StatisticType.LIKELIHOOD_RATIO: None,
     StatisticType.CUSTOM: None,
 }
-
-_SPENDING_FAMILY_ALIASES: Dict[str, SpendingFamily] = {
-    "obf": SpendingFamily.OBF,
-    "obrien_fleming": SpendingFamily.OBF,
-    "o'brien_fleming": SpendingFamily.OBF,
-    "pocock": SpendingFamily.POCOCK,
-    "hsd": SpendingFamily.HSD,
-}
-
-
-def normalize_spending_family(
-    value: Optional[Union[SpendingFamily, str]],
-) -> Optional[SpendingFamily]:
-    """Coerce user-provided family names (or aliases) to the canonical enum."""
-
-    if value is None:
-        return None
-    if isinstance(value, SpendingFamily):
-        return value
-    alias = str(value).strip().lower()
-    if alias in _SPENDING_FAMILY_ALIASES:
-        return _SPENDING_FAMILY_ALIASES[alias]
-    return SpendingFamily(alias)

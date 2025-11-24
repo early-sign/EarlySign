@@ -58,7 +58,7 @@ def _boundary_from_spending(
     # Demo-friendly spending functions.
     spent = max(I1 - I0, 1e-9)
     fam = family.lower()
-    if fam in {"obrien_fleming", "obf", "obrien-fleming"}:
+    if fam in {"obrien_fleming"}:
         return math.sqrt(2.0 * math.log(1.0 / (alpha * spent)))
     if fam == "pocock":
         return 2.4 - 0.3 * spent

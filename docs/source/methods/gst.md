@@ -300,17 +300,17 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 | `convert_scale` | `boundary.convert_statistic_scale` | ✅ |
 | **Type Definitions** | | |
 | `BindingMode` | string literal (`"binding"`, `"non_binding"`) | ✅ |
-| `SpendingFamily` | string literal (`"obf"`, `"pocock"`, `"hsd"`) | ✅ |
+| `SpendingFamily` | string literal (`"obrien_fleming"`, `"pocock"`, `"hsd"`) | ✅ |
 | `BoundaryScale` | string literal (`"z"`, `"bm"`) | ✅ |
 | `FutilityMode` | string literal (`"none"`, `"symmetric"`, `"fixed_threshold"`, `"beta_spending"`, `"custom"`) | ✅ |
 | `DesignPayload` | `applications.design.group_sequential.initial_design.schema.DesignPayloadModel` | ✅ |
 | **Ledger Operators** | | |
 | — | `records.GroupSequentialDesignRecord` (insert) | ✅ |
-| — | `operators.boundary.BoundaryFromDesign` | ✅ |
-| — | `schemes.two_proportions.operators.InformationTime` | ✅ |
-| — | `operators.info.InformationTimeFromRatio` | ✅ |
-| — | `operators.decision.GSDecision` | ✅ |
-| — | `operators.decision.GSDecisionFromWaldZ` | ✅ |
+| — | `methods.group_sequential.boundary.BoundaryFromDesign` | ✅ |
+| — | `methods.group_sequential.information_time.InformationTime` | ✅ |
+| — | `methods.group_sequential.information_time.InformationTimeFromRatio` | ✅ |
+| — | `methods.group_sequential.decision.GSDecision` | ✅ |
+| — | `methods.group_sequential.decision.GSDecisionFromWaldZ` | ✅ |
 | **Advanced & Visualization** | | |
 | `InverseDesign` (power) | `inverse_design.inverse_design_from_power` | ✅ |
 | `InverseDesign` (MDE) | `inverse_design.inverse_design_from_mde` | ✅ |

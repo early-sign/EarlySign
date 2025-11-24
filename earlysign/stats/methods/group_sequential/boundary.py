@@ -199,25 +199,22 @@ class BoundaryCalculator:
         style = efficacy["style"]
 
         if style == "alpha_spending":
-            family = efficacy.get("family", "obf")
-            gamma = efficacy.get("gamma", -4.0)
-
-            # Instantiate spending function (existing implementations)
+            family = efficacy.get("family", "obrien_fleming")
+            params = dict(efficacy.get("params") or {})
             key = str(family).lower()
-            s: spending_mod.SpendingFunction  # Type hinting
-            if key in ("obf", "obrien_fleming", "o'brien-fleming"):
-                # For two-sided tests, internal spending expects half-alpha
-                s = spending_mod.OBFSpending(
-                    alpha=float(spec["alpha"]), sided=int(spec["tails"])
-                )
-            elif key == "pocock":
-                s = spending_mod.PocockSpending(alpha=float(spec["alpha"]))
-            elif key == "hsd":
-                s = spending_mod.HSDSpending(
-                    alpha=float(spec["alpha"]), gamma=float(gamma)
-                )
-            else:
-                raise ValueError(f"Unknown spending family: {family}")
+            if key == "hsd" and "gamma" not in params:
+                params["gamma"] = float(efficacy.get("gamma", -4.0))
+
+            try:
+                spending_cls = spending_mod.get_spending_class(key)
+            except KeyError as exc:  # pragma: no cover - validated upstream
+                raise ValueError(f"Unknown spending family: {family}") from exc
+
+            kwargs: Dict[str, Any] = {"alpha": float(spec["alpha"])}
+            if spending_cls is spending_mod.OBFSpending:
+                kwargs["sided"] = int(spec["tails"])
+            kwargs.update(params)
+            s = spending_cls(**kwargs)
 
             alpha_spent = float(s.cumulative(np.array([t]))[0])
             upper_z, _ = nominal_z_from_spent_alpha(
@@ -271,20 +268,24 @@ class BoundaryCalculator:
 
         if mode == "beta_spending":
             # Beta spending: convert beta(t) cumulative to lower Z (negative).
-            family = futility.get("family", "obf")
-            gamma = futility.get("gamma", -4.0)
-            beta = futility.get("beta", 0.10)
+            family = futility.get("family", "obrien_fleming")
+            params = dict(futility.get("params") or {})
+            beta = float(params.get("beta", futility.get("beta", 0.10)))
 
             key = str(family).lower()
-            s_beta: spending_mod.SpendingFunction  # Type hinting
-            if key in ("obf", "obrien_fleming", "o'brien-fleming"):
-                s_beta = spending_mod.OBFSpending(alpha=float(beta), sided=1)
-            elif key == "pocock":
-                s_beta = spending_mod.PocockSpending(alpha=float(beta))
-            elif key == "hsd":
-                s_beta = spending_mod.HSDSpending(alpha=float(beta), gamma=float(gamma))
-            else:
-                raise ValueError(f"Unknown futility spending family: {family}")
+            if key == "hsd" and "gamma" not in params:
+                params["gamma"] = float(futility.get("gamma", -4.0))
+
+            try:
+                spending_cls = spending_mod.get_spending_class(key)
+            except KeyError as exc:  # pragma: no cover
+                raise ValueError(f"Unknown futility spending family: {family}") from exc
+
+            kwargs: Dict[str, Any] = {"alpha": beta}
+            if spending_cls is spending_mod.OBFSpending:
+                kwargs["sided"] = 1
+            kwargs.update(params)
+            s_beta: spending_mod.SpendingFunction = spending_cls(**kwargs)
 
             beta_spent = float(s_beta.cumulative(np.array([info_time]))[0])
             z_one_sided, _ = nominal_z_from_spent_alpha(beta_spent, tails=1)

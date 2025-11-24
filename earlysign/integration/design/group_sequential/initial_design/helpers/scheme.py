@@ -17,9 +17,7 @@ from earlysign.stats.methods.group_sequential.asn import ASNCalculator
 from earlysign.stats.methods.group_sequential.operating_characteristics import (
     Simulator,
 )
-from earlysign.stats.methods.group_sequential.spending import (
-    SpendingFunction,
-)
+from earlysign.stats.methods.group_sequential.spending import SpendingFunction
 
 FSDPlanner = Callable[[], Dict[str, int]]
 SimulatorFactory = Callable[[int, float], Simulator]
@@ -53,6 +51,7 @@ class GSTSchemeHooks:
     def with_effect_sizes(
         self, overrides: Optional[Sequence[float]]
     ) -> "GSTSchemeHooks":
+        """Return a copy with alternate effect sizes if provided."""
         if overrides is None:
             return self
         return GSTSchemeHooks(
