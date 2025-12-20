@@ -7,9 +7,6 @@ from typing import Dict, Optional, Tuple
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.integration.execution.schemes.one_mean.records import (
-    ZMeanKnownVarRecord,
-)
 from earlysign.methods.group_sequential.boundary import (
     GroupSequentialBoundaryRecord,
     convert_statistic_scale,
@@ -18,6 +15,9 @@ from earlysign.methods.group_sequential.decision import (
     GroupSequentialDecisionSignalRecord,
 )
 from earlysign.methods.group_sequential.info_time import InformationTimeRecord
+from earlysign.stats.schemes.one_mean.records import (
+    ZMeanKnownVarRecord,
+)
 
 
 def _decide(value: float, upper: float, lower: float) -> Tuple[str, str]:
