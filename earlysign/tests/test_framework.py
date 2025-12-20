@@ -12,20 +12,20 @@ Steps:
 
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
->>> from earlysign.integration.execution.schemes.two_proportions.binomial_arms import BinomialArmSnapshot
->>> from earlysign.integration.execution.schemes.two_proportions.wald_z import (
+>>> from earlysign.methods.group_sequential.schemes.two_proportions.binomial_arms import BinomialArmSnapshot
+>>> from earlysign.methods.group_sequential.schemes.two_proportions.wald_z import (
 ...     BinomialWaldZ,
 ...     WaldZStatisticRecord,
 ... )
->>> from earlysign.integration.execution.methods.group_sequential.decision import GSDecisionFromWaldZ
->>> from earlysign.integration.execution.methods.group_sequential.boundary import GroupSequentialBoundaryRecord
->>> from earlysign.integration.execution.methods.group_sequential.decision import GroupSequentialDecisionSignalRecord
->>> from earlysign.integration.execution.methods.group_sequential.records.design import GroupSequentialDesignRecord
->>> from earlysign.integration.execution.methods.group_sequential.information_time import (
+>>> from earlysign.methods.group_sequential.decision import GSDecisionFromWaldZ
+>>> from earlysign.methods.group_sequential.boundary import GroupSequentialBoundaryRecord
+>>> from earlysign.methods.group_sequential.decision import GroupSequentialDecisionSignalRecord
+>>> from earlysign.methods.group_sequential.design.records.design import GroupSequentialDesignRecord
+>>> from earlysign.methods.group_sequential.info_time import (
 ...     InformationTime,
 ...     InformationTimeRecord,
 ... )
->>> from earlysign.integration.execution.methods.group_sequential.boundary import BoundaryFromDesign
+>>> from earlysign.methods.group_sequential.boundary import BoundaryFromDesign
 
 
 # --- Setup in-memory ledger ---------------------------------------------------

@@ -20,36 +20,34 @@ from matplotlib.figure import Figure
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.ibis_cache import IbisCache
 from earlysign.framework import templates as tpl
-from earlysign.integration.design.group_sequential.initial_design.scenarios.fst_to_gst import (
-    AddInterimToFixedSampleTest,
-)
-from earlysign.integration.execution.methods.group_sequential.boundary import (
-    BoundaryFromDesign,
-)
-from earlysign.integration.execution.methods.group_sequential.decision import (
+from earlysign.methods.group_sequential.asn import ASNCalculator
+from earlysign.methods.group_sequential.boundary import BoundaryFromDesign
+from earlysign.methods.group_sequential.decision import (
     GroupSequentialDecisionSignalRecord,
     GSDecisionFromWaldZ,
 )
-from earlysign.integration.execution.methods.group_sequential.information_time import (
-    InformationTime,
-    InformationTimeRecord,
+from earlysign.methods.group_sequential.design.initial_design.scenarios.fst_to_gst import (
+    AddInterimToFixedSampleTest,
 )
-from earlysign.integration.execution.methods.group_sequential.records.design import (
+from earlysign.methods.group_sequential.design.records.design import (
     DesignPayloadModel,
     GroupSequentialDesignRecord,
 )
-from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
+from earlysign.methods.group_sequential.info_time import (
+    InformationTime,
+    InformationTimeRecord,
+)
+from earlysign.methods.group_sequential.report.plot_design_boundaries import (
+    plot_design_boundaries,
+)
+from earlysign.methods.group_sequential.schemes.two_proportions.binomial_arms import (
     BinomialArmResultRecord,
     BinomialArmSnapshot,
 )
-from earlysign.integration.execution.schemes.two_proportions.wald_z import (
+from earlysign.methods.group_sequential.schemes.two_proportions.wald_z import (
     BinomialWaldZ,
     WaldZStatisticRecord,
 )
-from earlysign.integration.report.group_sequential.plot_design_boundaries import (
-    plot_design_boundaries,
-)
-from earlysign.methods.group_sequential.asn import ASNCalculator
 from earlysign.methods.group_sequential.spending import (
     SpendingFunction,
     get_spending_class,

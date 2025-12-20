@@ -7,7 +7,7 @@ from typing import Any, Dict, Tuple
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord, QueryMixin
-from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
+from earlysign.methods.group_sequential.schemes.two_proportions.binomial_arms import (
     BinomialArmSnapshot,
 )
 from earlysign.stats.schemes.two_proportions.statistic.mixture_e import (

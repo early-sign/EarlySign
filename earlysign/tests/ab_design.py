@@ -3,7 +3,7 @@ Integration-style checks for the binomial GST design helper.
 
 These tests exercise :meth:`BinomialGSTDesignInterface.design.compare_interim`
 to ensure it returns sensible OC curves and that the lightweight plotting
-utilities in ``earlysign.integration.report`` consume the results.
+utilities in ``earlysign.methods.group_sequential.report`` consume the results.
 """
 
 import matplotlib
@@ -14,9 +14,7 @@ matplotlib.use("Agg")
 import numpy as np
 import pytest
 
-from earlysign.integration.report.group_sequential.plot_oc_curve import (
-    OCCurvePlotter,
-)
+from earlysign.methods.group_sequential.report.plot_oc_curve import OCCurvePlotter
 from earlysign.templates.ab_tests import BinomialABTest
 
 

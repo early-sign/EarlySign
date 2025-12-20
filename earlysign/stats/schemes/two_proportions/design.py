@@ -6,11 +6,11 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Optional, Sequence, cast
 
-from earlysign.integration.design.group_sequential.initial_design.helpers.scheme import (
-    GSTSchemeHooks,
-)
 from earlysign.methods.group_sequential import simulation
 from earlysign.methods.group_sequential.asn import ASNCalculator
+from earlysign.methods.group_sequential.design.initial_design.helpers.scheme import (
+    GSTSchemeHooks,
+)
 from earlysign.methods.group_sequential.operating_characteristics import (
     Simulator,
 )

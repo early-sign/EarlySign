@@ -1,6 +1,9 @@
-"""
-Helper utilities used by the group-sequential initial design workflow.
+"""Compatibility shims for initial-design helper modules."""
 
-This namespace collects protocol definitions together with template-facing
-adapters so that scenarios can depend on a stable helper surface.
-"""
+from earlysign.methods.group_sequential.design.initial_design import helpers as _helpers
+
+enums = _helpers.enums
+protocols = _helpers.protocols
+scheme = _helpers.scheme
+template_asn = _helpers.template_asn
+template_helpers = _helpers.template_helpers
