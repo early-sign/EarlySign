@@ -12,7 +12,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.stats import norm
 
-from earlysign.stats.methods.group_sequential.spending import (
+from earlysign.methods.group_sequential.spending import (
     SpendingFunction,
 )
 

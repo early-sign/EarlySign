@@ -12,12 +12,12 @@ from typing import Any, Callable, Dict, Optional, Sequence
 from earlysign.integration.design.group_sequential.initial_design.helpers.protocols import (
     ProcedureFactory,
 )
-from earlysign.stats.methods.group_sequential import simulation
-from earlysign.stats.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.methods.group_sequential.operating_characteristics import (
+from earlysign.methods.group_sequential import simulation
+from earlysign.methods.group_sequential.asn import ASNCalculator
+from earlysign.methods.group_sequential.operating_characteristics import (
     Simulator,
 )
-from earlysign.stats.methods.group_sequential.spending import SpendingFunction
+from earlysign.methods.group_sequential.spending import SpendingFunction
 
 FSDPlanner = Callable[[], Dict[str, int]]
 SimulatorFactory = Callable[[int, float], Simulator]

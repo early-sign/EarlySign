@@ -49,8 +49,8 @@ from earlysign.integration.execution.schemes.two_proportions.wald_z import (
 from earlysign.integration.report.group_sequential.plot_design_boundaries import (
     plot_design_boundaries,
 )
-from earlysign.stats.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.methods.group_sequential.spending import (
+from earlysign.methods.group_sequential.asn import ASNCalculator
+from earlysign.methods.group_sequential.spending import (
     SpendingFunction,
     get_spending_class,
 )

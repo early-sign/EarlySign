@@ -19,7 +19,7 @@ from earlysign.integration.execution.methods.group_sequential.information_time i
 from earlysign.integration.execution.schemes.one_mean.records import (
     ZMeanKnownVarRecord,
 )
-from earlysign.stats.methods.group_sequential.boundary import convert_statistic_scale
+from earlysign.methods.group_sequential.boundary import convert_statistic_scale
 
 
 def _decide(value: float, upper: float, lower: float) -> Tuple[str, str]:

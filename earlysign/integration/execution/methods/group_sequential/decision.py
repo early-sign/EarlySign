@@ -15,7 +15,7 @@ from earlysign.integration.execution.methods.group_sequential.information_time i
 from earlysign.integration.execution.schemes.two_proportions.wald_z import (
     WaldZStatisticRecord,
 )
-from earlysign.stats.methods.group_sequential.boundary import (
+from earlysign.methods.group_sequential.boundary import (
     convert_statistic_scale,
 )
 

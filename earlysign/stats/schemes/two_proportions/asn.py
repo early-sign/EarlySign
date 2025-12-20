@@ -9,7 +9,7 @@ corresponding normal approximation parameters.
 import math
 from dataclasses import dataclass
 
-from earlysign.stats.methods.group_sequential.spending import (
+from earlysign.methods.group_sequential.spending import (
     SpendingFunction,
 )
 from earlysign.stats.schemes.two_means.asn import (

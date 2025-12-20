@@ -5,12 +5,12 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from earlysign.stats.methods.group_sequential.operating_characteristics import (
+from earlysign.methods.group_sequential.operating_characteristics import (
     BatchedProcedure,
     OCPointResult,
     Procedure,
 )
-from earlysign.stats.methods.group_sequential.simulation import (
+from earlysign.methods.group_sequential.simulation import (
     SamplingStrategy,
 )
 

@@ -12,7 +12,7 @@ from earlysign.integration.execution.methods.group_sequential.records.design imp
     DesignPayloadModel,
     GroupSequentialDesignRecord,
 )
-from earlysign.stats.methods.group_sequential import boundary
+from earlysign.methods.group_sequential import boundary
 
 
 class GroupSequentialBoundaryRecord(LedgerRecord, QueryMixin):

@@ -7,8 +7,8 @@ application modules.
 
 Examples
 --------
->>> from earlysign.stats.methods.group_sequential import simulation
->>> from earlysign.stats.methods.group_sequential.spending import OBFSpending
+>>> from earlysign.methods.group_sequential import simulation
+>>> from earlysign.methods.group_sequential.spending import OBFSpending
 >>> from earlysign.stats.schemes.two_proportions.procedure import (
 ...     TwoProportionsBatchedProcedure,
 ... )
@@ -58,17 +58,17 @@ from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from earlysign.stats.methods.group_sequential import simulation
-from earlysign.stats.methods.group_sequential.boundary import (
+from earlysign.methods.group_sequential import simulation
+from earlysign.methods.group_sequential.boundary import (
     BoundaryCalculator,
     BoundaryCalculatorSpec,
     EfficacySpec,
     FutilitySpec,
 )
-from earlysign.stats.methods.group_sequential.operating_characteristics import (
+from earlysign.methods.group_sequential.operating_characteristics import (
     BatchedProcedure,
 )
-from earlysign.stats.methods.group_sequential.spending import (
+from earlysign.methods.group_sequential.spending import (
     SpendingFunction,
 )
 from earlysign.stats.schemes.two_proportions.statistic.wald_z import (

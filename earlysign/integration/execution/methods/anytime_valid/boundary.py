@@ -12,7 +12,7 @@ from earlysign.integration.execution.methods.anytime_valid.records import (
     SafeDesignRecord,
     VilleThresholdRecord,
 )
-from earlysign.stats.methods.anytime_valid.boundary import ville_threshold
+from earlysign.methods.anytime_valid.boundary import ville_threshold
 
 
 class VilleThreshold(LedgerOp):

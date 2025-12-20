@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from earlysign.integration.execution.methods.group_sequential.records.design import (
     DesignPayloadModel,
 )
-from earlysign.stats.methods.group_sequential.boundary import BoundaryCalculator
+from earlysign.methods.group_sequential.boundary import BoundaryCalculator
 
 
 def plot_design_boundaries(

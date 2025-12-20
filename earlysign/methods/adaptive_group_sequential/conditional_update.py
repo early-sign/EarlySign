@@ -39,7 +39,7 @@ conditional_power_curve :
 Examples
 --------
 >>> import numpy as np
->>> from earlysign.stats.methods.adaptive_group_sequential import conditional_update
+>>> from earlysign.methods.adaptive_group_sequential import conditional_update
 >>> # At interim: observed Z=1.5 at t=0.5, what's CP for final analysis?
 >>> cp = conditional_update.conditional_power(
 ...     observed_z=1.5,
@@ -58,7 +58,7 @@ from typing import Any, Dict, Literal, Tuple
 import numpy as np
 from scipy import stats
 
-from earlysign.stats.methods.group_sequential import boundary
+from earlysign.methods.group_sequential import boundary
 
 BindingMode = Literal["binding", "non_binding"]
 

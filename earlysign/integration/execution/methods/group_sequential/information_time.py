@@ -9,7 +9,7 @@ from earlysign.framework.records import LedgerRecord, QueryMixin
 from earlysign.integration.execution.schemes.two_proportions.binomial_arms import (
     BinomialArmSnapshot,
 )
-from earlysign.stats.methods.group_sequential.info_time import (
+from earlysign.methods.group_sequential.info_time import (
     info_time_from_fisher,
     info_time_from_ratio,
     info_time_from_sample_size,

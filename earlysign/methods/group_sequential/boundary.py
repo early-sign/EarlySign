@@ -43,7 +43,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 import numpy as np
 from scipy.stats import norm
 
-from earlysign.stats.methods.group_sequential import spending as spending_mod
+from earlysign.methods.group_sequential import spending as spending_mod
 
 # Essentials-level dataclasses for boundary configuration. Defined here per
 # request so the canonical BoundaryCalculator exposes its configuration type

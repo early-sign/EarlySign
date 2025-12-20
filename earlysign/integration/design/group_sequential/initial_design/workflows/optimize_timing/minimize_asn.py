@@ -11,7 +11,7 @@ from scipy.optimize import minimize
 from scipy.special import expit, logit
 from scipy.stats import norm
 
-from earlysign.stats.methods.group_sequential.asn import ASNCalculator
+from earlysign.methods.group_sequential.asn import ASNCalculator
 
 
 def _project_to_min_gap(
@@ -33,7 +33,7 @@ class MinimizeASNOptimizer:
 
     Example (doctest)
     ------------------
-    >>> from earlysign.stats.methods.group_sequential.spending import OBFSpending
+    >>> from earlysign.methods.group_sequential.spending import OBFSpending
     >>> from earlysign.stats.schemes.two_means.asn import NormalMeansASNCalculator
     >>> sp = OBFSpending(alpha=0.05, sided=2)
     >>> calc = NormalMeansASNCalculator(alpha=0.05, beta=0.2, sided=2, alternative=0.2, st_dev=1.0, allocation_ratio=1.0, spending=sp)

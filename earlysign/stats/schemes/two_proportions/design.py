@@ -9,12 +9,12 @@ from typing import Callable, Dict, Optional, Sequence, cast
 from earlysign.integration.design.group_sequential.initial_design.helpers.scheme import (
     GSTSchemeHooks,
 )
-from earlysign.stats.methods.group_sequential import simulation
-from earlysign.stats.methods.group_sequential.asn import ASNCalculator
-from earlysign.stats.methods.group_sequential.operating_characteristics import (
+from earlysign.methods.group_sequential import simulation
+from earlysign.methods.group_sequential.asn import ASNCalculator
+from earlysign.methods.group_sequential.operating_characteristics import (
     Simulator,
 )
-from earlysign.stats.methods.group_sequential.spending import (
+from earlysign.methods.group_sequential.spending import (
     SpendingFunction,
 )
 from earlysign.stats.schemes.two_proportions.asn import (
