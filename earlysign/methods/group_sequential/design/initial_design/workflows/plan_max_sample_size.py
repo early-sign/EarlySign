@@ -142,6 +142,7 @@ class PlanMaxSampleSizeWorkflow:
                     if achieved < self.target_power:
                         lo = mid + 1
                     else:
+                        best_n = int(mid)  # Track the smallest n that meets the target
                         hi = mid - 1
         finally:
             if search_bar is not None:
@@ -277,10 +278,17 @@ class CanonicalJointPowerEstimator:
         allocation = float(calculator.allocation_ratio)
         if allocation <= 0.0:
             raise ValueError("allocation_ratio must be positive for canonical power")
-        sigma_eff = float(calculator.st_dev) * np.sqrt(1.0 + 1.0 / allocation)
+        
+        # kappa = delta * sqrt(I_max) where I_max is the information.
+        # For normal means with variance sigma^2 and total sample size n_max:
+        # I_max = n_max / (sigma^2 * (1 + 1/allocation) * (1 + allocation))
+        #       = n_max * allocation / (sigma^2 * (1 + allocation)^2)
+        st_dev = float(calculator.st_dev)
         alternative = float(calculator.alternative)
         n_max = float(planned_max_n)
-        kappa = (alternative / sigma_eff) * np.sqrt(n_max)
+        
+        i_max = n_max * allocation / (st_dev**2 * (1 + allocation)**2)
+        kappa = abs(alternative) * np.sqrt(i_max)
         means = kappa * np.sqrt(rates)
 
         cov = np.sqrt(np.minimum.outer(rates, rates) / np.maximum.outer(rates, rates))
