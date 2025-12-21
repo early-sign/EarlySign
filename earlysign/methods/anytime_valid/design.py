@@ -4,9 +4,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from earlysign.integration.execution.methods.anytime_valid.records import (
-    SafeDesignRecord,
-)
+from earlysign.methods.anytime_valid.records import SafeDesignRecord
 
 
 class SafeDesignModel(BaseModel):

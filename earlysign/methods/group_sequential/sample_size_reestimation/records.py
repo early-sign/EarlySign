@@ -1,4 +1,4 @@
-"""Adaptive design support records for group sequential workflows."""
+"""Records for adaptive sample-size re-estimation in group sequential trials."""
 
 from earlysign.framework.records import LedgerRecord, QueryMixin
 

@@ -6,13 +6,13 @@ from typing import Dict, Optional
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.integration.execution.methods.anytime_valid.records import (
+from earlysign.methods.anytime_valid.boundary import ville_threshold
+from earlysign.methods.anytime_valid.records import (
     EProcessRecord,
     SafeDecisionRecord,
     SafeDesignRecord,
     VilleThresholdRecord,
 )
-from earlysign.methods.anytime_valid.boundary import ville_threshold
 
 
 class VilleThreshold(LedgerOp):
@@ -78,7 +78,6 @@ class VilleDecision(LedgerOp):
             return
         E = float(edf.iloc[0]["E"])
 
-        # resolve threshold
         if threshold_rec is not None:
             tdf = (
                 threshold_rec.latest()
@@ -115,13 +114,12 @@ class VilleDecision(LedgerOp):
         signal, reason = "continue", "none"
         if E >= T:
             signal, reason = "reject", "efficacy"
-        else:
-            if mode == "fixed" and (tau is not None):
-                tau = float(tau)
-                if tau <= 0.0:
-                    raise ValueError("`futility_tau` must be > 0 for mode='fixed'.")
-                if E <= tau:
-                    signal, reason = "stop_futility", "futility"
+        elif mode == "fixed" and (tau is not None):
+            tau = float(tau)
+            if tau <= 0.0:
+                raise ValueError("`futility_tau` must be > 0 for mode='fixed'.")
+            if E <= tau:
+                signal, reason = "stop_futility", "futility"
 
         payload = {
             "criterion": "Ville",

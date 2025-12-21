@@ -1,7 +1,5 @@
 """Arm lifecycle records shared across execution schemes."""
 
-from __future__ import annotations
-
 from enum import Enum
 
 from pydantic import Field
@@ -17,11 +15,7 @@ class ArmStatus(str, Enum):
 
 
 class ArmLifecycleRecord(LedgerRecord, QueryMixin):
-    """Record lifecycle transitions (add, pause, retire) for experiment arms.
-
-    Likely unnecessary in two-arm trials where the arms' status exactly correspond to
-    the experiment's "stop" or "continue" status.
-    """
+    """Record lifecycle transitions (add, pause, retire) for experiment arms."""
 
     schema = {
         "arm_id": (str, ...),

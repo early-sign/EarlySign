@@ -1,9 +1,4 @@
-"""
-Conditional update operator for adaptive group sequential testing.
-
-Implements promising-zone adaptive designs where trial design is modified
-based on interim analysis results and conditional power calculations.
-"""
+"""Ledger operators for adaptive group-sequential sample-size re-estimation."""
 
 from dataclasses import dataclass
 from typing import Dict
@@ -11,16 +6,16 @@ from typing import Dict
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
-from earlysign.integration.execution.methods.adaptive_group_sequential.records.conditional import (
-    ConditionalPowerRecord,
-    DesignUpdateDecisionRecord,
-    UpdatedBoundariesRecord,
-)
 from earlysign.methods.adaptive_group_sequential.conditional_update import (
     BindingMode,
     conditional_power,
     promising_zone_decision,
     update_remaining_boundaries,
+)
+from earlysign.methods.group_sequential.sample_size_reestimation.records import (
+    ConditionalPowerRecord,
+    DesignUpdateDecisionRecord,
+    UpdatedBoundariesRecord,
 )
 
 
@@ -30,44 +25,6 @@ class ConditionalPowerCalculation(LedgerOp):
 
     Reads observed Z-statistic from ledger, computes conditional power
     given assumed future effect size, and writes result back to ledger.
-
-    Parameters
-    ----------
-    ledger : Ledger
-        Scoped ledger instance.
-    out_id : str
-        ID of ConditionalPowerRecord to create.
-    observed_z_id : str
-        ID of record containing observed Z-statistic.
-    current_info_time : float
-        Current information time (0 < t < 1).
-    final_info_time : float
-        Information time at final analysis (typically 1.0).
-    final_efficacy_bound : float
-        Efficacy boundary at final analysis (Z-scale).
-    assumed_effect : float
-        Assumed standardized effect size for remaining data.
-    variance : float, default=1.0
-        Variance parameter.
-
-    Examples
-    --------
-    >>> import ibis
-    >>> from earlysign.core.ledger import Ledger
-    >>> con = ibis.duckdb.connect(":memory:")
-    >>> ledger = Ledger(con, "events")
-    >>> ledger.ensure()
-    >>> # Assume observed_z record exists
-    >>> op = ConditionalPowerCalculation(
-    ...     ledger,
-    ...     out_id="cp1",
-    ...     observed_z_id="z_interim",
-    ...     current_info_time=0.5,
-    ...     final_info_time=1.0,
-    ...     final_efficacy_bound=1.96,
-    ...     assumed_effect=0.5
-    ... )
-    >>> # op.run()  # Would compute CP and write to ledger
     """
 
     out_id: str
@@ -107,8 +64,6 @@ class ConditionalPowerCalculation(LedgerOp):
     def run(self) -> None:
         out = self.outputs.cp
 
-        # Read observed Z-statistic from ledger
-        # Query the ledger table for the record with the specified ID
         obs_id = str(getattr(self, "observed_z_id"))
         t = self.ledger.t
         result = (
@@ -122,7 +77,6 @@ class ConditionalPowerCalculation(LedgerOp):
             raise ValueError(f"No observed Z record found with id={obs_id}")
         observed_z = float(result.iloc[0]["z"])
 
-        # Compute conditional power
         cp = conditional_power(
             observed_z=observed_z,
             current_info_time=getattr(self, "current_info_time"),
@@ -132,7 +86,6 @@ class ConditionalPowerCalculation(LedgerOp):
             variance=getattr(self, "variance"),
         )
 
-        # Write result to ledger
         out.insert(
             {
                 "conditional_power": cp,
@@ -145,56 +98,7 @@ class ConditionalPowerCalculation(LedgerOp):
 
 
 class PromisingZoneDecision(LedgerOp):
-    """
-    Make continuation decision based on conditional power in promising zone.
-
-    Evaluates whether observed interim results warrant continuing the trial,
-    stopping for futility/efficacy, or modifying the design.
-
-    Parameters
-    ----------
-    ledger : Ledger
-        Scoped ledger instance.
-    out_id : str
-        ID of DesignUpdateDecisionRecord to create.
-    observed_z_id : str
-        ID of record containing observed Z-statistic.
-    current_info_time : float
-        Current information time.
-    current_efficacy_bound : float
-        Efficacy boundary at current analysis (Z-scale).
-    current_futility_bound : float
-        Futility boundary at current analysis (Z-scale).
-    final_info_time : float
-        Information time at final analysis.
-    final_efficacy_bound : float
-        Efficacy boundary at final analysis (Z-scale).
-    assumed_effect : float
-        Assumed effect size for conditional power calculation.
-    cp_threshold : float, default=0.80
-        Minimum conditional power threshold for continuation.
-
-    Examples
-    --------
-    >>> import ibis
-    >>> from earlysign.core.ledger import Ledger
-    >>> con = ibis.duckdb.connect(":memory:")
-    >>> ledger = Ledger(con, "events")
-    >>> ledger.ensure()
-    >>> op = PromisingZoneDecision(
-    ...     ledger,
-    ...     out_id="decision1",
-    ...     observed_z_id="z_interim",
-    ...     current_info_time=0.5,
-    ...     current_efficacy_bound=2.5,
-    ...     current_futility_bound=0.0,
-    ...     final_info_time=1.0,
-    ...     final_efficacy_bound=1.96,
-    ...     assumed_effect=0.5,
-    ...     cp_threshold=0.80
-    ... )
-    >>> # op.run()  # Would compute decision and write to ledger
-    """
+    """Make continuation decision based on conditional power in promising zone."""
 
     out_id: str
 
@@ -239,7 +143,6 @@ class PromisingZoneDecision(LedgerOp):
     def run(self) -> None:
         out = self.outputs.decision
 
-        # Read observed Z-statistic from ledger
         obs_id = str(getattr(self, "observed_z_id"))
         t = self.ledger.t
         result = (
@@ -253,7 +156,6 @@ class PromisingZoneDecision(LedgerOp):
             raise ValueError(f"No observed Z record found with id={obs_id}")
         observed_z = float(result.iloc[0]["z"])
 
-        # Make decision
         decision_result = promising_zone_decision(
             observed_z=observed_z,
             current_info_time=getattr(self, "current_info_time"),
@@ -265,7 +167,6 @@ class PromisingZoneDecision(LedgerOp):
             cp_threshold=getattr(self, "cp_threshold"),
         )
 
-        # Write decision to ledger
         out.insert(
             {
                 "decision": decision_result["decision"],
@@ -285,43 +186,6 @@ class UpdateRemainingBoundaries(LedgerOp):
     When trial design is modified at interim analysis, remaining boundaries
     must be recalculated to maintain overall Type I error control using
     alpha spending approach.
-
-    Parameters
-    ----------
-    ledger : Ledger
-        Scoped ledger instance.
-    out_id : str
-        ID of updated boundaries record to create.
-    current_info_time : float
-        Current information time where update occurs.
-    remaining_info_times : list of float
-        Information times for remaining analyses (including final).
-    alpha : float
-        Overall significance level (one-sided).
-    alpha_gamma : float
-        Shape parameter for HSD spending function.
-    cumulative_alpha_spent : float
-        Alpha already spent up to current_info_time.
-    binding_mode : str, default="non_binding"
-        Whether futility boundaries are binding ("binding" or "non_binding").
-
-    Examples
-    --------
-    >>> import ibis
-    >>> from earlysign.core.ledger import Ledger
-    >>> con = ibis.duckdb.connect(":memory:")
-    >>> ledger = Ledger(con, "events")
-    >>> ledger.ensure()
-    >>> op = UpdateRemainingBoundaries(
-    ...     ledger,
-    ...     out_id="updated_boundaries",
-    ...     current_info_time=0.5,
-    ...     remaining_info_times=[0.75, 1.0],
-    ...     alpha=0.025,
-    ...     alpha_gamma=-4.0,
-    ...     cumulative_alpha_spent=0.005
-    ... )
-    >>> # op.run()  # Would compute updated boundaries and write to ledger
     """
 
     out_id: str
@@ -367,14 +231,12 @@ class UpdateRemainingBoundaries(LedgerOp):
 
         out = self.outputs.updated_boundaries
 
-        # Normalize binding mode flag
         binding_mode_value: BindingMode
         if getattr(self, "binding_mode") == "binding":
             binding_mode_value = "binding"
         else:
             binding_mode_value = "non_binding"
 
-        # Compute updated boundaries
         result = update_remaining_boundaries(
             current_info_time=getattr(self, "current_info_time"),
             remaining_info_times=np.array(getattr(self, "remaining_info_times")),
@@ -384,7 +246,6 @@ class UpdateRemainingBoundaries(LedgerOp):
             binding_mode=binding_mode_value,
         )
 
-        # Write updated boundaries to ledger
         out.insert(
             {
                 "remaining_info_times": result["remaining_info_times"].tolist(),

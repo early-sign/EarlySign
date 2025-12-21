@@ -26,7 +26,7 @@ This facade delegates to the underlying framework components:
 - earlysign.core: Basic infrastructure and components
 - earlysign.schemes: Specific experimental designs
 - earlysign.runners: Execution environments
-- earlysign.integration.report: Analysis and visualization tools
+- earlysign.methods: Statistical methods, operators, and reporting helpers
 
 The facade pattern allows users to focus on their business objectives
 without needing to understand the internal framework architecture.

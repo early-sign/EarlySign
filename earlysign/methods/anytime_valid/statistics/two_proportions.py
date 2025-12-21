@@ -7,6 +7,7 @@ from typing import Any, Dict, Tuple
 from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord, QueryMixin
+from earlysign.methods.anytime_valid.records import EProcessRecord
 from earlysign.methods.group_sequential.schemes.two_proportions.binomial_arms import (
     BinomialArmSnapshot,
 )
@@ -18,15 +19,11 @@ from earlysign.stats.schemes.two_proportions.statistic.mixture_e import (
 BetaPrior = Tuple[float, float]
 
 
-class EProcessRecord(LedgerRecord, QueryMixin):
-    """E-process snapshots for anytime-valid (safe) testing."""
+class TwoProportionsEProcessRecord(EProcessRecord, QueryMixin):
+    """E-process snapshots for two-proportion anytime-valid testing."""
 
-    schema = {
-        "E": (float | None, None),
-        "logE": (float | None, None),
-        "look": (int | None, None),
-        "priors": (dict | None, None),
-    }
+    # inherit schema; keep alias for clarity
+    pass
 
 
 class MixtureEProcessTwoProportions(LedgerOp):
@@ -38,7 +35,7 @@ class MixtureEProcessTwoProportions(LedgerOp):
 
     @dataclass(frozen=True)
     class Outputs(LedgerOpOutputs):
-        eproc: EProcessRecord
+        eproc: TwoProportionsEProcessRecord
 
     outputs: Outputs
 
@@ -62,7 +59,9 @@ class MixtureEProcessTwoProportions(LedgerOp):
         )
 
     def build_outputs(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(name=self.out_id, ledger=self.ledger)}
+        return {
+            "eproc": TwoProportionsEProcessRecord(name=self.out_id, ledger=self.ledger)
+        }
 
     def run(self) -> None:
         out = self.outputs.eproc
@@ -95,7 +94,7 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
 
     @dataclass(frozen=True)
     class Outputs(LedgerOpOutputs):
-        eproc: EProcessRecord
+        eproc: TwoProportionsEProcessRecord
 
     outputs: Outputs
 
@@ -121,7 +120,9 @@ class MixtureEProcessTwoProportionsSkew(LedgerOp):
         )
 
     def build_outputs(self) -> Dict[str, LedgerRecord]:
-        return {"eproc": EProcessRecord(name=self.out_id, ledger=self.ledger)}
+        return {
+            "eproc": TwoProportionsEProcessRecord(name=self.out_id, ledger=self.ledger)
+        }
 
     def run(self) -> None:
         out = self.outputs.eproc
