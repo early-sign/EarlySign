@@ -12,6 +12,9 @@ type:
 test:
 	poetry run pytest
 
+spec-test:
+	poetry run pytest earlysign/tests/spec_tests/
+
 format:
 	# Format code using one Python version
 	# Sort imports, fix lint, and then run Black for final opinionated formatting

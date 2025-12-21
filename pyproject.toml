@@ -30,6 +30,7 @@ jupyter = "^1.1.1" # Example development
 ipython = "^9.5.0" # Debugging
 pudb = "^2025.1" # Debugging
 pytest = "^8.4.1" # Tests
+pytest-bdd = "^8.1.0" # BDD Tests
 mypy = "^1.17.1" # Type validation
 black = {extras = ["jupyter"], version = "^25.1.0"} # Formatting
 ## Docs

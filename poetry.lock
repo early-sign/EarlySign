@@ -939,6 +939,18 @@ files = [
 ]
 
 [[package]]
+name = "gherkin-official"
+version = "29.0.0"
+description = "Gherkin parser (official, by Cucumber team)"
+optional = false
+python-versions = "*"
+groups = ["dev"]
+files = [
+    {file = "gherkin_official-29.0.0-py3-none-any.whl", hash = "sha256:26967b0d537a302119066742669e0e8b663e632769330be675457ae993e1d1bc"},
+    {file = "gherkin_official-29.0.0.tar.gz", hash = "sha256:dbea32561158f02280d7579d179b019160d072ce083197625e2f80a6776bb9eb"},
+]
+
+[[package]]
 name = "gitdb"
 version = "4.0.12"
 description = "Git Object Database"
@@ -1913,6 +1925,26 @@ nearley = ["js2py"]
 regex = ["regex"]
 
 [[package]]
+name = "mako"
+version = "1.3.10"
+description = "A super-fast templating language that borrows the best ideas from the existing templating languages."
+optional = false
+python-versions = ">=3.8"
+groups = ["dev"]
+files = [
+    {file = "mako-1.3.10-py3-none-any.whl", hash = "sha256:baef24a52fc4fc514a0887ac600f9f1cff3d82c61d4d700a1fa84d597b88db59"},
+    {file = "mako-1.3.10.tar.gz", hash = "sha256:99579a6f39583fa7e5630a28c3c1f440e4e97a414b80372649c0ce338da2ea28"},
+]
+
+[package.dependencies]
+MarkupSafe = ">=0.9.2"
+
+[package.extras]
+babel = ["Babel"]
+lingua = ["lingua"]
+testing = ["pytest"]
+
+[[package]]
 name = "markdown-it-py"
 version = "3.0.0"
 description = "Python port of markdown-it. Markdown parsing, done right!"
@@ -2644,6 +2676,39 @@ files = [
 ]
 
 [[package]]
+name = "parse"
+version = "1.20.2"
+description = "parse() is the opposite of format()"
+optional = false
+python-versions = "*"
+groups = ["dev"]
+files = [
+    {file = "parse-1.20.2-py2.py3-none-any.whl", hash = "sha256:967095588cb802add9177d0c0b6133b5ba33b1ea9007ca800e526f42a85af558"},
+    {file = "parse-1.20.2.tar.gz", hash = "sha256:b41d604d16503c79d81af5165155c0b20f6c8d6c559efa66b4b695c3e5a0a0ce"},
+]
+
+[[package]]
+name = "parse-type"
+version = "0.6.6"
+description = "Simplifies to build parse types based on the parse module"
+optional = false
+python-versions = "!=3.0.*,!=3.1.*,>=2.7"
+groups = ["dev"]
+files = [
+    {file = "parse_type-0.6.6-py2.py3-none-any.whl", hash = "sha256:3ca79bbe71e170dfccc8ec6c341edfd1c2a0fc1e5cfd18330f93af938de2348c"},
+    {file = "parse_type-0.6.6.tar.gz", hash = "sha256:513a3784104839770d690e04339a8b4d33439fcd5dd99f2e4580f9fc1097bfb2"},
+]
+
+[package.dependencies]
+parse = {version = ">=1.18.0", markers = "python_version >= \"3.0\""}
+six = ">=1.15"
+
+[package.extras]
+develop = ["build (>=0.5.1)", "coverage (>=4.4)", "pylint", "pytest (<5.0) ; python_version < \"3.0\"", "pytest (>=5.0) ; python_version >= \"3.0\"", "pytest-cov", "pytest-html (>=1.19.0)", "ruff ; python_version >= \"3.7\"", "setuptools", "setuptools-scm", "tox (>=2.8,<4.0)", "twine (>=1.13.0)", "virtualenv (<20.22.0) ; python_version <= \"3.6\"", "virtualenv (>=20.0.0) ; python_version > \"3.6\"", "wheel"]
+docs = ["Sphinx (>=1.6)", "sphinx_bootstrap_theme (>=0.6.0)"]
+testing = ["pytest (<5.0) ; python_version < \"3.0\"", "pytest (>=5.0) ; python_version >= \"3.0\"", "pytest-html (>=1.19.0)"]
+
+[[package]]
 name = "parso"
 version = "0.8.5"
 description = "A Python Parser"
@@ -3299,6 +3364,27 @@ pygments = ">=2.7.2"
 
 [package.extras]
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests", "setuptools", "xmlschema"]
+
+[[package]]
+name = "pytest-bdd"
+version = "8.1.0"
+description = "BDD for pytest"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "pytest_bdd-8.1.0-py3-none-any.whl", hash = "sha256:2124051e71a05ad7db15296e39013593f72ebf96796e1b023a40e5453c47e5fb"},
+    {file = "pytest_bdd-8.1.0.tar.gz", hash = "sha256:ef0896c5cd58816dc49810e8ff1d632f4a12019fb3e49959b2d349ffc1c9bfb5"},
+]
+
+[package.dependencies]
+gherkin-official = ">=29.0.0,<30.0.0"
+Mako = "*"
+packaging = "*"
+parse = "*"
+parse-type = "*"
+pytest = ">=7.0.0"
+typing-extensions = "*"
 
 [[package]]
 name = "pytest-notebook"
@@ -5052,4 +5138,4 @@ examples = []
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "9240bc07e4e9a686949b3e63bd49e0d7931f0bfc915bb30737743e1a4a6ae6bd"
+content-hash = "10bdd962cf083beace2d548d110a9e9fa8577efc189dc36d8716d43766217c58"
