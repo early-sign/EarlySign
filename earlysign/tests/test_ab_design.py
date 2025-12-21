@@ -3,11 +3,13 @@ Doctest coverage for the binomial GST design helper and OC plotter.
 
 >>> import matplotlib
 >>> matplotlib.use("Agg")
->>> from earlysign.templates.ab_tests import BinomialABTest
+>>> from earlysign.methods.group_sequential.design.initial_design.scenarios.binomial import (
+...     create_binomial_design,
+... )
 >>> from earlysign.methods.group_sequential.report.plot_oc_curve import (
 ...     OCCurvePlotter,
 ... )
->>> interface = BinomialABTest.design_interface(
+>>> interface = create_binomial_design(
 ...     alpha=0.05,
 ...     delta=0.05,
 ...     power=0.8,
@@ -16,7 +18,8 @@ Doctest coverage for the binomial GST design helper and OC plotter.
 ...     n_sim=20,
 ...     seed=7,
 ... )
->>> comparison = interface.design.compare_interim(k=2)
+>>> comparison = interface.compare_interim(k=2)
+
 >>> len(comparison["oc_results"])
 3
 >>> comparison["plot_error"] is None

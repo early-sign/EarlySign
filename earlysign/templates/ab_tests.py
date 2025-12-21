@@ -20,14 +20,10 @@ from matplotlib.figure import Figure
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.ibis_cache import IbisCache
 from earlysign.framework import templates as tpl
-from earlysign.methods.group_sequential.asn import ASNCalculator
 from earlysign.methods.group_sequential.boundary import BoundaryFromDesign
 from earlysign.methods.group_sequential.decision import (
     GroupSequentialDecisionSignalRecord,
     GSDecisionFromWaldZ,
-)
-from earlysign.methods.group_sequential.design.initial_design.scenarios.fst_to_gst import (
-    AddInterimToFixedSampleTest,
 )
 from earlysign.methods.group_sequential.design.records.design import (
     DesignPayloadModel,
@@ -48,60 +44,6 @@ from earlysign.methods.group_sequential.schemes.two_proportions.wald_z import (
     BinomialWaldZ,
     WaldZStatisticRecord,
 )
-from earlysign.methods.group_sequential.spending import (
-    SpendingFunction,
-    get_spending_class,
-)
-from earlysign.stats.schemes.two_proportions.asn import (
-    build_asn_calculator,
-)
-from earlysign.stats.schemes.two_proportions.design import (
-    build_two_proportions_scheme,
-)
-
-
-@dataclass
-class BinomialGSTDesignInterface:
-    """Structured accessor for the canonical binomial design helper."""
-
-    design: AddInterimToFixedSampleTest
-    spending: SpendingFunction
-    asn_calculator_factory: Callable[[], ASNCalculator] = field(repr=False)
-
-    def new_asn_calculator(self) -> ASNCalculator:
-        """Return a fresh ASN calculator using the stored factory."""
-
-        return self.asn_calculator_factory()
-
-    def spending_family(self) -> str:
-        """Return canonical spending-family key understood by payload builders."""
-
-        return self.spending.name
-
-    def build_design_payload(
-        self,
-        info_times: Sequence[float],
-        planned_max_n: int,
-        *,
-        metadata: Optional[Mapping[str, object]] = None,
-    ) -> MutableMapping[str, object]:
-        """Construct a minimal JSON-serialisable design payload."""
-
-        payload: MutableMapping[str, object] = {
-            "alpha": float(self.design.alpha),
-            "hypothesis": {"structure": "two_sided_symmetric"},
-            "statistic": {"kind": "wald_z", "scale": "z"},
-            "efficacy": {
-                "style": "alpha_spending",
-                "family": self.spending_family(),
-            },
-            "futility": {"mode": "none", "binding_mode": "non_binding"},
-            "planned_max_n": int(planned_max_n),
-            "planned_info_times": [float(x) for x in info_times],
-        }
-        if metadata:
-            payload["metadata"] = dict(metadata)
-        return payload
 
 
 @dataclass
@@ -366,87 +308,6 @@ class BinomialABTest(tpl.TemplateBase):
         )
         decision_op.run()
 
-    @classmethod
-    def design_interface(
-        cls,
-        *,
-        alpha: float,
-        delta: float,
-        power: float,
-        p_control: float,
-        allocation_ratio: float = 1.0,
-        spending: Union[SpendingFunction, Type[SpendingFunction], str] = "pocock",
-        effect_sizes: Optional[Sequence[float]] = None,
-        n_sim: int = 200,
-        batch_size: Optional[int] = None,
-        seed: Optional[int] = None,
-        design_payload_builder: Optional[
-            Callable[[Sequence[float], int], Mapping[str, Any]]
-        ] = None,
-    ) -> BinomialGSTDesignInterface:
-        """Return a configured binomial GST design helper.
-
-        This surfaces the class-based ``AddInterimToFixedSampleTest`` flow
-        through a stable API so callers (including notebooks) no longer need
-        to replicate the spending/procedure wiring.
-        """
-
-        if hasattr(spending, "cumulative") and hasattr(
-            spending, "boundaries_from_stage_alpha"
-        ):
-            spending_obj = cast(SpendingFunction, spending)
-        else:
-            spending_cls = (
-                cast(Type[SpendingFunction], spending)
-                if isinstance(spending, type)
-                else get_spending_class(str(spending))
-            )
-            spending_obj = spending_cls(alpha=alpha)
-
-        base_scheme = build_two_proportions_scheme(
-            p_control=p_control,
-            target_effect=delta,
-            effect_sizes=effect_sizes or [delta],
-            alpha=alpha,
-            power=power,
-            allocation_ratio=allocation_ratio,
-        )
-        resolved_scheme = base_scheme.with_effect_sizes(effect_sizes)
-
-        def _asn_factory() -> ASNCalculator:
-            return build_asn_calculator(
-                alpha=alpha,
-                beta=1.0 - power,
-                sided=2,
-                p_control=p_control,
-                effect_size=delta,
-                allocation_ratio=allocation_ratio,
-                spending=spending_obj,
-            )
-
-        procedure_factory = resolved_scheme.procedure_factory_builder(
-            spending_obj, allocation_ratio
-        )
-
-        design = AddInterimToFixedSampleTest(
-            alpha=alpha,
-            power=power,
-            scheme=resolved_scheme,
-            procedure_factory=procedure_factory,
-            asn_calculator_factory=_asn_factory,
-            simulator=resolved_scheme.simulator_factory(
-                int(n_sim), float(allocation_ratio)
-            ),
-            batch_size=batch_size,
-            seed=seed,
-            design_payload_builder=design_payload_builder,
-        )
-
-        return BinomialGSTDesignInterface(
-            design=design,
-            spending=spending_obj,
-            asn_calculator_factory=_asn_factory,
-        )
 
     def status(self) -> State:
         decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
@@ -489,275 +350,123 @@ class BinomialABTest(tpl.TemplateBase):
         )
 
     def get_history(self) -> pd.DataFrame:
-        """Get complete history of the trial with all key metrics.
+        """Get complete history of the trial with all key metrics."""
+        records = {
+            "control": BinomialArmSnapshot(name="snapshot_A").attach(self.ledger),
+            "treatment": BinomialArmSnapshot(name="snapshot_B").attach(self.ledger),
+            "stat": WaldZStatisticRecord("statistic").attach(self.ledger),
+            "info": InformationTimeRecord("info_time").attach(self.ledger),
+            "decision": GroupSequentialDecisionSignalRecord("decision").attach(
+                self.ledger
+            ),
+        }
 
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame with columns: look, nA_cum, mA_cum, nB_cum, mB_cum,
-            pA, pB, diff, wald_z, info_time, signal
+        result = tpl.join_sequential_history(records)
+        result = result.mutate(
+            nA_cum=result.control_trial,
+            mA_cum=result.control_success,
+            nB_cum=result.treatment_trial,
+            mB_cum=result.treatment_success,
+            wald_z=result.stat_wald_z,
+            info_time=result.info_info_time,
+            signal=result.decision_signal,
+        )
+        result = result.mutate(
+            pA=(lambda t: (t.mA_cum / t.nA_cum).fill_null(0.0)),  # type: ignore[operator]
+            pB=(lambda t: (t.mB_cum / t.nB_cum).fill_null(0.0)),  # type: ignore[operator]
+        )
+        result = result.mutate(diff=lambda t: t.pB - t.pA)  # type: ignore[operator]
 
-        Examples
-        --------
-        >>> conn = ibis.connect("duckdb://:memory:")  # doctest: +SKIP
-        >>> test = BinomialABTest(conn, "exp1")  # doctest: +SKIP
-        ... # ... run experiment ...
-        >>> history = test.get_history()  # doctest: +SKIP
-        >>> print(history)  # doctest: +SKIP
-        """
-        control_snapshot_rec = BinomialArmSnapshot(name="snapshot_A").attach(
-            self.ledger
-        )
-        treatment_snapshot_rec = BinomialArmSnapshot(name="snapshot_B").attach(
-            self.ledger
-        )
-        stat_rec = WaldZStatisticRecord("statistic").attach(self.ledger)
-        info_rec = InformationTimeRecord("info_time").attach(self.ledger)
-        decision_rec = GroupSequentialDecisionSignalRecord("decision").attach(
-            self.ledger
-        )
-
-        control_snapshots = control_snapshot_rec.order_by_ts(
-            ascending=True, explode=True
-        )
-        control_indexed = control_snapshots.mutate(
-            look_index=ibis.row_number().over(order_by="ts")
-        )
-        control_view = control_indexed.select(
-            look=control_indexed.look_index,
-            nA_cum=control_indexed.trial,
-            mA_cum=control_indexed.success,
-            ts=control_indexed.ts,
-        )
-
-        treatment_snapshots = treatment_snapshot_rec.order_by_ts(
-            ascending=True, explode=True
-        )
-        treatment_indexed = treatment_snapshots.mutate(
-            look_index=ibis.row_number().over(order_by="ts")
-        )
-        treatment_view = treatment_indexed.select(
-            look=treatment_indexed.look_index,
-            nB_cum=treatment_indexed.trial,
-            mB_cum=treatment_indexed.success,
-            ts=treatment_indexed.ts,
-        )
-
-        snapshots_view = control_view.inner_join(
-            treatment_view, [control_view.look == treatment_view.look]
-        ).select(
-            look=control_view.look,
-            nA_cum=control_view.nA_cum,
-            mA_cum=control_view.mA_cum,
-            nB_cum=treatment_view.nB_cum,
-            mB_cum=treatment_view.mB_cum,
-            ts=ibis.greatest(control_view.ts, treatment_view.ts),
-        )
-
-        stats_table = stat_rec.order_by_ts(ascending=True, explode=True)
-        stats_indexed = stats_table.mutate(
-            look_index=ibis.row_number().over(order_by="ts")
-        )
-        stats_view = stats_indexed.select(
-            look=stats_indexed.look_index,
-            wald_z=stats_indexed.wald_z,
-            ts=stats_indexed.ts,
-        )
-
-        info_table = info_rec.order_by_ts(ascending=True, explode=True)
-        info_indexed = info_table.mutate(
-            look_index=ibis.row_number().over(order_by="ts")
-        )
-        info_view = info_indexed.select(
-            look=info_indexed.look_index,
-            info_time=info_indexed.info_time,
-        )
-
-        decisions_table = decision_rec.order_by_ts(ascending=True, explode=True)
-        decisions_indexed = decisions_table.mutate(
-            look_index=ibis.row_number().over(order_by="ts")
-        )
-        decisions_view = decisions_indexed.select(
-            look=decisions_indexed.look_index,
-            signal=decisions_indexed.signal,
-        )
-
-        result = (
-            snapshots_view.inner_join(
-                stats_view, [snapshots_view.look == stats_view.look]
-            )
-            .inner_join(info_view, [snapshots_view.look == info_view.look])
-            .inner_join(decisions_view, [snapshots_view.look == decisions_view.look])
-            .select(
-                snapshots_view.look,
-                "nA_cum",
-                "mA_cum",
-                "nB_cum",
-                "mB_cum",
-                wald_z=stats_view.wald_z,
-                info_time=info_view.info_time,
-                signal=decisions_view.signal,
-                ts=snapshots_view.ts,
-            )
-            .order_by("ts")
-            .mutate(
-                pA=(lambda t: (t.mA_cum / t.nA_cum).fill_null(0.0)),  # type: ignore[operator]
-                pB=(lambda t: (t.mB_cum / t.nB_cum).fill_null(0.0)),  # type: ignore[operator]
-            )
-            .mutate(diff=lambda t: t.pB - t.pA)  # type: ignore[operator]
-            .select(
-                "look",
-                "nA_cum",
-                "mA_cum",
-                "nB_cum",
-                "mB_cum",
-                "pA",
-                "pB",
-                "diff",
-                "wald_z",
-                "info_time",
-                "signal",
-            )
-        )
-
-        df_result = self._execute_expr(result)
+        cols = [
+            "look",
+            "nA_cum",
+            "mA_cum",
+            "nB_cum",
+            "mB_cum",
+            "pA",
+            "pB",
+            "diff",
+            "wald_z",
+            "info_time",
+            "signal",
+        ]
+        df_result = self._execute_expr(result.select(*cols).order_by("look"))
         return df_result if isinstance(df_result, pd.DataFrame) else pd.DataFrame()
 
     def get_results(self) -> Dict[str, Any]:
-        """Get comprehensive summary of trial results.
-
-        Returns
-        -------
-        dict
-            Dictionary containing:
-            - design: Design parameters
-            - n_looks: Number of analyses conducted
-            - stopped: Whether trial stopped early
-            - final_signal: Final decision signal
-            - final_stats: Final cumulative statistics
-            - history: Full history DataFrame
-
-        Examples
-        --------
-        >>> conn = ibis.connect("duckdb://:memory:")  # doctest: +SKIP
-        >>> test = BinomialABTest(conn, "exp1")  # doctest: +SKIP
-        ... # ... run experiment ...
-        >>> results = test.get_results()  # doctest: +SKIP
-        >>> print(results['n_looks'])  # doctest: +SKIP
-        >>> print(results['final_signal'])  # doctest: +SKIP
-        """
-        # Get design
+        """Get comprehensive summary of trial results."""
         design_rec = GroupSequentialDesignRecord("design").attach(self.ledger)
         design_df = self._execute_expr(
             design_rec.latest().select(payload=design_rec.t.payload)
         )
-        if len(design_df) > 0:
-            design_payload = DesignPayloadModel.model_validate(
-                design_df.iloc[0]["payload"]
-            ).to_payload()
-        else:
-            design_payload = {}
+        design_payload = (
+            DesignPayloadModel.model_validate(design_df.iloc[0]["payload"]).to_payload()
+            if len(design_df) > 0
+            else {}
+        )
 
-        # Get history (this already does all the joining and computation)
         history_df = self.get_history()
-
         if len(history_df) == 0:
-            # No data yet
             return {
                 "design": design_payload,
                 "n_looks": 0,
                 "stopped": False,
                 "final_signal": "unknown",
-                "final_stats": {
-                    "nA": 0,
-                    "mA": 0,
-                    "nB": 0,
-                    "mB": 0,
-                    "pA": 0.0,
-                    "pB": 0.0,
-                    "diff": 0.0,
-                    "wald_z": None,
-                },
+                "final_stats": {},
                 "history": history_df,
             }
 
-        # Extract final row (already computed in get_history)
-        final_row = history_df.iloc[-1]
-        stopped = "stop" in final_row["signal"]
-
+        final = history_df.iloc[-1]
         return {
             "design": design_payload,
             "n_looks": len(history_df),
-            "stopped": stopped,
-            "final_signal": final_row["signal"],
+            "stopped": "stop" in final["signal"],
+            "final_signal": final["signal"],
             "final_stats": {
-                "nA": int(final_row["nA_cum"]),
-                "mA": int(final_row["mA_cum"]),
-                "nB": int(final_row["nB_cum"]),
-                "mB": int(final_row["mB_cum"]),
-                "pA": float(final_row["pA"]),
-                "pB": float(final_row["pB"]),
-                "diff": float(final_row["diff"]),
-                "wald_z": (
-                    float(final_row["wald_z"])
-                    if final_row["wald_z"] is not None
-                    else None
-                ),
+                "nA": int(final["nA_cum"]),
+                "mA": int(final["mA_cum"]),
+                "nB": int(final["nB_cum"]),
+                "mB": int(final["mB_cum"]),
+                "pA": float(final["pA"]),
+                "pB": float(final["pB"]),
+                "diff": float(final["diff"]),
+                "wald_z": float(final["wald_z"]) if final["wald_z"] else None,
             },
             "history": history_df,
         }
 
     def print_results(self) -> None:
-        """Print formatted summary of trial results.
+        """Print formatted summary of trial results."""
+        res = self.get_results()
+        stats = res.get("final_stats", {})
+        if not stats:
+            print("No results found.")
+            return
 
-        Examples
-        --------
-        >>> conn = ibis.connect("duckdb://:memory:")  # doctest: +SKIP
-        >>> test = BinomialABTest(conn, "exp1")  # doctest: +SKIP
-        ... # ... run experiment ...
-        >>> test.print_results()  # doctest: +SKIP
-        """
-        results = self.get_results()
-        stats = results["final_stats"]
+        history_lines = [
+            f"\nLook {int(r['look'])} (Info time: {r['info_time']:.3f}):\n"
+            f"  Control:   {r['mA_cum']}/{r['nA_cum']} = {r['pA']:.3%}\n"
+            f"  Treatment: {r['mB_cum']}/{r['nB_cum']} = {r['pB']:.3%}\n"
+            f"  Z-stat:    {r['wald_z']:.4f}\n"
+            f"  Signal:    {r['signal']}"
+            for _, r in res["history"].iterrows()
+        ]
 
-        # Build compact history text
-        history = results["history"]
-        history_lines = []
-        for _, row in history.iterrows():
-            history_lines.append(
-                f"\nLook {int(row['look'])} (Info time: {row['info_time']:.3f}):\n"
-                f"  Control:   {row['mA_cum']}/{row['nA_cum']} = {row['pA']:.3%}\n"
-                f"  Treatment: {row['mB_cum']}/{row['nB_cum']} = {row['pB']:.3%}\n"
-                f"  Z-stat:    {row['wald_z']:.4f}\n"
-                f"  Signal:    {row['signal']}"
-            )
-        history_text = "".join(history_lines)
-
-        wald_z_text = f"Wald Z:        {stats['wald_z']:.4f}" if stats["wald_z"] else ""
+        wald_z_text = f"  Wald Z:        {stats['wald_z']:.4f}\n" if stats.get("wald_z") is not None else ""
 
         summary = f"""
 {'=' * 70}
-TRIAL RESULTS SUMMARY
+TRIAL RESULTS: {self.experiment_id}
 {'=' * 70}
+Looks: {res['n_looks']} | Stopped: {res['stopped']} | Signal: {res['final_signal']}
 
-Experiment ID: {self.experiment_id}
-Number of analyses: {results['n_looks']}
-Stopped early: {'Yes' if results['stopped'] else 'No'}
-Final decision: {results['final_signal']}
-
-{'-' * 70}
-FINAL STATISTICS
-{'-' * 70}
-Control (A):   {stats['mA']}/{stats['nA']} = {stats['pA']:.3%}
-Treatment (B): {stats['mB']}/{stats['nB']} = {stats['pB']:.3%}
-Difference:    {stats['diff']:.3%}
+FINAL STATISTICS:
+  Control (A):   {stats['mA']}/{stats['nA']} = {stats['pA']:.3%}
+  Treatment (B): {stats['mB']}/{stats['nB']} = {stats['pB']:.3%}
+  Difference:    {stats['diff']:.3%}
 {wald_z_text}
-
-{'-' * 70}
-ANALYSIS HISTORY
-{'-' * 70}
-{history_text}
-
+ANALYSIS HISTORY:
+{"".join(history_lines)}
 {'=' * 70}
 """
         print(summary)

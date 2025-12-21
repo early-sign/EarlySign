@@ -14,8 +14,10 @@ matplotlib.use("Agg")
 import numpy as np
 import pytest
 
+from earlysign.methods.group_sequential.design.initial_design.scenarios.binomial import (
+    create_binomial_design,
+)
 from earlysign.methods.group_sequential.report.plot_oc_curve import OCCurvePlotter
-from earlysign.templates.ab_tests import BinomialABTest
 
 
 def _run_compare_interim(
@@ -29,7 +31,7 @@ def _run_compare_interim(
     n_sim: int = 40,
     seed: int = 123,
 ):
-    interface = BinomialABTest.design_interface(
+    interface = create_binomial_design(
         alpha=alpha,
         delta=delta,
         power=power,
@@ -38,7 +40,8 @@ def _run_compare_interim(
         n_sim=n_sim,
         seed=seed,
     )
-    return interface.design.compare_interim(k=k)
+    return interface.compare_interim(k=k)
+
 
 
 @pytest.mark.basic
