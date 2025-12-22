@@ -15,6 +15,9 @@ from earlysign.methods.group_sequential.boundary import (
     EfficacySpec,
     FutilitySpec
 )
+from earlysign.methods.group_sequential.canonical_joint_distribution import CanonicalJointDistribution
+from earlysign.methods.group_sequential.design.planner import DesignPlanner
+from earlysign.methods.group_sequential.evaluation.evaluator import OperatingCharacteristicEvaluator
 
 # Load the feature file corresponding to this test runner
 scenarios(corresponding_scenario_path(__file__))
@@ -23,13 +26,37 @@ scenarios(corresponding_scenario_path(__file__))
 def design_params():
     return {}
 
+@pytest.fixture
+def cjd():
+    return CanonicalJointDistribution(n_sims=300000, rng_seed=42)
+
+@pytest.fixture
+def planner(cjd):
+    return DesignPlanner(cjd=cjd)
+
+@pytest.fixture
+def evaluator(cjd):
+    return OperatingCharacteristicEvaluator(cjd=cjd)
+
 # --- 3.4.2 Normal Mean Scenario ---
 
 @given(parsers.parse("a two-sided normal mean test design with alpha {alpha:f}"))
 def given_normal_mean_alpha(alpha, design_params):
     design_params["alpha"] = alpha
     design_params["tails"] = 2
-    design_params["type"] = "normal-mean"
+    design_params["trial_type"] = "normal-mean"
+
+@given(parsers.parse("a two-sided paired comparison design with alpha {alpha:f}"))
+def given_paired_comparison_alpha(alpha, design_params):
+    design_params["alpha"] = alpha
+    design_params["tails"] = 2
+    design_params["trial_type"] = "paired"
+
+@given(parsers.parse("a two-sided crossover trial design with alpha {alpha:f}"))
+def given_crossover_trial_alpha(alpha, design_params):
+    design_params["alpha"] = alpha
+    design_params["tails"] = 2
+    design_params["trial_type"] = "crossover"
 
 @given(parsers.parse("a target power {power:f} at effect size {delta:f}"))
 def given_power_delta(power, delta, design_params):
@@ -46,47 +73,31 @@ def given_looks_and_spending(k, spending, design_params):
     design_params["spending_family"] = spending
 
 @when("I compute the normal mean sequential design", target_fixture="results")
-def when_compute_normal_mean_design(design_params):
+def when_compute_normal_mean_design(design_params, planner):
     alpha = design_params["alpha"]
     power = design_params["power"]
     delta = design_params["delta"]
     k = design_params["k"]
     sigma2 = design_params["sigma2"]
+    spending_family = design_params["spending_family"]
+    trial_type = design_params.get("trial_type", "normal-mean")
     
-    sigma_eff = np.sqrt(sigma2 / 2.0)
-    spending = OBFSpending(alpha=alpha, sided=2)
-    
-    calc_factory = lambda: NormalMeansASNCalculator(
+    res = planner.plan_design(
         alpha=alpha,
-        beta=1.0 - power,
-        sided=2,
-        alternative=delta,
-        st_dev=sigma_eff,
-        allocation_ratio=1.0,
-        spending=spending
+        power=power,
+        theta=delta,
+        sigma2=sigma2,
+        k=k,
+        shape_type=spending_family,
+        trial_type=trial_type
     )
     
-    estimator = CanonicalJointPowerEstimator(asn_calculator_factory=calc_factory)
-    fsd_total = 2 * 31.40 * (sigma2 / 2.0) * 2
-    
-    searcher = PlanMaxSampleSizeWorkflow(
-        estimate_power=estimator,
-        target_power=power,
-        tolerance=0.001,
-        max_multiplier=4
-    )
-    
-    info_times = np.linspace(1/k, 1.0, k)
-    n_total = searcher.search(info_times=info_times, k=k, fsd_total=int(fsd_total))
-    
-    i_max = n_total / (2 * sigma2)
-    n_arm = n_total / 2.0
-    
-    return {
-        "i_max": i_max,
-        "n_max": n_arm,
-        "n_total": n_total
-    }
+    return res
+
+@then(parsers.parse("the total sample size (n_max) should be {n_max:d}"))
+def then_check_n_max_exact(results, n_max):
+    # For rounded values
+    assert results["n_max"] == pytest.approx(n_max, abs=4.0)
 
 @then(parsers.parse("the maximum information (I_max) should be around {threshold:f}"))
 def then_check_i_max(results, threshold):
@@ -112,64 +123,21 @@ def given_spending_or_shape(spending, design_params):
     design_params["spending_family"] = spending
 
 @when(parsers.parse("the actual sample size sequence per group is \"{n_actual}\""), target_fixture="results")
-def when_table31_eval(n_actual, design_params):
+def when_table31_eval(n_actual, design_params, evaluator):
     alpha = design_params["alpha"]
     n_plan = np.array(design_params["n_plan"])
     n_actual = np.array([float(x.strip()) for x in n_actual.split(",")])
     spending_family = design_params["spending_family"]
-    k = len(n_plan)
     
-    # 1. Plan design (find 'c' on planning sequence)
-    # sigma^2 = 4 (for each of two treatments), so sigma_eff^2 = 4 + 4 = 8? 
-    # No, table says sigma^2=4 and n_Ak=n_Bk=n_k. 
-    # Var(diff) = 4/n_k + 4/n_k = 8/n_k.
-    # Information I_k = 1 / (8/n_k) = n_k / 8.
-    i_plan = n_plan / 8.0
-    info_times_plan = i_plan / i_plan[-1]
-    
-    cov_plan = np.sqrt(np.minimum.outer(info_times_plan, info_times_plan) / np.maximum.outer(info_times_plan, info_times_plan))
-    np.fill_diagonal(cov_plan, 1.0)
-    
-    n_sims = 200000
-    z_sims = np.random.multivariate_normal(np.zeros(k), cov_plan, size=n_sims)
-    
-    def get_max_z(c_shape):
-        norm_z = np.abs(z_sims) / c_shape
-        max_z = np.max(norm_z, axis=1)
-        return np.percentile(max_z, 100 * (1 - alpha))
-
-    if spending_family == "pocock":
-        c_shape = np.ones(k)
-    elif spending_family == "obrien_fleming":
-        c_shape = 1.0 / np.sqrt(info_times_plan)
-    elif spending_family == "wang_tsiatis":
-        # Table 3.1 Wang-Tsiatis uses Delta = 0.25. Shape is t^(Delta - 0.5) = t^(-0.25)
-        c_shape = info_times_plan**(-0.25)
-    else:
-        raise ValueError(f"Unknown spending/shape: {spending_family}")
-        
-    c_val = get_max_z(c_shape)
-    boundaries_plan = c_val * c_shape
-    
-    # 2. Evaluate on actual sequence
-    i_actual = n_actual / 8.0
-    info_times_actual = i_actual / i_actual[-1]
-    
-    cov_actual = np.sqrt(np.minimum.outer(i_actual, i_actual) / np.maximum.outer(i_actual, i_actual))
-    np.fill_diagonal(cov_actual, 1.0)
-    
-    h0_eval = np.random.multivariate_normal(np.zeros(k), cov_actual, size=n_sims)
-    alpha_actual = np.mean(np.any(np.abs(h0_eval) > boundaries_plan, axis=1))
-    
-    # Drift for effect theta=1.0: drift_k = theta * sqrt(I_actual,k) = 1.0 * sqrt(n_actual,k / 8)
-    means_actual = 1.0 * np.sqrt(i_actual)
-    h1_eval = np.random.multivariate_normal(means_actual, cov_actual, size=n_sims)
-    power_actual = np.mean(np.any(np.abs(h1_eval) > boundaries_plan, axis=1))
-    
-    return {
-        "alpha_actual": float(alpha_actual),
-        "power_actual": float(power_actual)
-    }
+    res = evaluator.evaluate_table31_robustness(
+        planned_n=n_plan,
+        actual_n=n_actual,
+        alpha=alpha,
+        spending_family=spending_family,
+        theta=1.0,
+        var_diff=8.0
+    )
+    return res
 
 @then(parsers.parse("the actual power should be around {power:f} for effect 1.0 and variance 4.0"))
 def then_check_power_table31(results, power):
@@ -191,83 +159,21 @@ def given_spending_func(spending, design_params):
     design_params["spending_family"] = spending
 
 @when(parsers.parse("the actual information sequence is I_k = {pi:f} * (k/K)^{r:f} * I_max"), target_fixture="results")
-def when_table32_eval(pi, r, design_params):
+def when_table32_eval(pi, r, design_params, evaluator):
     alpha = design_params["alpha"]
     power = design_params["power"]
     k = design_params["k"]
     spending_family = design_params["spending_family"]
     
-    # 1. Plan design: find I_max and boundaries for EQUAL increments
-    # In J&T Table 3.2, Pocock means constant Z, OBF means Z ~ 1/sqrt(t).
-    info_times_plan = np.linspace(1/k, 1.0, k)
-    cov_plan = np.sqrt(np.minimum.outer(info_times_plan, info_times_plan) / np.maximum.outer(info_times_plan, info_times_plan))
-    np.fill_diagonal(cov_plan, 1.0)
-    
-    # Use Monte Carlo to find the constant 'c' that preserves exactly alpha=0.05
-    n_design_sims = 200000
-    z_sims = np.random.multivariate_normal(np.zeros(k), cov_plan, size=n_design_sims)
-    
-    def get_max_z(c_shape):
-        # c_shape is the shape of boundaries, e.g. [1, 1, ...] or [1/sqrt(t1), ...]
-        # We find c such that P(max |Z_i / c_shape_i| > c) = alpha
-        norm_z = np.abs(z_sims) / c_shape
-        max_z = np.max(norm_z, axis=1)
-        return np.percentile(max_z, 100 * (1 - alpha))
-
-    if spending_family == "pocock":
-        c_shape = np.ones(k)
-    else:
-        c_shape = 1.0 / np.sqrt(info_times_plan)
-        
-    c_val = get_max_z(c_shape)
-    boundaries_plan = c_val * c_shape
-    
-    # Also find I_max. In J&T, I_max = R * I_f.
-    # We find delta such that power is matched at I_max = R * I_f.
-    # But J&T just uses a fixed "standardized" delta.
-    # Actually, for the table, we just need to know the drift at each step.
-    # The drift in J&T is theta * sqrt(I). If 1-beta=0.9, then delta * sqrt(I_f) = z_alpha/2 + z_beta
-    # No, for GS, delta * sqrt(I_f) = (z_alpha/2 + z_beta) is for fixed test.
-    # For GS, we solve for delta such that power is 0.9.
-    import scipy.stats as stats
-    z_alpha2 = stats.norm.ppf(1 - alpha/2)
-    z_beta = stats.norm.ppf(power)
-    # Start with fixed-sample drift
-    drift_fixed = z_alpha2 + z_beta
-    
-    def get_power(drift_scale):
-        means = drift_scale * np.sqrt(info_times_plan) # this is for delta * sqrt(I_max) = drift_scale
-        h1_sims = np.random.multivariate_normal(means, cov_plan, size=n_design_sims)
-        rejected = np.any(np.abs(h1_sims) > boundaries_plan, axis=1)
-        return np.mean(rejected)
-
-    # Solve for drift_scale that gives 0.9 power
-    from scipy.optimize import root_scalar
-    res = root_scalar(lambda d: get_power(d) - power, bracket=[drift_fixed, drift_fixed * 1.5])
-    drift_scale_planned = res.root
-    
-    # 2. Evaluate on actual sequence
-    # info_times_actual = i_actual / i_max_planned
-    # drift at look k is theta * sqrt(I_k') = theta * sqrt(pi * (k/K)^r * I_max)
-    # = (theta * sqrt(I_max)) * sqrt(pi * (k/K)^r)
-    # = drift_scale_planned * sqrt(pi * (k/K)^r)
-    ks = np.arange(1, k + 1)
-    i_actual_fractions = pi * (ks/k)**r
-    cov_actual = np.sqrt(np.minimum.outer(i_actual_fractions, i_actual_fractions) / np.maximum.outer(i_actual_fractions, i_actual_fractions))
-    np.fill_diagonal(cov_actual, 1.0)
-    
-    n_eval_sims = 500000
-    h0_eval = np.random.multivariate_normal(np.zeros(k), cov_actual, size=n_eval_sims)
-    alpha_actual = np.mean(np.any(np.abs(h0_eval) > boundaries_plan, axis=1))
-    
-    means_actual = drift_scale_planned * np.sqrt(i_actual_fractions)
-    h1_eval = np.random.multivariate_normal(means_actual, cov_actual, size=n_eval_sims)
-    power_actual = np.mean(np.any(np.abs(h1_eval) > boundaries_plan, axis=1))
-    
-    return {
-        "alpha_actual": float(alpha_actual),
-        "power_actual": float(power_actual)
-    }
+    res = evaluator.evaluate_table32_robustness(
+        k=k,
+        alpha=alpha,
+        planned_power=power,
+        spending_family=spending_family,
+        pi=pi,
+        r=r
+    )
+    return res
 
 @then(parsers.parse("the actual alpha should be around {alpha:f}"))
 def then_check_alpha_actual(results, alpha):

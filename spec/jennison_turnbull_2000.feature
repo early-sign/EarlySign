@@ -6,6 +6,24 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
   I want to verify the group sequential design for various outcomes
   So that I can match the results from classic textbooks
 
+  Scenario: Computing O'Brien-Fleming design for a paired comparison (Subsection 3.2.2)
+    Given a two-sided paired comparison design with alpha 0.05
+    And a target power 0.9 at effect size 1.0
+    And a known variance (sigma squared) 6.0
+    And a maximum of 5 looks with "obrien_fleming" spending
+    When I compute the normal mean sequential design
+    Then the maximum information (I_max) should be around 10.78
+    And the total sample size (n_max) should be 65
+
+  Scenario: Computing Wang-Tsiatis design for a 2-period crossover trial (Subsection 3.2.2)
+    Given a two-sided crossover trial design with alpha 0.05
+    And a target power 0.8 at effect size 0.6
+    And a known variance (sigma squared) 9.0
+    And a maximum of 4 looks with "wang_tsiatis" spending
+    When I compute the normal mean sequential design
+    Then the maximum information (I_max) should be around 23.23
+    And the total sample size (n_max) should be 108
+
   Scenario: Computing O'Brien-Fleming design for a normal mean (Subsection 3.4.2)
     Given a two-sided normal mean test design with alpha 0.05
     And a target power 0.8 at effect size 0.5
