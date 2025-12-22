@@ -107,6 +107,12 @@ def then_check_i_max(results, threshold):
 def then_check_n_max_float(results, n_max):
     assert results["n_max"] == pytest.approx(n_max, rel=0.1)
 
+@then(parsers.parse("the boundary values should be around \"{boundaries}\""))
+def then_check_boundaries(results, boundaries):
+    expected = [float(x.strip()) for x in boundaries.split(",")]
+    actual = results["boundaries"]
+    assert np.allclose(actual, expected, atol=0.01)
+
 # --- Table 3.1 Operating Characteristics ---
 
 @given(parsers.parse("a two-sided normal mean design planned for alpha {alpha:f}"))

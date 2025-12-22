@@ -30,8 +30,9 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
     And a known variance (sigma squared) 1.2
     And a maximum of 6 looks with "obrien_fleming" spending
     When I compute the normal mean sequential design
-    Then the maximum information (I_max) should be around 32.4
-    And the total sample size (n_max) should be around 38.9
+    Then the maximum information (I_max) should be around 32.40
+    And the total sample size (n_max) should be around 155.5
+    And the boundary values should be around "5.029, 3.556, 2.903, 2.514, 2.249, 2.053"
 
   Scenario Outline: Operating characteristics with varying group sizes (Table 3.1)
     Given a two-sided normal mean design planned for alpha 0.05

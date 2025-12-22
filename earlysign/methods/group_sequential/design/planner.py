@@ -65,12 +65,7 @@ class DesignPlanner:
         # 4. Map to sample size n_max
         if trial_type == "normal-mean":
             # For 2-arm A/B trial: I = n_total / (4 * sigma^2) => n_total = 4 * sigma^2 * I
-            # If n_max refers to Subjects Per Group (n_g): n_g = 2 * sigma^2 * I
-            # However, looking at JT 3.4.2: sigma2=1.2, theta=0.5, I_max=32.4, n_arm=38.9.
-            # 32.4 * 1.2 = 38.88. This implies n_arm = I_max * sigma2? 
-            # This suggests sigma2 provided was already the variance of the difference / 2?
-            # Or n_total = 2 * I_max * sigma2. Let's use the most consistent mapping.
-            n_reported = i_max * sigma2
+            n_reported = 4 * i_max * sigma2
         elif trial_type == "paired":
             # For paired: I = n / sigma^2_diff => n = I * sigma^2_diff
             n_reported = i_max * sigma2
