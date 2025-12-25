@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 from scipy.optimize import root_scalar
 from scipy.stats import norm
+from earlysign.methods.group_sequential.spending import SpendingFunction
 
 
 class CanonicalJointDistribution:
@@ -127,3 +128,140 @@ class CanonicalJointDistribution:
 
         res = root_scalar(f, bracket=[low, high], xtol=1e-4)
         return float(res.root)
+
+    def solve_boundaries_from_spending(
+        self,
+        info_times: Sequence[float],
+        spending: SpendingFunction,
+        tails: int = 2,
+    ) -> np.ndarray:
+        """Solve for boundaries given a spending function and information schedule.
+        
+        Args:
+            info_times: Cumulative information fractions (t_1, ..., t_K).
+            spending: A SpendingFunction implementation.
+            tails: 1 or 2 (symmetric).
+            
+        Returns:
+            Array of Z-scale boundaries at each look.
+        """
+        t = np.asarray(info_times)
+        k = len(t)
+        cum_alpha = spending.cumulative(t)
+        
+        z_sims = self._generate_joint_z(t)
+        boundaries = np.zeros(k)
+        
+        for i in range(k):
+            target_alpha = cum_alpha[i]
+            if i == 0:
+                if tails == 2:
+                    boundaries[i] = norm.isf(target_alpha / 2.0)
+                else:
+                    boundaries[i] = norm.isf(target_alpha)
+            else:
+                # Find b_i such that P(any |Z_j| > b_j for j < i OR (|Z_i| > b_i if tails=2 else Z_i > b_i)) = target_alpha
+                if tails == 2:
+                    rejected_prev = np.any(np.abs(z_sims[:, :i]) > boundaries[:i], axis=1)
+                    def f(b):
+                        rejected_curr = np.abs(z_sims[:, i]) > b
+                        return np.mean(rejected_prev | rejected_curr) - target_alpha
+                else:
+                    rejected_prev = np.any(z_sims[:, :i] > boundaries[:i], axis=1)
+                    def f(b):
+                        rejected_curr = z_sims[:, i] > b
+                        return np.mean(rejected_prev | rejected_curr) - target_alpha
+                
+                res = root_scalar(f, bracket=[0, 10], xtol=1e-5)
+                boundaries[i] = res.root
+                
+        return boundaries
+
+    def solve_boundaries_from_cumulative_alpha(
+        self,
+        info_times: Sequence[float],
+        cum_alpha: Sequence[float],
+        tails: int = 2,
+    ) -> np.ndarray:
+        """Solve for boundaries given an arbitrary cumulative alpha schedule.
+        
+        Args:
+            info_times: Cumulative information fractions.
+            cum_alpha: Target cumulative Type I error at each look.
+            tails: 1 or 2 (symmetric).
+            
+        Returns:
+            Array of Z-scale boundaries at each look.
+        """
+        t = np.asarray(info_times)
+        k = len(t)
+        c_alpha = np.asarray(cum_alpha)
+        
+        z_sims = self._generate_joint_z(t)
+        boundaries = np.zeros(k)
+        
+        for i in range(k):
+            target_alpha = c_alpha[i]
+            if i == 0:
+                if tails == 2:
+                    boundaries[i] = norm.isf(target_alpha / 2.0)
+                else:
+                    boundaries[i] = norm.isf(target_alpha)
+            else:
+                if tails == 2:
+                    rejected_prev = np.any(np.abs(z_sims[:, :i]) > boundaries[:i], axis=1)
+                    def f(b):
+                        rejected_curr = np.abs(z_sims[:, i]) > b
+                        return np.mean(rejected_prev | rejected_curr) - target_alpha
+                else:
+                    rejected_prev = np.any(z_sims[:, :i] > boundaries[:i], axis=1)
+                    def f(b):
+                        rejected_curr = z_sims[:, i] > b
+                        return np.mean(rejected_prev | rejected_curr) - target_alpha
+                
+                res = root_scalar(f, bracket=[0, 10], xtol=1e-5)
+                boundaries[i] = res.root
+                
+        return boundaries
+
+    def evaluate_asn(
+        self,
+        info_times: Sequence[float],
+        boundaries: Sequence[float],
+        drift: float = 0.0,
+        tails: int = 2,
+    ) -> float:
+        """Evaluate the expected look number (ASN in terms of looks).
+        
+        Args:
+            info_times: Cumulative information fractions.
+            boundaries: Z-scale boundaries.
+            drift: Standardized drift.
+            tails: 1 or 2.
+            
+        Returns:
+            Expected look at which the trial stops (1.0 to K).
+        """
+        t = np.asarray(info_times)
+        b = np.asarray(boundaries)
+        k = len(t)
+        
+        means = drift * np.sqrt(t)
+        cov = np.sqrt(np.minimum.outer(t, t) / np.maximum.outer(t, t))
+        np.fill_diagonal(cov, 1.0)
+        
+        sims = self._rng.multivariate_normal(means, cov, size=self.n_sims)
+        
+        if tails == 2:
+            reject_matrix = np.abs(sims) > b
+        else:
+            reject_matrix = sims > b
+            
+        has_rejected = np.any(reject_matrix, axis=1)
+        first_rejected_idx = np.argmax(reject_matrix, axis=1)
+        
+        # Those that never rejected stop at the last look k.
+        stop_look_indices = np.where(has_rejected, first_rejected_idx, k - 1)
+        stop_looks = stop_look_indices + 1
+        
+        return float(np.mean(stop_looks))

@@ -41,7 +41,7 @@ from math import sqrt
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import norm, t as t_dist
 
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord, QueryMixin
@@ -127,7 +127,10 @@ class BoundaryCalculator:
 
     # ---- Core single-time computation ---------------------------------
     def compute_boundary(
-        self, info_time: float, look: Optional[int] = None
+        self,
+        info_time: float,
+        look: Optional[int] = None,
+        df: Optional[float] = None,
     ) -> Tuple[float, float, str]:
         """Compute (upper, lower, scale) for a single information time.
 
@@ -135,6 +138,15 @@ class BoundaryCalculator:
         :class:`BoundaryCalculator`. It resolves efficacy and futility levels
         on the requested output scale and mirrors the conceptual
         ``Design → boundary`` step described in ``gst.md``.
+
+        Parameters
+        ----------
+        info_time : float
+            Information time in [0, 1].
+        look : int, optional
+            Look index (1-based).
+        df : float, optional
+            Degrees of freedom, required if scale is 't'.
         """
 
         t = float(info_time)
@@ -157,11 +169,20 @@ class BoundaryCalculator:
         # Futility (lower) boundary on Z scale
         lower_z = self._resolve_futility_lower_z(upper_z, t, look)
 
-        # Convert to requested scale using the process
+        # Convert to requested scale
         if scale == "bm":
             upper = self._stat_to_process_scale(upper_z, t)
             lower = (
                 self._stat_to_process_scale(lower_z, t)
+                if np.isfinite(lower_z)
+                else lower_z
+            )
+        elif scale == "t":
+            if df is None:
+                raise ValueError("Degrees of freedom 'df' required for t-scale boundaries.")
+            upper = nominal_t_from_z(upper_z, df, tails=int(spec["tails"]))
+            lower = (
+                nominal_t_from_z(lower_z, df, tails=int(spec["tails"]))
                 if np.isfinite(lower_z)
                 else lower_z
             )
@@ -174,6 +195,7 @@ class BoundaryCalculator:
     def compute_boundaries(
         self,
         info_times: np.ndarray,
+        dfs: Optional[np.ndarray] = None,
     ) -> Dict[str, Any]:
         """Compute boundaries at multiple information times.
 
@@ -185,7 +207,8 @@ class BoundaryCalculator:
         scale: Optional[str] = None
 
         for i, t in enumerate(info_times):
-            up, lo, sc = self.compute_boundary(info_time=float(t), look=i + 1)
+            df = dfs[i] if dfs is not None else None
+            up, lo, sc = self.compute_boundary(info_time=float(t), look=i + 1, df=df)
             upper[i] = up
             lower[i] = lo
             if scale is None:
@@ -346,6 +369,29 @@ def nominal_z_from_level(alpha_level: float, *, tails: int = 2) -> Tuple[float, 
     if not (0.0 < alpha_level < 1.0):
         raise ValueError("alpha_level must lie in (0, 1).")
     return nominal_z_from_spent_alpha(alpha_level, tails=tails)
+
+
+def nominal_t_from_z(z: float, df: float, *, tails: int = 2) -> float:
+    """Convert a Z-scale boundary to a t-scale boundary with df degrees of freedom."""
+
+    if not np.isfinite(z):
+        return z
+    
+    # pocock 1977: t_boundary = t_{df, 1-Phi(z)}
+    # Note: 1-Phi(z) is the one-sided p-value.
+    if tails == 2:
+        # For 2-sided, z is the critical value for alpha/2.
+        # But we use the SAME nominal levels for t-test.
+        # Nom level for z is 2*(1-Phi(z)).
+        # t_boundary should be t_{df, 1-(level/2)} = t_{df, 1-(1-Phi(z))} = t_{df, Phi(z)}
+        # Wait, if z is positive, Phi(z) > 0.5. t_dist.isf(p, df) is the upper-tail quantile.
+        # p = level/2 = 1-Phi(z). 
+        # isf(1-Phi(z), df)
+        # Using norm.sf(z) is 1-Phi(z).
+        return float(t_dist.isf(norm.sf(abs(z)), df))
+    else:
+        # 1-sided: alpha = 1-Phi(z) = norm.sf(z)
+        return float(t_dist.isf(norm.sf(z), df))
 
 
 def z_to_brownian(z: float, t: float) -> float:

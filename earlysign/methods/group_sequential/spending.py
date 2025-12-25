@@ -191,10 +191,41 @@ class HSDSpending(SpendingFunction):
         return "hsd"
 
 
+class RhoFamilySpending(SpendingFunction):
+    """Rho-family power spending function.
+
+    Formula: alpha(t) = alpha * t^rho, for rho > 0.
+    Identical to Kim-DeMets (1987) / Jennison & Turnbull (2000) rho family.
+    rho=1 is linear spending (HSD gamma=0).
+    rho=2, 3 provide OBF-like conservative early spending.
+    """
+
+    def __init__(self, alpha: float, rho: float = 2.0) -> None:
+        if not (0.0 < alpha < 1.0):
+            raise ValueError("alpha must be in (0, 1)")
+        if rho <= 0:
+            raise ValueError("rho must be positive")
+        self.alpha = float(alpha)
+        self.rho = float(rho)
+
+    def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
+        t_arr = np.clip(np.asarray(t, dtype=float), 0.0, 1.0)
+        return np.asarray(self.alpha * (t_arr**self.rho), dtype=float)
+
+    def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
+        a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
+        return np.asarray(norm.ppf(1.0 - a), dtype=float)
+
+    @property
+    def name(self) -> str:
+        return "rho"
+
+
 _SPENDING_REGISTRY: Dict[str, Type[SpendingFunction]] = {
     "obrien_fleming": OBFSpending,
     "pocock": PocockSpending,
     "hsd": HSDSpending,
+    "rho": RhoFamilySpending,
 }
 
 
