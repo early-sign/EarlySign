@@ -389,3 +389,68 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000) - Chapter
       | 10 | 3   | 106.2    | 63.5  | 78.5        | 74.2      |
       | 15 | 3   | 106.9    | 62.2  | 77.3        | 73.0      |
       | 20 | 3   | 107.3    | 61.6  | 76.8        | 72.4      |
+
+  Scenario Outline: Properties of one-sided asymmetric maximum information tests (Table 7.8)
+    # References: Table 7.8. alpha=0.05, 1-beta=0.9
+    Given a one-sided maximum information test with alpha 0.05 and beta 0.1
+    And a maximum of <K> looks with rho-family spending <rho> for both errors
+    When I evaluate the one-sided expected sample size relative to fixed design
+    Then the maximum information (R_OS) should be <R_OS_pct> percent with 10.0 precision
+    And the expected sample size at theta=0 should be <ASN_0> percent with 4.0 precision
+    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 4.0 precision
+    And the expected sample size at theta=δ should be <ASN_delta> percent with 4.0 precision
+
+    Examples: rho=2
+      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     |
+      | 2  | 2   | 104.4    | 74.5  | 88.7        | 79.7      |
+      | 3  | 2   | 107.2    | 68.1  | 83.9        | 73.8      |
+      | 4  | 2   | 108.9    | 64.9  | 81.3        | 70.7      |
+      | 5  | 2   | 110.0    | 62.9  | 79.7        | 68.8      |
+      | 10 | 2   | 112.6    | 58.9  | 76.4        | 65.1      |
+      | 15 | 2   | 113.5    | 57.7  | 75.3        | 63.8      |
+      | 20 | 2   | 114.0    | 57.0  | 74.8        | 63.2      |
+
+    Examples: rho=3
+      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     |
+      | 2  | 3   | 101.5    | 79.0  | 92.0        | 83.6      |
+      | 3  | 3   | 103.0    | 72.6  | 86.9        | 77.5      |
+      | 4  | 3   | 104.0    | 69.2  | 84.2        | 74.2      |
+      | 5  | 3   | 104.8    | 67.1  | 82.6        | 72.2      |
+      | 10 | 3   | 106.6    | 63.1  | 79.2        | 68.4      |
+      | 15 | 3   | 107.3    | 61.8  | 78.0        | 67.1      |
+      | 20 | 3   | 107.7    | 61.1  | 77.4        | 66.5      |
+
+  Scenario Outline: Properties of one-sided asymmetric maximum information tests (Table 7.9)
+    # References: Table 7.9. alpha=0.05, 1-beta=0.95
+    Given a one-sided maximum information test with alpha 0.05 and beta 0.05
+    And a maximum of <K> looks with rho-family spending <rho> for both errors
+    When I evaluate the one-sided expected sample size relative to fixed design
+    Then the maximum information (R_OS) should be <R_OS_pct> percent with 10.0 precision
+    And the expected sample size at theta=0 should be <ASN_0> percent with 4.0 precision
+    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 4.0 precision
+    And the expected sample size at theta=δ should be <ASN_delta> percent with 4.0 precision
+
+    Examples: rho=2
+      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     |
+      | 2  | 2   | 104.5    | 74.9  | 89.2        | 74.9      |
+      | 3  | 2   | 107.3    | 68.7  | 84.5        | 68.7      |
+      | 4  | 2   | 109.0    | 65.4  | 81.9        | 65.4      |
+      | 5  | 2   | 110.1    | 63.4  | 80.3        | 63.4      |
+      | 10 | 2   | 112.7    | 59.5  | 77.1        | 59.5      |
+      | 15 | 2   | 113.7    | 58.3  | 76.0        | 58.3      |
+      | 20 | 2   | 114.2    | 57.7  | 75.5        | 57.7      |
+
+    Examples: rho=3
+      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     |
+      | 2  | 3   | 101.6    | 79.0  | 92.2        | 79.0      |
+      | 3  | 3   | 103.1    | 72.7  | 87.2        | 72.7      |
+      | 4  | 3   | 104.2    | 69.2  | 84.5        | 69.2      |
+      | 5  | 3   | 105.0    | 67.1  | 82.8        | 67.1      |
+      | 10 | 3   | 106.9    | 63.1  | 79.5        | 63.1      |
+      | 15 | 3   | 107.6    | 61.8  | 78.3        | 61.8      |
+      | 20 | 3   | 108.0    | 61.2  | 77.8        | 61.2      |
+
