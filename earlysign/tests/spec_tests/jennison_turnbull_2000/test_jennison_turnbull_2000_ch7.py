@@ -44,7 +44,7 @@ def given_alpha(alpha, design_params):
 def given_power(power, design_params):
     design_params["power"] = float(power)
 
-@given(parsers.parse("a maximum of {k} looks with rho-family spending {rho}"))
+@given(parsers.re(r"a maximum of (?P<k>\d+) looks with rho-family spending (?P<rho>[\d.]+)$"))
 def given_looks_and_rho(k, rho, design_params):
     design_params["k"] = int(k)
     design_params["rho"] = float(rho)
@@ -110,9 +110,11 @@ def then_check_r_ld(results, r_ld, atol):
     assert results["R_LD"] == pytest.approx(float(r_ld), abs=atol)
 
 @then(parsers.parse("the maximum information (R_LD) should be {r_ld:f} percent with {atol:f} precision"))
+@then(parsers.parse("the maximum information (R_OS) should be {r_ld:f} percent with {atol:f} precision"))
 def then_check_r_ld_pct(results, r_ld, atol):
-    # Calibrated tolerance from Gherkin
-    assert results["R_LD_pct"] == pytest.approx(float(r_ld), abs=atol)
+    # Try R_LD_pct first, then R_OS_pct
+    val = results.get("R_LD_pct", results.get("R_OS_pct"))
+    assert val == pytest.approx(float(r_ld), abs=atol)
 
 @then(parsers.parse("the expected sample size at theta={condition} should be {asn:f} percent with {atol:f} precision"))
 def then_check_asn(results, condition, asn, atol):
@@ -478,3 +480,42 @@ def then_check_bhat_rejection(results, z_list, look):
     
     # Check rejection at specified look
     assert np.abs(z_obs[look_idx]) > boundaries[look_idx], f"Should have rejected at look {look}"
+@given(parsers.parse("a one-sided maximum information test with alpha {alpha:f} and beta {beta:f}"), target_fixture="design_params")
+def given_one_sided_max_info_beta(alpha, beta):
+    return {"alpha": alpha, "beta": beta, "tails": 1}
+
+@given(parsers.re(r"a maximum of (?P<k>\d+) looks with rho-family spending (?P<rho>[\d.]+) for both errors"))
+def given_max_looks_rho_both(k, rho, design_params):
+    design_params["k"] = int(k)
+    design_params["rho"] = float(rho)
+
+@when("I compute the inflation factor R_OS", target_fixture="results")
+def when_compute_ros(design_params, cjd):
+    k = design_params["k"]
+    alpha = design_params["alpha"]
+    beta = design_params["beta"]
+    rho = design_params["rho"]
+    
+    ros = cjd.solve_ros_inflation_factor(k, alpha, beta, rho)
+    return {"R_LD": ros}
+
+@when("I evaluate the one-sided expected sample size relative to fixed design", target_fixture="results")
+def when_evaluate_os_asn(design_params, cjd):
+    k = design_params["k"]
+    alpha = design_params["alpha"]
+    beta = design_params["beta"]
+    rho = design_params["rho"]
+    
+    metrics = cjd.evaluate_ros_design_characteristics(k, alpha, beta, rho)
+    
+    r_os = metrics["r_os"]
+    # ASN% = 100 * R_OS * (E[look] / K)
+    def get_asn_percent(look_val):
+        return 100.0 * r_os * (look_val / k)
+
+    return {
+        "R_OS_pct": 100.0 * r_os,
+        "ASN_0": get_asn_percent(metrics["asn_0"]),
+        "ASN_05delta": get_asn_percent(metrics["asn_05delta"]),
+        "ASN_delta": get_asn_percent(metrics["asn_delta"]),
+    }

@@ -258,3 +258,134 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000) - Chapter
     And the observed death counts are 56, 77, 126, 177, 247, 318
     Then the boundaries should be "2.53, 2.59, 2.64, 2.50, 2.51, 2.47" with 0.08 precision
     And the observed Z-statistics 1.68, 2.24, 2.37, 2.30, 2.34, 2.82 should reject H0 at look 6
+
+  Scenario Outline: Verification of maximum information test constant R_OS (Table 7.6)
+    Given a one-sided maximum information test with alpha 0.05 and beta <beta>
+    And a maximum of <K> looks with rho-family spending <rho> for both errors
+    When I compute the inflation factor R_OS
+    Then the result should be <R_OS> with 0.10 precision
+
+    Examples: 1-beta=0.8
+      | K  | beta | rho | R_OS  |
+      | 1  | 0.2  | 2   | 1.000 |
+      | 2  | 0.2  | 2   | 1.043 |
+      | 3  | 0.2  | 2   | 1.070 |
+      | 4  | 0.2  | 2   | 1.087 |
+      | 5  | 0.2  | 2   | 1.098 |
+      | 6  | 0.2  | 2   | 1.106 |
+      | 7  | 0.2  | 2   | 1.111 |
+      | 8  | 0.2  | 2   | 1.116 |
+      | 9  | 0.2  | 2   | 1.120 |
+      | 10 | 0.2  | 2   | 1.123 |
+      | 11 | 0.2  | 2   | 1.125 |
+      | 12 | 0.2  | 2   | 1.127 |
+      | 15 | 0.2  | 2   | 1.132 |
+      | 20 | 0.2  | 2   | 1.137 |
+      | 1  | 0.2  | 3   | 1.000 |
+      | 2  | 0.2  | 3   | 1.014 |
+      | 3  | 0.2  | 3   | 1.028 |
+      | 4  | 0.2  | 3   | 1.038 |
+      | 5  | 0.2  | 3   | 1.045 |
+      | 6  | 0.2  | 3   | 1.050 |
+      | 7  | 0.2  | 3   | 1.054 |
+      | 8  | 0.2  | 3   | 1.058 |
+      | 9  | 0.2  | 3   | 1.060 |
+      | 10 | 0.2  | 3   | 1.062 |
+      | 11 | 0.2  | 3   | 1.064 |
+      | 12 | 0.2  | 3   | 1.066 |
+      | 15 | 0.2  | 3   | 1.069 |
+      | 20 | 0.2  | 3   | 1.073 |
+
+    Examples: 1-beta=0.9
+      | K  | beta | rho | R_OS  |
+      | 1  | 0.1  | 2   | 1.000 |
+      | 2  | 0.1  | 2   | 1.044 |
+      | 3  | 0.1  | 2   | 1.072 |
+      | 4  | 0.1  | 2   | 1.089 |
+      | 5  | 0.1  | 2   | 1.100 |
+      | 6  | 0.1  | 2   | 1.108 |
+      | 7  | 0.1  | 2   | 1.114 |
+      | 8  | 0.1  | 2   | 1.119 |
+      | 9  | 0.1  | 2   | 1.123 |
+      | 10 | 0.1  | 2   | 1.126 |
+      | 11 | 0.1  | 2   | 1.128 |
+      | 12 | 0.1  | 2   | 1.131 |
+      | 15 | 0.1  | 2   | 1.135 |
+      | 20 | 0.1  | 2   | 1.140 |
+      | 1  | 0.1  | 3   | 1.000 |
+      | 2  | 0.1  | 3   | 1.015 |
+      | 3  | 0.1  | 3   | 1.030 |
+      | 4  | 0.1  | 3   | 1.040 |
+      | 5  | 0.1  | 3   | 1.048 |
+      | 6  | 0.1  | 3   | 1.053 |
+      | 7  | 0.1  | 3   | 1.058 |
+      | 8  | 0.1  | 3   | 1.061 |
+      | 9  | 0.1  | 3   | 1.064 |
+      | 10 | 0.1  | 3   | 1.066 |
+      | 11 | 0.1  | 3   | 1.068 |
+      | 12 | 0.1  | 3   | 1.070 |
+      | 15 | 0.1  | 3   | 1.073 |
+      | 20 | 0.1  | 3   | 1.077 |
+
+    Examples: 1-beta=0.95
+      | K  | beta | rho | R_OS  |
+      | 1  | 0.05 | 2   | 1.000 |
+      | 2  | 0.05 | 2   | 1.045 |
+      | 3  | 0.05 | 2   | 1.073 |
+      | 4  | 0.05 | 2   | 1.090 |
+      | 5  | 0.05 | 2   | 1.101 |
+      | 6  | 0.05 | 2   | 1.109 |
+      | 7  | 0.05 | 2   | 1.115 |
+      | 8  | 0.05 | 2   | 1.120 |
+      | 9  | 0.05 | 2   | 1.124 |
+      | 10 | 0.05 | 2   | 1.127 |
+      | 11 | 0.05 | 2   | 1.130 |
+      | 12 | 0.05 | 2   | 1.132 |
+      | 15 | 0.05 | 2   | 1.137 |
+      | 20 | 0.05 | 2   | 1.142 |
+      | 1  | 0.05 | 3   | 1.000 |
+      | 2  | 0.05 | 3   | 1.016 |
+      | 3  | 0.05 | 3   | 1.031 |
+      | 4  | 0.05 | 3   | 1.042 |
+      | 5  | 0.05 | 3   | 1.050 |
+      | 6  | 0.05 | 3   | 1.055 |
+      | 7  | 0.05 | 3   | 1.060 |
+      | 8  | 0.05 | 3   | 1.063 |
+      | 9  | 0.05 | 3   | 1.066 |
+      | 10 | 0.05 | 3   | 1.069 |
+      | 11 | 0.05 | 3   | 1.071 |
+      | 12 | 0.05 | 3   | 1.072 |
+      | 15 | 0.05 | 3   | 1.076 |
+      | 20 | 0.05 | 3   | 1.080 |
+
+  Scenario Outline: Properties of one-sided asymmetric maximum information tests (Table 7.7)
+    # References: Table 7.7. alpha=0.05, 1-beta=0.8
+    Given a one-sided maximum information test with alpha 0.05 and beta 0.2
+    And a maximum of <K> looks with rho-family spending <rho> for both errors
+    When I evaluate the one-sided expected sample size relative to fixed design
+    Then the maximum information (R_OS) should be <R_OS_pct> percent with 10.0 precision
+    And the expected sample size at theta=0 should be <ASN_0> percent with 4.0 precision
+    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 4.0 precision
+    And the expected sample size at theta=δ should be <ASN_delta> percent with 4.0 precision
+
+    Examples: rho=2
+      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     |
+      | 2  | 2   | 104.3    | 74.5  | 87.8        | 84.6      |
+      | 3  | 2   | 107.0    | 68.0  | 82.8        | 79.2      |
+      | 4  | 2   | 108.7    | 64.7  | 80.2        | 76.4      |
+      | 5  | 2   | 109.8    | 62.7  | 78.5        | 74.6      |
+      | 10 | 2   | 112.3    | 58.7  | 75.2        | 71.1      |
+      | 15 | 2   | 113.2    | 57.4  | 74.0        | 69.9      |
+      | 20 | 2   | 113.7    | 56.8  | 73.5        | 69.3      |
+
+    Examples: rho=3
+      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     |
+      | 2  | 3   | 101.4    | 79.6  | 91.6        | 88.3      |
+      | 3  | 3   | 102.8    | 73.1  | 86.4        | 82.6      |
+      | 4  | 3   | 103.8    | 69.6  | 83.7        | 79.6      |
+      | 5  | 3   | 104.5    | 67.6  | 82.0        | 77.8      |
+      | 10 | 3   | 106.2    | 63.5  | 78.5        | 74.2      |
+      | 15 | 3   | 106.9    | 62.2  | 77.3        | 73.0      |
+      | 20 | 3   | 107.3    | 61.6  | 76.8        | 72.4      |
