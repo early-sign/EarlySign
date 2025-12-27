@@ -124,6 +124,7 @@ class DesignPlanner:
         res = {
             "i_max": i_max,
             "i_fixed": i_fixed,
+            "information_levels": (info_times * i_max).tolist(),
             "n_max": n_reported,
             "boundaries": boundaries,
             "n_per_look": n_per_look,

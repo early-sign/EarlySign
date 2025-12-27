@@ -9,33 +9,29 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
   Background:
     Given simulation precision with 60000 samples
 
-  Scenario: Computing O'Brien-Fleming design for a paired comparison (Subsection 3.2.2)
+  Scenario: Computing two-sided O'Brien-Fleming design for a paired comparison (Subsection 3.2.2)
     Given a two-sided paired comparison design with alpha 0.05
     And a target power 0.9 at effect size 1.0
     And a known variance (sigma squared) 6.0
     And a maximum of 5 looks with "obrien_fleming" spending
     When I compute the normal mean sequential design
-    Then the maximum information (I_max) should be 10.78 with 0.1 precision
-    And the total sample size (n_max) should be 65 with 1.0 precision
+    Then the information levels (I_k) should be "2.16, 4.31, 6.47, 8.63, 10.78" with 0.15 precision
+    And the critical values (c_k) should be "4.562, 3.226, 2.634, 2.281, 2.040" with 0.05 precision
+    And the total number of pairs (n_max) should be 64.7 with 1.0 precision
+    And the required pairs per group should be 12.9 with 0.2 precision
+    And the rounded pairs per group should be 13
 
-  Scenario: Computing Wang-Tsiatis design for a 2-period crossover trial (Subsection 3.2.2)
+  Scenario: Computing two-sided Wang-Tsiatis design for a 2-period crossover trial (Subsection 3.2.2)
     Given a two-sided crossover trial design with alpha 0.05
     And a target power 0.8 at effect size 0.6
     And a known variance (sigma squared) 9.0
     And a maximum of 4 looks with "wang_tsiatis" spending
     When I compute the normal mean sequential design
-    Then the maximum information (I_max) should be 23.44 with 0.1 precision
-    And the total sample size (n_max) should be 106 with 1.0 precision
-
-  Scenario: Computing O'Brien-Fleming design for a normal mean (Subsection 3.4.2)
-    Given a two-sided normal mean test design with alpha 0.05
-    And a target power 0.8 at effect size 0.5
-    And a known variance (sigma squared) 1.2
-    And a maximum of 6 looks with "obrien_fleming" spending
-    When I compute the normal mean sequential design
-    Then the maximum information (I_max) should be 32.22 with 0.1 precision
-    And the total sample size (n_max) should be 155.5 with 1.5 precision
-    And the boundary values should be "5.029, 3.556, 2.903, 2.514, 2.249, 2.053" with 0.08 precision
+    Then the information levels (I_k) should be "5.81, 11.61, 17.42, 23.23" with 0.3 precision
+    And the critical values (c_k) should be "2.988, 2.513, 2.271, 2.113" with 0.1 precision
+    And the total subjects per sequence (n_max) should be 104.5 with 2.0 precision
+    And the required subjects per sequence per group should be 26.1 with 0.4 precision
+    And the rounded subjects per sequence per group should be 27
 
   Scenario Outline: Operating characteristics with varying group sizes (Table 3.1)
     Given a two-sided normal mean design planned for alpha 0.05
@@ -133,6 +129,16 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
       | 10 | obrien_fleming | 1.25 | 0.9 | 0.053        | 0.869        |
       | 10 | obrien_fleming | 1.25 | 1.0 | 0.053        | 0.901        |
       | 10 | obrien_fleming | 1.25 | 1.1 | 0.053        | 0.926        |
+
+  Scenario: Computing O'Brien-Fleming design for a normal mean (Subsection 3.4.2)
+    Given a two-sided normal mean test design with alpha 0.05
+    And a target power 0.8 at effect size 0.5
+    And a known variance (sigma squared) 1.2
+    And a maximum of 6 looks with "obrien_fleming" spending
+    When I compute the normal mean sequential design
+    Then the maximum information (I_max) should be 32.22 with 0.1 precision
+    And the total sample size (n_max) should be 155.5 with 1.5 precision
+    And the boundary values should be "5.029, 3.556, 2.903, 2.514, 2.249, 2.053" with 0.08 precision
 
   Scenario: Computing Pocock design for a single-arm binomial test (Subsection 3.6.1)
     Given a two-sided single-arm binomial test design with alpha 0.05

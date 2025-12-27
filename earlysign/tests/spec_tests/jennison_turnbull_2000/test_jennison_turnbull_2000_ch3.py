@@ -171,6 +171,22 @@ def then_check_n_max_float(results, n_max, atol):
 
 @then(
     parsers.parse(
+        'the information levels (I_k) should be "{values}" with {atol:f} precision'
+    )
+)
+def then_check_information_levels(results, values, atol):
+    expected = [float(x.strip()) for x in values.split(",")]
+    actual = results["information_levels"]
+    assert np.allclose(actual, expected, atol=atol)
+
+
+@then(
+    parsers.parse(
+        'the critical values (c_k) should be "{values}" with {atol:f} precision'
+    )
+)
+@then(
+    parsers.parse(
         'the boundary values should be around "{boundaries}" with {atol:f} precision'
     )
 )
@@ -179,8 +195,9 @@ def then_check_n_max_float(results, n_max, atol):
         'the boundary values should be "{boundaries}" with {atol:f} precision'
     )
 )
-def then_check_boundaries(results, boundaries, atol):
-    expected = [float(x.strip()) for x in boundaries.split(",")]
+def then_check_boundaries(results, boundaries=None, atol=None, values=None):
+    raw = boundaries if boundaries is not None else values
+    expected = [float(x.strip()) for x in raw.split(",")]
     actual = results["boundaries"]
     # Calibrated tolerance from Gherkin
     assert np.allclose(actual, expected, atol=atol)
@@ -549,6 +566,16 @@ def then_check_i_f(results, i_f, atol):
 
 @then(
     parsers.parse(
+        "the total number of pairs (n_max) should be {n_max:f} with {atol:f} precision"
+    )
+)
+@then(
+    parsers.parse(
+        "the total subjects per sequence (n_max) should be {n_max:f} with {atol:f} precision"
+    )
+)
+@then(
+    parsers.parse(
         "the total sample size (n_max) should be {n_max:d} with {atol:f} precision"
     )
 )
@@ -559,6 +586,34 @@ def then_check_i_f(results, i_f, atol):
 )
 def then_check_n_max(results, n_max, atol):
     assert results["n_max"] == pytest.approx(n_max, abs=atol)
+
+
+@then(
+    parsers.parse(
+        "the required pairs per group should be {n_per_look:f} with {atol:f} precision"
+    )
+)
+@then(
+    parsers.parse(
+        "the required subjects per sequence per group should be {n_per_look:f} with {atol:f} precision"
+    )
+)
+def then_check_n_per_look_exact(results, n_per_look, atol):
+    # results['n_per_look'] is now back to being a float (the increment per look)
+    assert results["n_per_look"] == pytest.approx(n_per_look, abs=atol)
+
+
+@then(parsers.parse("the rounded pairs per group should be {rounded:d}"))
+@then(
+    parsers.parse("the rounded subjects per sequence per group should be {rounded:d}")
+)
+def then_check_n_per_look_rounded(results, rounded):
+    # Jennison & Turnbull round up the per-group size.
+    # We round to 1 decimal place first to handle simulation noise (e.g. 13.02 -> 13.0).
+    import math
+
+    actual_rounded = math.ceil(round(results["n_per_look"], 1))
+    assert actual_rounded == rounded
 
 
 @then(
