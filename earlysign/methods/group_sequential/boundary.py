@@ -179,7 +179,9 @@ class BoundaryCalculator:
             )
         elif scale == "t":
             if df is None:
-                raise ValueError("Degrees of freedom 'df' required for t-scale boundaries.")
+                raise ValueError(
+                    "Degrees of freedom 'df' required for t-scale boundaries."
+                )
             upper = nominal_t_from_z(upper_z, df, tails=int(spec["tails"]))
             lower = (
                 nominal_t_from_z(lower_z, df, tails=int(spec["tails"]))
@@ -376,7 +378,7 @@ def nominal_t_from_z(z: float, df: float, *, tails: int = 2) -> float:
 
     if not np.isfinite(z):
         return z
-    
+
     # pocock 1977: t_boundary = t_{df, 1-Phi(z)}
     # Note: 1-Phi(z) is the one-sided p-value.
     if tails == 2:
@@ -385,7 +387,7 @@ def nominal_t_from_z(z: float, df: float, *, tails: int = 2) -> float:
         # Nom level for z is 2*(1-Phi(z)).
         # t_boundary should be t_{df, 1-(level/2)} = t_{df, 1-(1-Phi(z))} = t_{df, Phi(z)}
         # Wait, if z is positive, Phi(z) > 0.5. t_dist.isf(p, df) is the upper-tail quantile.
-        # p = level/2 = 1-Phi(z). 
+        # p = level/2 = 1-Phi(z).
         # isf(1-Phi(z), df)
         # Using norm.sf(z) is 1-Phi(z).
         return float(t_dist.isf(norm.sf(abs(z)), df))

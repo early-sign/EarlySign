@@ -278,7 +278,7 @@ class CanonicalJointPowerEstimator:
         allocation = float(calculator.allocation_ratio)
         if allocation <= 0.0:
             raise ValueError("allocation_ratio must be positive for canonical power")
-        
+
         # kappa = delta * sqrt(I_max) where I_max is the information.
         # For normal means with variance sigma^2 and total sample size n_max:
         # I_max = n_max / (sigma^2 * (1 + 1/allocation) * (1 + allocation))
@@ -286,8 +286,8 @@ class CanonicalJointPowerEstimator:
         st_dev = float(calculator.st_dev)
         alternative = float(calculator.alternative)
         n_max = float(planned_max_n)
-        
-        i_max = n_max * allocation / (st_dev**2 * (1 + allocation)**2)
+
+        i_max = n_max * allocation / (st_dev**2 * (1 + allocation) ** 2)
         kappa = abs(alternative) * np.sqrt(i_max)
         means = kappa * np.sqrt(rates)
 

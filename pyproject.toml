@@ -77,6 +77,10 @@ exclude = ["docs/_build", ".venv", ".git"]
 select = ["E", "F", "W", "I", "TID"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["earlysign"]
+
 [tool.mypy]
 python_version = "3.11"  # Base version for compatibility
 ignore_missing_imports = true

@@ -1,15 +1,10 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import (
     Any,
-    Callable,
     Dict,
     Mapping,
-    MutableMapping,
     Optional,
     Sequence,
-    Type,
-    Union,
-    cast,
 )
 
 import ibis
@@ -24,6 +19,12 @@ from earlysign.methods.group_sequential.boundary import BoundaryFromDesign
 from earlysign.methods.group_sequential.decision import (
     GroupSequentialDecisionSignalRecord,
     GSDecisionFromWaldZ,
+)
+from earlysign.methods.group_sequential.design.initial_design.scenarios.binomial import (
+    create_binomial_design,
+)
+from earlysign.methods.group_sequential.design.initial_design.scenarios.fst_to_gst import (
+    AddInterimToFixedSampleTest,
 )
 from earlysign.methods.group_sequential.design.records.design import (
     DesignPayloadModel,
@@ -49,6 +50,26 @@ from earlysign.methods.group_sequential.schemes.two_proportions.wald_z import (
 @dataclass
 class State:
     stop_recommended: bool = False
+
+
+@dataclass
+class BinomialGSTDesignInterface:
+    """Wrapper for binomial GST design helper to maintain API compatibility."""
+
+    design: AddInterimToFixedSampleTest
+
+    def build_design_payload(
+        self,
+        info_times: Sequence[float],
+        planned_max_n: int,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> Mapping[str, Any]:
+        """Proxy to the underlying design helper."""
+        return self.design.build_design_payload(
+            info_times=info_times,
+            planned_max_n=planned_max_n,
+            metadata=metadata,
+        )
 
 
 class BinomialABTest(tpl.TemplateBase):
@@ -103,6 +124,15 @@ class BinomialABTest(tpl.TemplateBase):
             if ibis_cache is not None
             else IbisCache(self.connector, mode="execute")
         )
+
+    @staticmethod
+    def design_interface(**kwargs: Any) -> BinomialGSTDesignInterface:
+        """
+        Build a group sequential design helper for binomial metrics.
+        (Kept for backward compatibility and tutorial usage)
+        """
+        helper = create_binomial_design(**kwargs)
+        return BinomialGSTDesignInterface(design=helper)
 
     def set_design(self, payload: Dict[str, Any]) -> None:
         """Set the group sequential design.
@@ -308,7 +338,6 @@ class BinomialABTest(tpl.TemplateBase):
         )
         decision_op.run()
 
-
     def status(self) -> State:
         decision_record = GroupSequentialDecisionSignalRecord("decision").attach(
             self.ledger
@@ -452,7 +481,11 @@ class BinomialABTest(tpl.TemplateBase):
             for _, r in res["history"].iterrows()
         ]
 
-        wald_z_text = f"  Wald Z:        {stats['wald_z']:.4f}\n" if stats.get("wald_z") is not None else ""
+        wald_z_text = (
+            f"  Wald Z:        {stats['wald_z']:.4f}\n"
+            if stats.get("wald_z") is not None
+            else ""
+        )
 
         summary = f"""
 {'=' * 70}

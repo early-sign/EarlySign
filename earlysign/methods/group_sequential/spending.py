@@ -61,6 +61,8 @@ class SpendingFunction(Protocol):
     @property
     def name(self) -> str: ...
 
+    alpha: float
+
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]: ...
 
     def boundaries_from_stage_alpha(

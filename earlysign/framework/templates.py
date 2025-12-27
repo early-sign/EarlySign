@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping
 
 import ibis
 import pandas as pd
@@ -93,4 +93,3 @@ def join_sequential_history(
 ) -> TableExpr:
     """Helper for joining multiple records by their sequence number."""
     return TemplateBase._format_history_table(records, index_col=index_col)
-

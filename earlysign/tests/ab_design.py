@@ -43,7 +43,6 @@ def _run_compare_interim(
     return interface.compare_interim(k=k)
 
 
-
 @pytest.mark.basic
 def test_gst_operating_characteristics() -> None:
     """Compare-interim returns monotonic power and plots without error."""

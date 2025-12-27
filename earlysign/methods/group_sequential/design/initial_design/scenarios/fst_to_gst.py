@@ -213,7 +213,7 @@ class AddInterimToFixedSampleTest:
         if self.power_estimator is None:
             self.power_estimator = MonteCarloPowerEstimator(
                 build_design_context=self._build_design_context,
-                build_design_payload=self._build_design_payload,
+                build_design_payload=self.build_design_payload,
                 make_procedure=self._make_procedure,
                 build_simulation_request=lambda effect, n, strategy: self._build_simulation_request(
                     effect_size=effect,
@@ -236,17 +236,30 @@ class AddInterimToFixedSampleTest:
     def fsd_design(self) -> Dict[str, Any]:
         return dict(self.scheme.fsd_planner())
 
-    def _build_design_payload(
-        self, info_times: Sequence[float], planned_max_n: int
+    def build_design_payload(
+        self,
+        info_times: Sequence[float],
+        planned_max_n: int,
+        metadata: Optional[Mapping[str, Any]] = None,
     ) -> Mapping[str, Any]:
         if self.design_payload_builder is None:
-            raw_payload: Mapping[str, Any] = {
-                "info_times": list(map(float, info_times)),
-                "planned_max_n": int(planned_max_n),
-            }
+            from earlysign.methods.group_sequential.design.records.design import (
+                DesignPayloadModel,
+            )
+
+            model = DesignPayloadModel(
+                alpha=self.alpha,
+                planned_max_n=int(planned_max_n),
+                planned_info_times=list(map(float, info_times)),
+            )
+            raw_payload = model.to_payload()
         else:
-            raw_payload = self.design_payload_builder(info_times, planned_max_n)
-        return {str(key): value for key, value in dict(raw_payload).items()}
+            raw_payload = dict(self.design_payload_builder(info_times, planned_max_n))
+
+        if metadata:
+            raw_payload.update(metadata)
+
+        return {str(key): value for key, value in raw_payload.items()}
 
     def _make_procedure(
         self,
@@ -376,7 +389,7 @@ class AddInterimToFixedSampleTest:
         logger.info("Using planned_max_n=%s for k=%s", planned_max_n, k)
 
         context = self._build_design_context(optimized_info_times, planned_max_n)
-        design_payload = self._build_design_payload(
+        design_payload = self.build_design_payload(
             context.info_times, context.planned_max_n
         )
 

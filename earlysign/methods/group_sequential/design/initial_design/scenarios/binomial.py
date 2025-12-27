@@ -1,6 +1,6 @@
 """Binomial GST design creation logic."""
 
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Type, Union, cast
+from typing import Any, Callable, Mapping, Optional, Sequence, Type, Union, cast
 
 from earlysign.methods.group_sequential.asn import ASNCalculator
 from earlysign.methods.group_sequential.design.initial_design.scenarios.fst_to_gst import (
@@ -50,7 +50,9 @@ def create_binomial_design(
             if isinstance(spending, type)
             else get_spending_class(str(spending))
         )
-        spending_obj = spending_cls(alpha=alpha)
+        from typing import Any
+
+        spending_obj = cast(Any, spending_cls)(alpha=alpha)
 
     base_scheme = build_two_proportions_scheme(
         p_control=p_control,

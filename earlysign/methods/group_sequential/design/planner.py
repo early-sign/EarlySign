@@ -1,17 +1,27 @@
 from typing import Dict, Literal, Optional
-import numpy as np
-from scipy.stats import norm, nct
 
-from earlysign.methods.group_sequential.canonical_joint_distribution import CanonicalJointDistribution
+import numpy as np
+from scipy.stats import nct, norm
+
+from earlysign.methods.group_sequential.canonical_joint_distribution import (
+    CanonicalJointDistribution,
+)
 
 TrialType = Literal[
-    "normal-mean", "paired", "crossover", "binomial-single", "binomial-ab", "log-rank", "t-test"
+    "normal-mean",
+    "paired",
+    "crossover",
+    "binomial-single",
+    "binomial-ab",
+    "log-rank",
+    "t-test",
 ]
+
 
 class DesignPlanner:
     """
     Planner for group sequential designs based on the canonical joint distribution.
-    Determines the required information (I_max) and sample size (n_max) to achieve 
+    Determines the required information (I_max) and sample size (n_max) to achieve
     target operating characteristics (alpha, power) for clinical trial scenarios.
     """
 
@@ -31,7 +41,7 @@ class DesignPlanner:
     ) -> Dict[str, float]:
         """
         Plans a sequential design by calculating I_max and n_max.
-        
+
         Args:
             alpha: Type I error rate.
             power: Target power (1 - beta).
@@ -41,15 +51,17 @@ class DesignPlanner:
             shape_type: 'pocock', 'obrien_fleming', or 'wang_tsiatis'.
             trial_type: 'normal-mean', 'paired', 'crossover', 'binomial-single', 'binomial-ab'.
             round_to_k: If True, round n_max up to the nearest multiple of k.
-            
+
         Returns:
             Dict containing 'i_max', 'n_max', 'boundaries', and 'n_per_look'.
         """
-        info_times = np.linspace(1/k, 1.0, k)
-        
+        info_times = np.linspace(1 / k, 1.0, k)
+
         # 1. Solve for boundary constant c
-        c_val = self._cjd.solve_boundary_constant(info_times, alpha, shape_type=shape_type)
-        
+        c_val = self._cjd.solve_boundary_constant(
+            info_times.tolist(), alpha, shape_type=shape_type
+        )
+
         if shape_type == "pocock":
             c_shape = np.ones(k)
         elif shape_type == "obrien_fleming":
@@ -58,28 +70,31 @@ class DesignPlanner:
             c_shape = info_times ** (-0.25)
         else:
             raise ValueError(f"Unknown shape: {shape_type}")
-            
+
         boundaries = c_val * c_shape
-        
+
         # 2. Solve for standardized drift delta = theta * sqrt(I_max)
-        drift = self._cjd.solve_drift(info_times, boundaries, target_power=power)
-        
+        drift = self._cjd.solve_drift(
+            info_times.tolist(), boundaries.tolist(), target_power=power
+        )
+
         # 3. Calculate I_max = (drift / theta)^2
-        i_max = (drift / theta)**2
+        i_max = (drift / theta) ** 2
 
         # 3b. Calculate I_fixed = ( (z_{1-alpha/2} + z_{1-beta}) / theta )^2
         from scipy.stats import norm
+
         z_alpha = norm.ppf(1.0 - alpha / 2.0)
         z_beta = norm.ppf(power)
-        i_fixed = ((z_alpha + z_beta) / theta)**2
-        
+        i_fixed = ((z_alpha + z_beta) / theta) ** 2
+
         # 4. Map to sample size n_max
         if trial_type == "normal-mean" or trial_type == "binomial-ab":
             # For 2-arm A/B trial: I = n_total / (4 * sigma^2) => n_total = 4 * sigma^2 * I
-            # Here n_reported is n_total if normal-mean, but we often want n_g. 
+            # Here n_reported is n_total if normal-mean, but we often want n_g.
             # In the previous test implementation for binomial-ab, we used n_g.
             # Let's keep consistency with the existing methods or refine them.
-            n_reported = 4 * i_max * sigma2 
+            n_reported = 4 * i_max * sigma2
         elif trial_type == "paired" or trial_type == "binomial-single":
             # For paired: I = n / sigma^2_diff => n = I * sigma^2_diff
             n_reported = i_max * sigma2
@@ -111,15 +126,17 @@ class DesignPlanner:
             "i_fixed": i_fixed,
             "n_max": n_reported,
             "boundaries": boundaries,
-            "n_per_look": n_per_look
+            "n_per_look": n_per_look,
         }
 
         if trial_type == "t-test":
             # For t-test, we might have passed nu_K as sigma2 or similar.
             # J&T Table 3.3 uses nu_K (degrees of freedom at final look).
             # Let's assume sigma2 is used for nu_K here or passed in metadata.
-            nu_K = sigma2 # Use sigma2 as a container for nu_K in this context
-            approx = self.calculate_t_test_power_approx(alpha, i_max, i_fixed, theta, nu_K)
+            nu_K = sigma2  # Use sigma2 as a container for nu_K in this context
+            approx = self.calculate_t_test_power_approx(
+                alpha, i_max, i_fixed, theta, nu_K
+            )
             res.update(approx)
 
         return res
@@ -143,13 +160,11 @@ class DesignPlanner:
         # Approximation uses drift_actual = theta * sqrt(I_max / r) = theta * sqrt(I_fixed)
         ncp = theta * np.sqrt(i_fixed)
         power_normal = norm.cdf(ncp - z_alpha)
-        
+
         # Eq (3.20): Non-central t approximation
         from scipy.stats import t as t_dist
+
         t_alpha = t_dist.isf(alpha / 2.0, df_max)
         power_t = nct.sf(t_alpha, df_max, ncp)
-        
-        return {
-            "power_approx_320": power_t,
-            "power_approx_321": power_normal
-        }
+
+        return {"power_approx_320": power_t, "power_approx_321": power_normal}
