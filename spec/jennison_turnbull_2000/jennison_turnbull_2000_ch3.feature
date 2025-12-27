@@ -130,15 +130,30 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
       | 10 | obrien_fleming | 1.25 | 1.0 | 0.053        | 0.901        |
       | 10 | obrien_fleming | 1.25 | 1.1 | 0.053        | 0.926        |
 
-  Scenario: Computing O'Brien-Fleming design for a normal mean (Subsection 3.4.2)
+  Scenario: Computing two-sided Pocock design for a normal mean (Subsection 3.4.2)
+    Given a two-sided normal mean test design with alpha 0.05
+    And a target power 0.8 at effect size 0.5
+    And a known variance (sigma squared) 1.2
+    And a maximum of 5 looks with "pocock" spending
+    When I compute the normal mean sequential design
+    Then the maximum information (I_max) should be 38.60 with 0.4 precision
+    And the information levels (I_k) should be "7.72, 15.44, 23.16, 30.88, 38.60" with 0.4 precision
+    And the boundary values should be "2.413, 2.413, 2.413, 2.413, 2.413" with 0.05 precision
+    And the total sample size (n_max) should be 185.3 with 1.5 precision
+    And the sample size increment per group per look should be 37.1 with 0.4 precision
+
+  Scenario: Computing two-sided O'Brien-Fleming design for a normal mean (Subsection 3.4.2)
     Given a two-sided normal mean test design with alpha 0.05
     And a target power 0.8 at effect size 0.5
     And a known variance (sigma squared) 1.2
     And a maximum of 6 looks with "obrien_fleming" spending
     When I compute the normal mean sequential design
-    Then the maximum information (I_max) should be 32.22 with 0.1 precision
+    Then the fixed sample information (I_f) should be 31.40 with 0.1 precision
+    And the maximum information (I_max) should be 32.40 with 0.4 precision
+    And the information levels (I_k) should be "5.40, 10.80, 16.20, 21.60, 27.00, 32.40" with 0.4 precision
+    And the critical values (c_k) should be "5.029, 3.556, 2.903, 2.514, 2.249, 2.053" with 0.08 precision
     And the total sample size (n_max) should be 155.5 with 1.5 precision
-    And the boundary values should be "5.029, 3.556, 2.903, 2.514, 2.249, 2.053" with 0.08 precision
+    And the sample size increment per group per look should be 25.9 with 0.4 precision
 
   Scenario: Computing Pocock design for a single-arm binomial test (Subsection 3.6.1)
     Given a two-sided single-arm binomial test design with alpha 0.05

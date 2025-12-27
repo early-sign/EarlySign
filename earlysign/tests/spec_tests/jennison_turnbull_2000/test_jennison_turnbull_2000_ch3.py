@@ -739,6 +739,11 @@ def then_check_n_g(results, n_g, atol):
 
 @then(
     parsers.parse(
+        "the sample size increment per group per look should be {n:f} with {atol:f} precision"
+    )
+)
+@then(
+    parsers.parse(
         "the sample size increment per group per look should be {n:d} with {atol:f} precision"
     )
 )
