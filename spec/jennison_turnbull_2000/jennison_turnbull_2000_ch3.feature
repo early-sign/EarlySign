@@ -32,7 +32,7 @@ Feature: Jennison & Turnbull (2000) Chapter 3 (Two-Sided Tests: General Applicat
     And the total subjects per sequence (n_max) should be 104.4 with 3.0 precision
     And the rounded subjects per sequence per group should be 27
 
-  Scenario Outline: Operating characteristics with varying group sizes (Table 3.1)
+  Scenario: Operating characteristics with varying group sizes (Table 3.1)
     Given a two-sided normal mean design planned for alpha 0.05
     And a planning sample size sequence per group "<n_plan>"
     And a spending function or shape "<spending>"
@@ -64,7 +64,7 @@ Feature: Jennison & Turnbull (2000) Chapter 3 (Two-Sided Tests: General Applicat
       | wang_tsiatis   | 18, 36, 54, 72, 90  | 11, 38, 59, 65, 83   | 0.048        | 0.875        |
       | wang_tsiatis   | 18, 36, 54, 72, 90  | 27, 40, 57, 73, 96   | 0.050        | 0.919        |
 
-  Scenario Outline: Operating characteristics with information mismatch (Table 3.2)
+  Scenario: Operating characteristics with information mismatch (Table 3.2)
     Given a two-sided normal mean design planned for alpha 0.05 and power 0.9
     And a planning information sequence for <K> looks with equal increments
     And a spending function "<spending>"
@@ -177,7 +177,7 @@ Feature: Jennison & Turnbull (2000) Chapter 3 (Two-Sided Tests: General Applicat
     And the total number of events (d_max) should be 197 with 2.0 precision
     And the boundary values should be "4.562, 3.226, 2.634, 2.281, 2.04" with 0.1 precision
 
-  Scenario Outline: Properties of group sequential t-tests (Table 3.3)
+  Scenario: Properties of group sequential t-tests (Table 3.3)
     # Calculations are performed assuming the total number of subjects (n_k) across
     # two treatment groups at look k, even if it results in fractional subjects per group.
     # Degrees of freedom at look k: nu_k = (k/K)(nu_K + 2) - 2.
