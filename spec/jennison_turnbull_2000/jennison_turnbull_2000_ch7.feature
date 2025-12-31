@@ -104,60 +104,66 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 20 | 3   | 0.9   | 1.050 |
 
   Scenario: Properties of maximum information tests (Table 7.2)
+    # Note: This scenario is identical to Table 7.3 except for the target power (0.8).
     Given a two-sided maximum information test with alpha 0.05
-    And a target power 0.8 at some effect size
+    And a target power 0.8 at theta = ±δ
+    And the sample size is designed to attain this power at theta = ±δ
     And a maximum of <K> looks with rho-family spending <rho>
     When I evaluate the expected sample size relative to fixed design
-    Then the maximum information (R_LD) should be <R_LD_pct> percent with 2.0 precision
-    And the expected sample size at theta=0 should be <ASN_0> percent with 2.0 precision
-    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 2.0 precision
-    And the expected sample size at theta=δ should be <ASN_delta> percent with 2.0 precision
-    And the expected sample size at theta=1.5δ should be <ASN_15delta> percent with 2.0 precision
+    Then the maximum sample size relative to fixed design (R_LD) should be <R_LD_pct> percent with 2.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 2.0 precision
+    And the expected sample size at theta = ±0.5δ should be <ASN_±0.5δ> percent with 2.0 precision
+    And the expected sample size at theta = ±δ should be <ASN_±δ> percent with 2.0 precision
+    And the expected sample size at theta = ±1.5δ should be <ASN_±1.5δ> percent with 2.0 precision
 
     Examples: rho=1
-      | K  | rho | R_LD_pct | ASN_0 | ASN_05delta | ASN_delta | ASN_15delta |
+      | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
       | 1  | 1   | 100.0    | 100.0 | 100.0       | 100.0     | 100.0       |
       | 2  | 1   | 108.2    | 106.9 | 102.1       | 85.0      | 64.8        |
       | 3  | 1   | 111.7    | 109.9 | 103.4       | 81.2      | 56.5        |
       | 4  | 1   | 113.7    | 111.6 | 104.2       | 79.5      | 53.0        |
       | 5  | 1   | 115.0    | 112.7 | 104.8       | 78.5      | 51.0        |
       | 10 | 1   | 117.8    | 115.1 | 106.1       | 76.6      | 47.4        |
+      | 15 | 1   | 118.8    | 116.0 | 106.6       | 76.1      | 46.3        |
       | 20 | 1   | 119.3    | 116.5 | 106.9       | 75.8      | 45.8        |
 
     Examples: rho=2
-      | K  | rho | R_LD_pct | ASN_0 | ASN_05delta | ASN_delta | ASN_15delta |
+      | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
       | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     | 100.0       |
       | 2  | 2   | 102.8    | 102.1 | 99.3        | 86.7      | 67.0        |
       | 3  | 2   | 104.5    | 103.5 | 99.2        | 82.3      | 60.4        |
       | 4  | 2   | 105.6    | 104.4 | 99.2        | 80.1      | 57.1        |
       | 5  | 2   | 106.3    | 105.1 | 99.3        | 78.8      | 55.0        |
       | 10 | 2   | 108.1    | 106.6 | 99.7        | 76.2      | 51.0        |
+      | 15 | 2   | 108.8    | 107.2 | 99.9        | 75.4      | 49.7        |
       | 20 | 2   | 109.2    | 107.5 | 100.0       | 75.1      | 49.1        |
 
     Examples: rho=3
-      | K  | rho | R_LD_pct | ASN_0 | ASN_05delta | ASN_delta | ASN_15delta |
+      | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
       | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     | 100.0       |
       | 2  | 3   | 101.0    | 100.7 | 98.9        | 89.5      | 70.7        |
       | 3  | 3   | 102.0    | 101.4 | 98.3        | 84.6      | 64.7        |
       | 4  | 3   | 102.7    | 102.0 | 98.0        | 82.1      | 61.0        |
       | 5  | 3   | 103.2    | 102.4 | 97.9        | 80.6      | 58.8        |
       | 10 | 3   | 104.5    | 103.4 | 97.9        | 77.8      | 54.6        |
+      | 15 | 3   | 105.0    | 103.9 | 98.0        | 76.9      | 53.3        |
       | 20 | 3   | 105.4    | 104.2 | 98.0        | 76.5      | 52.7        |
 
   Scenario: Properties of maximum information tests (Table 7.3)
-    # References: Table 7.3. alpha=0.05, 1-beta=0.9
+    # Note: This scenario is identical to Table 7.2 except for the target power (0.9).
     Given a two-sided maximum information test with alpha 0.05
-    And a target power 0.9 at some effect size
+    And a target power 0.9 at theta = ±δ
+    And the sample size is designed to attain this power at theta = ±δ
     And a maximum of <K> looks with rho-family spending <rho>
     When I evaluate the expected sample size relative to fixed design
-    Then the maximum information (R_LD) should be <R_LD_pct> percent with 2.0 precision
-    And the expected sample size at theta=0 should be <ASN_0> percent with 2.0 precision
-    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 2.0 precision
-    And the expected sample size at theta=δ should be <ASN_delta> percent with 2.0 precision
-    And the expected sample size at theta=1.5δ should be <ASN_15delta> percent with 2.0 precision
+    Then the maximum sample size relative to fixed design (R_LD) should be <R_LD_pct> percent with 2.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 2.0 precision
+    And the expected sample size at theta = ±0.5δ should be <ASN_±0.5δ> percent with 2.0 precision
+    And the expected sample size at theta = ±δ should be <ASN_±δ> percent with 2.0 precision
+    And the expected sample size at theta = ±1.5δ should be <ASN_±1.5δ> percent with 2.0 precision
 
     Examples: rho=1
-      | K  | rho | R_LD_pct | ASN_0 | ASN_05delta | ASN_delta | ASN_15delta |
+      | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
       | 1  | 1   | 100.0    | 100.0 | 100.0       | 100.0     | 100.0       |
       | 2  | 1   | 107.5    | 106.1 | 99.6        | 77.7      | 58.7        |
       | 3  | 1   | 110.7    | 108.8 | 100.1       | 72.2      | 48.5        |
@@ -168,7 +174,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 20 | 1   | 117.6    | 114.8 | 102.0       | 64.5      | 36.7        |
 
     Examples: rho=2
-      | K  | rho | R_LD_pct | ASN_0 | ASN_05delta | ASN_delta | ASN_15delta |
+      | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
       | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     | 100.0       |
       | 2  | 2   | 102.5    | 101.9 | 97.9        | 80.5      | 59.6        |
       | 3  | 2   | 104.1    | 103.2 | 97.1        | 75.0      | 52.3        |
@@ -179,7 +185,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 20 | 2   | 108.5    | 106.8 | 96.6        | 65.7      | 40.7        |
 
     Examples: rho=3
-      | K  | rho | R_LD_pct | ASN_0 | ASN_05delta | ASN_delta | ASN_15delta |
+      | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
       | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     | 100.0       |
       | 2  | 3   | 100.9    | 100.6 | 98.1        | 84.1      | 62.4        |
       | 3  | 3   | 101.8    | 101.3 | 96.8        | 78.2      | 56.7        |
@@ -401,13 +407,13 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     Given a one-sided maximum information test with alpha 0.05 and beta 0.2
     And a maximum of <K> looks with rho-family spending <rho> for both errors
     When I evaluate the one-sided expected sample size relative to fixed design
-    Then the maximum information (R_OS) should be <R_OS_pct> percent with 10.0 precision
-    And the expected sample size at theta=0 should be <ASN_0> percent with 4.0 precision
-    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 4.0 precision
-    And the expected sample size at theta=δ should be <ASN_delta> percent with 4.0 precision
+    Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 4.0 precision
+    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 4.0 precision
+    And the expected sample size at theta = δ should be <ASN_δ> percent with 4.0 precision
 
     Examples: rho=2
-      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | K  | rho | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
       | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     |
       | 2  | 2   | 104.3    | 74.5  | 87.8        | 84.6      |
       | 3  | 2   | 107.0    | 68.0  | 82.8        | 79.2      |
@@ -418,7 +424,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 20 | 2   | 113.7    | 56.8  | 73.5        | 69.3      |
 
     Examples: rho=3
-      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | K  | rho | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
       | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     |
       | 2  | 3   | 101.4    | 79.6  | 91.6        | 88.3      |
       | 3  | 3   | 102.8    | 73.1  | 86.4        | 82.6      |
@@ -433,13 +439,13 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     Given a one-sided maximum information test with alpha 0.05 and beta 0.1
     And a maximum of <K> looks with rho-family spending <rho> for both errors
     When I evaluate the one-sided expected sample size relative to fixed design
-    Then the maximum information (R_OS) should be <R_OS_pct> percent with 10.0 precision
-    And the expected sample size at theta=0 should be <ASN_0> percent with 4.0 precision
-    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 4.0 precision
-    And the expected sample size at theta=δ should be <ASN_delta> percent with 4.0 precision
+    Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 4.0 precision
+    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 4.0 precision
+    And the expected sample size at theta = δ should be <ASN_δ> percent with 4.0 precision
 
     Examples: rho=2
-      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | K  | rho | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
       | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     |
       | 2  | 2   | 104.4    | 74.5  | 88.7        | 79.7      |
       | 3  | 2   | 107.2    | 68.1  | 83.9        | 73.8      |
@@ -450,7 +456,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 20 | 2   | 114.0    | 57.0  | 74.8        | 63.2      |
 
     Examples: rho=3
-      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | K  | rho | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
       | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     |
       | 2  | 3   | 101.5    | 79.0  | 92.0        | 83.6      |
       | 3  | 3   | 103.0    | 72.6  | 86.9        | 77.5      |
@@ -465,13 +471,13 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     Given a one-sided maximum information test with alpha 0.05 and beta 0.05
     And a maximum of <K> looks with rho-family spending <rho> for both errors
     When I evaluate the one-sided expected sample size relative to fixed design
-    Then the maximum information (R_OS) should be <R_OS_pct> percent with 10.0 precision
-    And the expected sample size at theta=0 should be <ASN_0> percent with 4.0 precision
-    And the expected sample size at theta=0.5δ should be <ASN_05delta> percent with 4.0 precision
-    And the expected sample size at theta=δ should be <ASN_delta> percent with 4.0 precision
+    Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 4.0 precision
+    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 4.0 precision
+    And the expected sample size at theta = δ should be <ASN_δ> percent with 4.0 precision
 
     Examples: rho=2
-      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | K  | rho | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
       | 1  | 2   | 100.0    | 100.0 | 100.0       | 100.0     |
       | 2  | 2   | 104.5    | 74.9  | 89.2        | 74.9      |
       | 3  | 2   | 107.3    | 68.7  | 84.5        | 68.7      |
@@ -482,7 +488,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 20 | 2   | 114.2    | 57.7  | 75.5        | 57.7      |
 
     Examples: rho=3
-      | K  | rho | R_OS_pct | ASN_0 | ASN_05delta | ASN_delta |
+      | K  | rho | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
       | 1  | 3   | 100.0    | 100.0 | 100.0       | 100.0     |
       | 2  | 3   | 101.6    | 79.0  | 92.2        | 79.0      |
       | 3  | 3   | 103.1    | 72.7  | 87.2        | 72.7      |

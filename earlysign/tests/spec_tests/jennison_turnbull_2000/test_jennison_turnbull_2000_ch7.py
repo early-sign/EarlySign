@@ -51,8 +51,15 @@ def given_alpha(alpha, design_params):
 
 
 @given(parsers.parse("a target power {power} at some effect size"))
+@given(parsers.parse("a target power {power} at theta = ±δ"))
 def given_power(power, design_params):
     design_params["power"] = float(power)
+
+
+@given("the sample size is designed to attain this power at theta = ±δ")
+def given_sample_size_at_delta(design_params):
+    # This is primarily informational in the Gherkin to match textbook phrasing
+    pass
 
 
 @given(
@@ -135,12 +142,12 @@ def then_check_r_ld(results, r_ld, atol):
 
 @then(
     parsers.parse(
-        "the maximum information (R_LD) should be {r_ld:f} percent with {atol:f} precision"
+        "the maximum sample size relative to fixed design (R_LD) should be {r_ld:f} percent with {atol:f} precision"
     )
 )
 @then(
     parsers.parse(
-        "the maximum information (R_OS) should be {r_ld:f} percent with {atol:f} precision"
+        "the maximum sample size relative to fixed design (R_OS) should be {r_ld:f} percent with {atol:f} precision"
     )
 )
 def then_check_r_ld_pct(results, r_ld, atol):
@@ -150,22 +157,34 @@ def then_check_r_ld_pct(results, r_ld, atol):
 
 
 @then(
-    parsers.parse(
-        "the expected sample size at theta={condition} should be {asn:f} percent with {atol:f} precision"
+    parsers.re(
+        r"the expected sample size at theta\s*=\s*(?P<condition>.+) should be (?P<asn>[\d.]+) percent with (?P<atol>[\d.]+) precision"
     )
 )
 def then_check_asn(results, condition, asn, atol):
-    # The condition in feature file is "0", "0.5δ", "δ", "1.5δ"
+    # Standardize condition string: remove spaces and normalize characters
+    cleaned_cond = condition.replace(" ", "")
+
     # Mapping to results keys
     mapping = {
         "0": "ASN_0",
         "0.5δ": "ASN_05delta",
+        "±0.5δ": "ASN_05delta",
         "δ": "ASN_delta",
+        "±δ": "ASN_delta",
         "1.5δ": "ASN_15delta",
+        "±1.5δ": "ASN_15delta",
     }
-    actual_key = mapping.get(condition)
+    actual_key = mapping.get(cleaned_cond)
+
+    if actual_key is None:
+        # Fallback for Table 7.9 or others if they use different notation
+        # e.g. "0.5δ" might be passed if Gherkin has "theta = 0.5δ"
+        # Let's also support the raw condition if it matches a key in results
+        actual_key = cleaned_cond
+
     # Calibrated tolerance from Gherkin
-    assert results[actual_key] == pytest.approx(asn, abs=atol)
+    assert results[actual_key] == pytest.approx(float(asn), abs=float(atol))
 
 
 # --- Subsection 7.2.2 Steps ---
