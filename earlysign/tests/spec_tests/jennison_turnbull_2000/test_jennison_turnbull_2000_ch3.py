@@ -1,4 +1,5 @@
 import re
+
 import numpy as np
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
@@ -90,8 +91,8 @@ def given_sigma2(sigma2, design_params):
     design_params["sigma2"] = float(sigma2)
 
 
-@given(parsers.parse("a maximum of {k:d} looks with \"{spending}\" spending"))
-@given(parsers.parse("the maximum number of looks is {k:d} with \"{spending}\" spending"))
+@given(parsers.parse('a maximum of {k:d} looks with "{spending}" spending'))
+@given(parsers.parse('the maximum number of looks is {k:d} with "{spending}" spending'))
 def given_looks_and_spending(k, spending, design_params):
     design_params["k"] = k
     design_params["spending_family"] = spending
@@ -370,7 +371,9 @@ def when_table32_eval(pi, r, design_params, evaluator, planner, cjd):
     return {"alpha_actual": alpha_actual, "power_actual": power_actual}
 
 
-@then(parsers.parse("the actual type-I error should be {alpha:f} with {atol:f} precision"))
+@then(
+    parsers.parse("the actual type-I error should be {alpha:f} with {atol:f} precision")
+)
 def then_check_alpha_actual(results, alpha, atol):
     # Calibrated tolerance from Gherkin
     assert results["alpha_actual"] == pytest.approx(alpha, abs=atol)
@@ -883,8 +886,16 @@ def given_nu_k(nu_K, design_params):
     design_params["nu_K"] = nu_K
 
 
-@given(parsers.parse("we take a total of n_max = {n:d} observations as a convenient sample size{desc}"))
-@given(parsers.parse("we take a total of {n:d} observations as a convenient sample size{desc}"))
+@given(
+    parsers.parse(
+        "we take a total of n_max = {n:d} observations as a convenient sample size{desc}"
+    )
+)
+@given(
+    parsers.parse(
+        "we take a total of {n:d} observations as a convenient sample size{desc}"
+    )
+)
 @given(parsers.parse("a total of {n:d} observations"))
 def given_total_observations(n, design_params):
     design_params["n_max"] = n
@@ -1010,9 +1021,6 @@ def when_group_sequential_t_test_eval(design_params, planner, evaluator, cjd):
     }
 
 
-
-
-
 @when(
     "I compute the t-statistic sequential design with the significance-level approach based on the canonical Gaussian process model",
     target_fixture="results",
@@ -1098,13 +1106,13 @@ def then_check_t_thresholds(results, values, atol):
     assert np.allclose(actual, expected, atol=atol)
 
 
-
-
-@then(parsers.parse("the total sample size (n_max) should be {n:d} with {atol:f} precision"))
+@then(
+    parsers.parse(
+        "the total sample size (n_max) should be {n:d} with {atol:f} precision"
+    )
+)
 def then_check_n_max_t_test(results, n, atol):
     assert results["n_max"] == pytest.approx(n, abs=atol)
-
-
 
 
 @then(

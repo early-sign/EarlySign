@@ -66,9 +66,7 @@ class CanonicalJointDistribution:
         elif shape_type == "obrien_fleming":
             c_shape = 1.0 / np.sqrt(t)
         elif shape_type == "wang_tsiatis":
-            delta_wt = (
-                shape_params.get("delta_wt", 0.25) if shape_params else 0.25
-            )
+            delta_wt = shape_params.get("delta_wt", 0.25) if shape_params else 0.25
             c_shape = t ** (delta_wt - 0.5)
         else:
             raise ValueError(f"Unknown shape_type: {shape_type}")

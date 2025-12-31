@@ -74,9 +74,7 @@ class DesignPlanner:
             c_shape = 1.0 / np.sqrt(info_times)
         elif shape_type == "wang_tsiatis":
             # Delta case from Table 3.1
-            delta_wt = (
-                shape_params.get("delta_wt", 0.25) if shape_params else 0.25
-            )
+            delta_wt = shape_params.get("delta_wt", 0.25) if shape_params else 0.25
             c_shape = info_times ** (delta_wt - 0.5)
         else:
             raise ValueError(f"Unknown shape: {shape_type}")
@@ -108,7 +106,11 @@ class DesignPlanner:
                 i_max = i_fixed * 1.032
 
         # 4. Map to sample size n_max
-        if trial_type == "normal-mean" or trial_type == "binomial-ab" or trial_type == "t-test":
+        if (
+            trial_type == "normal-mean"
+            or trial_type == "binomial-ab"
+            or trial_type == "t-test"
+        ):
             # For 2-arm A/B trial: I = n_total / (4 * sigma^2) => n_total = 4 * sigma^2 * I
             n_reported = 4 * i_max * sigma2
         elif trial_type == "paired" or trial_type == "binomial-single":
