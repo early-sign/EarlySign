@@ -5,12 +5,13 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
   Background:
     Given simulation precision with 60000 samples
 
-  Scenario Outline: Verification of maximum information test constant R_LD (Table 7.1)
+  Scenario: Verification of maximum information test constant R_LD (Table 7.1)
     Given a two-sided maximum information test with alpha 0.05
     And a target power <power> at some effect size
     And a maximum of <K> looks with rho-family spending <rho>
     When I compute the inflation factor R_LD
     Then the result should be <R_LD> with 0.02 precision
+    # Note: under the canonical Gaussian process model, R_LD is independent of the effect size.
 
     Examples: 1-beta=0.8
       | K  | rho | power | R_LD  |
@@ -19,21 +20,42 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 3  | 1   | 0.8   | 1.117 |
       | 4  | 1   | 0.8   | 1.137 |
       | 5  | 1   | 0.8   | 1.150 |
+      | 6  | 1   | 0.8   | 1.159 |
+      | 7  | 1   | 0.8   | 1.165 |
+      | 8  | 1   | 0.8   | 1.170 |
+      | 9  | 1   | 0.8   | 1.174 |
       | 10 | 1   | 0.8   | 1.178 |
+      | 11 | 1   | 0.8   | 1.180 |
+      | 12 | 1   | 0.8   | 1.183 |
+      | 15 | 1   | 0.8   | 1.188 |
       | 20 | 1   | 0.8   | 1.193 |
       | 1  | 2   | 0.8   | 1.000 |
       | 2  | 2   | 0.8   | 1.028 |
       | 3  | 2   | 0.8   | 1.045 |
       | 4  | 2   | 0.8   | 1.056 |
       | 5  | 2   | 0.8   | 1.063 |
+      | 6  | 2   | 0.8   | 1.069 |
+      | 7  | 2   | 0.8   | 1.073 |
+      | 8  | 2   | 0.8   | 1.076 |
+      | 9  | 2   | 0.8   | 1.079 |
       | 10 | 2   | 0.8   | 1.081 |
+      | 11 | 2   | 0.8   | 1.083 |
+      | 12 | 2   | 0.8   | 1.085 |
+      | 15 | 2   | 0.8   | 1.088 |
       | 20 | 2   | 0.8   | 1.092 |
       | 1  | 3   | 0.8   | 1.000 |
       | 2  | 3   | 0.8   | 1.010 |
       | 3  | 3   | 0.8   | 1.020 |
       | 4  | 3   | 0.8   | 1.027 |
       | 5  | 3   | 0.8   | 1.032 |
+      | 6  | 3   | 0.8   | 1.036 |
+      | 7  | 3   | 0.8   | 1.039 |
+      | 8  | 3   | 0.8   | 1.041 |
+      | 9  | 3   | 0.8   | 1.043 |
       | 10 | 3   | 0.8   | 1.045 |
+      | 11 | 3   | 0.8   | 1.046 |
+      | 12 | 3   | 0.8   | 1.048 |
+      | 15 | 3   | 0.8   | 1.050 |
       | 20 | 3   | 0.8   | 1.054 |
 
     Examples: 1-beta=0.9
@@ -43,25 +65,45 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 3  | 1   | 0.9   | 1.107 |
       | 4  | 1   | 0.9   | 1.124 |
       | 5  | 1   | 0.9   | 1.136 |
+      | 6  | 1   | 0.9   | 1.144 |
+      | 7  | 1   | 0.9   | 1.150 |
+      | 8  | 1   | 0.9   | 1.155 |
+      | 9  | 1   | 0.9   | 1.159 |
       | 10 | 1   | 0.9   | 1.162 |
+      | 11 | 1   | 0.9   | 1.164 |
+      | 12 | 1   | 0.9   | 1.166 |
+      | 15 | 1   | 0.9   | 1.171 |
       | 20 | 1   | 0.9   | 1.176 |
       | 1  | 2   | 0.9   | 1.000 |
       | 2  | 2   | 0.9   | 1.025 |
       | 3  | 2   | 0.9   | 1.041 |
       | 4  | 2   | 0.9   | 1.051 |
       | 5  | 2   | 0.9   | 1.058 |
+      | 6  | 2   | 0.9   | 1.063 |
+      | 7  | 2   | 0.9   | 1.067 |
+      | 8  | 2   | 0.9   | 1.070 |
+      | 9  | 2   | 0.9   | 1.073 |
       | 10 | 2   | 0.9   | 1.075 |
+      | 11 | 2   | 0.9   | 1.077 |
+      | 12 | 2   | 0.9   | 1.078 |
+      | 15 | 2   | 0.9   | 1.082 |
       | 20 | 2   | 0.9   | 1.085 |
       | 1  | 3   | 0.9   | 1.000 |
       | 2  | 3   | 0.9   | 1.009 |
       | 3  | 3   | 0.9   | 1.018 |
       | 4  | 3   | 0.9   | 1.025 |
       | 5  | 3   | 0.9   | 1.030 |
+      | 6  | 3   | 0.9   | 1.033 |
+      | 7  | 3   | 0.9   | 1.036 |
+      | 8  | 3   | 0.9   | 1.039 |
+      | 9  | 3   | 0.9   | 1.040 |
       | 10 | 3   | 0.9   | 1.042 |
+      | 11 | 3   | 0.9   | 1.043 |
+      | 12 | 3   | 0.9   | 1.044 |
+      | 15 | 3   | 0.9   | 1.047 |
       | 20 | 3   | 0.9   | 1.050 |
 
-  Scenario Outline: Properties of maximum information tests (Table 7.2)
-    # References: Table 7.2. alpha=0.05, 1-beta=0.8
+  Scenario: Properties of maximum information tests (Table 7.2)
     Given a two-sided maximum information test with alpha 0.05
     And a target power 0.8 at some effect size
     And a maximum of <K> looks with rho-family spending <rho>
@@ -102,7 +144,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 10 | 3   | 104.5    | 103.4 | 97.9        | 77.8      | 54.6        |
       | 20 | 3   | 105.4    | 104.2 | 98.0        | 76.5      | 52.7        |
 
-  Scenario Outline: Properties of maximum information tests (Table 7.3)
+  Scenario: Properties of maximum information tests (Table 7.3)
     # References: Table 7.3. alpha=0.05, 1-beta=0.9
     Given a two-sided maximum information test with alpha 0.05
     And a target power 0.9 at some effect size
@@ -183,7 +225,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     And the final maximum information should be 12.0 with 0.5 precision
     And the power at delta 1.0 should be 0.92 with 0.02 precision
 
-  Scenario Outline: Power under mismatched information schedules (Table 7.4)
+  Scenario: Power under mismatched information schedules (Table 7.4)
     Given a two-sided maximum information test with alpha 0.05
     And a target power 0.9 at effect size 1.0
     When I evaluate Table 7.4 robustness with K_tilde=<K>, rho=<rho>, r=<r>, and pi=<pi>
@@ -217,7 +259,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 10 | 3   | 1.00 | 1.0 | 0.900 |
       | 15 | 3   | 0.80 | 1.1 | 0.904 |
 
-  Scenario Outline: Power when number of analyses differs from plan (Table 7.5)
+  Scenario: Power when number of analyses differs from plan (Table 7.5)
     Given a two-sided maximum information test with alpha 0.05
     And a target power 0.9 at effect size 1.0
     When I evaluate Table 7.5 robustness with K_tilde=<K_tilde>, K=<K>, and rho=<rho>
@@ -255,7 +297,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     Then the boundaries should be "2.53, 2.59, 2.64, 2.50, 2.51, 2.47" with 0.08 precision
     And the observed Z-statistics 1.68, 2.24, 2.37, 2.30, 2.34, 2.82 should reject H0 at look 6
 
-  Scenario Outline: Verification of maximum information test constant R_OS (Table 7.6)
+  Scenario: Verification of maximum information test constant R_OS (Table 7.6)
     Given a one-sided maximum information test with alpha 0.05 and beta <beta>
     And a maximum of <K> looks with rho-family spending <rho> for both errors
     When I compute the inflation factor R_OS
@@ -354,7 +396,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 15 | 0.05 | 3   | 1.076 |
       | 20 | 0.05 | 3   | 1.080 |
 
-  Scenario Outline: Properties of one-sided asymmetric maximum information tests (Table 7.7)
+  Scenario: Properties of one-sided asymmetric maximum information tests (Table 7.7)
     # References: Table 7.7. alpha=0.05, 1-beta=0.8
     Given a one-sided maximum information test with alpha 0.05 and beta 0.2
     And a maximum of <K> looks with rho-family spending <rho> for both errors
@@ -386,7 +428,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 15 | 3   | 106.9    | 62.2  | 77.3        | 73.0      |
       | 20 | 3   | 107.3    | 61.6  | 76.8        | 72.4      |
 
-  Scenario Outline: Properties of one-sided asymmetric maximum information tests (Table 7.8)
+  Scenario: Properties of one-sided asymmetric maximum information tests (Table 7.8)
     # References: Table 7.8. alpha=0.05, 1-beta=0.9
     Given a one-sided maximum information test with alpha 0.05 and beta 0.1
     And a maximum of <K> looks with rho-family spending <rho> for both errors
@@ -418,7 +460,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
       | 15 | 3   | 107.3    | 61.8  | 78.0        | 67.1      |
       | 20 | 3   | 107.7    | 61.1  | 77.4        | 66.5      |
 
-  Scenario Outline: Properties of one-sided asymmetric maximum information tests (Table 7.9)
+  Scenario: Properties of one-sided asymmetric maximum information tests (Table 7.9)
     # References: Table 7.9. alpha=0.05, 1-beta=0.95
     Given a one-sided maximum information test with alpha 0.05 and beta 0.05
     And a maximum of <K> looks with rho-family spending <rho> for both errors
