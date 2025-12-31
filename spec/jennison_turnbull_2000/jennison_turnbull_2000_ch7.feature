@@ -1,10 +1,6 @@
-# Reference:
-# Jennison, C., & Turnbull, B. W. (2000). Group Sequential Methods with Applications to Clinical Trials. Chapman and Hall/CRC.
-
-Feature: Sequential Test Design Computation (Jennison & Turnbull 2000) - Chapter 7
-  As a statistical designer
-  I want to verify the maximum information test constants R_LD
-  So that I can match the results from table 7.1 in the textbook
+Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Spending Approach)
+  As a statistical designer, I want to verify the library's outputs match the results from the classic textbook
+  Jennison, C., & Turnbull, B. W. (2000). Group Sequential Methods with Applications to Clinical Trials. Chapman and Hall/CRC.
 
   Background:
     Given simulation precision with 60000 samples

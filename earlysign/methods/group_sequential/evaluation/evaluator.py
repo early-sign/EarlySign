@@ -123,17 +123,25 @@ class OperatingCharacteristicEvaluator:
 
         # 2. Generate joint chi-square distribution for variance estimates
         # nu_k * S_k^2 / sigma^2 ~ chi2_{nu_k}
-        # Increments in SSE are independent.
+        # Correct for potentially zero or negative df in phantom looks
         chi2_sims = np.zeros((n_sims, k))
         current_chi2 = np.zeros(n_sims)
         for i in range(k):
-            df_inc = nu[i] - (nu[i - 1] if i > 0 else 0)
+            df_curr = max(0, nu[i])
+            df_prev = max(0, nu[i - 1]) if i > 0 else 0
+            df_inc = df_curr - df_prev
             if df_inc > 0:
                 current_chi2 += rng.chisquare(df_inc, size=n_sims)
             chi2_sims[:, i] = current_chi2
 
         # 3. Compute T statistics: T_k = Z_k / sqrt(chi2_k / nu_k)
-        t_sims = z_sims / np.sqrt(chi2_sims / nu)
+        # Handle nu_k <= 0 by making tk safely large (no rejection)
+        safe_nu = np.where(nu > 0, nu, 1.0)
+        t_sims = z_sims / np.sqrt(chi2_sims / safe_nu)
+        # Avoid rejection if nu <= 0
+        for i in range(k):
+            if nu[i] <= 0:
+                t_sims[:, i] = 0.0
 
         if tails == 2:
             rejected = np.any(np.abs(t_sims) > b, axis=1)

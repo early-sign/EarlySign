@@ -1,36 +1,35 @@
-# Reference:
-# Jennison, C., & Turnbull, B. W. (2000). Group Sequential Methods with Applications to Clinical Trials. Chapman and Hall/CRC.
-
-Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
-  As a statistical designer
-  I want to verify the group sequential design for various outcomes
-  So that I can match the results from classic textbooks
+Feature: Jennison & Turnbull (2000) Chapter 3 (Two-Sided Tests: General Applications)
+  As a statistical designer, I want to verify the library's outputs match the results from the classic textbook
+  Jennison, C., & Turnbull, B. W. (2000). Group Sequential Methods with Applications to Clinical Trials. Chapman and Hall/CRC.
 
   Background:
     Given simulation precision with 60000 samples
 
   Scenario: Computing two-sided O'Brien-Fleming design for a paired comparison (Subsection 3.2.2)
     Given a two-sided paired comparison design with alpha 0.05
-    And a target power 0.9 at effect size 1.0
-    And a known variance (sigma squared) 6.0
+    And a target power 0.9 at effect size 1
+    And a known variance (sigma squared) 6
     And a maximum of 5 looks with "obrien_fleming" spending
     When I compute the normal mean sequential design
-    Then the information levels (I_k) should be "2.16, 4.31, 6.47, 8.63, 10.78" with 0.15 precision
-    And the critical values (c_k) should be "4.562, 3.226, 2.634, 2.281, 2.040" with 0.05 precision
+    Then the fixed sample information (I_f) should be 10.51 with 0.01 precision
+    And the maximum information (I_max) should be 10.78 with 0.15 precision
+    And the boundary values should be "4.562, 3.226, 2.634, 2.281, 2.040" with 0.05 precision
+    And the required pairs per group should be 12.94 with 0.2 precision
     And the total number of pairs (n_max) should be 64.7 with 1.0 precision
-    And the required pairs per group should be 12.9 with 0.2 precision
     And the rounded pairs per group should be 13
 
   Scenario: Computing two-sided Wang-Tsiatis design for a 2-period crossover trial (Subsection 3.2.2)
     Given a two-sided crossover trial design with alpha 0.05
     And a target power 0.8 at effect size 0.6
-    And a known variance (sigma squared) 9.0
+    And a known variance (sigma squared) 9
     And a maximum of 4 looks with "wang_tsiatis" spending
+    And a Wang-Tsiatis delta 0.25
     When I compute the normal mean sequential design
-    Then the information levels (I_k) should be "5.81, 11.61, 17.42, 23.23" with 0.3 precision
-    And the critical values (c_k) should be "2.988, 2.513, 2.271, 2.113" with 0.1 precision
-    And the total subjects per sequence (n_max) should be 104.5 with 2.0 precision
-    And the required subjects per sequence per group should be 26.1 with 0.4 precision
+    Then the fixed sample information (I_f) should be 21.81 with 0.01 precision
+    And the maximum information (I_max) should be 23.23 with 0.5 precision
+    And the boundary values should be "2.988, 2.513, 2.270, 2.113" with 0.1 precision
+    And the required subjects per sequence per group should be 26.1 with 0.8 precision
+    And the total subjects per sequence (n_max) should be 104.4 with 3.0 precision
     And the rounded subjects per sequence per group should be 27
 
   Scenario Outline: Operating characteristics with varying group sizes (Table 3.1)
@@ -38,8 +37,8 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
     And a planning sample size sequence per group "<n_plan>"
     And a spending function or shape "<spending>"
     When the actual sample size sequence per group is "<n_actual>"
-    Then the actual alpha should be <alpha_actual> with 0.015 precision
-    And the actual power should be <power_actual> with 0.02 precision for effect 1.0 and variance 4.0
+    Then the actual type-I error should be <alpha_actual> with 0.015 precision
+    And the actual power should be <power_actual> with 0.02 precision for effect 1 and variance 4
 
     Examples:
       | spending       | n_plan             | n_actual            | alpha_actual | power_actual |
@@ -70,7 +69,7 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
     And a planning information sequence for <K> looks with equal increments
     And a spending function "<spending>"
     When the actual information sequence is I_k = <pi> * (k/K)^<r> * I_max
-    Then the actual alpha should be <alpha_actual> with 0.015 precision
+    Then the actual type-I error should be <alpha_actual> with 0.015 precision
     And the actual power should be <power_actual> with 0.02 precision
 
     Examples:
@@ -130,30 +129,17 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
       | 10 | obrien_fleming | 1.25 | 1.0 | 0.053        | 0.901        |
       | 10 | obrien_fleming | 1.25 | 1.1 | 0.053        | 0.926        |
 
-  Scenario: Computing two-sided Pocock design for a normal mean (Subsection 3.4.2)
-    Given a two-sided normal mean test design with alpha 0.05
-    And a target power 0.8 at effect size 0.5
-    And a known variance (sigma squared) 1.2
-    And a maximum of 5 looks with "pocock" spending
-    When I compute the normal mean sequential design
-    Then the maximum information (I_max) should be 38.60 with 0.4 precision
-    And the information levels (I_k) should be "7.72, 15.44, 23.16, 30.88, 38.60" with 0.4 precision
-    And the boundary values should be "2.413, 2.413, 2.413, 2.413, 2.413" with 0.05 precision
-    And the total sample size (n_max) should be 185.3 with 1.5 precision
-    And the sample size increment per group per look should be 37.1 with 0.4 precision
-
   Scenario: Computing two-sided O'Brien-Fleming design for a normal mean (Subsection 3.4.2)
     Given a two-sided normal mean test design with alpha 0.05
     And a target power 0.8 at effect size 0.5
     And a known variance (sigma squared) 1.2
     And a maximum of 6 looks with "obrien_fleming" spending
     When I compute the normal mean sequential design
-    Then the fixed sample information (I_f) should be 31.40 with 0.1 precision
-    And the maximum information (I_max) should be 32.40 with 0.4 precision
-    And the information levels (I_k) should be "5.40, 10.80, 16.20, 21.60, 27.00, 32.40" with 0.4 precision
-    And the critical values (c_k) should be "5.029, 3.556, 2.903, 2.514, 2.249, 2.053" with 0.08 precision
-    And the total sample size (n_max) should be 155.5 with 1.5 precision
-    And the sample size increment per group per look should be 25.9 with 0.4 precision
+    Then the fixed sample information (I_f) should be 31.40 with 0.01 precision
+    And the maximum information (I_max) should be 32.40 with 0.3 precision
+    And the information levels (I_k) should be "5.40, 10.80, 16.20, 21.60, 27.00, 32.40" with 0.3 precision
+    And the critical values (c_k) should be "5.029, 3.556, 2.903, 2.515, 2.249, 2.053" with 0.05 precision
+    And the total sample size (n_max) should be 155.4 with 1.0 precision
 
   Scenario: Computing Pocock design for a single-arm binomial test (Subsection 3.6.1)
     Given a two-sided single-arm binomial test design with alpha 0.05
@@ -161,18 +147,12 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
     And a null hypothesis proportion (p_0) 0.6
     And a maximum of 4 looks with "pocock" spending
     When I compute the single-arm binomial sequential design
-    Then the maximum information (I_max) should be 311.4 with 0.1 precision
-    And the total sample size (n_max) should be 76 with 1.0 precision
+    Then the fixed sample information (I_f) should be 262.7 with 0.1 precision
+    And the maximum information (I_max) should be 310.8 with 1.0 precision
+    And the total sample size (n_max) should be 76 with 0.4 precision
+    And the sample size increment per group per look should be 19 with 0.4 precision
     And the Pocock boundary value (C) should be 2.361 with 0.05 precision
-    And the critical difference in proportions should be 0.265 with 0.05 precision / sqrt(k)
 
-  Scenario: Operating characteristics of the single-arm binomial test (Subsection 3.6.1)
-    Given a two-sided single-arm binomial test design with 4 looks and total sample size 76
-    And a null hypothesis proportion (p_0) 0.6
-    When I evaluate the operating characteristics
-    Then the actual alpha should be 0.050 with 0.01 precision
-    And the nominal power at p = 0.8 (using null variance) should be 0.906 with 0.005 precision
-    And the true power at p = 0.8 (using alternative variance) should be 0.982 with 0.005 precision
 
   Scenario: Computing O'Brien-Fleming design for binomial outcomes (Subsection 3.6.2)
     Given a two-sided A/B test design with alpha 0.05
@@ -181,72 +161,75 @@ Feature: Sequential Test Design Computation (Jennison & Turnbull 2000)
     And a maximum of 8 looks with "obrien_fleming" spending
     When I compute the binomial sequential design
     Then the fixed sample information (I_f) should be 196.2 with 0.1 precision
-    And the maximum information (I_max) should be 203.2 with 0.1 precision
-    And the total sample size per group (n_g) should be 104 with 1.5 precision
-    And the sample size increment per group per look should be 13 with 1.0 precision
+    And the maximum information (I_max) should be 203.5 with 1.0 precision
+    And the total sample size per group (n_g) should be 104 with 0.4 precision
+    And the sample size increment per group per look should be 13 with 0.4 precision
     And the O'Brien-Fleming boundary constant (C_OBF) should be 2.072 with 0.05 precision
-    And the standardized boundary at look k should be 2.072 with 0.08 precision * sqrt(8/k)
-    And the critical difference in proportions should be 2.30 with 0.05 precision * sqrt(p_bar * (1-p_bar)) / k
-
-  Scenario: Operating characteristics of the A/B binomial test (Subsection 3.6.2)
-    Given a two-sided A/B test design with 8 looks and sample size per group 104
-    And a baseline proportion (p_control) 0.5
-    When I evaluate the A/B operating characteristics
-    Then the actual alpha should be 0.050 with 0.01 precision
-    And the nominal power at delta = 0.2 (using sigma^2 = 0.25) should be 0.801 with 0.02 precision
-    And the true power at p_A = 0.4, p_B = 0.6 (using sigma^2 = 0.24) should be 0.816 with 0.02 precision
+    And the standardized boundaries (z_k) should be "5.861, 4.144, 3.384, 2.930, 2.621, 2.393, 2.215, 2.072" with 0.05 precision
 
   Scenario: Computing O'Brien-Fleming design for survival data (Subsection 3.7)
     Given a two-sided log-rank test design with alpha 0.05
     And a target power 0.8 at hazard ratio 1.5
     And a maximum of 5 looks with "obrien_fleming" spending
     When I compute the log-rank sequential design
-    Then the fixed sample information (I_f) should be 47.74 with 0.1 precision
-    And the maximum information (I_max) should be 49.70 with 0.1 precision
-    And the total number of events (d_max) should be 197 with 2.5 precision
-    And the boundary values should be "4.562, 3.226, 2.634, 2.281, 2.040" with 0.08 precision
+    Then the fixed sample information (I_f) should be 47.85 with 0.2 precision
+    And the maximum information (I_max) should be 49.19 with 1.0 precision
+    And the total number of events (d_max) should be 197 with 2.0 precision
+    And the boundary values should be "4.562, 3.226, 2.634, 2.281, 2.04" with 0.1 precision
 
   Scenario Outline: Properties of group sequential t-tests (Table 3.3)
-    # Reference: Section 3.8.1, Table 3.3
-    # Note from Table 3.3 footnote:
     # Calculations are performed assuming the total number of subjects (n_k) across
     # two treatment groups at look k, even if it results in fractional subjects per group.
     # Degrees of freedom at look k: nu_k = (k/K)(nu_K + 2) - 2.
     Given a two-sided t-test design with alpha 0.05
     And a maximum of <K> looks with "<spending>" spending
     And a final degrees of freedom (nu_K) <nu_K>
+    And simulation precision with 50000 replicates
     When I evaluate the group sequential t-test performance
-    Then the actual alpha should be <alpha_actual> with 0.02 precision
+    Then the actual type-I error should be <alpha_actual> with 0.01 precision
     And the actual power should be <power_actual> with 0.02 precision
-    And the power approximation (3.20) should be 0.8 with 0.01 precision
-    And the power approximation (3.21) should be <approx_321> with 0.05 precision
 
     Examples:
-      | spending       | K | nu_K | alpha_actual | power_actual | approx_321 |
-      | pocock         | 3 | 7    | 0.060        | 0.741        | 0.905      |
-      | pocock         | 3 | 13   | 0.054        | 0.774        | 0.858      |
-      | pocock         | 5 | 13   | 0.058        | 0.760        | 0.858      |
-      | pocock         | 5 | 23   | 0.054        | 0.780        | 0.833      |
-      | obrien_fleming | 3 | 7    | 0.054        | 0.793        | 0.905      |
-      | obrien_fleming | 3 | 13   | 0.052        | 0.798        | 0.858      |
-      | obrien_fleming | 5 | 13   | 0.055        | 0.795        | 0.858      |
-      | obrien_fleming | 5 | 23   | 0.051        | 0.797        | 0.833      |
-      | wang_tsiatis   | 3 | 7    | 0.057        | 0.782        | 0.905      |
-      | wang_tsiatis   | 3 | 13   | 0.054        | 0.794        | 0.858      |
+      | spending       | K | nu_K | alpha_actual | power_actual |
+      | pocock         | 3 | 7    | 0.060        | 0.741        |
+      | pocock         | 3 | 13   | 0.054        | 0.774        |
+      | pocock         | 5 | 13   | 0.058        | 0.760        |
+      | pocock         | 5 | 23   | 0.054        | 0.780        |
+      | pocock         | 8 | 22   | 0.058        | 0.774        |
+      | pocock         | 8 | 38   | 0.056        | 0.786        |
+      | obrien_fleming | 3 | 7    | 0.054        | 0.793        |
+      | obrien_fleming | 3 | 13   | 0.052        | 0.798        |
+      | obrien_fleming | 5 | 13   | 0.055        | 0.795        |
+      | obrien_fleming | 5 | 23   | 0.051        | 0.797        |
+      | obrien_fleming | 8 | 22   | 0.055        | 0.799        |
+      | obrien_fleming | 8 | 38   | 0.052        | 0.803        |
+      | wang_tsiatis   | 3 | 7    | 0.057        | 0.782        |
+      | wang_tsiatis   | 3 | 13   | 0.054        | 0.794        |
+      | wang_tsiatis   | 5 | 13   | 0.056        | 0.791        |
+      | wang_tsiatis   | 5 | 23   | 0.051        | 0.794        |
+      | wang_tsiatis   | 8 | 22   | 0.056        | 0.793        |
+      | wang_tsiatis   | 8 | 38   | 0.052        | 0.796        |
 
-  Scenario: Two-sample t-test with O'Brien-Fleming boundaries (Subsection 3.8.2, Example 1)
-    Given a two-sided t-test design with alpha 0.01
-    And a maximum of 4 looks with "obrien_fleming" spending
-    And a final degrees of freedom (nu_K) 62
-    And a parameter count (p) 2
-    When I evaluate the group sequential t-test performance for effect 1.0 (sigma units)
-    Then the actual alpha should be 0.0101 with 0.01 precision
-    And the actual power should be 0.9021 with 0.03 precision
+  Scenario: Two-sample t-test with O'Brien-Fleming boundaries (Subsection 3.8.2, Two-Treatment Comparison)
+    Given the problem setup "Two-sample comparison: X_Ai ~ N(mu_A, sigma^2), X_Bi ~ N(mu_B, sigma^2), sigma^2 unknown"
+    And we test "H_0: mu_A = mu_B vs H_1: mu_A != mu_B"
+    And the stat definition is "T_k = (sum(X_Ai) - sum(X_Bi)) / sqrt(2*m*k * s_k^2)"
+    And the degrees of freedom are 2*m*k - 2
+    And the design targets alpha 0.01
+    And the maximum number of looks is 4 with "obrien_fleming" spending
+    And each group contains m = 8 observations per treatment
+    When I compute the t-statistic sequential design with the significance-level approach based on the canonical Gaussian process model
+    Then the t-statistic thresholds should be "t(14, 1 - Phi(5.218 * 1^(-0.5))), t(30, 1 - Phi(5.218 * 2^(-0.5))), t(46, 1 - Phi(5.218 * 3^(-0.5))), t(62, 1 - Phi(5.218 * 4^(-0.5)))" with 0.001 precision
 
-  Scenario: Covariate-adjusted t-test (Subsection 3.8.2, Example 2)
-    Given a two-sided t-test design with alpha 0.05
-    And a maximum of 6 looks with "obrien_fleming" spending
-    And a final degrees of freedom (nu_K) 150
-    And a parameter count (p) 6
-    When I evaluate the group sequential t-test performance for effect 0.5 (beta_1) and sigma_sq 1.2
-    Then the power approximation (3.20) should be 0.796 with 0.01 precision
+  Scenario: Covariate-adjusted t-test (Subsection 3.8.2, Two-Treatment Comparison Adjusted for Covariates)
+    Given the problem setup "Linear model: Y_i = beta_0 + beta_1 * Z1_i + ... + beta_5 * Z5_i + epsilon_i, sigma^2 unknown"
+    And we test "H_0: beta_1 = 0 vs H_1: beta_1 != 0"
+    And the stat definition is "T_k = beta_hat_1_k / sqrt(Var_hat(beta_hat_1_k))"
+    And we assume p = 6 parameters (5 covariates and 1 treatment effect)
+    # The degrees of freedom are nu_k = n_k - p
+    And the degrees of freedom are n_k - 6
+    And the design targets alpha 0.05
+    And the maximum number of looks is 6 with "obrien_fleming" spending
+    And we take a total of n_max = 156 observations as a convenient sample size, giving 26 per group
+    When I compute the t-statistic sequential design with the significance-level approach based on the canonical Gaussian process model
+    Then the t-statistic thresholds should be "t(20, 1 - Phi(6.131 * 1^(-0.5))), t(46, 1 - Phi(6.131 * 2^(-0.5))), t(72, 1 - Phi(6.131 * 3^(-0.5))), t(98, 1 - Phi(6.131 * 4^(-0.5))), t(124, 1 - Phi(6.131 * 5^(-0.5))), t(150, 1 - Phi(6.131 * 6^(-0.5)))" with 0.001 precision

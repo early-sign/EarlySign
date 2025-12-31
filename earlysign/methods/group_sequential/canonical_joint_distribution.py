@@ -46,14 +46,16 @@ class CanonicalJointDistribution:
         alpha: float,
         shape_type: str = "pocock",
         tails: int = 2,
+        shape_params: Optional[Dict] = None,
     ) -> float:
         """Solve for the constant 'c' that yields the target alpha for a given shape.
 
         Args:
             info_times: Cumulative information fractions (t_1, ..., t_K).
             alpha: Target Type I error.
-            shape_type: "pocock", "obrien_fleming", or "wang_tsiatis" (with Delta=0.25).
+            shape_type: "pocock", "obrien_fleming", or "wang_tsiatis".
             tails: 1 or 2 (currently implementation focused on symmetric 2-sided).
+            shape_params: Optional dict for extra params (e.g. {'delta_wt': 0.1}).
 
         Returns:
             The constant c such that P(any |Z_k| > c * shape_k) = alpha.
@@ -64,8 +66,10 @@ class CanonicalJointDistribution:
         elif shape_type == "obrien_fleming":
             c_shape = 1.0 / np.sqrt(t)
         elif shape_type == "wang_tsiatis":
-            # Delta = 0.25 case from Table 3.1
-            c_shape = t ** (-0.25)
+            delta_wt = (
+                shape_params.get("delta_wt", 0.25) if shape_params else 0.25
+            )
+            c_shape = t ** (delta_wt - 0.5)
         else:
             raise ValueError(f"Unknown shape_type: {shape_type}")
 
