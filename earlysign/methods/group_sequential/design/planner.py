@@ -38,7 +38,7 @@ class DesignPlanner:
         shape_type: str,
         trial_type: TrialType = "normal-mean",
         round_to_k: bool = False,
-        shape_params: Optional[Dict] = None,
+        shape_params: Optional[Dict[str, float]] = None,
     ) -> Dict[str, float]:
         """
         Plans a sequential design by calculating I_max and n_max.

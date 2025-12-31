@@ -46,7 +46,7 @@ class CanonicalJointDistribution:
         alpha: float,
         shape_type: str = "pocock",
         tails: int = 2,
-        shape_params: Optional[Dict] = None,
+        shape_params: Optional[Dict[str, float]] = None,
     ) -> float:
         """Solve for the constant 'c' that yields the target alpha for a given shape.
 
