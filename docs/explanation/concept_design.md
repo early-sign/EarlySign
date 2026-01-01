@@ -115,6 +115,13 @@ The taxonomy above serves as a set of **architectural stress tests**—conceptua
 
 The candidates below represent a progression from **Explicit Manual Control** to **Transparent Logical Autopilot**. They share the same underlying "Episodes" and "Ledger" but differ in their degree of structural integrity, operational efficiency, and the level of "Architectural Consciousness" required from the developer.
 
+**Summary of Evolution (Selection Guide):**
+- **Pattern A/B**: Best for simple, one-off scripts where explicit control is preferred.
+- **Pattern C**: Useful for scripts where literal string identifiers are preferred over formal types.
+- **Pattern F**: Recommended standard for production-grade trials. It provides strict type safety, automatic validation, and clear schema definitions via Pydantic.
+- **Pattern G**: The most refined standard, adding **Traced[T]** containers and polymorphic trace merging for precise scientific context management.
+- **Pattern D/E**: Future experimental patterns for complex orchestration.
+
 ## III-1. Pattern A: Raw Procedural API (Manual Integrity)
 
 This is the baseline API. It provides direct, procedural access to Ledger operations. It is intuitive but places the burden of integrity (e.g. idempotency, provenance) entirely on the developer.
@@ -142,6 +149,7 @@ with ledger.bind(episode_id="TRIAL_01").Horizon() as ep:
 
 Pattern B is **Pattern A with an "Anchor"**. It uses the same procedural flow but introduces `ep.Commit` to solve idempotency, governance, and stochastic challenges structurally. The name `Commit` emphasizes that we are finalizing a statistical insight into the immutable Ledger within the current **Horizon**.
 
+```python
 episode = ledger.bind(episode_id="TRIAL_01")
 with episode.session() as ep:
     # 1. Read: Hydrate a summary using a Projector
@@ -180,17 +188,12 @@ Pattern C is the standard evolution, designed for high-performance and distribut
 
         if res.p_value < 0.05:
             ep.Decision(Decision.Success())
+```
 
 ### Note on "Read" Skipping in Pattern C:
 The `ep.Read()` calls are executed to prepare arguments for `ep.CommitCallResult()`. While the calculation body is skipped if the fingerprint matches, the data retrieval logic remains visible and active. This is suitable for workflows where data retrieval overhead is negligible compared to statistical computation.
 
-**Summary of Evolution (Selection Guide):**
-- **Pattern A/B**: Best for simple, one-off scripts where explicit control is preferred.
-- **Pattern C**: Useful for scripts where literal string identifiers are preferred over formal types.
-- **Pattern F**: Recommended standard for production-grade trials. It provides strict type safety, automatic validation, and clear schema definitions via Pydantic.
-- **Pattern D/E**: Future experimental patterns for complex orchestration.
-```
-
+## III-4. Pattern F: Typed Record API (Recommended Standard)
 
 Pattern F is the standard implementation pattern. It focuses on the use of **Pydantic Models** to define the schema of every committed event.
 
@@ -236,9 +239,62 @@ with episode.session() as ep:
 2.  **Modular Projections**: `Projector` classes centralize complex "Read" logic (folds), keeping the analysis script focused on scientific rules.
 3.  **Schema Persistence**: Committing with Typed Records stores the schema identity (model name/version) in the Ledger, allowing future tools to parse event payloads without guessing.
 
-## III-5. Library-Side Logic: Projectors & Typed Commitment
+## III-5. Pattern G: Traced Procedural API (The Refined Standard)
 
-Pattern F leverages class-based Projectors and Pydantic validation.
+Pattern G is the **Refined Standard** for EarlySign. It builds upon Pattern F by introducing the `Traced[T]` container and advanced trace orchestration. While Pattern F handles schema, Pattern G ensures that scientific causality is handled with both automation and surgical precision.
+
+### Key Features of Pattern G:
+
+1.  **Implicit Trace Accumulation**: Every `ep.Read(projector)` adds the specific data references (the "Trace") identified by the Projector to the session's context.
+2.  **`Traced[T]` Container**: `Read` returns a wrapper that holds both the hydrated `data` and its scientific `trace`. This allows the trace to be passed explicitly as an argument.
+3.  **Polymorphic Trace Merging**: Methods like `Commit` accept a `List[Union[Traced, str]]`, automatically flattening containers to extract their lineage.
+4.  **Implicit Access**: The `ep.trace` property provides direct access to the session's cumulative "implicit trace."
+
+### User Workspace: Advanced Orchestration
+
+```python
+episode = ledger.bind(episode_id="TRIAL_01")
+with episode.session() as ep:
+    # 1. Targeted Read: returns Traced[BinomialSummary]
+    summary_a = ep.Read(BinomialProjector(arm="A"))
+    summary_b = ep.Read(BinomialProjector(arm="B"))
+
+    # 2. Polymorphic Merging:
+    # The Trace for this result is automatically merged from (summary_a, summary_b)
+    res = ep.CommitCallResult(ComparativeResult, calculate_diff, summary_a, summary_b)
+
+    # 3. Explicit Narrowing:
+    # We choose to justify this decision ONLY based on the comparative result 'res', 
+    # ignoring other unrelated session activity.
+    if res.p_value < 0.05:
+        ep.Decision(Decision.Success(), trace=[res])
+```
+
+### Control Modes of Pattern G:
+
+1.  **Automatic (Convenience)**: By default, `Commit` and `Decision` use the cumulative session trace. 
+2.  **Narrowed (Explicit & Polymorphic)**: Pass a `List[Traced | str]` to `Commit(trace=...)`. The library flattens any `Traced` containers to extract their scientific lineage.
+3.  **Explicit Isolation**: Passing `trace=[]` (empty list) binds the record *only* to the current Snapshot, isolating it from session-level interactions.
+4.  **Implicit Access**: The `ep.trace` property provides direct access to the current cumulative "implicit trace" of the session.
+
+### How it Works: The Trace Hash Ingredients
+
+The **Trace Hash** is the soul of the system's integrity. It represents a **Scientific Lineage**, ensuring that every fact in the Ledger is provably tied to its evidence. Technically, it is a stable hash computed from four discrete ingredients:
+
+1.  **Induction Snapshot**: The Ledger's state ID (LSN or cumulative hash) representing the observation cutoff.
+2.  **Parent Trace Hashes**: The `trace_hash` values extracted from every record/container passed as an argument to the current call. This creates the dependency link.
+3.  **Action Identity**: The `name` or `type` of the operation (e.g., "ComparativeResult").
+4.  **Parameter State**: Literal values of other `*args` and `**kwargs`.
+
+### Why this is User-Friendly:
+
+*   **Linear code, Non-linear reality**: You write a simple, top-to-bottom script. The library "remembers" what has already been logically satisfied.
+*   **Stochastic Safety**: In Bayesian trials (MCMC), the first result is the *only* result. Future runs retrieve the exact same posterior-samples from the Ledger, ensuring your audit trail is deterministic.
+*   **Pipeline Awareness**: It solves the "Waitlist" problem automatically. If 20 new patients enroll, the fingerprint changes, allowing a new "Look" that accounts for the increased information weight.
+
+## III-6. Library-Side Logic: Implementing Pattern G
+
+Pattern G leverages Traced[T] containers and a polymorphic Trace Resolver to guarantee scientific causality.
 
 ```python
 # Generic container for data + scientific trace
@@ -308,46 +364,8 @@ class Session:
         self._session_trace.append(trace_hash)
         return event
 
-Pattern G provides the most refined control over scientific causality:
 
-1.  **Automatic (Convenience)**: By default, `Commit` uses the cumulative session trace. 
-2.  **Narrowed (Explicit & Polymorphic)**: Pass a `List[Traced | str]` to `Commit(trace=...)`. The library flattens any `Traced` containers to extract their scientific lineage, allowing you to combine specific dependencies with surgical precision. 
-3.  **Explicit Isolation**: Passing `trace=[]` (empty list) binds the record *only* to the current Snapshot, isolating it from session-level interactions.
-4.  **Implicit Access**: The `ep.trace` property provides direct access to the current cumulative "implicit trace" of the session, enabling manual auditing or custom orchestration.
-
-```python
-# Linkage example
-res = ep.CommitCallResult(SSRResult, perform_analysis, data)
-
-if res.recommended_n > 500:
-    # All subsequent actions in the session implicitly depend on 'res'.
-    ep.UpdateProtocol(MaxNUpdate(new_n=res.recommended_n))
-```
-```
-
-### How it Works: The Trace Hash Ingredients
-
-The **Trace Hash** is the soul of the system's integrity. It represents a **Merkle-Proof of Scientific Lineage**, ensuring that every fact in the Ledger is provably tied to its evidence.
-
-Technically, it is a stable hash computed from four discrete ingredients:
-
-1.  **Induction Snapshot**: The Ledger's state ID (LSN or cumulative hash) representing the observation cutoff.
-2.  **Parent Trace Hashes**: The `trace_hash` values extracted from every record passed as an argument to the current call. This creates the dependency link.
-3.  **Action Identity**: The `name` or `type` of the operation.
-4.  **Parameter State**: Literal values of `*args` and `**kwargs`.
-
-#### The "Get-or-Confirm" Lifecycle:
-- **First Run**: No event with this specific Trace Hash exists. The library evaluates the logic and commits the result.
-- **Subsequent Runs (Same Context)**: The Trace Hash matches perfectly. The library **skips the logic** and returns the pinned fact from the Ledger.
-- **Referential Transparency**: Because a `trace_hash` shifts if any of its ancestors or inputs change, a complex workflow behaves like a series of pure functional transformations. The developer writes imperative code; the library enforces functional rigor.
-
-### Why this is User-Friendly:
-
-*   **Linear code, Non-linear reality**: You write a simple, top-to-bottom script. You don't need `if total_n >= 50 and not look_2_done:` branches. The library "remembers" what has already been logically satisfied.
-*   **Stochastic Safety**: In Bayesian trials (MCMC), the first result is the *only* result. Future runs retrieve the exact same posterior-samples from the Ledger, ensuring your audit trail is deterministic even if your solver isn't.
-*   **Pipeline Awareness**: It solves the "Waitlist" problem automatically. If 20 new patients enroll, the fingerprint changes, allowing a new "Look" that accounts for the increased information weight—without you tracking enrollment counts manually.
-
-## III-7. Architectural Proofs: Defending Against Complex Attacks (Pattern F)
+## III-7. Architectural Proofs: Defending Against Complex Attacks (Pattern G)
 
 To demonstrate that the Typed Procedural API is rigorous enough for professional adaptivity, we examine its behavior in complex scenarios.
 
@@ -376,6 +394,12 @@ with episode.session() as ep:
     platform = ep.Read(PlatformProjector())
     
     for arm_id in platform.active_arms:
+        # 1. Targeted Read for a specific arm
+        summary = ep.Read(BinomialProjector(arm=arm_id))
+        
+        # 2. The analysis is strictly bound to 'summary'
+        res = ep.CommitCallResult(AnalysisResult, perform_analysis, summary)
+        
         if res.z > res.bounds.futility:
              ep.Decision(Decision.ArmFutility(arm=arm_id))
 ```
@@ -383,7 +407,7 @@ with episode.session() as ep:
 ### Proof 3: Latency & Pipeline (The Waitlist Challenge)
 **Challenge**: Preventing "Double Stopping" when multiple analyses are run while outcome data is still in the pipeline.
 
-By including the **Pipeline Hash** (enrolled subjects with pending outcomes) in the `CommitCallResult` trace hash, Pattern F ensures that a heavy analysis is only "New" if the pipeline has changed. If the number of pending patients remains the same and no outcomes have arrived, `CommitCallResult` returns the existing `res` immediately, and the library's internal `ep.Decision` check prevents a redundant action.
+By including the **Pipeline Hash** (enrolled subjects with pending outcomes) in the `CommitCallResult` trace hash, Pattern G ensures that a heavy analysis is only "New" if the pipeline has changed. If the number of pending patients remains the same and no outcomes have arrived, `CommitCallResult` returns the existing `res` immediately, and the library's internal `ep.Decision` check prevents a redundant action.
 
 ### Proof 4: Stochastic Reproducibility (Bayesian MCMC)
 **Challenge**: Guaranteeing that stochastic computations (e.g., MCMC sampling) are "frozen" once computed, ensuring deterministic replay.
@@ -395,9 +419,10 @@ episode = ledger.bind(episode_id="TRIAL_01")
 with episode.session() as ep:
     ctx = ep.Read(InferenceProjector())
     
-    # The first time this runs, perform_mcmc executes.
-    # Subsequent runs retrieve the exact same result from the Ledger.
-    res = ep.CommitCallResult(BayesianResult, perform_mcmc, ctx.data, seed=42)
+    # 1. perform_mcmc executes on the first run.
+    # 2. Subsequent runs detect that 'ctx' (scientific trace) hasn't changed.
+    # 3. The library skips the solver and returns the committed record.
+    res = ep.CommitCallResult(BayesianResult, perform_mcmc, ctx, seed=42)
     
     if res.posterior_mean > threshold:
         ep.Decision(Decision.EfficacySignal())
@@ -406,7 +431,7 @@ with episode.session() as ep:
 ### Proof 5: Multi-Generation Challenge (Platform Trials)
 **Challenge**: Maintaining $O(N)$ performance for state reconstruction in long-running platform trials with evolving protocols.
 
-Pattern F, combined with **Persistent Snapshots** (II-1), addresses this by ensuring that `ep.Read()` operations can leverage the latest snapshot, and `ep.CommitCallResult()` trace hashes only need to consider the differential events since that snapshot. The `Induction Snapshot` in the trace hash ensures that even if the underlying protocol changes, the system correctly identifies when a re-computation is necessary, while the snapshotting mechanism keeps the replay cost manageable.
+Pattern G, combined with **Persistent Snapshots** (II-1), addresses this by ensuring that `ep.Read()` operations can leverage the latest snapshot, and `ep.CommitCallResult()` trace hashes only need to consider the differential events since that snapshot. The `Induction Snapshot` in the trace hash ensures that even if the underlying protocol changes, the system correctly identifies when a re-computation is necessary, while the snapshotting mechanism keeps the replay cost manageable.
 
 ## III-8. The Repeatable Process Pattern (Idempotency of Action)
 
@@ -476,29 +501,6 @@ with episode.session() as ep:
 ```
 
 ---
-
-## V. Philosophical Appendix: The Merkle Ledger (A Thought Experiment)
-
-The concept of "Git-like commit hashes" (Merkle DAGs) provides a powerful mental model for the future of statistical integrity.
-
-### What if the Ledger were a Merkle Tree?
-In this vision, every event in EarlySign is a "Commit".
-1.  **Content-Addressability**: An $AnalysisRecord$ is not just a row with an ID; it is a hash of its content + its "Parents" (the specific observation events it read).
-2.  **The Proof of Trial**: The entire history of a platform trial would culminate in a single **Root Hash**. This hash represents the absolute, tamper-proof state of every observation, protocol version, and stop-decision made to date.
-
-### How it compares to our current Fingerprint:
-Our current **Reference-Set Fingerprint** is effectively a "Shallow Merkle Proof":
-*   **Git**: Hashes the entire tree of every file.
-*   **EarlySign**: Hashes the "View" (Projection) of the data. 
-    - *Why?* Because hashing 10 million raw rows for every analysis is slow. Instead, we hash the **Projection State** (e.g., the hash of the current cumulative summary), which acts as a "Merkle Root" for that specific data view.
-
-### The "Slightly Different Concept" (The "Git-Flow" for Stats):
-If we went "Full Git", the API might look like this:
-```python
-# 'basis' becomes a pointer to a Parent Commit Hash
-res = ep.CommitCallResult("MCMC", perform_mcmc, data, parent=protocol.hash)
-```
-**The Breakthrough**: If two independent PIs (Principal Investigators) have the same "Final Hash", then it is mathematically proven that they saw the exact same data and followed the exact same logic. In a JSS context, this is the standard defense against "data dredging" or "p-hacking"—the hash becomes a public, verifiable seal of scientific integrity.
 
 ---
 
