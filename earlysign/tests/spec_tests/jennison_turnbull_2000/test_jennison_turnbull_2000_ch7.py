@@ -38,7 +38,7 @@ def given_precision(n, design_params):
     design_params["n_sims"] = int(n)
 
 
-@given(parsers.parse("a target power {power} at effect size {delta}"))
+@given(parsers.re(r"a target power (?P<power>[\d.]+) at effect size (?P<delta>[\d.]+)$"))
 def given_power_delta(power, delta, design_params):
     design_params["power"] = float(power)
     design_params["delta"] = float(delta)
@@ -50,16 +50,33 @@ def given_alpha(alpha, design_params):
     design_params["tails"] = 2
 
 
-@given(parsers.parse("a target power {power} at some effect size"))
-@given(parsers.parse("a target power {power} at theta = ±δ"))
-def given_power(power, design_params):
+@given(
+    parsers.re(
+        r"(?i)(?:a target power |the design is planned to attain power )(?P<power>[\d.]+) at (?:theta\s*=\s*(?:±)?δ|some effect size|effect size delta|mu_A - mu_B = ±(?P<delta>[\d.]+))"
+    )
+)
+def given_power_ch7(power, delta, design_params):
     design_params["power"] = float(power)
+    if delta:
+        design_params["delta"] = float(delta)
+    elif "delta" not in design_params:
+        design_params["delta"] = 1.0
 
 
-@given("the sample size is designed to attain this power at theta = ±δ")
-def given_sample_size_at_delta(design_params):
+@given(parsers.re(r"(?i)delta is (?P<delta>[\d.]+)"))
+def given_delta_value_ch7(delta, design_params):
+    design_params["delta"] = float(delta)
+
+
+@given(parsers.re(r"(?i)the sample size is designed to attain this power at theta = ±δ"))
+def given_sample_size_at_delta_ch7(design_params):
     # This is primarily informational in the Gherkin to match textbook phrasing
     pass
+
+
+@given(parsers.re(r"(?i)a planned maximum information (?P<i_max>[\d.]+)"))
+def given_planned_i_max_ch7(i_max, design_params):
+    design_params["planned_i_max"] = float(i_max)
 
 
 @given(
@@ -153,12 +170,12 @@ def then_check_r_ld(results, r_ld, atol):
 def then_check_r_ld_pct(results, r_ld, atol):
     # Try R_LD_pct first, then R_OS_pct
     val = results.get("R_LD_pct", results.get("R_OS_pct"))
-    assert val == pytest.approx(float(r_ld), abs=atol)
+    assert val == pytest.approx(float(r_ld), abs=float(atol))
 
 
 @then(
     parsers.re(
-        r"the expected sample size at theta\s*=\s*(?P<condition>.+) should be (?P<asn>[\d.]+) percent with (?P<atol>[\d.]+) precision"
+        r"the expected sample size at theta\s*=\s*(?P<condition>[^ ]+) should be (?P<asn>[\d.]+) percent with (?P<atol>[\d.]+) precision"
     )
 )
 def then_check_asn(results, condition, asn, atol):
@@ -190,22 +207,51 @@ def then_check_asn(results, condition, asn, atol):
 # --- Subsection 7.2.2 Steps ---
 
 
-@given(parsers.parse("a two-sided A/B test with alpha {alpha}"))
-def given_ab_alpha(alpha, design_params):
+@given(
+    parsers.re(
+        r"(?i)a two-sided (?:maximum information test|normal mean comparison|A/B test) with alpha (?P<alpha>[\d.]+)"
+    ),
+    target_fixture="design_params",
+)
+def given_two_sided_test_ch7(alpha, design_params):
     design_params["alpha"] = float(alpha)
     design_params["tails"] = 2
-    design_params["trial_type"] = "binomial-ab"  # Using 2-arm logic
+    return design_params
 
 
-@given(parsers.parse("a target power {power} at effect size {delta}"))
+@given(
+    parsers.re(
+        r"(?i)a target power (?P<power>[\d.]+) at effect size mu_A - mu_B = ±(?P<delta>[\d.]+)"
+    )
+)
 def given_power_delta_ch7(power, delta, design_params):
     design_params["power"] = float(power)
     design_params["delta"] = float(delta)
 
 
-@given(parsers.parse("a known variance (sigma squared) {sigma2}"))
+@given(
+    parsers.re(
+        r"(?i)(?:the responses|a) (?:have )?known variance \(sigma squared\) (?P<sigma2>[\d.]+)"
+    )
+)
 def given_sigma2_ch7(sigma2, design_params):
     design_params["sigma2"] = float(sigma2)
+
+
+@given(parsers.re(r"(?i)(?:we use a|a) Lan-DeMets rho-family spending function with rho (?P<rho>[\d.]+)"))
+@given(parsers.re(r"(?i)(?:we use a|a) rho-family spending function with rho (?P<rho>[\d.]+)"))
+def given_rho_spending_ch7(rho, design_params):
+    design_params["rho"] = float(rho)
+
+
+@given(parsers.re(r"(?i)(?:we plan for a|a) maximum of (?:K = )?(?P<k>\d+) analyses"))
+def given_max_analyses_ch7(k, design_params):
+    design_params["k"] = int(k)
+
+
+@given(parsers.re(r"(?i)a total sample size budget of (?P<total>\d+) observations \((?P<per_arm>\d+) per arm\)"))
+def given_sample_budget_ch7(total, per_arm, design_params):
+    design_params["i_max_constrained"] = float(per_arm) / (2 * design_params["sigma2"])
 
 
 @given(parsers.parse("a maximum information (I_max) constrained to {i_max}"))
@@ -213,20 +259,20 @@ def given_i_max_constrained(i_max, design_params):
     design_params["i_max_constrained"] = float(i_max)
 
 
+@when("I compute the group sequential design parameters", target_fixture="results")
 @when(
     parsers.parse(
         "I analyze the Lan-DeMets design from section 7.2.2 with K={k} and rho={rho}"
     ),
-    target_fixture="results",
 )
-def when_analyze_722(k, rho, design_params, evaluator):
+def when_analyze_722(design_params, evaluator, k=None, rho=None):
     alpha = design_params["alpha"]
     power = design_params["power"]
     delta = design_params["delta"]
     sigma2 = design_params["sigma2"]
 
-    k_val = int(k)
-    rho_val = float(rho)
+    k_val = int(k) if k is not None else design_params["k"]
+    rho_val = float(rho) if rho is not None else design_params["rho"]
 
     # Fixed sample information
     eta_fixed = norm.ppf(1 - alpha / 2.0) + norm.ppf(power)
@@ -262,18 +308,21 @@ def when_analyze_722(k, rho, design_params, evaluator):
 
 
 @when(
+    parsers.re(r"I evaluate the required effect size for power (?P<power>[\d.]+)"),
+    target_fixture="results",
+)
+@when(
     parsers.parse(
         "I evaluate the required effect size for power {power} using K={k} and rho={rho}"
     ),
-    target_fixture="results",
 )
-def when_solve_delta(power, k, rho, design_params, evaluator):
+def when_solve_delta(power, design_params, evaluator, k=None, rho=None):
     alpha = design_params["alpha"]
     i_max_const = design_params["i_max_constrained"]
 
     p_val = float(power)
-    k_val = int(k)
-    rho_val = float(rho)
+    k_val = int(k) if k is not None else design_params["k"]
+    rho_val = float(rho) if rho is not None else design_params["rho"]
 
     from earlysign.methods.group_sequential.spending import RhoFamilySpending
 
@@ -295,60 +344,67 @@ def when_solve_delta(power, k, rho, design_params, evaluator):
     eta_fixed = norm.ppf(1 - alpha / 2.0) + norm.ppf(p_val)
     delta_required = eta_fixed / np.sqrt(i_fixed_required)
 
-    return {"delta": delta_required, "r_ld": r_ld}
+    return {
+        "delta": delta_required,
+        "r_ld": r_ld,
+        "i_max": i_max_const,
+        "i_fixed": i_fixed_required,
+    }
 
 
 @then(
-    parsers.parse(
-        "the fixed sample information (I_f) should be {i_f} with {atol:f} precision"
+    parsers.re(
+        r"the fixed sample information \(I_f\) should be (?P<i_f>[\d.]+) with (?P<atol>[\d.]+) precision"
     )
 )
 def then_check_i_f_ch7(results, i_f, atol):
-    assert results["i_fixed"] == pytest.approx(float(i_f), abs=atol)
+    assert results["i_fixed"] == pytest.approx(float(i_f), abs=float(atol))
 
 
 @then(
-    parsers.parse(
-        "the fixed sample size per group should be {n} with {atol:f} precision"
+    parsers.re(
+        r"the fixed sample size per group (\(n_f\) )?should be (?P<n>[\d.]+) with (?P<atol>[\d.]+) precision"
     )
 )
 def then_check_n_fixed_ch7(results, n, atol):
-    assert results["n_fixed"] == pytest.approx(float(n), abs=atol)
+    assert results["n_fixed"] == pytest.approx(float(n), abs=float(atol))
 
 
 @then(
-    parsers.parse(
-        "the maximum information (I_max) should be {i_max} with {atol:f} precision"
+    parsers.re(
+        r"the (?:resulting |final )?maximum information \(I_max\) should be (?P<i_max>[\d.]+) with (?P<atol>[\d.]+) precision"
     )
 )
-def then_check_i_max_722(results, i_max, atol):
-    assert results["i_max"] == pytest.approx(float(i_max), abs=atol)
+def then_check_i_max_ch7(results, i_max, atol):
+    assert results["i_max"] == pytest.approx(float(i_max), abs=float(atol))
 
 
 @then(
-    parsers.parse(
-        "the maximum sample size per group should be {n} with {atol:f} precision"
+    parsers.re(
+        r"the maximum sample size per group (\(n_max\) )?should be (?P<n>[\d.]+) with (?P<atol>[\d.]+) precision"
     )
 )
 def then_check_n_max(results, n, atol):
     # Calibrated tolerance from Gherkin
-    assert results["n_max"] == pytest.approx(float(n), abs=atol)
+    assert results["n_max"] == pytest.approx(float(n), abs=float(atol))
 
 
 @then(
-    parsers.parse(
-        "the required effect size (delta) should be {delta} with {atol:f} precision"
+    parsers.re(
+        r"the required effect size \(delta\) should be (?P<delta>[\d.]+) with (?P<atol>[\d.]+) precision"
     )
 )
 def then_check_delta_required(results, delta, atol):
-    assert results["delta"] == pytest.approx(float(delta), abs=atol)
+    assert results["delta"] == pytest.approx(float(delta), abs=float(atol))
 
 
 @then(
-    parsers.parse("the inflation factor R_LD should be {r_ld} with {atol:f} precision")
+    parsers.re(
+        r"the inflation factor R_LD should be (?P<r_ld>[\d.]+) with (?P<atol>[\d.]+) precision"
+    )
 )
 def then_check_r_ld_722(results, r_ld, atol):
-    assert results["r_ld"] == pytest.approx(float(r_ld), abs=atol)
+    assert results["r_ld"] == pytest.approx(float(r_ld), abs=float(atol))
 
 
 # --- Under-running and Over-running Steps ---
@@ -365,12 +421,30 @@ def given_rho_spending(rho, design_params):
 
 
 @when(
-    parsers.parse("I perform a trial with actual information sequence {sequence}"),
+    parsers.re(
+        r"the trial ends at cumulative information (?P<cum_info>[\d.]+) after (?P<looks>\d+) looks"
+    ),
     target_fixture="results",
 )
-def when_perform_mismatched_trial(sequence, design_params, evaluator):
-    # Parse sequence "1.125, 2.25, ..."
-    actual_info = np.array([float(s.strip()) for s in sequence.split(",")])
+@when(
+    parsers.parse("I perform a trial with actual information sequence {sequence}"),
+)
+def when_perform_mismatched_trial(design_params, evaluator, sequence=None, cum_info=None, looks=None):
+    if sequence:
+        # Parse sequence "1.125, 2.25, ..."
+        actual_info = np.array([float(s.strip()) for s in sequence.split(",")])
+    else:
+        # Generate sequence ending at cum_info with 'looks' looks
+        # Textbook context for 7.2.2 under-running: first 9 looks are 1.125 each (total 10.125),
+        # look 10 ends at 10.6.
+        k_val = int(looks)
+        info_per_look = 1.125 # assumed for 7.2.2
+        actual_info = []
+        for i in range(k_val - 1):
+            actual_info.append((i+1) * info_per_look)
+        actual_info.append(float(cum_info))
+        actual_info = np.array(actual_info)
+
     planned_i_max = design_params["planned_i_max"]
     alpha = design_params["alpha"]
     rho = design_params["rho"]
@@ -391,17 +465,22 @@ def when_perform_mismatched_trial(sequence, design_params, evaluator):
 
 
 @then(
-    parsers.parse(
-        "the power at delta {theta} should be {power:f} with {atol:f} precision"
+    parsers.re(
+        r"the power at (?:theta = ±1|mu_A - mu_B = ±1|theta = δ|delta [\d.]+) should be (?P<power>[\d.]+) with (?P<atol>[\d.]+) precision"
     )
 )
-def then_check_power_722_robust(results, theta, power, atol):
-    assert results["rejection_probability"] == pytest.approx(float(power), abs=atol)
+@then(
+    parsers.re(
+        r"the (?:resulting |attained )?power at (?:the same |active )?effect size delta should be (?P<power>[\d.]+) with (?P<atol>[\d.]+) precision"
+    )
+)
+def then_check_power_722_robust(results, power, atol):
+    assert results["rejection_probability"] == pytest.approx(float(power), abs=float(atol))
 
 
 @when(
-    parsers.parse(
-        "I perform a trial with group size {n} per stage until I_max {i_max_target} is reached"
+    parsers.re(
+        r"I perform a trial with group size (?P<n>[\d.]+) per stage until I_max (?P<i_max_target>[\d.]+) is reached"
     ),
     target_fixture="results",
 )
@@ -458,9 +537,64 @@ def then_check_final_info(results, i_max, atol):
 # --- Table 7.4 Robustness Steps ---
 
 
+@given(
+    parsers.re(
+        r"(?i)(?:the design is )?planned for K_tilde (?P<k_tilde>\d+) equidistant analyses?(?: reaching I_max)?"
+    )
+)
+def when_planned_k_tilde(k_tilde, design_params):
+    design_params["k"] = int(k_tilde)
+
+
+@given(
+    parsers.re(
+        r"(?i)(?:the design |the test |we )?uses? a (?:Lan-DeMets )?rho-family spending function with rho (?P<rho>[\d.]+)"
+    )
+)
+def given_rho_ch7(rho, design_params):
+    design_params["rho"] = float(rho)
+
+
 @when(
-    parsers.parse(
-        "I evaluate Table 7.4 robustness with K_tilde={k}, rho={rho}, r={r}, and pi={pi}"
+    parsers.re(
+        r"(?i)the actual information accrual follows schedule r (?P<r>[\d.]+) and pi (?P<pi>[\d.]+)"
+    ),
+    target_fixture="results",
+)
+def when_actual_schedule_re(r, pi, design_params, evaluator):
+    return when_evaluate_table_7_4(
+        design_params["k"], design_params["rho"], float(r), float(pi), 
+        design_params, evaluator
+    )
+
+
+@when(
+    parsers.re(
+        r"(?i)actually K (?P<k>\d+) equidistant analyses occur reaching I_max"
+    ),
+    target_fixture="results",
+)
+def when_actual_k_re(k, design_params, evaluator):
+    return when_evaluate_table_7_5(
+        design_params["k"], int(k), design_params["rho"],
+        design_params, evaluator
+    )
+
+
+@when(
+    parsers.re(
+        r"(?i)the information levels follow schedule r (?P<r>[\d.]+) and pi (?P<pi>[\d.]+) with (?P<k>\d+) analyses and rho (?P<rho>[\d.]+)"
+    ),
+    target_fixture="results",
+)
+def when_evaluate_schedule_robustness(k, rho, r, pi, design_params, evaluator):
+    # Backward compatibility for existing feature file runs
+    return when_evaluate_table_7_4(k, rho, r, pi, design_params, evaluator)
+
+
+@when(
+    parsers.re(
+        r"I evaluate Table 7.4 robustness with K_tilde=(?P<k>\d+), rho=(?P<rho>[\d.]+), r=(?P<r>[\d.]+), and pi=(?P<pi>[\d.]+)"
     ),
     target_fixture="results",
 )
@@ -510,19 +644,32 @@ def when_evaluate_table_7_4(k, rho, r, pi, design_params, evaluator):
     return metrics
 
 
-@then(parsers.parse("the resulting power should be {power} with {atol:f} precision"))
-@then(parsers.parse("the power at delta 1.0 should be {power} with {atol:f} precision"))
-def then_check_resulting_power(results, power, atol):
-    # Calibrated tolerance from Gherkin
-    assert results["rejection_probability"] == pytest.approx(float(power), abs=atol)
+@then(
+    parsers.re(
+        r"the power at delta 1.0 should be (?P<power>[\d.]+) with (?P<atol>[\d.]+) precision"
+    )
+)
+def then_check_resulting_power_alt(results, power, atol):
+    assert results["rejection_probability"] == pytest.approx(float(power), abs=float(atol))
 
 
 # --- Table 7.5 Robustness Steps ---
 
 
 @when(
-    parsers.parse(
-        "I evaluate Table 7.5 robustness with K_tilde={k_tilde}, K={k}, and rho={rho}"
+    parsers.re(
+        r"(?i)the design is planned for K_tilde (?P<k_tilde>\d+) but actually has (?P<k>\d+) looks with rho (?P<rho>[\d.]+)"
+    ),
+    target_fixture="results",
+)
+def when_evaluate_k_robustness(k_tilde, k, rho, design_params, evaluator):
+    # Backward compatibility
+    return when_evaluate_table_7_5(k_tilde, k, rho, design_params, evaluator)
+
+
+@when(
+    parsers.re(
+        r"I evaluate Table 7.5 robustness with K_tilde=(?P<k_tilde>\d+), K=(?P<k>\d+), and rho=(?P<rho>[\d.]+)"
     ),
     target_fixture="results",
 )
@@ -575,9 +722,14 @@ def given_bhat_setup(months, design_params):
     design_params["bhat_t_max"] = float(months)
 
 
-@given(parsers.parse("rho-family spending rho {rho} based on calendar time"))
+@given(
+    parsers.re(
+        r"(?i)(?:use the error spending function f\(t\) = alpha min\(t, 1\)|rho-family spending rho (?P<rho>[\d.]+)) based on calendar time"
+    )
+)
 def given_bhat_rho(rho, design_params):
-    design_params["bhat_rho"] = float(rho)
+    # If no rho provided (alpha min(t, 1) case), it is effectively rho=1
+    design_params["bhat_rho"] = float(rho) if rho else 1.0
 
 
 @given(parsers.parse("information estimated as deaths divided by {divisor}"))
@@ -631,7 +783,9 @@ def then_check_bhat_boundaries(results, b_list, atol):
 
 
 @then(
-    parsers.parse("the observed Z-statistics {z_list} should reject H0 at look {look}")
+    parsers.re(
+        r"the (?:observed Z-statistics|sequence of standardized log-rank statistics at the interim analyses) (?P<z_list>[\d.,\s-]+) should reject H0 at look (?P<look>\d+)"
+    )
 )
 def then_check_bhat_rejection(results, z_list, look):
     z_obs = np.array([float(z.strip()) for z in z_list.split(",")])
@@ -649,18 +803,20 @@ def then_check_bhat_rejection(results, z_list, look):
 
 
 @given(
-    parsers.parse(
-        "a one-sided maximum information test with alpha {alpha:f} and beta {beta:f}"
+    parsers.re(
+        r"a one-sided maximum information test with alpha (?P<alpha>[\d.]+) and power (?P<power>[\d.]+)(?: at theta = δ)?"
     ),
     target_fixture="design_params",
 )
-def given_one_sided_max_info_beta(alpha, beta):
-    return {"alpha": alpha, "beta": beta, "tails": 1}
+def given_one_sided_max_info_power(alpha, power):
+    alpha_val = float(alpha)
+    power_val = float(power)
+    return {"alpha": alpha_val, "power": power_val, "beta": 1.0 - power_val, "tails": 1}
 
 
 @given(
     parsers.re(
-        r"a maximum of (?P<k>\d+) looks with rho-family spending (?P<rho>[\d.]+) for both errors"
+        r"a maximum of (?P<k>\d+) (?:equally-spaced )?looks with rho-family spending (?P<rho>[\d.]+) for both (?:type-I and type-II )?errors"
     )
 )
 def given_max_looks_rho_both(k, rho, design_params):
