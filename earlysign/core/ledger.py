@@ -118,6 +118,7 @@ class Ledger:
                 ),  # ISO8601 string to avoid tz/precision drift across backends
                 pkg_version=dt.string,
                 payload_type=dt.string,
+                identity=dt.string,  # Top-level identity for state/stream lookup
                 payload=dt.json,
                 labels=dt.json,
             )
@@ -210,10 +211,19 @@ class Ledger:
             "ts": datetime.now(timezone.utc),
             "pkg_version": f"earlysign=={__version__}",
             "payload_type": payload_type,
+            "identity": labels.get("identity") if labels else None,
             "payload": sanitize_for_json(dict(payload)),
             "labels": sanitize_for_json(combined_labels) or None,
         }
         self.connector.insert(self.table_name, [row])
+
+    # --------- scientific horizon support ----------
+    @property
+    def latest_ts(self) -> Any:
+        """Returns the latest timestamp from the ledger."""
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
+        return self.t.ts.max().execute()
 
     # --------- utility ----------
     def show(self, all: bool = False) -> Any:

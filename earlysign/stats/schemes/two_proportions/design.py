@@ -2,8 +2,6 @@
 Scheme adaptor for two-proportions group-sequential designs.
 """
 
-from __future__ import annotations
-
 from typing import Callable, Dict, Optional, Sequence, cast
 
 from earlysign.methods.group_sequential import simulation

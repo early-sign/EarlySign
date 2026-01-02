@@ -44,6 +44,7 @@ DatabaseTable: events
   ts           timestamp('UTC', 6)
   pkg_version  string
   payload_type string
+  identity     string
   payload      json
   labels       json
 

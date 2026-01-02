@@ -38,7 +38,9 @@ def given_precision(n, design_params):
     design_params["n_sims"] = int(n)
 
 
-@given(parsers.re(r"a target power (?P<power>[\d.]+) at effect size (?P<delta>[\d.]+)$"))
+@given(
+    parsers.re(r"a target power (?P<power>[\d.]+) at effect size (?P<delta>[\d.]+)$")
+)
 def given_power_delta(power, delta, design_params):
     design_params["power"] = float(power)
     design_params["delta"] = float(delta)
@@ -68,7 +70,9 @@ def given_delta_value_ch7(delta, design_params):
     design_params["delta"] = float(delta)
 
 
-@given(parsers.re(r"(?i)the sample size is designed to attain this power at theta = ±δ"))
+@given(
+    parsers.re(r"(?i)the sample size is designed to attain this power at theta = ±δ")
+)
 def given_sample_size_at_delta_ch7(design_params):
     # This is primarily informational in the Gherkin to match textbook phrasing
     pass
@@ -238,8 +242,16 @@ def given_sigma2_ch7(sigma2, design_params):
     design_params["sigma2"] = float(sigma2)
 
 
-@given(parsers.re(r"(?i)(?:we use a|a) Lan-DeMets rho-family spending function with rho (?P<rho>[\d.]+)"))
-@given(parsers.re(r"(?i)(?:we use a|a) rho-family spending function with rho (?P<rho>[\d.]+)"))
+@given(
+    parsers.re(
+        r"(?i)(?:we use a|a) Lan-DeMets rho-family spending function with rho (?P<rho>[\d.]+)"
+    )
+)
+@given(
+    parsers.re(
+        r"(?i)(?:we use a|a) rho-family spending function with rho (?P<rho>[\d.]+)"
+    )
+)
 def given_rho_spending_ch7(rho, design_params):
     design_params["rho"] = float(rho)
 
@@ -249,7 +261,11 @@ def given_max_analyses_ch7(k, design_params):
     design_params["k"] = int(k)
 
 
-@given(parsers.re(r"(?i)a total sample size budget of (?P<total>\d+) observations \((?P<per_arm>\d+) per arm\)"))
+@given(
+    parsers.re(
+        r"(?i)a total sample size budget of (?P<total>\d+) observations \((?P<per_arm>\d+) per arm\)"
+    )
+)
 def given_sample_budget_ch7(total, per_arm, design_params):
     design_params["i_max_constrained"] = float(per_arm) / (2 * design_params["sigma2"])
 
@@ -429,7 +445,9 @@ def given_rho_spending(rho, design_params):
 @when(
     parsers.parse("I perform a trial with actual information sequence {sequence}"),
 )
-def when_perform_mismatched_trial(design_params, evaluator, sequence=None, cum_info=None, looks=None):
+def when_perform_mismatched_trial(
+    design_params, evaluator, sequence=None, cum_info=None, looks=None
+):
     if sequence:
         # Parse sequence "1.125, 2.25, ..."
         actual_info = np.array([float(s.strip()) for s in sequence.split(",")])
@@ -438,10 +456,10 @@ def when_perform_mismatched_trial(design_params, evaluator, sequence=None, cum_i
         # Textbook context for 7.2.2 under-running: first 9 looks are 1.125 each (total 10.125),
         # look 10 ends at 10.6.
         k_val = int(looks)
-        info_per_look = 1.125 # assumed for 7.2.2
+        info_per_look = 1.125  # assumed for 7.2.2
         actual_info = []
         for i in range(k_val - 1):
-            actual_info.append((i+1) * info_per_look)
+            actual_info.append((i + 1) * info_per_look)
         actual_info.append(float(cum_info))
         actual_info = np.array(actual_info)
 
@@ -475,7 +493,9 @@ def when_perform_mismatched_trial(design_params, evaluator, sequence=None, cum_i
     )
 )
 def then_check_power_722_robust(results, power, atol):
-    assert results["rejection_probability"] == pytest.approx(float(power), abs=float(atol))
+    assert results["rejection_probability"] == pytest.approx(
+        float(power), abs=float(atol)
+    )
 
 
 @when(
@@ -563,21 +583,22 @@ def given_rho_ch7(rho, design_params):
 )
 def when_actual_schedule_re(r, pi, design_params, evaluator):
     return when_evaluate_table_7_4(
-        design_params["k"], design_params["rho"], float(r), float(pi), 
-        design_params, evaluator
+        design_params["k"],
+        design_params["rho"],
+        float(r),
+        float(pi),
+        design_params,
+        evaluator,
     )
 
 
 @when(
-    parsers.re(
-        r"(?i)actually K (?P<k>\d+) equidistant analyses occur reaching I_max"
-    ),
+    parsers.re(r"(?i)actually K (?P<k>\d+) equidistant analyses occur reaching I_max"),
     target_fixture="results",
 )
 def when_actual_k_re(k, design_params, evaluator):
     return when_evaluate_table_7_5(
-        design_params["k"], int(k), design_params["rho"],
-        design_params, evaluator
+        design_params["k"], int(k), design_params["rho"], design_params, evaluator
     )
 
 
@@ -650,7 +671,9 @@ def when_evaluate_table_7_4(k, rho, r, pi, design_params, evaluator):
     )
 )
 def then_check_resulting_power_alt(results, power, atol):
-    assert results["rejection_probability"] == pytest.approx(float(power), abs=float(atol))
+    assert results["rejection_probability"] == pytest.approx(
+        float(power), abs=float(atol)
+    )
 
 
 # --- Table 7.5 Robustness Steps ---

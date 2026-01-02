@@ -24,8 +24,6 @@ Example
 62
 """
 
-from __future__ import annotations
-
 import logging
 from contextlib import nullcontext
 from dataclasses import dataclass

@@ -1,6 +1,6 @@
 # Implementation Plan: Pattern G (EarlySign v1) - The Scientific Standard
 
-This plan outlines the definitive implementation of "Pattern G" within the `earlysign/v1/` directory. Pattern G untangles complexity by strictly separating scientific concerns, focusing on technical robustness and a natural domain language for sequential inference.
+This plan outlines the definitive implementation of "Pattern G" within the `earlysign/v1/` directory. For the foundational design philosophy, see the [Concept Design](file:///Users/teshima/2025/EarlySign/docs/explanation/concept_design.md).
 
 ## User Review Required
 
@@ -22,11 +22,13 @@ The framework provides the low-level ES/CQRS primitives required for scientific 
 - **`ProjectionResult[T]`**: Dataclass container for hydrated `data` and its evidentiary `trace`.
 - **`Projector[T]` Protocol**: Defines the `project(self, data: ibis.Expr) -> ProjectionResult[T]` interface.
 - **Ibis Integration**: The `project` method receives an Ibis table (filtered by the scientific horizon) to perform high-performance server-side aggregation.
-- **Incremental Projection**: Implementers are responsible for their own state management, potentially leveraging internal snapshots.
+- **Incremental Folding**: Projectors can implement the "Incremental Folding" principle, leveraging **Intermediate Facts** to fold new events onto a previously committed state.
 
-#### [NEW] snapshot.py (Optimization)
-- **Mechanism**: Implements intermediate state persistence for Event Sourcing.
-- **Usage**: Projectors utilize these snapshots to resume aggregation from the last valid checkpoint, essential for verifying $O(N)$ recovery performance.
+#### [Intermediate Facts (Snapshots)]
+- **Mechanism**: Intermediate Facts are persisted optimizations in the Ledger, allowing long-running projections to be reconstructed via **Incremental Folding**.
+- **Signature**: The base class `IntermediateFact[T]` coordinates the lifecycle by providing a `compute(snapshot, delta_expr, full_table)` interface for subclasses.
+- **State Identity**: Records are indexed via a top-level `identity` column in the Ledger, enabling efficient O(1)/O(log N) lookup for state recovery.
+- **Autonomy**: Projectors remain the primary tool for analysis. While some projectors function as `IntermediateFact` sources (Tier 1), others (Tier 2) consume these results to perform complex inference without redundant database work.
 
 #### [NEW] session.py (Context Isolation)
 - **`Session`**: A context manager (`with Session(ledger) as ep:`) that captures the ledger's latest state at initiation.
