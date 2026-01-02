@@ -10,7 +10,7 @@ from earlysign.v1.methods.anytime_valid.e_process import (
     EValueResult,
     compute_binomial_e_value,
 )
-from earlysign.v1.methods.protocols import EProcessProtocol
+from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
 from earlysign.v1.stats.binary import BinomialSummaryFact
 
 if TYPE_CHECKING:

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
-from earlysign.v1.methods.protocols import GSTProtocol
+from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 from earlysign.v1.stats.binary import (
     BinomialSummaryFact,
     BinomialZProjector,

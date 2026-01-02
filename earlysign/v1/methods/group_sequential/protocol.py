@@ -17,15 +17,3 @@ class GSTProtocol(BaseModel):
     rho: float = Field(3.0, description="Rho parameter for spending function")
     side: int = Field(1, description="1-sided or 2-sided test")
     delta: Optional[float] = Field(None, description="Target clinical difference")
-
-
-class EProcessProtocol(BaseModel):
-    """
-    Protocol for e-process based monitoring.
-    """
-
-    alpha: float = Field(0.05, description="Type-1 error rate")
-    null_p: float = Field(0.5, description="Hypothesized probability under H0")
-    alt_p: Optional[float] = Field(
-        None, description="Hypothesized probability under H1"
-    )
