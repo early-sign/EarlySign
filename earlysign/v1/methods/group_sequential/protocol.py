@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,7 +18,7 @@ class GSTProtocol(BaseModel):
     )
     power: float = Field(0.8, description="Target statistical power (1 - Beta).")
     K: int = Field(3, description="Total number of looks (interim + final).")
-    spending_function: str = Field(
+    spending_function: Literal["rho_family", "obrien_fleming"] = Field(
         "rho_family",
         description="Type of alpha spending function (e.g., 'rho_family', 'obrien_fleming').",
     )
