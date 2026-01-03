@@ -10,14 +10,27 @@ project = "EarlySign"
 author = "Takeshi Teshima"
 
 extensions = [
-    "autoapi.extension",
+    "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx.ext.napoleon",
     "myst_nb",
     "sphinx_copybutton",
+    "sphinxcontrib.autodoc_pydantic",
+    "sphinx_autodoc_typehints",
+    "autoapi.extension",
 ]
-templates_path = []
-exclude_patterns = ["ADR_template.rst"]
+
+# autodoc_pydantic settings
+autodoc_pydantic_model_show_json = True
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_summary = True
+autodoc_pydantic_model_show_validator_members = True
+autodoc_pydantic_model_show_field_summary = True
+autodoc_pydantic_model_member_order = "bysource"
+autodoc_pydantic_field_list_validators = True
+autodoc_pydantic_field_doc_policy = "both"
+templates_path = ["_templates"]
+exclude_patterns = ["ADR_template.rst", "_templates"]
 
 nb_execution_mode = "off"
 
@@ -76,7 +89,7 @@ autoapi_type = "python"
 # Restrict autoapi to the package source directory so it doesn't scan the
 # virtualenv or unrelated repository folders. This keeps module names
 # correctly rooted at `earlysign.*` while avoiding .venv recursion.
-autoapi_dirs = ["../../earlysign"]
+autoapi_dirs = ["../.."]
 
 # Keep a conservative ignore list as a safety net
 autoapi_ignore = [
@@ -85,6 +98,15 @@ autoapi_ignore = [
     "**/tests/**",
     "**/.venv/**",
     "**/__pycache__/**",
+    "**/.poetry/**",
+    "**/spec/**",
+    "**/.Trash/**",
+    "**/.git/**",
+    "**/.github/**",
+    "**/.mypy_cache/**",
+    "**/.pytest_cache/**",
+    "**/.ruff_cache/**",
+    "verify_*.py",
 ]
 
 autodoc_typehints = "description"
@@ -96,5 +118,7 @@ autoapi_options = [
     "show-inheritance",
     "show-module-summary",
 ]
+
+autoapi_template_dir = "_templates/autoapi"
 
 autoapi_python_class_content = "both"  # "class", "init"
