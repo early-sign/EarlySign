@@ -15,9 +15,9 @@ from pydantic import BaseModel
 from typing import List, Any, Optional
 
 from earlysign.core.ledger import Ledger
-from earlysign.v1.methods.protocols import GSTProtocol
-from earlysign.v1.methods.group_sequential.design_planner import DesignPlanner
-from earlysign.v1.stats.binary import BinomialSummaryFact, BatchObservation
+from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
+from earlysign.v1.methods.group_sequential.protocol_designer import ProtocolDesigner
+from earlysign.v1.methods.binomial import BinomialSummaryFact, BatchObservation
 from earlysign.v1.templates.binomial_ab import BinomialABTemplate
 
 
@@ -70,30 +70,25 @@ def main():
     df["dn_c"], df["ds_c"], df["dn_t"], df["ds_t"] = dn_c, ds_c, dn_t, ds_t
     df = df[(df["dn_c"] > 0) | (df["dn_t"] > 0)].copy()
 
-    # 1. Initialize Template and Protocol
-    protocol = GSTProtocol(alpha=0.05, power=0.8, delta=0.005, K=3)
+    # 1. Plan Design (Intent -> Realized Protocol)
+    # Using realized p_control for planning (in practice, this would be historical or estimated)
+    p_control = df.iloc[0]["mean_c"]
+    
+    designer = ProtocolDesigner()
+    protocol = designer.plan_binomial_ab(
+        alpha=0.05,
+        power=0.8,
+        delta=0.005,
+        k=3,
+        p_control=p_control,
+    )
+
+    # 2. Initialize Template with realized protocol
     trial = BinomialABTemplate(ledger)
     trial.set_protocol(protocol)
 
-    # 2. Design (Calculated based on first look for p_control)
-    p_control = df.iloc[0]["mean_c"]
-    planner = DesignPlanner()
-    design = planner.plan_binomial_ab(
-        alpha=protocol.alpha,
-        power=protocol.power,
-        p_control=p_control,
-        delta=protocol.delta,
-        k=protocol.K,
-    )
-
-    trial.update_protocol(
-        n_max=design["n_max"],
-        milestones=[0.65, 0.8, 1.0],
-        boundaries=design["boundaries"],
-    )
-
     print(
-        f"-> Planned Design: n_max={design['n_max']}, Boundaries={[round(b, 2) for b in design['boundaries']]}"
+        f"-> Planned Design: n_max={protocol.n_max}, Boundaries={[round(b, 2) for b in protocol.boundaries]}"
     )
 
     # 3. Execution Loop
@@ -118,7 +113,7 @@ def main():
             )
             print(f"       Control: n and s reconstructed via logic.")
             print(
-                f"       Z: {res['z_stat']:.4f} (Bound: {trial.boundaries[res['look']-1]:.2f}) - Reject: {res['is_rejected']}"
+                f"       Z: {res['z_stat']:.4f} (Bound: {protocol.boundaries[res['look']-1]:.2f}) - Reject: {res['is_rejected']}"
             )
 
             if res["is_rejected"]:
