@@ -1,5 +1,3 @@
-from typing import Optional
-
 import ibis
 import numpy as np
 from pydantic import BaseModel
@@ -50,5 +48,3 @@ class BinomialZProjector(Projector[BinomialZResult]):
             )
 
         return ProjectionResult(data=res, trace=ctrl_traced.trace + tret_traced.trace)
-
-

@@ -50,12 +50,12 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
         p = protocol_traced.data
 
         # 2. Read Summary
-        sc_traced = BinomialSummaryFact(identity="summary_c", filter_variant="C").project(
-            table
-        )
-        st_traced = BinomialSummaryFact(identity="summary_t", filter_variant="T").project(
-            table
-        )
+        sc_traced = BinomialSummaryFact(
+            identity="summary_c", filter_variant="C"
+        ).project(table)
+        st_traced = BinomialSummaryFact(
+            identity="summary_t", filter_variant="T"
+        ).project(table)
         sc, st = sc_traced.data, st_traced.data
 
         # 3. Calculate Operating Stats
@@ -108,8 +108,12 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
         self.final_status = final_status
 
     def project(self, table: ibis.Expr) -> ProjectionResult[BinomialFinalReport]:
-        sc = BinomialSummaryFact(identity="summary_c", filter_variant="C").project(table)
-        st = BinomialSummaryFact(identity="summary_t", filter_variant="T").project(table)
+        sc = BinomialSummaryFact(identity="summary_c", filter_variant="C").project(
+            table
+        )
+        st = BinomialSummaryFact(identity="summary_t", filter_variant="T").project(
+            table
+        )
 
         n_c, n_t = sc.data.n, st.data.n
         z_stat = 0.0

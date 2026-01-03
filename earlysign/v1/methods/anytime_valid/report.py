@@ -35,7 +35,9 @@ class MonitoringProgressProjector(Projector[MonitoringProgressReport]):
 
     def project(self, table: ibis.Expr) -> ProjectionResult[MonitoringProgressReport]:
         from earlysign.v1.framework.projector import ProtocolProjector
-        from earlysign.v1.methods.anytime_valid.e_process import compute_binomial_e_value
+        from earlysign.v1.methods.anytime_valid.e_process import (
+            compute_binomial_e_value,
+        )
         from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
 
         # 1. Read Protocol
@@ -43,7 +45,9 @@ class MonitoringProgressProjector(Projector[MonitoringProgressReport]):
         p = protocol_traced.data
 
         # 2. Read Summary
-        traced_summary = BinomialSummaryFact(identity="monitoring_summary").project(table)
+        traced_summary = BinomialSummaryFact(identity="monitoring_summary").project(
+            table
+        )
         s = traced_summary.data
 
         # 3. Compute e-value

@@ -1,25 +1,17 @@
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 from pydantic import BaseModel
 
-from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.write_models import WriteModel
 from earlysign.v1.methods.actions import Decision, UpdateProtocol
-from earlysign.v1.methods.anytime_valid.e_process import (
-    EValueResult,
-    compute_binomial_e_value,
-)
 from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
 from earlysign.v1.methods.anytime_valid.report import (
     MonitoringFinalProjector,
     MonitoringProgressProjector,
 )
-from earlysign.v1.methods.binomial import BinomialSummaryFact
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
-    from earlysign.v1.framework.trace import TraceHash
 
 
 class DecisionRecord(BaseModel):

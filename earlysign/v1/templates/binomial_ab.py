@@ -4,11 +4,11 @@ from pydantic import BaseModel
 
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
-from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 from earlysign.v1.methods.binomial import BinomialSummaryFact
 from earlysign.v1.methods.group_sequential.binomial import (
     BinomialZProjector,
 )
+from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 from earlysign.v1.methods.group_sequential.report import (
     BinomialFinalProjector,
     BinomialProgressProjector,
@@ -16,7 +16,6 @@ from earlysign.v1.methods.group_sequential.report import (
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
-    from earlysign.v1.framework.trace import TraceHash
 
 
 class ABDecisionRecord(BaseModel):
@@ -127,7 +126,9 @@ class BinomialABTemplate:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
             return sess.Read(
-                BinomialFinalProjector(is_rejected=is_rejected, final_status=final_status)
+                BinomialFinalProjector(
+                    is_rejected=is_rejected, final_status=final_status
+                )
             ).data.model_dump()
 
     def run_backtest(self, batches: Any) -> Dict[str, Any]:
