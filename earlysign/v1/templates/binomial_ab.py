@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 
 
 class ABDecisionRecord(BaseModel):
+    """
+    Structured record of a decision event (e.g. stopping for efficacy/futility).
+    """
     status: str
     message: str
 
