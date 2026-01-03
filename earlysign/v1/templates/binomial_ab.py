@@ -28,7 +28,7 @@ class ABDecisionRecord(BaseModel):
 
 class BinomialABTemplate:
     """
-    Standard orchestration for a Binomial A/B test using Group Sequential Design (Pattern G).
+    Standard orchestration for a Binomial A/B test using Group Sequential Design.
     """
 
     def __init__(self, ledger: "Ledger"):
@@ -134,14 +134,14 @@ class BinomialABTemplate:
                 )
             ).data.model_dump()
 
-    def run_backtest(self, batches: Any) -> Dict[str, Any]:
+    def backtest(self, batches: Any) -> Dict[str, Any]:
         """
         Historical Analysis: Replays data and stops immediately on a stopping decision.
         Returns a FinalReport.
 
-        Data Requirements:
-        - `batches`: Iterator yielding `BatchObservation` objects or lists of them.
-        - Each `BatchObservation` must have `n`, `success`, and `variant`.
+        Args:
+           batches: Iterator yielding `BatchObservation` objects or lists of them.
+                    Each `BatchObservation` must have `n`, `success`, and `variant`.
         """
         last_res = {"status": "COMPLETED", "is_rejected": False}
         for i, batch in enumerate(batches):

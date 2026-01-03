@@ -1,5 +1,5 @@
 """
-Verification Script: Pattern G (EarlySign v1) - ASOS Dataset with Intermediate Facts.
+Verification Script: ASOS Dataset with Intermediate Facts.
 Demonstrates:
 1. Dynamic Protocol Design.
 2. Progressive Ingestion.
@@ -50,7 +50,7 @@ def get_increments(df: pd.DataFrame):
 
 # --- 3. Main Workflow ---
 def main():
-    print("=== Pattern G Verification (ASOS + BinomialABTemplate) ===")
+    print("=== Verification (ASOS + BinomialABTemplate) ===")
 
     con = ibis.duckdb.connect(":memory:")
     ledger = Ledger(con, "events")

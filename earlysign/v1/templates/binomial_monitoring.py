@@ -21,7 +21,7 @@ class DecisionRecord(BaseModel):
 
 class BinomialMonitoringTemplate:
     """
-    Safe testing / Continuous monitoring template using e-processes (Pattern G).
+    Safe testing / Continuous monitoring template using e-processes.
     """
 
     def __init__(self, ledger: "Ledger"):

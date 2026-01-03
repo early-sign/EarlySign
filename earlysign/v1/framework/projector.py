@@ -48,7 +48,7 @@ class ProtocolProjector(Projector[P]):
         self.protocol_type = protocol_type
 
     def project(self, table: ibis.Expr) -> ProjectionResult[P]:
-        # Payload type in Pattern G is the class name
+        # Payload type is the class name
         type_name = self.protocol_type.__name__
         matched = table.filter(table.payload_type == type_name)
 

@@ -1,5 +1,5 @@
 """
-Verification Script: Pattern G (EarlySign v1) - Trace Verification.
+Verification Script: - Trace Verification.
 Checks if the implicit trace accumulation and CommitCallResult lineage are working.
 """
 

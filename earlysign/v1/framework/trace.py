@@ -14,7 +14,7 @@ class Traced(Generic[T]):
     """
     A container that wraps data with its scientific provenance (trace).
 
-    Pattern G uses this to track causality through an analysis session.
+    The framework uses this to track causality through an analysis session.
 
     >>> t = Traced(data=42, trace=[TraceHash("hash_1")])
     >>> t.data

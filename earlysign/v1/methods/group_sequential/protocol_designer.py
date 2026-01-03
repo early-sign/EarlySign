@@ -10,7 +10,7 @@ from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 
 class ProtocolDesigner:
     """
-    Designer for group sequential protocols (Pattern G v1).
+    Designer for group sequential protocols.
     Translates scientific intent (alpha, power, delta) into a realized design (boundaries, sample size).
     """
 

@@ -11,7 +11,7 @@ T = TypeVar("T")
 
 class Session:
     """
-    The primary execution context for Pattern G.
+    The primary execution context for the framework.
 
     A session defines the 'Scientific Horizon' by capturing the state of
     the Ledger at initiation. It also manages 'Implicit Trace Accumulation'
