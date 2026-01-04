@@ -1,3 +1,77 @@
+"""
+Binomial A/B Testing Template
+=============================
+
+This module provides a standard template for running sequential A/B tests with binary outcomes.
+
+Usage
+-----
+The following example demonstrates how to set up and run a sequential A/B test
+simulating a scenario with a 20% baseline conversion rate and a relative 10% lift (Treatment = 22%).
+
+For demonstration, we prepare the following datastream.
+
+    >>> # We simulate a stream where Treatment actually has the lift (p=0.25 vs p=0.20)
+    >>> stream = BinomialStream(
+    ...     n_per_batch=100,
+    ...     p_control=0.20,
+    ...     p_treatment=0.25,
+    ...     seed=42
+    ... )
+
+Then, we initialize the template and run the experiment.
+
+    >>> import ibis
+    >>> from earlysign.core.ledger import Ledger
+    >>> from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
+    >>> from earlysign.v1.methods.group_sequential.protocol_designer import ProtocolDesigner
+    >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate
+    >>> from earlysign.v1.tests.util import BinomialStream
+
+    >>> # 1. Setup Environment (In-memory DuckDB)
+    >>> conn = ibis.connect("duckdb://:memory:")
+    >>> ledger = Ledger(conn, "events")
+    >>> ledger.ensure()
+    >>> ledger = ledger.bind(experiment_id="test_experiment_001")
+
+    >>> # 2. Define Protocol using Designer
+    >>> # Scenario: Detecting a 10% relative lift (20% -> 22%) with 80% power.
+    >>> designer = ProtocolDesigner.from_dict({
+    ...     "model": "canonical_gaussian",
+    ...     "model_params": {"rng_seed": 42}
+    ... })
+    >>> protocol = designer.plan_binomial_ab(
+    ...     alpha=0.05,
+    ...     power=0.8,
+    ...     delta=0.02, # 20% -> 22%
+    ...     p_control=0.20,
+    ...     k=2,
+    ...     shape_type="obrien_fleming"
+    ... )
+    >>> print(f"Designed Max Sample Size: {protocol.n_max}")
+    Designed Max Sample Size: 12623
+
+    >>> # 3. Initialize Template and Save the designed protocol
+    >>> template = BinomialABTemplate(ledger)
+    >>> template.set_protocol(protocol)
+
+    >>> # 4. Run Experiment
+    >>> for batch in stream:
+    ...     result = template.update(batch)
+    ...     # Check if we crossed a boundary or stopped for futility
+    ...     if result['status'] != "CONTINUE":
+    ...         break
+
+    >>> # 5. Generate Final Report
+    >>> final_result = template.report_result()
+    >>> print(f"Final Status: {final_result['final_status']}")
+    Final Status: STOP_EFFICACY
+    >>> print(f"Is Rejected: {final_result['is_rejected']}")
+    Is Rejected: True
+
+In practice, each iteration may run in a different process.
+To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
+"""
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from pydantic import BaseModel
@@ -10,20 +84,13 @@ from earlysign.v1.methods.group_sequential.binomial import (
 )
 from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 from earlysign.v1.methods.group_sequential.report import (
+    ABDecisionRecord,
     BinomialFinalProjector,
     BinomialProgressProjector,
 )
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
-
-
-class ABDecisionRecord(BaseModel):
-    """
-    Structured record of a decision event (e.g. stopping for efficacy/futility).
-    """
-    status: str
-    message: str
 
 
 class BinomialABTemplate:
@@ -49,7 +116,7 @@ class BinomialABTemplate:
         """
         from earlysign.v1.framework.projector import ProtocolProjector
 
-        # 1. Ingest Evidence
+        # 1. Ingest Data
         if batch:
             with Session(self.ledger) as sess:
                 for item in batch:
@@ -117,7 +184,7 @@ class BinomialABTemplate:
 
             return result
 
-    def progress_report(self) -> Dict[str, Any]:
+    def report_progress(self) -> Dict[str, Any]:
         """
         Returns the current progress report.
         Reconstructs state via BinomialProgressProjector.
@@ -125,14 +192,10 @@ class BinomialABTemplate:
         with Session(self.ledger) as sess:
             return sess.Read(BinomialProgressProjector()).data.model_dump()
 
-    def final_report(self, is_rejected: bool, final_status: str) -> Dict[str, Any]:
+    def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
-            return sess.Read(
-                BinomialFinalProjector(
-                    is_rejected=is_rejected, final_status=final_status
-                )
-            ).data.model_dump()
+            return sess.Read(BinomialFinalProjector()).data.model_dump()
 
     def backtest(self, batches: Any) -> Dict[str, Any]:
         """
@@ -148,9 +211,30 @@ class BinomialABTemplate:
             res = self.update(batch if isinstance(batch, list) else [batch])
             last_res = res
             if res.get("status") == "STOP_EFFICACY":
-                return self.final_report(is_rejected=True, final_status="STOP_EFFICACY")
+                return self.report_result()
 
-        return self.final_report(
-            is_rejected=last_res.get("is_rejected", False),
-            final_status=last_res.get("status", "COMPLETED"),
+        return self.report_result()
+
+    def plot_result(self) -> Any:
+        """
+        Generates a summary plot of the GST results.
+        
+        Returns:
+            matplotlib.figure.Figure: The generated plot figure.
+        """
+        from earlysign.v1.framework.projector import ProtocolProjector
+        from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
+        from earlysign.v1.methods.group_sequential.report import (
+            plot_gst_summary,
+            reconstruct_binomial_z_history,
         )
+
+        with Session(self.ledger) as sess:
+            protocol_res = sess.Read(ProtocolProjector(GSTProtocol))
+            p = protocol_res.data
+            
+            # Reconstruct History
+            history_n, history_z = reconstruct_binomial_z_history(sess.table, p)
+            
+            # Generate Plot
+            return plot_gst_summary(p, history_n, history_z)

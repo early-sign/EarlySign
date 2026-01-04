@@ -17,6 +17,29 @@ class ProtocolDesigner:
     def __init__(self, cjd: Optional[CanonicalJointDistribution] = None):
         self._cjd = cjd or CanonicalJointDistribution()
 
+    @classmethod
+    def from_dict(cls, config: Dict[str, Any]) -> "ProtocolDesigner":
+        """
+        Creates a ProtocolDesigner instance from a configuration dictionary.
+
+        Args:
+            config: A dictionary containing initialization parameters.
+                Supported keys:
+                - model: (str) Model type to use (default: "canonical_gaussian").
+                - model_params: (dict) Parameters to pass to the model constructor (e.g., {"rng_seed": 42}).
+
+        Returns:
+            An initialized ProtocolDesigner instance.
+        """
+        model_type = config.get("model", "canonical_gaussian")
+        model_params = config.get("model_params", {})
+
+        if model_type == "canonical_gaussian":
+            cjd = CanonicalJointDistribution(**model_params)
+            return cls(cjd=cjd)
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
+
     def plan_binomial_ab(
         self,
         alpha: float,
