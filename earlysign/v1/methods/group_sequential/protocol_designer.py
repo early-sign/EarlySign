@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 
@@ -101,7 +101,7 @@ class ProtocolDesigner:
         # Information I = n_total / (4 * sigma^2) => n_total = 4 * I * sigma^2
         n_max_float = 4 * i_max * sigma2
         n_max = int(np.ceil(n_max_float))
-        
+
         # Construct the realized protocol
         return GSTProtocol(
             # Intent
@@ -110,9 +110,8 @@ class ProtocolDesigner:
             K=k,
             delta=delta,
             side=side,
-            spending_function=shape_type, # Mapping string directly for now
+            spending_function=shape_type,  # Mapping string directly for now
             rho=rho,
-            
             # Realization
             n_max=n_max,
             milestones=info_times.tolist(),

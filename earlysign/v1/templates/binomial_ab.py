@@ -72,6 +72,7 @@ Then, we initialize the template and run the experiment.
 In practice, each iteration may run in a different process.
 To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
 """
+
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from pydantic import BaseModel
@@ -206,10 +207,8 @@ class BinomialABTemplate:
            batches: Iterator yielding `BatchObservation` objects or lists of them.
                     Each `BatchObservation` must have `n`, `success`, and `variant`.
         """
-        last_res = {"status": "COMPLETED", "is_rejected": False}
         for i, batch in enumerate(batches):
             res = self.update(batch if isinstance(batch, list) else [batch])
-            last_res = res
             if res.get("status") == "STOP_EFFICACY":
                 return self.report_result()
 
@@ -218,7 +217,7 @@ class BinomialABTemplate:
     def plot_result(self) -> Any:
         """
         Generates a summary plot of the GST results.
-        
+
         Returns:
             matplotlib.figure.Figure: The generated plot figure.
         """
@@ -232,9 +231,9 @@ class BinomialABTemplate:
         with Session(self.ledger) as sess:
             protocol_res = sess.Read(ProtocolProjector(GSTProtocol))
             p = protocol_res.data
-            
+
             # Reconstruct History
             history_n, history_z = reconstruct_binomial_z_history(sess.table, p)
-            
+
             # Generate Plot
             return plot_gst_summary(p, history_n, history_z)
