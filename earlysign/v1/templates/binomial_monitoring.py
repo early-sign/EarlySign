@@ -66,7 +66,7 @@ class BinomialMonitoringTemplate:
 
         Data Requirements:
         - `batches`: Iterator yielding `BatchObservation` objects or lists of them.
-        - Each `BatchObservation` must have `n`, `success`, and `variant`.
+        - Each `BatchObservation` must have `n`, `success`, and `arm`.
         """
         from earlysign.v1.methods.actions import Ingest
 
@@ -119,7 +119,7 @@ class BinomialMonitoringTemplate:
 
         # Group/Sort
         # Assuming single stream of updates
-        # Check columns. If 'variant' exists, sum them if 2-sample.
+        # Check columns. If 'arm' exists, sum them if 2-sample.
         # But 'Monitoring' usually implies we use 'n' and 'successes' from the summary accumulators.
         # The E-value function takes aggregated n, k.
 

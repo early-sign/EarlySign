@@ -22,7 +22,7 @@ class BatchObservation(BaseModel):
 
     n: int
     success: int
-    variant: str
+    arm: str
 
 
 class BinomialSummaryFact(IntermediateFact[BinomialSummary]):
@@ -33,9 +33,9 @@ class BinomialSummaryFact(IntermediateFact[BinomialSummary]):
 
     data_type = BinomialSummary
 
-    def __init__(self, identity: str, filter_variant: Optional[str] = None):
+    def __init__(self, identity: str, filter_arm: Optional[str] = None):
         super().__init__(identity)
-        self.filter_variant = filter_variant
+        self.filter_arm = filter_arm
 
     def compute(
         self,
@@ -50,15 +50,15 @@ class BinomialSummaryFact(IntermediateFact[BinomialSummary]):
         obs_table = delta_expr.filter(delta_expr.payload_type == "Observation")
         batch_table = delta_expr.filter(delta_expr.payload_type == "BatchObservation")
 
-        if self.filter_variant:
-            variant_val = self.filter_variant
+        if self.filter_arm:
+            arm_val = self.filter_arm
             obs_table = obs_table.filter(
-                obs_table.payload["variant"].cast("string").re_replace('^"|"$', "")
-                == variant_val
+                obs_table.payload["arm"].cast("string").re_replace('^"|"$', "")
+                == arm_val
             )
             batch_table = batch_table.filter(
-                batch_table.payload["variant"].cast("string").re_replace('^"|"$', "")
-                == variant_val
+                batch_table.payload["arm"].cast("string").re_replace('^"|"$', "")
+                == arm_val
             )
 
         # 2. Extract incremental stats via Ibis

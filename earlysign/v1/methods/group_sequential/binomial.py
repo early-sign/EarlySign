@@ -25,12 +25,12 @@ class BinomialZProjector(Projector[BinomialZResult]):
 
     def project(self, table: ibis.Expr) -> ProjectionResult[BinomialZResult]:
         # Tier 1: State Reconstruction
-        ctrl_traced = BinomialSummaryFact(
-            identity="summary_c", filter_variant="C"
-        ).project(table)
-        tret_traced = BinomialSummaryFact(
-            identity="summary_t", filter_variant="T"
-        ).project(table)
+        ctrl_traced = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(
+            table
+        )
+        tret_traced = BinomialSummaryFact(identity="summary_t", filter_arm="T").project(
+            table
+        )
 
         sc, st = ctrl_traced.data, tret_traced.data
         n_c, n_t = sc.n, st.n

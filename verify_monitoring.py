@@ -1,8 +1,8 @@
 import ibis
 from earlysign.core.ledger import Ledger
 from earlysign.v1.templates.binomial_monitoring import BinomialMonitoringTemplate
-from earlysign.v1.methods.protocols import EProcessProtocol
-from earlysign.v1.stats.binary import BatchObservation
+from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
+from earlysign.v1.methods.binomial import BatchObservation
 from earlysign.v1.methods.actions import Ingest
 from earlysign.v1.framework.session import Session
 
@@ -22,13 +22,13 @@ def main():
 
     # 2. Ingest some evidence
     with Session(ledger) as sess:
-        Ingest(sess, BatchObservation(n=100, success=65, variant="C"))
+        Ingest(sess, BatchObservation(n=100, success=65, arm="C"))
     print("-> Ingested: N=100, Successes=65")
 
     # 3. Check Monitoring
-    res = template.check()
+    res = template.report_progress()
     print(
-        f"-> Monitoring Result: E-Value={res.e_value:.4f}, Rejected={res.is_rejected}"
+        f"-> Monitoring Result: E-Value={res['e_value']:.4f}, Rejected={res['is_rejected']}"
     )
 
     # 4. Verify that no snapshot was created (identity="monitoring_summary")

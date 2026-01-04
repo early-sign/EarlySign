@@ -56,6 +56,6 @@ class BinomialStream:
         self.current_n += batch_size
 
         return [
-            BatchObservation(n=batch_size, success=k_c, variant="C"),
-            BatchObservation(n=batch_size, success=k_t, variant="T"),
+            BatchObservation(n=batch_size, success=k_c, arm="C"),
+            BatchObservation(n=batch_size, success=k_t, arm="T"),
         ]

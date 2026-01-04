@@ -20,13 +20,13 @@ Covers the flow:
 
 # --- Step 1. Ingest Data ---
 >>> with Session(ledger) as sess:
-...     _ = Ingest(sess, BatchObservation(n=100, success=38, variant="C"))
-...     _ = Ingest(sess, BatchObservation(n=120, success=51, variant="T"))
+...     _ = Ingest(sess, BatchObservation(n=100, success=38, arm="C"))
+...     _ = Ingest(sess, BatchObservation(n=120, success=51, arm="T"))
 
 # --- Step 2. Read and Analyze (Tier 1 Projection) ---
 >>> with Session(ledger) as sess:
-...     summary_c = sess.Read(BinomialSummaryFact(identity="s_c", filter_variant="C")).data
-...     summary_t = sess.Read(BinomialSummaryFact(identity="s_t", filter_variant="T")).data
+...     summary_c = sess.Read(BinomialSummaryFact(identity="s_c", filter_arm="C")).data
+...     summary_t = sess.Read(BinomialSummaryFact(identity="s_t", filter_arm="T")).data
 ...     print(f"C: {summary_c.n}, {summary_c.successes}")
 ...     print(f"T: {summary_t.n}, {summary_t.successes}")
 C: 100, 38

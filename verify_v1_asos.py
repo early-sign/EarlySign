@@ -96,13 +96,9 @@ def main():
         # Prepare minibatch
         batch = []
         if row["dn_c"] > 0:
-            batch.append(
-                BatchObservation(n=row["dn_c"], success=row["ds_c"], variant="C")
-            )
+            batch.append(BatchObservation(n=row["dn_c"], success=row["ds_c"], arm="C"))
         if row["dn_t"] > 0:
-            batch.append(
-                BatchObservation(n=row["dn_t"], success=row["ds_t"], variant="T")
-            )
+            batch.append(BatchObservation(n=row["dn_t"], success=row["ds_t"], arm="T"))
 
         # Update Trial (Ingest -> Read -> Analyze -> Decide)
         res = trial.update(batch)

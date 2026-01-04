@@ -60,12 +60,12 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
         p = protocol_traced.data
 
         # 2. Read Summary
-        sc_traced = BinomialSummaryFact(
-            identity="summary_c", filter_variant="C"
-        ).project(table)
-        st_traced = BinomialSummaryFact(
-            identity="summary_t", filter_variant="T"
-        ).project(table)
+        sc_traced = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(
+            table
+        )
+        st_traced = BinomialSummaryFact(identity="summary_t", filter_arm="T").project(
+            table
+        )
         sc, st = sc_traced.data, st_traced.data
 
         # 3. Calculate Operating Stats
@@ -120,12 +120,8 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
         protocol_res = ProtocolProjector(GSTProtocol).project(table)
         p = protocol_res.data
 
-        sc = BinomialSummaryFact(identity="summary_c", filter_variant="C").project(
-            table
-        )
-        st = BinomialSummaryFact(identity="summary_t", filter_variant="T").project(
-            table
-        )
+        sc = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(table)
+        st = BinomialSummaryFact(identity="summary_t", filter_arm="T").project(table)
 
         n_c, n_t = sc.data.n, st.data.n
         z_stat = 0.0
@@ -189,12 +185,12 @@ def reconstruct_binomial_z_history(
     df = table.execute()
 
     # Check table columns. Assuming generic ledger schema or implicit conversion from Ingest
-    if "variant" not in df.columns or "n" not in df.columns:
+    if "arm" not in df.columns or "n" not in df.columns:
         # Fallback empty if schema mismatch
         return [], []
 
-    df_c = df[df["variant"] == "C"].copy()
-    df_t = df[df["variant"] == "T"].copy()
+    df_c = df[df["arm"] == "C"].copy()
+    df_t = df[df["arm"] == "T"].copy()
 
     # Build timeline
     df_all = pd.concat([df_c.assign(grp="C"), df_t.assign(grp="T")]).sort_index()

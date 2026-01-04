@@ -129,10 +129,10 @@ class BinomialABTemplate:
             p = sess.Read(ProtocolProjector(GSTProtocol)).data
 
             summary_c = sess.Read(
-                BinomialSummaryFact(identity="summary_c", filter_variant="C")
+                BinomialSummaryFact(identity="summary_c", filter_arm="C")
             ).data
             summary_t = sess.Read(
-                BinomialSummaryFact(identity="summary_t", filter_variant="T")
+                BinomialSummaryFact(identity="summary_t", filter_arm="T")
             ).data
 
             cumulative_n = summary_c.n + summary_t.n
@@ -205,7 +205,7 @@ class BinomialABTemplate:
 
         Args:
            batches: Iterator yielding `BatchObservation` objects or lists of them.
-                    Each `BatchObservation` must have `n`, `success`, and `variant`.
+                    Each `BatchObservation` must have `n`, `success`, and `arm`.
         """
         for i, batch in enumerate(batches):
             res = self.update(batch if isinstance(batch, list) else [batch])
