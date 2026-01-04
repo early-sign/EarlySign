@@ -73,7 +73,7 @@ def main():
     # 1. Plan Design (Intent -> Realized Protocol)
     # Using realized p_control for planning (in practice, this would be historical or estimated)
     p_control = df.iloc[0]["mean_c"]
-    
+
     designer = ProtocolDesigner()
     protocol = designer.plan_binomial_ab(
         alpha=0.05,
