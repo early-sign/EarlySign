@@ -53,14 +53,13 @@ True
 """
 
 import warnings
-from typing import Any, Dict, Literal, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 from scipy import stats
 
+from earlysign.methods.adaptive_group_sequential.types import BindingMode
 from earlysign.methods.group_sequential import boundary
-
-BindingMode = Literal["binding", "non_binding"]
 
 
 def conditional_power(
@@ -358,7 +357,6 @@ def update_remaining_boundaries(
         "futility": {"mode": "none"},  # Simplified for now
     }
 
-    # Compute boundaries at remaining times using canonical BoundaryCalculator
     calc = boundary.BoundaryCalculator(spec=design, process=None)
     boundary_result = calc.compute_boundaries(info_times=remaining_info_times)
 

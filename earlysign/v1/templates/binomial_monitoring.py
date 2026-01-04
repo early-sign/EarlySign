@@ -27,7 +27,7 @@ class BinomialMonitoringTemplate:
     def __init__(self, ledger: "Ledger"):
         self.ledger = ledger
 
-    def set_protocol(self, protocol: EProcessProtocol):
+    def set_protocol(self, protocol: EProcessProtocol) -> None:
         """
         Persists the monitoring protocol to the ledger.
         """
@@ -145,7 +145,7 @@ class BinomialMonitoringTemplate:
             s_val = row["s_cum"]
 
             res = compute_binomial_e_value(
-                n=n_val, successes=s_val, null_p=null_p, alt_p=alt_p, alpha=alpha
+                n=n_val, successes=s_val, null_p=null_p, alt_p=alt_p or 0.0, alpha=alpha
             )
             history_e.append(res.e_value)
             history_n.append(n_val)

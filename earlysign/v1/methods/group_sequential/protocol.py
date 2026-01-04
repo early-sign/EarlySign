@@ -18,9 +18,9 @@ class GSTProtocol(BaseModel):
     )
     power: float = Field(0.8, description="Target statistical power (1 - Beta).")
     K: int = Field(3, description="Total number of looks (interim + final).")
-    spending_function: Literal["rho_family", "obrien_fleming"] = Field(
+    spending_function: Literal["rho_family", "obrien_fleming", "pocock"] = Field(
         "rho_family",
-        description="Type of alpha spending function (e.g., 'rho_family', 'obrien_fleming').",
+        description="Type of alpha spending function (e.g., 'rho_family', 'obrien_fleming', 'pocock').",
     )
     rho: float = Field(
         3.0, description="Rho parameter for the spending function (if applicable)."

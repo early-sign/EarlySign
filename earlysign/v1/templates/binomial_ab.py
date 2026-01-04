@@ -12,6 +12,7 @@ simulating a scenario with a 20% baseline conversion rate and a relative 10% lif
 For demonstration, we prepare the following datastream.
 
     >>> # We simulate a stream where Treatment actually has the lift (p=0.25 vs p=0.20)
+    >>> from earlysign.v1.tests.util import BinomialStream
     >>> stream = BinomialStream(
     ...     n_per_batch=100,
     ...     p_control=0.20,
@@ -102,7 +103,7 @@ class BinomialABTemplate:
     def __init__(self, ledger: "Ledger"):
         self.ledger = ledger
 
-    def set_protocol(self, protocol: GSTProtocol):
+    def set_protocol(self, protocol: GSTProtocol) -> None:
         """
         Persists the trial protocol to the ledger.
         This handles both initial intent and realized designs.
@@ -157,7 +158,7 @@ class BinomialABTemplate:
 
             if look_num:
                 # Execution layer: Pure statistical calculation
-                analysis_traced = sess.Read(BinomialZProjector(boundary))
+                analysis_traced = sess.Read(BinomialZProjector(boundary or 0.0))
                 calc_res = analysis_traced.data
 
                 # Record Decision if rejected or final
@@ -232,7 +233,8 @@ class BinomialABTemplate:
             protocol_res = sess.Read(ProtocolProjector(GSTProtocol))
             p = protocol_res.data
 
-            # Reconstruct History
+            # Retrieve Z-statistic history for visualization
+            # Use sess.table to respect snapshot isolation
             history_n, history_z = reconstruct_binomial_z_history(sess.table, p)
 
             # Generate Plot

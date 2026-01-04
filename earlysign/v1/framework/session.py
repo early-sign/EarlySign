@@ -34,6 +34,14 @@ class Session:
         """Returns the current implicit session trace."""
         return list(self._session_trace)
 
+    @property
+    def table(self) -> Any:
+        """
+        Returns a lazy table expression filtered by the Scientific Horizon.
+        """
+        # Filter ledger by the horizon timestamp captured at __init__
+        return self.ledger.t.filter(self.ledger.t.ts <= self.horizon_id)
+
     def Read(self, projector: Projector[T]) -> Traced[T]:
         """
         Hydrates data using a Projector and accumulates its lineage.

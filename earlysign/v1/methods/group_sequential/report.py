@@ -240,7 +240,7 @@ def plot_gst_summary(
     history_n: List[int],
     history_z: List[float],
     title: str = "GST Monitoring",
-    **kwargs,
+    **kwargs: Any,
 ) -> Any:
     """
     Generates a standard summary plot for Group Sequential Test results.
@@ -261,7 +261,7 @@ def plot_gst_summary(
 
     # Extract Protocol Params
     milestones = protocol.milestones
-    n_max = protocol.n_max
+    n_max = int(protocol.n_max)
     boundaries = protocol.boundaries
     look_ns = [int(m * n_max) for m in milestones]
 
@@ -289,10 +289,10 @@ def plot_gst_summary(
     ax.axhline(0, color="k", linestyle=":", alpha=0.3)
 
     # Info Time Axis
-    def n_to_info(x):
+    def n_to_info(x: Any) -> Any:
         return x / n_max if n_max > 0 else 0
 
-    def info_to_n(x):
+    def info_to_n(x: Any) -> Any:
         return x * n_max
 
     secax = ax.secondary_xaxis("top", functions=(n_to_info, info_to_n))

@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -15,6 +13,6 @@ class EProcessProtocol(BaseModel):
     null_p: float = Field(
         0.5, description="Success probability hypothesized under the Null (H0)."
     )
-    alt_p: Optional[float] = Field(
-        None, description="Success probability hypothesized under the Alternative (H1)."
+    alt_p: float = Field(
+        ..., description="Success probability hypothesized under the Alternative (H1)."
     )

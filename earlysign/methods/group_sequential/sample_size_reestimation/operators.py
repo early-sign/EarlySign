@@ -7,11 +7,11 @@ from earlysign.core.ledger import Ledger
 from earlysign.framework.operator import LedgerOp, LedgerOpOutputs
 from earlysign.framework.records import LedgerRecord
 from earlysign.methods.adaptive_group_sequential.conditional_update import (
-    BindingMode,
     conditional_power,
     promising_zone_decision,
     update_remaining_boundaries,
 )
+from earlysign.methods.adaptive_group_sequential.types import BindingMode
 from earlysign.methods.group_sequential.sample_size_reestimation.records import (
     ConditionalPowerRecord,
     DesignUpdateDecisionRecord,

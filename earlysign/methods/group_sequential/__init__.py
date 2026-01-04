@@ -18,7 +18,6 @@ from earlysign.methods.group_sequential import (  # noqa: F401
     decision,
     info_time,
     operating_characteristics,
-    sample_size_reestimation,
     simulation,
     spending,
 )
