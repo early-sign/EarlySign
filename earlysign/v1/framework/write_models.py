@@ -53,7 +53,7 @@ class WriteModel:
         return trace_hash
 
     @staticmethod
-    def CommitCallResult(
+    def CallAndCommit(
         session: "Session",
         result_type: Type[B],
         func: Callable[..., Any],

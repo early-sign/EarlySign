@@ -1,6 +1,6 @@
 """
 Verification Script: - Trace Verification.
-Checks if the implicit trace accumulation and CommitCallResult lineage are working.
+Checks if the implicit trace accumulation and CallAndCommit lineage are working.
 """
 
 import ibis
@@ -61,7 +61,7 @@ def main():
         def double(f: Fact):
             return {"total": f.val * 2}
 
-        res = WriteModel.CommitCallResult(sess, Result, double, traced_fact)
+        res = WriteModel.CallAndCommit(sess, Result, double, traced_fact)
         print(f"-> Computed result: {res.total}")
 
         # Verify result's trace in ledger

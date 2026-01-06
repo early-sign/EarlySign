@@ -39,7 +39,7 @@ The framework provides the low-level ES/CQRS primitives required for scientific 
 The fundamental operations for asserting facts into the Ledger.
 - **`Commit(session, record: BaseModel, trace=None)`**:
     - **Pydantic Integration**: Accepts a Pydantic `BaseModel`. Uses `record.model_dump()` for payload and its class name for schema tracking.
-- **`CommitCallResult(session, result_type: Type[BaseModel], func, *args, **kwargs)`**:
+- **`CallAndCommit(session, result_type: Type[BaseModel], func, *args, **kwargs)`**:
     - **Result Schema**: The `result_type` MUST be a Pydantic `BaseModel` subclass.
     - **Scientific Provenance**: Skips `func` execution if a matching `trace_hash` exists in the Ledger.
 
@@ -84,7 +84,7 @@ The verification script will exercise the **entire Pattern G stack**:
 1.  **Ingest**: Load ASOS data incrementally (`Ingest`).
 2.  **Setup**: Define and persist the trial rules (`UpdateProtocol` with `GSTProtocol`).
 3.  **Read**: Execute `Read` using `BinomialSummaryProjector`, demonstrating both automatic trace accumulation and **Snapshot-based recovery** (by re-running the script).
-4.  **Compute**: Use `CommitCallResult` to solve boundaries and test statistics, verifying skip-logic on the second run.
+4.  **Compute**: Use `CallAndCommit` to solve boundaries and test statistics, verifying skip-logic on the second run.
 5.  **Act**: Issue a `Decision` based on the results and verify it's only appended once.
 
 #### Standard Requirements

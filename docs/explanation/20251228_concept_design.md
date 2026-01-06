@@ -182,17 +182,17 @@ Pattern C is the standard evolution, designed for high-performance and distribut
         ctx = ep.Read(InferenceProjector())
 
         # Step 1: Preprocessing (Lazy)
-        clean = ep.CommitCallResult(DataRecord, slow_preprocess, ctx)
+        clean = ep.CallAndCommit(DataRecord, slow_preprocess, ctx)
 
         # Step 2: Analysis (Lazy)
-        res = ep.CommitCallResult(BayesianResult, perform_mcmc, clean)
+        res = ep.CallAndCommit(BayesianResult, perform_mcmc, clean)
 
         if res.p_value < 0.05:
             ep.Decision(Decision.Success())
 ```
 
 ### Note on "Read" Skipping in Pattern C:
-The `ep.Read()` calls are executed to prepare arguments for `ep.CommitCallResult()`. While the calculation body is skipped if the fingerprint matches, the data retrieval logic remains visible and active. This is suitable for workflows where data retrieval overhead is negligible compared to statistical computation.
+The `ep.Read()` calls are executed to prepare arguments for `ep.CallAndCommit()`. While the calculation body is skipped if the fingerprint matches, the data retrieval logic remains visible and active. This is suitable for workflows where data retrieval overhead is negligible compared to statistical computation.
 
 ## III-4. Pattern F: Typed Record API (Recommended Standard)
 
@@ -226,7 +226,7 @@ with episode.session() as ep:
 
     # 2. Automated Commitment: 
     # extract trace from 'summary' automatically.
-    res = ep.CommitCallResult(ZTestResult, perform_analysis, summary)
+    res = ep.CallAndCommit(ZTestResult, perform_analysis, summary)
 
     # 3. Governance:
     # Uses the implicit session trace (including 'res') by default.
@@ -262,7 +262,7 @@ with episode.session() as ep:
 
     # 2. Polymorphic Merging:
     # The Trace for this result is automatically merged from (summary_a, summary_b)
-    res = ep.CommitCallResult(ComparativeResult, calculate_diff, summary_a, summary_b)
+    res = ep.CallAndCommit(ComparativeResult, calculate_diff, summary_a, summary_b)
 
     # 3. Explicit Narrowing:
     # We choose to justify this decision ONLY based on the comparative result 'res', 
@@ -347,7 +347,7 @@ class Session:
         self._session_trace.append(trace_hash)
         return record.with_trace(trace_hash)
 
-    def CommitCallResult(self, result_type: Type[TypedRecord], func, *args, **kwargs):
+    def CallAndCommit(self, result_type: Type[TypedRecord], func, *args, **kwargs):
         # a. Automatic Trace Extraction from arguments
         explicit_traces = [v.trace for v in list(args) + list(kwargs.values()) if isinstance(v, Traced)]
         
@@ -379,7 +379,7 @@ with episode.session() as ep:
     ctx = ep.Read(SSRContextProjector())
     
     # Pass 'ctx' directly. The fingerprint caches the result.
-    insight = ep.CommitCallResult(SSRResult, compute_cp_and_n, ctx)
+    insight = ep.CallAndCommit(SSRResult, compute_cp_and_n, ctx)
     
     # Protocol updates are also adaptive actions.
     if insight.recommended_n > 500:
@@ -399,7 +399,7 @@ with episode.session() as ep:
         summary = ep.Read(BinomialProjector(arm=arm_id))
         
         # 2. The analysis is strictly bound to 'summary'
-        res = ep.CommitCallResult(AnalysisResult, perform_analysis, summary)
+        res = ep.CallAndCommit(AnalysisResult, perform_analysis, summary)
         
         if res.z > res.bounds.futility:
              ep.Decision(Decision.ArmFutility(arm=arm_id))
@@ -408,7 +408,7 @@ with episode.session() as ep:
 ### Proof 3: Latency & Pipeline (The Waitlist Challenge)
 **Challenge**: Preventing "Double Stopping" when multiple analyses are run while outcome data is still in the pipeline.
 
-By including the **Pipeline Hash** (enrolled subjects with pending outcomes) in the `CommitCallResult` trace hash, Pattern G ensures that a heavy analysis is only "New" if the pipeline has changed. If the number of pending patients remains the same and no outcomes have arrived, `CommitCallResult` returns the existing `res` immediately, and the library's internal `ep.Decision` check prevents a redundant action.
+By including the **Pipeline Hash** (enrolled subjects with pending outcomes) in the `CallAndCommit` trace hash, Pattern G ensures that a heavy analysis is only "New" if the pipeline has changed. If the number of pending patients remains the same and no outcomes have arrived, `CallAndCommit` returns the existing `res` immediately, and the library's internal `ep.Decision` check prevents a redundant action.
 
 ### Proof 4: Stochastic Reproducibility (Bayesian MCMC)
 **Challenge**: Guaranteeing that stochastic computations (e.g., MCMC sampling) are "frozen" once computed, ensuring deterministic replay.
@@ -423,7 +423,7 @@ with episode.session() as ep:
     # 1. perform_mcmc executes on the first run.
     # 2. Subsequent runs detect that 'ctx' (scientific trace) hasn't changed.
     # 3. The library skips the solver and returns the committed record.
-    res = ep.CommitCallResult(BayesianResult, perform_mcmc, ctx, seed=42)
+    res = ep.CallAndCommit(BayesianResult, perform_mcmc, ctx, seed=42)
     
     if res.posterior_mean > threshold:
         ep.Decision(Decision.EfficacySignal())
@@ -432,7 +432,7 @@ with episode.session() as ep:
 ### Proof 5: Multi-Generation Challenge (Platform Trials)
 **Challenge**: Maintaining $O(N)$ performance for state reconstruction in long-running platform trials with evolving protocols.
 
-Pattern G, combined with **Persistent Snapshots** (II-1), addresses this by ensuring that `ep.Read()` operations can leverage the latest snapshot, and `ep.CommitCallResult()` trace hashes only need to consider the differential events since that snapshot. The `Induction Snapshot` in the trace hash ensures that even if the underlying protocol changes, the system correctly identifies when a re-computation is necessary, while the snapshotting mechanism keeps the replay cost manageable.
+Pattern G, combined with **Persistent Snapshots** (II-1), addresses this by ensuring that `ep.Read()` operations can leverage the latest snapshot, and `ep.CallAndCommit()` trace hashes only need to consider the differential events since that snapshot. The `Induction Snapshot` in the trace hash ensures that even if the underlying protocol changes, the system correctly identifies when a re-computation is necessary, while the snapshotting mechanism keeps the replay cost manageable.
 
 ## III-8. The Repeatable Process Pattern (Idempotency of Action)
 
@@ -533,7 +533,7 @@ These tests validate the deferred execution logic of Pattern C, ensuring that "h
 ```python
 # [Pattern C Logic]
 # compute_cp_and_n is ONLY called on the first encounter of this context.
-insight = ep.CommitCallResult("SSR_Analysis", compute_cp_and_n, history)
+insight = ep.CallAndCommit("SSR_Analysis", compute_cp_and_n, history)
 ```
 
 ---
