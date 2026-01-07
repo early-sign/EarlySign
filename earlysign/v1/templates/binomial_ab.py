@@ -24,9 +24,8 @@ Then, we initialize the template and run the experiment.
 
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
-    >>> from earlysign.v1.methods.group_sequential.protocol_designer import ProtocolDesigner
-    >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate
+    >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
+    >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.v1.tests.util import BinomialStream
 
     >>> # 1. Setup Environment (In-memory DuckDB)
@@ -74,21 +73,31 @@ In practice, each iteration may run in a different process.
 To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
+import earlysign.schema.ES3.GST as GST
+from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.trace import Traced
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
 from earlysign.v1.methods.binomial import BinomialSummaryFact
-from earlysign.v1.methods.group_sequential.binomial import (
-    BinomialZProjector,
-)
-from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
+from earlysign.v1.framework.write_models import WriteModel
+from earlysign.schema.ES3.GST import DecisionStatus
 from earlysign.v1.methods.group_sequential.report import (
     ABDecisionRecord,
     BinomialFinalProjector,
     BinomialProgressProjector,
+    plot_gst_summary,
+    reconstruct_binomial_z_history,
+)
+from earlysign.v1.methods.group_sequential.protocol_designer import (
+    ProtocolDesigner,
+)
+from earlysign.v1.methods.group_sequential.binomial import (
+    BinomialGSTEngine,
+    BinomialTestResult,
 )
 
 if TYPE_CHECKING:
@@ -103,7 +112,7 @@ class BinomialABTemplate:
     def __init__(self, ledger: "Ledger"):
         self.ledger = ledger
 
-    def set_protocol(self, protocol: GSTProtocol) -> None:
+    def set_protocol(self, protocol: BinomialABProtocol) -> None:
         """
         Persists the trial protocol to the ledger.
         This handles both initial intent and realized designs.
@@ -111,13 +120,11 @@ class BinomialABTemplate:
         with Session(self.ledger) as sess:
             UpdateProtocol(sess, protocol)
 
-    def update(self, batch: List[BaseModel]) -> Dict[str, Any]:
+    def update(self, batch: List[BaseModel]) -> None:
         """
         Orchestrates a single minibatch update cycle:
         Ingest -> [Read -> Analyze -> Decide -> Snapshot].
         """
-        from earlysign.v1.framework.projector import ProtocolProjector
-
         # 1. Ingest Data
         if batch:
             with Session(self.ledger) as sess:
@@ -127,64 +134,39 @@ class BinomialABTemplate:
         # 2. Analysis
         with Session(self.ledger) as sess:
             # Reconstruct Protocol from Ledger
-            p = sess.Read(ProtocolProjector(GSTProtocol)).data
+            protocol = sess.Read(ProtocolProjector(BinomialABProtocol))
 
             summary_c = sess.Read(
                 BinomialSummaryFact(identity="summary_c", filter_arm="C")
-            ).data
+            )
             summary_t = sess.Read(
                 BinomialSummaryFact(identity="summary_t", filter_arm="T")
-            ).data
+            )
 
-            cumulative_n = summary_c.n + summary_t.n
-            info_frac = cumulative_n / p.n_max if p.n_max > 0 else 0
 
-            result = {
-                "info_frac": info_frac,
-                "look": None,
-                "z_stat": None,
-                "is_rejected": False,
-                "status": "CONTINUE",
-            }
+            # 3. Engine Execution
 
-            # 3. Check if Look is due
-            # We determine the "current" look by comparing cumulative N with milestones.
-            look_num = None
-            boundary = None
-            for i, m in enumerate(p.milestones):
-                if info_frac >= m:
-                    look_num = i + 1
-                    boundary = p.boundaries[i]
+            # Use CallAndCommit to execute logic and persist result with scientific lineage
+            result: Traced[BinomialTestResult] = WriteModel.CallAndCommit(
+                sess,
+                BinomialTestResult,
+                BinomialGSTEngine(protocol.data).run,
+                summary_c=summary_c,
+                summary_t=summary_t,
+                protocol=protocol,
+            )
 
-            if look_num:
-                # Execution layer: Pure statistical calculation
-                analysis_traced = sess.Read(BinomialZProjector(boundary or 0.0))
-                calc_res = analysis_traced.data
-
-                # Record Decision if rejected or final
-                status = "CONTINUE"
-                if calc_res.is_rejected:
-                    status = "STOP_EFFICACY"
-                    Decision(
-                        sess,
-                        ABDecisionRecord(
-                            status="STOP", message=f"Rejected at Look {look_num}"
-                        ),
-                        trace=analysis_traced.trace,
-                    )
-                elif look_num == len(p.milestones):
-                    status = "STOP_FINAL"
-
-                result.update(
-                    {
-                        "look": look_num,
-                        "z_stat": calc_res.z_stat,
-                        "is_rejected": calc_res.is_rejected,
-                        "status": status,
-                    }
+            # Record Decision
+            if result.data.status == DecisionStatus.STOP_EFFICACY:
+                Decision(
+                    sess,
+                    ABDecisionRecord(
+                        status=DecisionStatus.STOP,
+                        message=f"Rejected at Look {result.data.look}",
+                    ),
+                    # Use the trace from the calculation result which includes dependencies
+                    trace=result.trace,
                 )
-
-            return result
 
     def report_progress(self) -> Dict[str, Any]:
         """
@@ -192,12 +174,16 @@ class BinomialABTemplate:
         Reconstructs state via BinomialProgressProjector.
         """
         with Session(self.ledger) as sess:
-            return sess.Read(BinomialProgressProjector()).data.model_dump()
+            return sess.Read(
+                BinomialProgressProjector(protocol_type=BinomialABProtocol)
+            ).data.model_dump()
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
-            return sess.Read(BinomialFinalProjector()).data.model_dump()
+            return sess.Read(
+                BinomialFinalProjector(protocol_type=BinomialABProtocol)
+            ).data.model_dump()
 
     def backtest(self, batches: Any) -> Dict[str, Any]:
         """
@@ -209,8 +195,9 @@ class BinomialABTemplate:
                     Each `BatchObservation` must have `n`, `success`, and `arm`.
         """
         for i, batch in enumerate(batches):
-            res = self.update(batch if isinstance(batch, list) else [batch])
-            if res.get("status") == "STOP_EFFICACY":
+            self.update(batch if isinstance(batch, list) else [batch])
+            prog = self.report_progress()
+            if prog.get("status") == DecisionStatus.STOP_EFFICACY:
                 return self.report_result()
 
         return self.report_result()
@@ -222,15 +209,8 @@ class BinomialABTemplate:
         Returns:
             matplotlib.figure.Figure: The generated plot figure.
         """
-        from earlysign.v1.framework.projector import ProtocolProjector
-        from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
-        from earlysign.v1.methods.group_sequential.report import (
-            plot_gst_summary,
-            reconstruct_binomial_z_history,
-        )
-
         with Session(self.ledger) as sess:
-            protocol_res = sess.Read(ProtocolProjector(GSTProtocol))
+            protocol_res = sess.Read(ProtocolProjector(BinomialABProtocol))
             p = protocol_res.data
 
             # Retrieve Z-statistic history for visualization
