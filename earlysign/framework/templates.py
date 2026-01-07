@@ -1,9 +1,7 @@
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict
 
-import ibis
 import pandas as pd
 from ibis import BaseBackend
-from ibis.expr.types import Table as TableExpr
 
 
 class TemplateBase:
@@ -34,4 +32,3 @@ class TemplateBase:
     def get_history(self) -> pd.DataFrame:
         """Get complete history of the trial with all key metrics."""
         raise NotImplementedError()
-

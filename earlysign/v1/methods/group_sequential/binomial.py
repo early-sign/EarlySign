@@ -1,13 +1,12 @@
 from typing import Any, Optional, Union
 
-import ibis
 import numpy as np
 from pydantic import BaseModel
 
 # Import protocol types for type hinting if needed (avoid circular if possible)
 import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.GST import DecisionStatus
-from earlysign.v1.methods.binomial import BinomialSummary, BinomialSummaryFact
+from earlysign.v1.methods.binomial import BinomialSummary
 from earlysign.v1.methods.group_sequential.engine import GSTStoppingRuleEngine
 
 
@@ -24,7 +23,9 @@ class BinomialTestResult(BaseModel):
     futility_boundary: Optional[float]
     is_futility_crossed: bool
 
-    status: Union[DecisionStatus, str]  # "CONTINUE", "STOP_EFFICACY", "STOP_FUTILITY", "STOP_PLAN_END_REACHED"
+    status: Union[
+        DecisionStatus, str
+    ]  # "CONTINUE", "STOP_EFFICACY", "STOP_FUTILITY", "STOP_PLAN_END_REACHED"
 
 
 class BinomialGSTEngine:
@@ -146,5 +147,3 @@ class BinomialGSTEngine:
             is_futility_crossed=is_futility_crossed,
             status=status,
         )
-
-

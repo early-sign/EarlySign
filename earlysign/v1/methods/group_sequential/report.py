@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
+from earlysign.schema.ES3.GST import DecisionStatus
 from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.methods.binomial import BinomialSummaryFact
-from earlysign.schema.ES3.GST import DecisionStatus
 
 
 class ABDecisionRecord(BaseModel):
@@ -339,7 +339,9 @@ def plot_gst_summary(
         # Calculate Futility Boundaries if applicable
         futility_boundaries = []
         if protocol.method.futility:
-            beta_budget = 1.0 - (protocol.task.futility.power if protocol.task.futility else 0.8)
+            beta_budget = 1.0 - (
+                protocol.task.futility.power if protocol.task.futility else 0.8
+            )
             fut_engine = GSTStoppingRuleEngine(
                 protocol.method.futility, "futility", total_budget=beta_budget
             )
@@ -357,17 +359,19 @@ def plot_gst_summary(
     # 1. Boundaries
     if look_ns:
         if boundaries:
-             ax.plot(look_ns, boundaries, "r--", label="Efficacy Boundary")
+            ax.plot(look_ns, boundaries, "r--", label="Efficacy Boundary")
 
         # Plot Futility if exists (ES3)
         if "futility_boundaries" in locals() and futility_boundaries:
-             # Check if we have valid boundaries (not -inf)
-             valid_fut = [b for b in futility_boundaries if b > -100] # Simple filter for plotting
-             if valid_fut:
+            # Check if we have valid boundaries (not -inf)
+            valid_fut = [
+                b for b in futility_boundaries if b > -100
+            ]  # Simple filter for plotting
+            if valid_fut:
                 ax.plot(look_ns, futility_boundaries, "k--", label="Futility Boundary")
-        
+
         elif hasattr(protocol, "boundaries") and protocol.boundaries:
-             pass
+            pass
 
     # 2. Trajectory using realized history
     # Add origin

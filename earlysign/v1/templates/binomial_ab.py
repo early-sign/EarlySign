@@ -88,26 +88,26 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, model_validator
 
 import earlysign.schema.ES3.GST as GST
+from earlysign.schema.ES3.GST import DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
 from earlysign.v1.framework.trace import Traced
+from earlysign.v1.framework.write_models import WriteModel
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
 from earlysign.v1.methods.binomial import BinomialSummaryFact
-from earlysign.v1.framework.write_models import WriteModel
-from earlysign.schema.ES3.GST import DecisionStatus
+from earlysign.v1.methods.group_sequential.binomial import (
+    BinomialGSTEngine,
+    BinomialTestResult,
+)
+from earlysign.v1.methods.group_sequential.protocol_designer import (
+    ProtocolDesigner,
+)
 from earlysign.v1.methods.group_sequential.report import (
     ABDecisionRecord,
     BinomialFinalProjector,
     BinomialProgressProjector,
     plot_gst_summary,
     reconstruct_binomial_z_history,
-)
-from earlysign.v1.methods.group_sequential.protocol_designer import (
-    ProtocolDesigner,
-)
-from earlysign.v1.methods.group_sequential.binomial import (
-    BinomialGSTEngine,
-    BinomialTestResult,
 )
 
 # --- ES3 Protocol Manifest ---
@@ -227,7 +227,6 @@ class BinomialABTemplate:
                 BinomialSummaryFact(identity="summary_t", filter_arm="T")
             )
 
-
             # 3. Engine Execution
 
             # Use CallAndCommit to execute logic and persist result with scientific lineage
@@ -242,7 +241,10 @@ class BinomialABTemplate:
 
             # Record Decision
             # Record Decision
-            if result.data.status in (DecisionStatus.STOP_EFFICACY, DecisionStatus.STOP_FUTILITY):
+            if result.data.status in (
+                DecisionStatus.STOP_EFFICACY,
+                DecisionStatus.STOP_FUTILITY,
+            ):
                 Decision(
                     sess,
                     ABDecisionRecord(

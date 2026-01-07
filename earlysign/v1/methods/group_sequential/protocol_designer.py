@@ -114,9 +114,7 @@ class ProtocolDesigner:
                 hypotheses=GST.HypothesisSpec(
                     h_null="Difference <= 0",
                     h_alt=f"Difference > {delta}",
-                    test_logic=GST.SuperiorityHypothesis(
-                        superiority_margin=0.0
-                    ),
+                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.BinaryEffectSize(
                         proportions={
                             "control": p_control,
