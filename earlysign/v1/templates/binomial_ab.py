@@ -67,7 +67,8 @@ Then, we initialize the template and run the experiment.
 
     >>> # 4. Run Experiment
     >>> for batch in stream:
-    ...     result = template.update(batch)
+    ...     template.update(batch)
+    ...     result = template.report_progress()
     ...     # Check if we crossed a boundary or stopped for futility
     ...     if result['status'] != "CONTINUE":
     ...         break
@@ -75,7 +76,7 @@ Then, we initialize the template and run the experiment.
     >>> # 5. Generate Final Report
     >>> final_result = template.report_result()
     >>> print(f"Final Status: {final_result['final_status']}")
-    Final Status: STOP_EFFICACY
+    Final Status: DecisionStatus.STOP_EFFICACY
     >>> print(f"Is Rejected: {final_result['is_rejected']}")
     Is Rejected: True
 
@@ -85,11 +86,12 @@ To support this use case, the Template object can be destroyed after each iterat
 
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.GST import DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
+from earlysign.v1.framework.protocol import AutoNameMixin
 from earlysign.v1.framework.session import Session
 from earlysign.v1.framework.trace import Traced
 from earlysign.v1.framework.write_models import WriteModel
@@ -131,17 +133,10 @@ class BinomialABMethodSpec(GST.MethodSpec):
     futility: Optional[GST.StoppingRule] = None
 
 
-class BinomialABProtocol(GST.Protocol):
+class BinomialABProtocol(GST.Protocol, AutoNameMixin):
     task: BinomialABTaskSpec
     method: BinomialABMethodSpec
-
-    @model_validator(mode="before")
-    @classmethod
-    def default_name(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "name" not in data:
-                data["name"] = f"{cls.__module__}.{cls.__name__}"
-        return data
+    name: str = Field(default="")
 
 
 if TYPE_CHECKING:
