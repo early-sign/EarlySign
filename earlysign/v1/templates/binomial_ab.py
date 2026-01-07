@@ -34,25 +34,35 @@ Then, we initialize the template and run the experiment.
     >>> ledger.ensure()
     >>> ledger = ledger.bind(experiment_id="test_experiment_001")
 
-    >>> # 2. Define Protocol using Designer
+    >>> # 2. Define Task and Design Protocol
     >>> # Scenario: Detecting a 10% relative lift (20% -> 22%) with 80% power.
-    >>> designer = ProtocolDesigner.from_dict({
-    ...     "model": "canonical_gaussian",
-    ...     "model_params": {"rng_seed": 42}
-    ... })
-    >>> protocol = designer.plan_binomial_ab(
-    ...     alpha=0.05,
-    ...     power=0.8,
-    ...     delta=0.02, # 20% -> 22%
-    ...     p_control=0.20,
-    ...     k=2,
-    ...     shape_type="obrien_fleming"
+    >>> task = BinomialABTaskSpec(
+    ...     arms=["control", "treatment"],
+    ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+    ...     futility=GST.FutilityRequirement(power=0.8),
+    ...     hypotheses=GST.HypothesisSpec(
+    ...         h_null="Difference <= 0",
+    ...         h_alt="Difference > 0.02",
+    ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+    ...         target_effect=GST.BinaryEffectSize(
+    ...             proportions={"control": 0.20, "treatment": 0.22}
+    ...         )
+    ...     )
     ... )
-    >>> print(f"Designed Max Sample Size: {protocol.n_max}")
+
+    >>> # 3. Initialize Template and Design
+    >>> template = BinomialABTemplate(ledger)
+    >>> protocol = template.design(
+    ...     task=task,
+    ...     looks=2,
+    ...     spending_function="obrien_fleming",
+    ...     designer_params={"model": "canonical_gaussian", "model_params": {"rng_seed": 42}}
+    ... )
+
+    >>> print(f"Designed Max Sample Size: {int(protocol.method.efficacy.schedule.interim_points[-1])}")
     Designed Max Sample Size: 12623
 
-    >>> # 3. Initialize Template and Save the designed protocol
-    >>> template = BinomialABTemplate(ledger)
+    >>> # 4. Save the designed protocol
     >>> template.set_protocol(protocol)
 
     >>> # 4. Run Experiment
@@ -75,7 +85,7 @@ To support this use case, the Template object can be destroyed after each iterat
 
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 import earlysign.schema.ES3.GST as GST
 from earlysign.v1.framework.projector import ProtocolProjector
@@ -100,6 +110,40 @@ from earlysign.v1.methods.group_sequential.binomial import (
     BinomialTestResult,
 )
 
+# --- ES3 Protocol Manifest ---
+
+
+class BinomialABTaskSpec(GST.TaskSpec):
+    response_type: Literal["binary"] = "binary"
+    # Design Requirements
+    efficacy: GST.EfficacyRequirement = GST.EfficacyRequirement(alpha=0.025)
+    futility: GST.FutilityRequirement = GST.FutilityRequirement(
+        power=0.8, binding=False
+    )
+
+    hypotheses: GST.HypothesisSpec
+
+
+class BinomialABMethodSpec(GST.MethodSpec):
+    # Efficacy Stopping Rule
+    efficacy: GST.StoppingRule
+    # Futility Stopping Rule
+    futility: Optional[GST.StoppingRule] = None
+
+
+class BinomialABProtocol(GST.Protocol):
+    task: BinomialABTaskSpec
+    method: BinomialABMethodSpec
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_name(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "name" not in data:
+                data["name"] = f"{cls.__module__}.{cls.__name__}"
+        return data
+
+
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
 
@@ -108,6 +152,46 @@ class BinomialABTemplate:
     """
     Standard orchestration for a Binomial A/B test using Group Sequential Design.
     """
+
+    @classmethod
+    def design(
+        cls,
+        task: BinomialABTaskSpec,
+        looks: int,
+        spending_function: str = "obrien_fleming",
+        designer_params: Optional[Dict[str, Any]] = None,
+    ) -> BinomialABProtocol:
+        """
+        Designs a Binomial A/B protocol based on the provided TaskSpec.
+
+        Args:
+            task: The generic task specification containing requirements (alpha, power, delta).
+            looks: Number of interim looks (K).
+            spending_function: Shape of the boundary (e.g., 'obrien_fleming').
+            designer_params: Optional params for ProtocolDesigner (e.g., model type).
+
+        Returns:
+            A populated BinomialABProtocol with the calculated schedule.
+        """
+        designer = ProtocolDesigner.from_dict(designer_params or {})
+
+        # Delegate logic to Designer
+        method_spec_base = designer.method_from_task_spec(
+            task=task,
+            params={"looks": looks, "spending_function": spending_function},
+        )
+
+        if not method_spec_base.efficacy:
+            raise ValueError("Designed method is missing efficacy rule.")
+
+        # Wrap in specific Protocol Method Spec
+        method_spec = BinomialABMethodSpec(
+            kind="group_sequential",
+            efficacy=method_spec_base.efficacy,
+            futility=method_spec_base.futility,
+        )
+
+        return BinomialABProtocol(task=task, method=method_spec)
 
     def __init__(self, ledger: "Ledger"):
         self.ledger = ledger
@@ -157,12 +241,13 @@ class BinomialABTemplate:
             )
 
             # Record Decision
-            if result.data.status == DecisionStatus.STOP_EFFICACY:
+            # Record Decision
+            if result.data.status in (DecisionStatus.STOP_EFFICACY, DecisionStatus.STOP_FUTILITY):
                 Decision(
                     sess,
                     ABDecisionRecord(
-                        status=DecisionStatus.STOP,
-                        message=f"Rejected at Look {result.data.look}",
+                        status=result.data.status,
+                        message=f"Stopped: {result.data.status} at Look {result.data.look}",
                     ),
                     # Use the trace from the calculation result which includes dependencies
                     trace=result.trace,

@@ -74,8 +74,6 @@ class ProtocolDesigner:
         info_times = np.linspace(1 / k, 1.0, k)
 
         # 1. Solve for boundary constant c
-        # Note: CanonicalJointDistribution currently takes 'shape_type' string.
-        # Ideally, this should map from protocol enums, but for now we pass through.
         c_val = self._cjd.solve_boundary_constant(
             info_times.tolist(), alpha, shape_type=shape_type
         )
@@ -118,7 +116,7 @@ class ProtocolDesigner:
                     h_alt=f"Difference > {delta}",
                     test_logic=GST.SuperiorityHypothesis(
                         superiority_margin=0.0
-                    ),  # Assuming Simple Superiority
+                    ),
                     target_effect=GST.BinaryEffectSize(
                         proportions={
                             "control": p_control,

@@ -113,23 +113,10 @@ class MonitoringFinalProjector(Projector[MonitoringFinalReport]):
         )
 
         # 4. Determine Final Status
-        # Check for recorded Decision
-        # Or implicitly use current rejection status
-
-        # We should check if a Decision was already made.
-        # But for 'Final Report', reporting the CURRENT status is usually correct if the stream ended.
-        # If we rejected earlier, the E-value might have kept changing if we didn't stop ingestion.
-        # Usually we stop ingestion.
-
-        # Ideally we search for the FIRST rejection event.
-        # But assuming the user stops upon rejection in the loop, the current state IS the stopping state.
-
+        # For E-Process, statistical rejection is the primary Stopping Condition.
         final_status = "COMPLETED"
         if res.is_rejected:
             final_status = "STOP_EVAL"
-
-        # We could also check for decision record like in binomial_ab.py,
-        # but let's stick to the computed status for simplicity unless strictly required.
 
         report = MonitoringFinalReport(
             n=s.n,

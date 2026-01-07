@@ -13,9 +13,10 @@ import numpy as np
 import ibis
 from pydantic import BaseModel
 from typing import List, Any, Optional
+from earlysign.schema.ES3.GST import DecisionStatus
 
 from earlysign.core.ledger import Ledger
-from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
+import earlysign.schema.ES3.GST as GST
 from earlysign.v1.methods.group_sequential.protocol_designer import ProtocolDesigner
 from earlysign.v1.methods.binomial import BinomialSummaryFact, BatchObservation
 from earlysign.v1.templates.binomial_ab import BinomialABTemplate
@@ -70,25 +71,58 @@ def main():
     df["dn_c"], df["ds_c"], df["dn_t"], df["ds_t"] = dn_c, ds_c, dn_t, ds_t
     df = df[(df["dn_c"] > 0) | (df["dn_t"] > 0)].copy()
 
-    # 1. Plan Design (Intent -> Realized Protocol)
-    # Using realized p_control for planning (in practice, this would be historical or estimated)
+    # 1. Plan Design
     p_control = df.iloc[0]["mean_c"]
+    delta = 0.005
 
-    designer = ProtocolDesigner()
-    protocol = designer.plan_binomial_ab(
-        alpha=0.05,
-        power=0.8,
-        delta=0.005,
-        k=3,
-        p_control=p_control,
+    # Create Task Spec
+    from earlysign.v1.templates.binomial_ab import BinomialABTaskSpec
+    import earlysign.schema.ES3.GST as GST
+
+    task = BinomialABTaskSpec(
+        arms=["C", "T"],
+        response_type="binary",
+        hypotheses=GST.HypothesisSpec(
+            h_null="Diff <= 0",
+            h_alt="Diff > 0",
+            test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+            target_effect=GST.BinaryEffectSize(
+                proportions={"control": p_control, "treatment": p_control + delta}
+            ),
+        ),
+        efficacy=GST.EfficacyRequirement(alpha=0.05),
+        futility=GST.FutilityRequirement(power=0.8),
+    )
+
+    protocol = BinomialABTemplate.design(
+        task=task, looks=3, spending_function="obrien_fleming"
     )
 
     # 2. Initialize Template with realized protocol
     trial = BinomialABTemplate(ledger)
     trial.set_protocol(protocol)
 
+    # Extract realized params for display
+    # Schedule (N)
+    interim_points = protocol.method.efficacy.schedule.interim_points
+    n_max = int(max(interim_points))
+
+    # Boundaries (Calculate via Engine for display)
+    from earlysign.v1.methods.group_sequential.engine import GSTStoppingRuleEngine
+
+    engine = GSTStoppingRuleEngine(
+        protocol.method.efficacy, "efficacy", total_budget=0.05
+    )
+
+    # Reconstruct boundary values
+    boundaries = []
+    for i, n in enumerate(interim_points):
+        info_frac = n / n_max
+        b = engine.get_boundary_at_look(i, info_frac)
+        boundaries.append(b)
+
     print(
-        f"-> Planned Design: n_max={protocol.n_max}, Boundaries={[round(b, 2) for b in protocol.boundaries]}"
+        f"-> Planned Design: n_max={n_max}, Boundaries={[round(b, 2) for b in boundaries]}"
     )
 
     # 3. Execution Loop
@@ -101,18 +135,20 @@ def main():
             batch.append(BatchObservation(n=row["dn_t"], success=row["ds_t"], arm="T"))
 
         # Update Trial (Ingest -> Read -> Analyze -> Decide)
-        res = trial.update(batch)
+        trial.update(batch)
+        res = trial.report_progress()
 
         if res["look"]:
             print(
                 f"\n   >>> Look {res['look']} Triggered (Info Frac: {res['info_frac']:.2f})"
             )
-            print(f"       Control: n and s reconstructed via logic.")
+            boundary_val = boundaries[res["look"] - 1]
+
             print(
-                f"       Z: {res['z_stat']:.4f} (Bound: {protocol.boundaries[res['look']-1]:.2f}) - Reject: {res['is_rejected']}"
+                f"       Z: {res['z_stat']:.4f} (Bound: {boundary_val:.2f}) - Report Status: {res['status']}"
             )
 
-            if res["is_rejected"]:
+            if res["status"] == DecisionStatus.STOP_EFFICACY:
                 print(f"       [DECISION] STOP.")
                 break
 

@@ -74,17 +74,46 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
         sc, st = sc_traced.data, st_traced.data
 
         # 3. Calculate Operating Stats
+        # Extract n_max and milestones from ES3 Protocol
+        schedule = p.method.efficacy.schedule
+        if schedule.unit == "sample_size" and schedule.interim_points:
+            look_ns = [int(n) for n in schedule.interim_points]
+            n_max = max(look_ns)
+            milestones = [n / n_max for n in look_ns]
+            boundaries_vals = []
+            # Reconstruct boundaries using GSTStoppingRuleEngine for accuracy.
+            from earlysign.v1.methods.group_sequential.engine import (
+                GSTStoppingRuleEngine,
+            )
+
+            alpha = p.task.efficacy.alpha
+            engine = GSTStoppingRuleEngine(
+                p.method.efficacy, "efficacy", total_budget=alpha
+            )
+            boundaries_vals = [
+                engine.get_boundary_at_look(i, m) for i, m in enumerate(milestones)
+            ]
+        else:
+            n_max = 0
+            milestones = []
+            boundaries_vals = []
+
         n_c, n_t = sc.n, st.n
         n_total = n_c + n_t
-        info_frac = n_total / p.n_max if p.n_max > 0 else 0.0
+        info_frac = n_total / n_max if n_max > 0 else 0.0
 
         # Determine current look and boundary
         look_num = None
         boundary = None
-        for i, m in enumerate(p.milestones):
-            if info_frac >= m:
+
+        # Determine look: latest milestone passed by current sample size.
+        for i, m_frac in enumerate(milestones):
+            m_n = look_ns[i]
+            if n_total >= m_n:
                 look_num = i + 1
-                boundary = p.boundaries[i]
+                boundary = boundaries_vals[i]
+            else:
+                break
 
         z_stat = None
         if n_c >= 2 and n_t >= 2:
@@ -148,13 +177,11 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
             # Use generic ProtocolProjector to find last ABDecisionRecord
             decision_res = ProtocolProjector(ABDecisionRecord).project(table)
             decision = decision_res.data
-            if decision.status == DecisionStatus.STOP or decision.status == "STOP":
-                # Assuming message or context implies rejection if STOP_EFFICACY
-                if "Rejected" in decision.message:
-                    is_rejected = True
-                    final_status = DecisionStatus.STOP_EFFICACY
-                else:
-                    final_status = DecisionStatus.STOP_FUTILITY  # or similar
+            if decision.status == DecisionStatus.STOP_EFFICACY:
+                is_rejected = True
+                final_status = DecisionStatus.STOP_EFFICACY
+            elif decision.status == DecisionStatus.STOP_FUTILITY:
+                final_status = DecisionStatus.STOP_FUTILITY
         except RuntimeError:
             # No decision record found.
             # Check if we reached max samples (Implicit Futility / Completion)
@@ -218,10 +245,8 @@ def reconstruct_binomial_z_history(
         if schedule.unit == "sample_size" and schedule.interim_points:
             # ES3 stores N directly in interim_points
             look_ns = [int(n) for n in schedule.interim_points]
-            milestones = [n / max(look_ns) for n in look_ns]  # Reconstruct info frac
             n_max = max(look_ns)
         else:
-            # Fallback or Todo: Handle info_frac based schedules
             return [], []
     else:
         # Legacy GSTProtocol
@@ -240,7 +265,6 @@ def reconstruct_binomial_z_history(
             break
 
         n_target = look_ns[current_look_idx]
-        # Check if we just crossed the target or are past it (and haven't recorded yet)
         if row["n_total"] >= n_target:
             # Calculate stats
             sub = df_all.loc[:idx]
@@ -288,15 +312,62 @@ def plot_gst_summary(
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Extract Protocol Params
-    milestones = protocol.milestones
-    n_max = int(protocol.n_max)
-    boundaries = protocol.boundaries
-    look_ns = [int(m * n_max) for m in milestones]
+    # Extract Protocol Params (Adapter)
+    if hasattr(protocol, "method") and hasattr(protocol.method, "efficacy"):
+        # ES3
+        # Using GSTStoppingRuleEngine to compute theoretical boundaries at look points.
+        from earlysign.v1.methods.group_sequential.engine import GSTStoppingRuleEngine
+
+        # Assuming Efficacy Engine for plot
+        alpha = protocol.task.efficacy.alpha if protocol.task.efficacy else 0.05
+        engine = GSTStoppingRuleEngine(
+            protocol.method.efficacy, "efficacy", total_budget=alpha
+        )
+
+        schedule = protocol.method.efficacy.schedule
+        if schedule.unit == "sample_size" and schedule.interim_points:
+            look_ns = [int(n) for n in schedule.interim_points]
+            n_max = max(look_ns)
+            milestones = [n / n_max for n in look_ns]
+
+        # Calculate Efficacy Boundaries
+        boundaries = []
+        for i, m in enumerate(milestones):
+            b = engine.get_boundary_at_look(i, m)
+            boundaries.append(b if b is not None else 0.0)
+
+        # Calculate Futility Boundaries if applicable
+        futility_boundaries = []
+        if protocol.method.futility:
+            beta_budget = 1.0 - (protocol.task.futility.power if protocol.task.futility else 0.8)
+            fut_engine = GSTStoppingRuleEngine(
+                protocol.method.futility, "futility", total_budget=beta_budget
+            )
+            for i, m in enumerate(milestones):
+                b = fut_engine.get_boundary_at_look(i, m)
+                futility_boundaries.append(b if b is not None else -np.inf)
+
+    else:
+        # Legacy
+        milestones = protocol.milestones
+        n_max = int(protocol.n_max)
+        boundaries = protocol.boundaries
+        look_ns = [int(m * n_max) for m in milestones]
 
     # 1. Boundaries
-    ax.plot(look_ns, boundaries, "r--", label="Upper Boundary")
-    ax.plot(look_ns, [-b for b in boundaries], "r--", label="Lower Boundary")
+    if look_ns:
+        if boundaries:
+             ax.plot(look_ns, boundaries, "r--", label="Efficacy Boundary")
+
+        # Plot Futility if exists (ES3)
+        if "futility_boundaries" in locals() and futility_boundaries:
+             # Check if we have valid boundaries (not -inf)
+             valid_fut = [b for b in futility_boundaries if b > -100] # Simple filter for plotting
+             if valid_fut:
+                ax.plot(look_ns, futility_boundaries, "k--", label="Futility Boundary")
+        
+        elif hasattr(protocol, "boundaries") and protocol.boundaries:
+             pass
 
     # 2. Trajectory using realized history
     # Add origin
