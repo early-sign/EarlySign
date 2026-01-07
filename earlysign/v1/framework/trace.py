@@ -1,9 +1,16 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Generic, List, NewType, Optional, TypeVar
+from typing import (
+    Any,
+    Generic,
+    List,
+    NewType,
+    Optional,
+    TypeVar,
+)
 
-T = TypeVar("T")
+T = TypeVar("T", covariant=True)
 
 # Strong typing for hashes to ensure scientific provenance
 TraceHash = NewType("TraceHash", str)

@@ -2,7 +2,12 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, Typ
 
 from pydantic import BaseModel
 
-from earlysign.v1.framework.trace import Traced, TraceHash, extract_traces, stable_hash
+from earlysign.v1.framework.trace import (
+    Traced,
+    TraceHash,
+    extract_traces,
+    stable_hash,
+)
 
 if TYPE_CHECKING:
     from earlysign.v1.framework.session import Session
@@ -59,7 +64,7 @@ class WriteModel:
         func: Callable[..., Any],
         *args: Any,
         **kwargs: Any,
-    ) -> B:
+    ) -> Traced[B]:
         """
         Executes a function and commits its result, keyed by scientific lineage.
         """
@@ -99,4 +104,4 @@ class WriteModel:
             labels={"trace_hash": str(compute_hash), "is_result": True},
         )
 
-        return record
+        return Traced(data=record, trace=[compute_hash])

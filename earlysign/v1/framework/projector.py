@@ -1,25 +1,25 @@
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Generic, List, Protocol, Type, TypeVar, cast
+from typing import Any, Dict, Generic, Protocol, Type, TypeVar, cast
 
 import ibis
 from pydantic import BaseModel
 
-from earlysign.v1.framework.trace import TraceHash
+from earlysign.v1.framework.trace import Traced, TraceHash
 
 T = TypeVar("T", covariant=True)
 P = TypeVar("P", bound=BaseModel)
 
 
 @dataclass(frozen=True)
-class ProjectionResult(Generic[T]):
+class ProjectionResult(Traced[T]):
     """
     The output of a scientific projection.
     Wraps the hydrated state with the specific evidentiary trace that produced it.
+    Inherits from Traced[T].
     """
 
-    data: T
-    trace: List[TraceHash]
+    pass
 
 
 class Projector(Protocol, Generic[T]):
