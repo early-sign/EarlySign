@@ -8,6 +8,7 @@ from earlysign.schema.ES3.GST.Boundary import (
     StoppingRule as StoppingRule,
     WangTsiatisBoundary as WangTsiatisBoundary,
 )
+from earlysign.schema.ES3.GST.Decision import DecisionStatus as DecisionStatus
 from earlysign.schema.ES3.GST.Hypothesis import (
     BinaryEffectSize as BinaryEffectSize,
     ContinuousEffectSize as ContinuousEffectSize,

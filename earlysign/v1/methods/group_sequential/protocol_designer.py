@@ -2,10 +2,10 @@ from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 
+import earlysign.schema.ES3.GST as GST
 from earlysign.v1.methods.group_sequential.canonical_dist import (
     CanonicalJointDistribution,
 )
-from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 
 
 class ProtocolDesigner:
@@ -50,9 +50,9 @@ class ProtocolDesigner:
         shape_type: Literal["obrien_fleming", "pocock"] = "obrien_fleming",
         side: int = 1,
         rho: float = 3.0,
-    ) -> GSTProtocol:
+    ) -> GST.Protocol:
         """
-        Plans a binomial A/B design and returns a fully populated GSTProtocol.
+        Plans a binomial A/B design and returns a fully populated GST.Protocol.
 
         Args:
             alpha: Type-1 error rate.
@@ -65,7 +65,7 @@ class ProtocolDesigner:
             rho: Parameter for spending function if applicable.
 
         Returns:
-            GSTProtocol with both intent fields AND realized design fields (n_max, boundaries, etc.) populated.
+            GST.Protocol with design fields populated.
         """
         # Average variance under H0 approx: p_control * (1 - p_control)
         sigma2 = p_control * (1.0 - p_control)
@@ -102,18 +102,103 @@ class ProtocolDesigner:
         n_max_float = 4 * i_max * sigma2
         n_max = int(np.ceil(n_max_float))
 
+        # 5. Calculate Schedule Points
+        n_schedule = [float(int(np.ceil(n_max * t))) for t in info_times]
+
         # Construct the realized protocol
-        return GSTProtocol(
+        return GST.Protocol(
             # Intent
+            name="Designed Protocol",
+            task=GST.TaskSpec(
+                kind="group_sequential",
+                arms=["control", "treatment"],  # Default/Placeholder
+                response_type="binary",
+                hypotheses=GST.HypothesisSpec(
+                    h_null="Difference <= 0",
+                    h_alt=f"Difference > {delta}",
+                    test_logic=GST.SuperiorityHypothesis(
+                        superiority_margin=0.0
+                    ),  # Assuming Simple Superiority
+                    target_effect=GST.BinaryEffectSize(
+                        proportions={
+                            "control": p_control,
+                            "treatment": p_control + delta,
+                        }
+                    ),
+                ),
+                efficacy=GST.EfficacyRequirement(alpha=alpha),
+                futility=GST.FutilityRequirement(power=power),
+            ),
+            method=GST.MethodSpec(
+                kind="group_sequential",
+                efficacy=GST.StoppingRule(
+                    schedule=GST.ScheduleSpec(
+                        unit="sample_size",
+                        n_looks=k,
+                        interim_points=n_schedule,  # Store the sample sizes
+                    ),
+                    boundary=GST.SpendingBoundary(
+                        reference_model=GST.BinaryModel(
+                            kind="binary",
+                            test_statistic="Z",
+                            use_canonical_joint_distribution=True,
+                        ),
+                        kind="spending",
+                        spending_function=GST.SpendingFunctionSpec(type=shape_type),
+                    ),
+                ),
+            ),
+        )
+
+    def method_from_task_spec(
+        self, task: GST.TaskSpec, params: Dict[str, Any]
+    ) -> GST.MethodSpec:
+        """
+        Derives a MethodSpec from a TaskSpec effectively serving as a 'Design Strategy'.
+
+        Args:
+            task: The generic task specification containing requirements.
+            params: Dictionary containing design parameters (e.g. 'looks', 'spending_function').
+
+        Returns:
+            A populated GST.MethodSpec.
+        """
+        if not task.efficacy:
+            raise ValueError("Task is missing efficacy requirements.")
+        alpha = task.efficacy.alpha
+
+        if not task.futility:
+            raise ValueError("Task is missing futility requirements.")
+        power = task.futility.power
+        k = params.get("looks", 2)
+        shape_type = params.get("spending_function", "obrien_fleming")
+
+        if not isinstance(task.hypotheses.target_effect, GST.BinaryEffectSize):
+            raise ValueError("Task must have BinaryEffectSize for Binomial Design")
+
+        props = task.hypotheses.target_effect.proportions
+        p_c = props.get("control") or list(props.values())[0]
+
+        # Heuristic to find treatment or second value
+        p_t = props.get("treatment")
+        if p_t is None:
+            # Fallback: if there is a second key
+            keys = list(props.keys())
+            if len(keys) > 1 and keys[1] != "control":
+                p_t = props[keys[1]]
+            else:
+                raise ValueError("Could not identify treatment proportion")
+
+        delta = abs(p_t - p_c)
+
+        # 2. Plan the design
+        generic_proto = self.plan_binomial_ab(
             alpha=alpha,
             power=power,
-            K=k,
             delta=delta,
-            side=side,
-            spending_function=shape_type,  # Mapping string directly for now
-            rho=rho,
-            # Realization
-            n_max=n_max,
-            milestones=info_times.tolist(),
-            boundaries=boundaries,
+            k=k,
+            p_control=p_c,
+            shape_type=shape_type,
         )
+
+        return generic_proto.method

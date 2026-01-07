@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Union
 
 import ibis
 import numpy as np
@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.methods.binomial import BinomialSummaryFact
+from earlysign.schema.ES3.GST import DecisionStatus
 
 
 class ABDecisionRecord(BaseModel):
@@ -14,7 +15,7 @@ class ABDecisionRecord(BaseModel):
     Structured record of a decision event (e.g. stopping for efficacy/futility).
     """
 
-    status: str
+    status: Union[DecisionStatus, str]
     message: str
 
 
@@ -27,7 +28,7 @@ class BinomialProgressReport(BaseModel):
     z_stat: Optional[float]
     boundary: Optional[float]
     info_frac: float
-    status: str
+    status: Union[DecisionStatus, str]
 
 
 class BinomialFinalReport(BaseModel):
@@ -42,7 +43,7 @@ class BinomialFinalReport(BaseModel):
     delta_hat: float
     z_stat: float
     is_rejected: bool
-    final_status: str
+    final_status: Union[DecisionStatus, str]
 
 
 class BinomialProgressProjector(Projector[BinomialProgressReport]):
@@ -51,12 +52,16 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
     Stateless: Reconstructs the report from Protocol and Summary facts.
     """
 
+    def __init__(self, protocol_type: Any = None):
+        import earlysign.schema.ES3.GST as GST
+
+        self.protocol_type = protocol_type or GST.Protocol
+
     def project(self, table: ibis.Expr) -> ProjectionResult[BinomialProgressReport]:
         from earlysign.v1.framework.projector import ProtocolProjector
-        from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 
         # 1. Read Protocol
-        protocol_traced = ProtocolProjector(GSTProtocol).project(table)
+        protocol_traced = ProtocolProjector(self.protocol_type).project(table)
         p = protocol_traced.data
 
         # 2. Read Summary
@@ -87,12 +92,12 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
             se = np.sqrt(p_pool * (1 - p_pool) * (1 / n_c + 1 / n_t))
             z_stat = float((st.p_hat - sc.p_hat) / se) if se > 0 else 0.0
 
-        status = "MONITORING"
+        status = DecisionStatus.CONTINUE
         if look_num:
             if boundary and z_stat is not None and abs(z_stat) > boundary:
-                status = "STOP_EFFICACY"
-            elif look_num == len(p.milestones):
-                status = "STOP_FINAL"
+                status = DecisionStatus.STOP_EFFICACY
+            elif look_num == len(milestones):
+                status = DecisionStatus.STOP_PLAN_END_REACHED
 
         report = BinomialProgressReport(
             look=look_num,
@@ -113,11 +118,15 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
     Tier 2 Projector for final study summary.
     """
 
+    def __init__(self, protocol_type: Any = None):
+        import earlysign.schema.ES3.GST as GST
+
+        self.protocol_type = protocol_type or GST.Protocol
+
     def project(self, table: ibis.Expr) -> ProjectionResult[BinomialFinalReport]:
         from earlysign.v1.framework.projector import ProtocolProjector
-        from earlysign.v1.methods.group_sequential.protocol import GSTProtocol
 
-        protocol_res = ProtocolProjector(GSTProtocol).project(table)
+        protocol_res = ProtocolProjector(self.protocol_type).project(table)
         p = protocol_res.data
 
         sc = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(table)
@@ -139,22 +148,27 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
             # Use generic ProtocolProjector to find last ABDecisionRecord
             decision_res = ProtocolProjector(ABDecisionRecord).project(table)
             decision = decision_res.data
-            if decision.status == "STOP":
+            if decision.status == DecisionStatus.STOP or decision.status == "STOP":
                 # Assuming message or context implies rejection if STOP_EFFICACY
                 if "Rejected" in decision.message:
                     is_rejected = True
-                    final_status = "STOP_EFFICACY"
+                    final_status = DecisionStatus.STOP_EFFICACY
                 else:
-                    final_status = "STOP_FUTILITY"  # or similar
+                    final_status = DecisionStatus.STOP_FUTILITY  # or similar
         except RuntimeError:
             # No decision record found.
             # Check if we reached max samples (Implicit Futility / Completion)
             n_total = n_c + n_t
-            if p.n_max > 0 and n_total >= p.n_max:
-                final_status = "STOP_FINAL"
+
+            # Extract n_max
+            schedule = p.method.efficacy.schedule
+            n_max = schedule.interim_points[-1] if schedule.interim_points else 0
+
+            if n_max > 0 and n_total >= n_max:
+                final_status = DecisionStatus.STOP_PLAN_END_REACHED
             else:
                 # Still running or just arbitrarily requested final report
-                final_status = "MONITORING"
+                final_status = DecisionStatus.CONTINUE
 
         report = BinomialFinalReport(
             n_c=n_c,
@@ -181,6 +195,7 @@ def reconstruct_binomial_z_history(
 ) -> Tuple[List[int], List[float]]:
     """
     Helper to reconstruct the Z-statistic history at look milestones from the ledger.
+    Supports both generic GSTProtocol and ES3.GST.Protocol.
     """
     df = table.execute()
 
@@ -196,9 +211,23 @@ def reconstruct_binomial_z_history(
     df_all = pd.concat([df_c.assign(grp="C"), df_t.assign(grp="T")]).sort_index()
     df_all["n_total"] = df_all["n"].cumsum()
 
-    milestones = protocol.milestones
-    n_max = protocol.n_max
-    look_ns = [int(m * n_max) for m in milestones]
+    # Adapt to Schema Version
+    # ES3
+    if hasattr(protocol, "method") and hasattr(protocol.method, "efficacy"):
+        schedule = protocol.method.efficacy.schedule
+        if schedule.unit == "sample_size" and schedule.interim_points:
+            # ES3 stores N directly in interim_points
+            look_ns = [int(n) for n in schedule.interim_points]
+            milestones = [n / max(look_ns) for n in look_ns]  # Reconstruct info frac
+            n_max = max(look_ns)
+        else:
+            # Fallback or Todo: Handle info_frac based schedules
+            return [], []
+    else:
+        # Legacy GSTProtocol
+        milestones = protocol.milestones
+        n_max = protocol.n_max
+        look_ns = [int(m * n_max) for m in milestones]
 
     history_z = []
     history_n = []
