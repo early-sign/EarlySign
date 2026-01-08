@@ -3,8 +3,10 @@ import pandas as pd
 from earlysign.core.ledger import Ledger
 from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
 import earlysign.schema.ES3.GST as GST
+from earlysign.schema.ES3.GST import DecisionStatus
 from earlysign.v1.tests.util import BinomialStream
 import json
+
 
 def verify_traces():
     print("=== Verifying Traces ===")
@@ -26,8 +28,8 @@ def verify_traces():
             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
             target_effect=GST.BinaryEffectSize(
                 proportions={"control": 0.20, "treatment": 0.22}
-            )
-        )
+            ),
+        ),
     )
 
     template = BinomialABTemplate(ledger)
@@ -37,28 +39,28 @@ def verify_traces():
     # 3. generate data that triggers a stop
     # Large effect to ensures stopping
     stream = BinomialStream(
-        n_per_batch=5000,
-        p_control=0.20,
-        p_treatment=0.30, # Big lift
-        seed=42
+        n_per_batch=5000, p_control=0.20, p_treatment=0.30, seed=42  # Big lift
     )
 
     # 4. Run until stop
     print("Running simulation...")
     decision_trace = None
     result_trace = None
-    
+
     for batch in stream:
         template.update(batch)
         result = template.report_progress()
-        if result['status'] != "CONTINUE" and result['status'] != DecisionStatus.CONTINUE:
+        if (
+            result["status"] != "CONTINUE"
+            and result["status"] != DecisionStatus.CONTINUE
+        ):
             print(f"Stopped with status: {result['status']}")
             break
 
     # 5. Inspect Ledger
     print("\nlnspecting Ledger...")
     df = ledger.t.execute()
-    
+
     # Check for Result.BinomialTestResult
     results = df[df["payload_type"] == "Result.BinomialTestResult"]
     if results.empty:
@@ -79,18 +81,23 @@ def verify_traces():
     # Get the last decision (should be the stop)
     last_decision = decisions.iloc[-1]
     last_decision = decisions.iloc[-1]
-    
+
     # We can check if `Result.BinomialTestResult` has `is_result=True`.
     last_result = results.iloc[-1]
-    last_result_labels = json.loads(last_result["labels"]) if isinstance(last_result["labels"], str) else last_result["labels"]
-    
+    last_result_labels = (
+        json.loads(last_result["labels"])
+        if isinstance(last_result["labels"], str)
+        else last_result["labels"]
+    )
+
     if not last_result_labels.get("is_result"):
         print("FAIL: Result record is not marked as is_result.")
         exit(1)
-    
+
     print(f"PASS: Result record marked as is_result.")
-    
+
     print("Verification Successful.")
+
 
 if __name__ == "__main__":
     verify_traces()
