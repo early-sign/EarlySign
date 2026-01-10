@@ -204,11 +204,72 @@ namespace ES3.GST {
     values: float64[]; // Explicit boundary values per look
   }
 
+  namespace Log {
+    /**
+     * Status of an ongoing or completed Group Sequential Test.
+     */
+    enum DecisionStatus {
+      CONTINUE,
+      STOP_EFFICACY,
+      STOP_FUTILITY,
+      STOP_PLAN_END_REACHED,
+      STOP,
+    }
+
+    /**
+     * Defines the reason / cause for an operational event (e.g., Analysis Execution).
+     */
+    @discriminator("kind")
+    model Trigger {}
+
+    /**
+     * Triggered by planned protocol milestones or schedules.
+     */
+    model ScheduleTrigger extends Trigger {
+      kind: "schedule";
+      index: int32;
+      value: float64;
+    }
+
+    /**
+     * Triggered manually by a human operator.
+     */
+    model ManualTrigger extends Trigger {
+      kind: "manual";
+      reason: string;
+    }
+
+    /**
+     * Structural Record of a GST Analysis Execution.
+     * This captures the Context (Trigger), Metadata, and factual Result.
+     */
+    model Analysis {
+      trigger?: Trigger;
+      
+      // Results
+      look: int32;
+      statistic: float64;
+      info_frac: float64;
+      decision: DecisionStatus;
+      
+      efficacy_boundary?: float64;
+      futility_boundary?: float64;
+    }
+
+    /**
+     * Formalized Decision Event.
+     */
+    model Decision {
+      status: DecisionStatus;
+      message: string;
+    }
+  }
+
   @discriminator("type")
   model AdaptationSpec {}
 
-  model SsrSpec extends AdaptationSpec {
-    type: "SSR";
+  model SampleSizeReestimationSpec extends AdaptationSpec {
+    type: "sample_size_reestimation";
     method: "conditional_power" | "predictive_power";
     target_power: float64;
     n_range: [uint32, uint32]; 
@@ -252,7 +313,6 @@ namespace ES3.GST.Multivariate {
 }
 
 namespace ES3.Examples {
-  /**
   /**
    * Example Extension: Wang-Tsiatis Power Family Boundary.
    * Demonstrates how to extend the standard boundary definitions.

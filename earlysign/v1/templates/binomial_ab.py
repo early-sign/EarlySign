@@ -89,7 +89,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.schema.ES3.GST import DecisionStatus
+from earlysign.schema.ES3.GST.Log.Analysis import DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol import AutoNameMixin
 from earlysign.v1.framework.session import Session
@@ -258,14 +258,14 @@ class BinomialABTemplate:
         with Session(self.ledger) as sess:
             return sess.Read(
                 BinomialProgressProjector(protocol_type=BinomialABProtocol)
-            ).data.model_dump()
+            ).data.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
             return sess.Read(
                 BinomialFinalProjector(protocol_type=BinomialABProtocol)
-            ).data.model_dump()
+            ).data.model_dump(mode="json")
 
     def backtest(self, batches: Any) -> Dict[str, Any]:
         """
@@ -279,7 +279,7 @@ class BinomialABTemplate:
         for i, batch in enumerate(batches):
             self.update(batch if isinstance(batch, list) else [batch])
             prog = self.report_progress()
-            if prog.get("status") == DecisionStatus.STOP_EFFICACY:
+            if prog.get("decision") != DecisionStatus.CONTINUE:
                 return self.report_result()
 
         return self.report_result()

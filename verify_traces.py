@@ -50,10 +50,7 @@ def verify_traces():
     for batch in stream:
         template.update(batch)
         result = template.report_progress()
-        if (
-            result["status"] != "CONTINUE"
-            and result["status"] != DecisionStatus.CONTINUE
-        ):
+        if result["status"] != DecisionStatus.CONTINUE:
             print(f"Stopped with status: {result['status']}")
             break
 

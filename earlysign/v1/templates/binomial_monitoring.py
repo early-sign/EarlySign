@@ -62,12 +62,12 @@ class BinomialMonitoringTemplate:
                     trace=traced_report.trace,
                 )
 
-            return report.model_dump()
+            return report.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
-            return sess.Read(MonitoringFinalProjector()).data.model_dump()
+            return sess.Read(MonitoringFinalProjector()).data.model_dump(mode="json")
 
     def run_backtest(self, batches: Any) -> Dict[str, Any]:
         """

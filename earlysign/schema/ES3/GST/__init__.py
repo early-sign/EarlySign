@@ -8,7 +8,6 @@ from earlysign.schema.ES3.GST.Boundary import (
     StoppingRule as StoppingRule,
     WangTsiatisBoundary as WangTsiatisBoundary,
 )
-from earlysign.schema.ES3.GST.Decision import DecisionStatus as DecisionStatus
 from earlysign.schema.ES3.GST.Hypothesis import (
     BinaryEffectSize as BinaryEffectSize,
     ContinuousEffectSize as ContinuousEffectSize,
@@ -25,6 +24,7 @@ from earlysign.schema.ES3.GST.Protocol import Protocol as Protocol
 from earlysign.schema.ES3.GST.ReferenceModel import (
     BinaryModel as BinaryModel,
     ContinuousModel as ContinuousModel,
+    ReferenceModelSpec as ReferenceModelSpec,
     SurvivalModel as SurvivalModel,
 )
 from earlysign.schema.ES3.GST.Task import (
@@ -32,3 +32,5 @@ from earlysign.schema.ES3.GST.Task import (
     FutilityRequirement as FutilityRequirement,
     TaskSpec as TaskSpec,
 )
+
+from . import Log as Log

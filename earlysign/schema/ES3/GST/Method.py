@@ -10,8 +10,8 @@ class AdaptationSpec(BaseModel):
     type: str
 
 
-class SsrSpec(AdaptationSpec):
-    type: Literal["SSR"] = "SSR"
+class SampleSizeReestimationSpec(AdaptationSpec):
+    type: Literal["sample_size_reestimation"] = "sample_size_reestimation"
     method: Literal["conditional_power", "predictive_power"]
     target_power: float
     n_range: List[int]
