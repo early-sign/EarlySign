@@ -67,11 +67,12 @@ False
 {'experiment_id': 'exp1', 'env': 'prod'}
 """
 
+import json
 import re
 import uuid as uuidlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Mapping, Pattern, Union
+from typing import Any, Dict, List, Mapping, Pattern, Union
 
 import ibis
 import ibis.expr.datatypes as dt
@@ -119,6 +120,7 @@ class Ledger:
                 pkg_version=dt.string,
                 payload_type=dt.string,
                 identity=dt.string,  # Top-level identity for state/stream lookup
+                trace=dt.string,  # JSON-serialized list of parent record uuids
                 payload=dt.json,
                 labels=dt.json,
             )
@@ -195,10 +197,16 @@ class Ledger:
         payload_type: str,
         payload: Mapping[str, Any],
         labels: Mapping[str, Any] | None = None,
+        trace: List[str] | None = None,
     ) -> None:
         """
         Insert one row (append-only). Auto-fills uuid and ts.
         The current scope labels (self.labels) are ALWAYS merged into `labels`.
+
+        Note: This method intentionally does not return anything.
+        In event sourcing all derived state should be obtained
+        by projecting from the ledger via Read, which provides Traced[T] with
+        proper lineage.
         """
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
@@ -212,6 +220,7 @@ class Ledger:
             "pkg_version": f"earlysign=={__version__}",
             "payload_type": payload_type,
             "identity": labels.get("identity") if labels else None,
+            "trace": json.dumps(trace) if trace else None,
             "payload": sanitize_for_json(dict(payload)),
             "labels": sanitize_for_json(combined_labels) or None,
         }

@@ -1,12 +1,11 @@
 from typing import Optional
 
 import ibis
-import pandas as pd
 from pydantic import BaseModel
 
 from earlysign.v1.framework.intermediate_fact import IntermediateFact, Snapshot
 from earlysign.v1.framework.projector import ProjectionResult
-from earlysign.v1.framework.trace import TraceHash
+from earlysign.v1.framework.trace import TraceId
 
 
 class BinomialSummary(BaseModel):
@@ -61,30 +60,26 @@ class BinomialSummaryFact(IntermediateFact[BinomialSummary]):
                 == arm_val
             )
 
-        # 2. Extract incremental stats via Ibis
-        agg_obs = obs_table.aggregate(
-            n=obs_table.count(),
-            successes=obs_table.payload["success"].cast("int").sum(),
-        )
+        # 2. Execute once to get both data and uuids
+        obs_df = obs_table.select(
+            "uuid",
+            success=obs_table.payload["success"].cast("int"),
+        ).execute()
 
-        agg_batch = batch_table.aggregate(
-            n=batch_table.payload["n"].cast("int").sum(),
-            successes=batch_table.payload["success"].cast("int").sum(),
-        )
+        batch_df = batch_table.select(
+            "uuid",
+            n=batch_table.payload["n"].cast("int"),
+            success=batch_table.payload["success"].cast("int"),
+        ).execute()
 
-        res_obs = agg_obs.execute()
-        n_obs_raw = res_obs["n"].iloc[0]
-        n_obs = int(n_obs_raw) if not pd.isna(n_obs_raw) else 0
-        s_obs_raw = res_obs["successes"].iloc[0]
-        s_obs = int(s_obs_raw) if not pd.isna(s_obs_raw) else 0
+        # 3. Aggregate from dataframes
+        n_obs = len(obs_df)
+        s_obs = int(obs_df["success"].sum()) if n_obs > 0 else 0
 
-        res_batch = agg_batch.execute()
-        n_batch_raw = res_batch["n"].iloc[0]
-        n_batch = int(n_batch_raw) if not pd.isna(n_batch_raw) else 0
-        s_batch_raw = res_batch["successes"].iloc[0]
-        s_batch = int(s_batch_raw) if not pd.isna(s_batch_raw) else 0
+        n_batch = int(batch_df["n"].sum()) if len(batch_df) > 0 else 0
+        s_batch = int(batch_df["success"].sum()) if len(batch_df) > 0 else 0
 
-        # 3. Incremental Folding (Snapshot + Delta)
+        # 4. Incremental Folding (Snapshot + Delta)
         n_snap = snapshot.data.n if snapshot else 0
         s_snap = snapshot.data.successes if snapshot else 0
 
@@ -94,13 +89,15 @@ class BinomialSummaryFact(IntermediateFact[BinomialSummary]):
 
         summary = BinomialSummary(n=n_total, successes=s_total, p_hat=p_hat)
 
-        # 4. Lineage Management
-        try:
-            h_obs = obs_table.labels["trace_hash"].execute().tolist()
-            h_batch = batch_table.labels["trace_hash"].execute().tolist()
-            trace = [TraceHash(h) for h in h_obs + h_batch]
-            # If we had the snapshot's trace, we'd prepend it here.
-        except Exception:
-            trace = []
+        # 5. Lineage Management - uuids already fetched above
+        trace: list[TraceId] = []
+        if snapshot:
+            snapshot_uuid = getattr(snapshot, "uuid", None)
+            if snapshot_uuid:
+                trace.append(TraceId(str(snapshot_uuid)))
+
+        # Collect delta uuids from already-executed dataframes
+        trace.extend([TraceId(str(uid)) for uid in obs_df["uuid"].tolist()])
+        trace.extend([TraceId(str(uid)) for uid in batch_df["uuid"].tolist()])
 
         return ProjectionResult(data=summary, trace=trace)

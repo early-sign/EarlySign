@@ -45,6 +45,7 @@ DatabaseTable: events
   pkg_version  string
   payload_type string
   identity     string
+  trace        string
   payload      json
   labels       json
 

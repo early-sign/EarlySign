@@ -1,8 +1,15 @@
+"""
+Domain-specific write actions using the Ubiquitous Language.
+
+These are semantic wrappers around WriteModel.Commit for common operations.
+They do NOT return identifiers - trace flows through Read, not Write.
+"""
+
 from typing import TYPE_CHECKING, List, Optional
 
 from pydantic import BaseModel
 
-from earlysign.v1.framework.trace import TraceHash
+from earlysign.v1.framework.trace import TraceId
 from earlysign.v1.framework.write_models import WriteModel
 
 if TYPE_CHECKING:
@@ -10,30 +17,27 @@ if TYPE_CHECKING:
 
 
 def Decision(
-    session: "Session", decision: BaseModel, trace: Optional[List[TraceHash]] = None
-) -> TraceHash:
+    session: "Session", decision: BaseModel, trace: Optional[List[TraceId]] = None
+) -> None:
     """
     Ubiquitous Language: Records an operational conclusion (e.g., Stop Efficacy).
     """
-    # Logic to record decision with provenance
-    return WriteModel.Commit(session, decision, trace=trace)
+    WriteModel.Commit(session, decision, trace=trace)
 
 
 def UpdateProtocol(
-    session: "Session", protocol: BaseModel, trace: Optional[List[TraceHash]] = None
-) -> TraceHash:
+    session: "Session", protocol: BaseModel, trace: Optional[List[TraceId]] = None
+) -> None:
     """
     Ubiquitous Language: Records a structural update to the trial design (e.g., SSR).
     """
-    # Logic to record protocol update
-    return WriteModel.Commit(session, protocol, trace=trace)
+    WriteModel.Commit(session, protocol, trace=trace)
 
 
-def Ingest(session: "Session", batch: BaseModel) -> TraceHash:
+def Ingest(session: "Session", batch: BaseModel) -> None:
     """
     Ubiquitous Language: Records new raw evidence (Observations).
+
+    Observations are the start of lineage, so they have empty trace.
     """
-    # Logic to append raw evidence
-    return WriteModel.Commit(
-        session, batch, trace=[]
-    )  # Observations are the start of lineage
+    WriteModel.Commit(session, batch, trace=[])  # Root of lineage

@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Any, List, TypeVar
 
 from earlysign.v1.framework.projector import Projector
-from earlysign.v1.framework.trace import Traced, TraceHash
+from earlysign.v1.framework.trace import Traced, TraceId
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
@@ -21,7 +21,7 @@ class Session:
     def __init__(self, ledger: "Ledger"):
         self.ledger = ledger
         self.horizon_id = ledger.latest_ts  # Define the Scientific Horizon
-        self._session_trace: List[TraceHash] = []
+        self._session_trace: List[TraceId] = []
 
     def __enter__(self) -> "Session":
         return self
@@ -30,7 +30,7 @@ class Session:
         self._session_trace = []
 
     @property
-    def trace(self) -> List[TraceHash]:
+    def trace(self) -> List[TraceId]:
         """Returns the current implicit session trace."""
         return list(self._session_trace)
 

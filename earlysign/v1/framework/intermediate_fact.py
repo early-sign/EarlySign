@@ -15,7 +15,7 @@ import ibis
 from pydantic import BaseModel
 
 from earlysign.v1.framework.projector import ProjectionResult, Projector
-from earlysign.v1.framework.trace import Traced, TraceHash
+from earlysign.v1.framework.trace import Traced
 from earlysign.v1.framework.write_models import WriteModel
 
 if TYPE_CHECKING:
@@ -32,6 +32,7 @@ class Snapshot(BaseModel, Generic[T]):
     identity: str
     data: T
     ts: Any  # Ledger's Last Timestamp
+    uuid: Optional[str] = None  # Record uuid for trace reference
 
 
 class IntermediateFact(Projector[T], ABC):
@@ -113,10 +114,15 @@ class IntermediateFact(Projector[T], ABC):
                     f"Failed to hydrate snapshot data for {self.identity}: {e}"
                 ) from e
 
-            return Snapshot(identity=self.identity, data=data_inst, ts=row["ts"])
+            return Snapshot(
+                identity=self.identity,
+                data=data_inst,
+                ts=row["ts"],
+                uuid=row.get("uuid"),
+            )
         return None
 
-    def save(self, session: "Session", result: Traced[T]) -> TraceHash:
+    def save(self, session: "Session", result: Traced[T]) -> None:
         """
         Standardizes how a new intermediate fact is committed.
         """
@@ -127,6 +133,4 @@ class IntermediateFact(Projector[T], ABC):
         )
 
         # We use a custom Commit that ensures identity is set in labels
-        return WriteModel.Commit(
-            session, snap_record, labels={"identity": self.identity}
-        )
+        WriteModel.Commit(session, snap_record, labels={"identity": self.identity})

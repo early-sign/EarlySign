@@ -5,7 +5,7 @@ from typing import Any, Dict, Generic, Protocol, Type, TypeVar, cast
 import ibis
 from pydantic import BaseModel
 
-from earlysign.v1.framework.trace import Traced, TraceHash
+from earlysign.v1.framework.trace import Traced, TraceId
 
 T = TypeVar("T", covariant=True)
 P = TypeVar("P", bound=BaseModel)
@@ -28,7 +28,7 @@ class Projector(Protocol, Generic[T]):
     Projectors are responsible for transforming raw event streams (Ibis tables)
     into structured scientific contexts.
 
-    The projector MUST identify exactly which events (via TraceHash) constitute
+    The projector MUST identify exactly which events (via TraceId/uuid) constitute
     the resulting state.
     """
 
@@ -67,7 +67,6 @@ class ProtocolProjector(Projector[P]):
             return dict(val) if val is not None else {}
 
         payload = _ensure_dict(row.get("payload"))
-        labels = _ensure_dict(row.get("labels"))
 
         # Reconstruct into the Pydantic model
         try:
@@ -77,8 +76,8 @@ class ProtocolProjector(Projector[P]):
                 f"Failed to hydrate protocol {type_name} from ledger payload: {e}"
             ) from e
 
-        # Extract the trace hash (Scientific Lineage)
-        raw_trace_hash = labels.get("trace_hash")
-        trace = [TraceHash(str(raw_trace_hash))] if raw_trace_hash else []
+        # Extract the uuid as the trace (Scientific Lineage)
+        row_uuid = row.get("uuid")
+        trace = [TraceId(str(row_uuid))] if row_uuid else []
 
         return ProjectionResult(data=data, trace=trace)

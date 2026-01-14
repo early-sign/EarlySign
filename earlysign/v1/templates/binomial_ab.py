@@ -93,13 +93,11 @@ from earlysign.schema.ES3.GST.Log import DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol import AutoNameMixin
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.trace import Traced
 from earlysign.v1.framework.write_models import WriteModel
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
 from earlysign.v1.methods.binomial import BinomialSummaryFact
 from earlysign.v1.methods.group_sequential.binomial import (
     BinomialGSTEngine,
-    BinomialTestResult,
 )
 from earlysign.v1.methods.group_sequential.protocol_designer import (
     ProtocolDesigner,
@@ -220,32 +218,29 @@ class BinomialABTemplate:
                 BinomialSummaryFact(identity="summary_t", filter_arm="T")
             )
 
-            # 3. Engine Execution
-
-            # Use CallAndCommit to execute logic and persist result with scientific lineage
-            result: Traced[BinomialTestResult] = WriteModel.CallAndCommit(
-                sess,
-                BinomialTestResult,
-                BinomialGSTEngine(protocol.data).run,
-                summary_c=summary_c,
-                summary_t=summary_t,
-                protocol=protocol,
+            # 3. Engine Execution - compute result
+            engine = BinomialGSTEngine(protocol.data)
+            test_result = engine.run(
+                summary_c=summary_c.data,
+                summary_t=summary_t.data,
+                protocol=protocol.data,
             )
 
-            # Record Decision
-            # Record Decision
-            if result.data.status in (
+            # 4. Commit the result (trace comes from session's accumulated reads)
+            WriteModel.Commit(sess, test_result)
+
+            # 5. Record Decision if stopping
+            if test_result.status in (
                 DecisionStatus.STOP_EFFICACY,
                 DecisionStatus.STOP_FUTILITY,
             ):
                 Decision(
                     sess,
                     ABDecisionRecord(
-                        status=result.data.status,
-                        message=f"Stopped: {result.data.status} at Look {result.data.look}",
+                        status=test_result.status,
+                        message=f"Stopped: {test_result.status} at Look {test_result.look}",
                     ),
-                    # Use the trace from the calculation result which includes dependencies
-                    trace=result.trace,
+                    # Uses implicit session.trace from the Reads
                 )
 
     def report_progress(self) -> Dict[str, Any]:

@@ -1,12 +1,27 @@
+"""
+Write models for the framework.
+
+Design Philosophy:
+==================
+In event sourcing, ALL state and lineage flows through Read operations (Projectors).
+Write operations (Commit, Ingest) are "fire and forget" - they record events to the
+ledger but do not return identifiers. If you need to reference data after writing,
+you Read it back via a Projector, which provides Traced[T] with proper lineage.
+
+This design ensures:
+1. All trace information comes from the ledger itself (via Projections)
+2. No out-of-band state passing through return values
+3. Clear separation: Write = record events, Read = reconstruct state and facts with lineage
+"""
+
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
 from earlysign.v1.framework.trace import (
     Traced,
-    TraceHash,
+    TraceId,
     extract_traces,
-    stable_hash,
 )
 
 if TYPE_CHECKING:
@@ -17,33 +32,28 @@ B = TypeVar("B", bound=BaseModel)
 
 class WriteModel:
     """
-    Fundamental operations for asserting facts into the Ledger.
-    These operations ensure scientific provenance and idempotency.
+    Fundamental operations for asserting events into the Ledger.
+
+    These operations record events with their scientific trace (parent uuids).
+    They do NOT return identifiers - trace flows through Read, not Write.
     """
 
     @staticmethod
     def Commit(
         session: "Session",
         record: BaseModel,
-        trace: Optional[List[TraceHash]] = None,
+        trace: Optional[List[TraceId]] = None,
         labels: Optional[Dict[str, Any]] = None,
-    ) -> TraceHash:
+    ) -> None:
         """
         Records a Pydantic model into the Ledger with its scientific trace.
+
+        Note: This method intentionally returns nothing. If you need to
+        reference this data later, Read it back via a Projector.
         """
         target_trace = trace if trace is not None else session.trace
 
-        # Compute the Trace Hash (The identity of this fact)
-        trace_hash = stable_hash(
-            session.horizon_id,
-            target_trace,
-            record.__class__.__name__,
-            record.model_dump(),
-        )
-
-        # Write to physical ledger
         combined_labels = {
-            "trace_hash": str(trace_hash),
             "horizon": str(session.horizon_id),
         }
         if labels:
@@ -53,9 +63,8 @@ class WriteModel:
             payload_type=record.__class__.__name__,
             payload=record.model_dump(),
             labels=combined_labels,
+            trace=[str(t) for t in target_trace],
         )
-
-        return trace_hash
 
     @staticmethod
     def CallAndCommit(
@@ -64,9 +73,13 @@ class WriteModel:
         func: Callable[..., Any],
         *args: Any,
         **kwargs: Any,
-    ) -> Traced[B]:
+    ) -> None:
         """
-        Executes a function and commits its result, keyed by scientific lineage.
+        Executes a function and commits its result with scientific lineage.
+
+        The trace is extracted from Traced inputs or defaults to session.trace.
+        This method intentionally returns nothing - if you need the result,
+        Read it back via a Projector.
         """
         # 1. Extract traces from arguments
         arg_traces = extract_traces(*args, **kwargs)
@@ -76,23 +89,14 @@ class WriteModel:
         # and we default to the union of all Reads in the session.
         target_trace = arg_traces if arg_traces is not None else session.trace
 
-        # 3. Compute hash
-        compute_hash = stable_hash(
-            session.horizon_id,
-            target_trace,
-            result_type.__name__,
-            str(args),
-            str(kwargs),
-        )
-
-        # 4. Execute Logic
+        # 3. Execute Logic
         raw_args = [v.data if isinstance(v, Traced) else v for v in args]
         raw_kwargs = {
             k: v.data if isinstance(v, Traced) else v for k, v in kwargs.items()
         }
         result_data = func(*raw_args, **raw_kwargs)
 
-        # 5. Wrap and Commit
+        # 4. Commit the result
         if isinstance(result_data, dict):
             record = result_type(**result_data)
         else:
@@ -101,7 +105,6 @@ class WriteModel:
         session.ledger.insert(
             payload_type=f"Result.{result_type.__name__}",
             payload=record.model_dump(),
-            labels={"trace_hash": str(compute_hash), "is_result": True},
+            labels={"is_result": True},
+            trace=[str(t) for t in target_trace],
         )
-
-        return Traced(data=record, trace=[compute_hash])
