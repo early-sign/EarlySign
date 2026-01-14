@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from earlysign.schema.ES3.GST import DecisionStatus
+from earlysign.schema.ES3.GST.Log import DecisionStatus
 from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.methods.binomial import BinomialSummaryFact
 
@@ -121,7 +121,7 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
             se = np.sqrt(p_pool * (1 - p_pool) * (1 / n_c + 1 / n_t))
             z_stat = float((st.p_hat - sc.p_hat) / se) if se > 0 else 0.0
 
-        status = DecisionStatus.CONTINUE
+        status = DecisionStatus.CONTINUE_
         if look_num:
             if boundary and z_stat is not None and abs(z_stat) > boundary:
                 status = DecisionStatus.STOP_EFFICACY
@@ -195,7 +195,7 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
                 final_status = DecisionStatus.STOP_PLAN_END_REACHED
             else:
                 # Still running or just arbitrarily requested final report
-                final_status = DecisionStatus.CONTINUE
+                final_status = DecisionStatus.CONTINUE_
 
         report = BinomialFinalReport(
             n_c=n_c,

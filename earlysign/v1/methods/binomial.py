@@ -85,7 +85,6 @@ class BinomialSummaryFact(IntermediateFact[BinomialSummary]):
         s_batch = int(s_batch_raw) if not pd.isna(s_batch_raw) else 0
 
         # 3. Incremental Folding (Snapshot + Delta)
-        # The Snapshot record holds the data as T (BinomialSummary)
         n_snap = snapshot.data.n if snapshot else 0
         s_snap = snapshot.data.successes if snapshot else 0
 

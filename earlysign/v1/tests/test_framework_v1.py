@@ -12,6 +12,7 @@ Covers the flow:
 >>> from earlysign.v1.methods.binomial import BatchObservation, BinomialSummaryFact
 >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec, BinomialABProtocol
 >>> import earlysign.schema.ES3.GST as GST
+>>> from earlysign.schema.ES3.GST.Log import DecisionStatus
 
 # --- Setup in-memory ledger ---
 >>> con = ibis.duckdb.connect(":memory:")
@@ -23,14 +24,15 @@ Covers the flow:
 >>> # Use Template factory to ensure valid schema
 >>> task = BinomialABTaskSpec(
 ...     arms=["C", "T"],
-...     response_type="binary",
+...     response_type=GST.ResponseType.BINARY,
 ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+...     futility=GST.FutilityRequirement(power=0.8),
 ...     hypotheses=GST.HypothesisSpec(
 ...         h_null="Diff <= 0",
 ...         h_alt="Diff > 0.01",
 ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.01),
 ...         target_effect=GST.BinaryEffectSize(
-...             type="binary", proportions={"C": 0.1, "T": 0.11}
+...             proportions={"C": 0.1, "T": 0.11}
 ...         )
 ...     )
 ... )
@@ -60,13 +62,13 @@ T: 120, 51
 >>> print(round(prog['z_stat'], 3))
 0.677
 >>> print(prog['status'])
-DecisionStatus.CONTINUE
+continue
 
 # --- Step 4. Record Decision ---
 # The template handles decision logic inside update() or we can check status
 >>> # BinomialABTemplate.update() handles decisions when batches are processed.
 >>> # Here we manually just check that the status is CONTINUE.
->>> if prog['status'] == GST.DecisionStatus.CONTINUE:
+>>> if prog['status'] == DecisionStatus.CONTINUE_:
 ...     print("Decision: CONTINUE")
 Decision: CONTINUE
 

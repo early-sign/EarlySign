@@ -78,6 +78,9 @@ exclude = ["docs/_build", ".venv", ".git"]
 select = ["E", "F", "W", "I", "TID"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+"earlysign/schema/ES3/**" = ["TID252"]
+
 [tool.ruff.lint.isort]
 combine-as-imports = true
 known-first-party = ["earlysign"]
@@ -98,6 +101,12 @@ exclude = [
     "earlysign/templates/.*",
     "earlysign/tests/.*",
 ]
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 # --nb-test-files is run the notebooks that do not follow the test naming convention: `test_*.ipynb`.

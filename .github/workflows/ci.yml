@@ -27,6 +27,9 @@ jobs:
         run: |
           poetry config virtualenvs.create false
           poetry install --with dev,ci --no-interaction
+      - name: Install schema build dependencies
+        run: |
+          make -C ES3 install
       - name: Run tests
         run: |
           make lint-type-test

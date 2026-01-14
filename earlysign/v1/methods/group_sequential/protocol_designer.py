@@ -110,7 +110,7 @@ class ProtocolDesigner:
             task=GST.TaskSpec(
                 kind="group_sequential",
                 arms=["control", "treatment"],  # Default/Placeholder
-                response_type="binary",
+                response_type=GST.ResponseType.BINARY,
                 hypotheses=GST.HypothesisSpec(
                     h_null="Difference <= 0",
                     h_alt=f"Difference > {delta}",
@@ -129,17 +129,20 @@ class ProtocolDesigner:
                 kind="group_sequential",
                 efficacy=GST.StoppingRule(
                     schedule=GST.ScheduleSpec(
-                        unit="sample_size",
+                        unit=GST.Unit.SAMPLE_SIZE,
                         n_looks=k,
                         interim_points=n_schedule,  # Store the sample sizes
                     ),
                     boundary=GST.SpendingBoundary(
+                        kind="spending",
+                        boundary_scale=GST.BoundaryScale.Z_SCORE,
+                        binding=True,
                         reference_model=GST.BinaryModel(
                             kind="binary",
-                            test_statistic="Z",
+                            test_statistic=GST.TestStatistic.Z,
+                            link_function=GST.LinkFunction.IDENTITY,
                             use_canonical_joint_distribution=True,
                         ),
-                        kind="spending",
                         spending_function=GST.SpendingFunctionSpec(type=shape_type),
                     ),
                 ),
@@ -159,20 +162,26 @@ class ProtocolDesigner:
         Returns:
             A populated GST.MethodSpec.
         """
-        if not task.efficacy:
+        efficacy = task.efficacy
+        if not efficacy:
             raise ValueError("Task is missing efficacy requirements.")
-        alpha = task.efficacy.alpha
+        alpha = efficacy.alpha
 
-        if not task.futility:
+        futility = task.futility
+        if not futility:
             raise ValueError("Task is missing futility requirements.")
-        power = task.futility.power
+        power = futility.power
         k = params.get("looks", 2)
         shape_type = params.get("spending_function", "obrien_fleming")
 
-        if not isinstance(task.hypotheses.target_effect, GST.BinaryEffectSize):
+        hypotheses = task.hypotheses
+        if not hypotheses:
+            raise ValueError("Task is missing hypotheses.")
+
+        if not isinstance(hypotheses.target_effect, GST.BinaryEffectSize):
             raise ValueError("Task must have BinaryEffectSize for Binomial Design")
 
-        props = task.hypotheses.target_effect.proportions
+        props = hypotheses.target_effect.proportions
         p_c = props.get("control") or list(props.values())[0]
 
         # Heuristic to find treatment or second value

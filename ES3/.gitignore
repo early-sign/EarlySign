@@ -1,0 +1,12 @@
+# TypeSpec build output
+out-openapi3/
+tsp-output/
+
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# Local environment / temporary files
+.temp_check/
+.temp_check_openapi/
+.DS_Store

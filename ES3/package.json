@@ -1,0 +1,11 @@
+{
+    "name": "es3-standard",
+    "version": "1.0.0",
+    "description": "ES3 Standard Specification (TypeSpec)",
+    "dependencies": {
+        "@typespec/compiler": "latest",
+        "@typespec/http": "latest",
+        "@typespec/openapi3": "latest",
+        "@typespec/rest": "latest"
+    }
+}

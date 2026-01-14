@@ -15,6 +15,10 @@ test:
 spec-test:
 	poetry run pytest earlysign/tests/spec_tests/
 
+compile-ES3:
+	$(MAKE) -C ES3 install
+	$(MAKE) -C ES3 compile
+
 format:
 	# Format code using one Python version
 	# Sort imports, fix lint, and then run Black for final opinionated formatting
@@ -51,5 +55,6 @@ check:
 	make docs-build
 
 check-lite:
+	$(MAKE) -C ES3 check-sync
 	mise exec python -- make lint-type-test
 	make docs-build

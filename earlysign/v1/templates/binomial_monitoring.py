@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from pydantic import BaseModel
 
-import earlysign.schema.ES3.AVI as AVI
+from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.actions import Decision, UpdateProtocol
 from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
@@ -14,10 +14,10 @@ from earlysign.v1.methods.anytime_valid.report import (
 # --- ES3 Protocol Manifest ---
 
 
-class BinomialMonitoringProtocol(AVI.Protocol):
+class BinomialMonitoringProtocol(AVIProtocol):
     name: str = "Binomial Monitoring (AVI)"
-    task: AVI.AVITaskSpec
-    method: AVI.AVIMethodSpec
+    task: TaskSpec
+    method: MethodSpec
 
 
 if TYPE_CHECKING:

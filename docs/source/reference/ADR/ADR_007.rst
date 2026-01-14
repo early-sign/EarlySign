@@ -1,0 +1,45 @@
+ADR-007: Selection of Schema Management and Pydantic Generation Strategy
+======================================================================
+
+📋 Context
+-----------
+The EarlySign Standard Schema (ES3) requires a robust technical foundation for defining cross-domain clinical trial protocols and generating type-safe Python SDKs. The primary requirements were:
+
+1. **Schema-First Workflow**: Single source of truth for protocol definitions.
+2. **Human-Readable Syntax**: Easy for domain experts to review and edit.
+3. **Pydantic v2 Integration**: Automatic generation of high-quality Pydantic models.
+4. **Namespace Support**: Ability to organize models into logical groups (e.g., ``GST``, ``Base``, ``AVI``).
+5. **Deterministic Builds**: Consistent output for CI/CD and synchronization checks.
+6. **Flexibility**: Support for discriminators, enums, literals, and inheritance.
+
+💡 Decision
+------------
+We have selected **TypeSpec** as the primary schema language, pipelined with the **OpenAPI 3** emitter and **datamodel-code-generator** for Python SDK generation.
+
+The workflow is as follows:
+1. Define the schema in ``.tsp`` files using TypeSpec.
+2. Compile TypeSpec to an OpenAPI 3 YAML specification via ``@typespec/openapi3``.
+3. Generate namespaced Pydantic models using ``datamodel-code-generator`` with specific flags:
+   * ``--enum-field-as-literal one``: Keeps single-value "kind" fields as Literals for better type hinting.
+   * ``--capitalise-enum-members``: Ensures consistent enum member naming.
+   * ``--reuse-model``: Reduces redundancy across namespaces.
+
+**Alternatives Considered:**
+
+* **LinkML**: Investigated for its freshness. While powerful, it introduced friction in generating nested Python namespaces and deterministic outputs compared to the TypeSpec/OpenAPI pipeline.
+* **Protobuf/gRPC**: Excellent for performance, but lacks the natural mapping to Pydantic models required for this project's orchestration layer.
+* **Raw JSON Schema/OpenAPI**: Rejected as primary authoring formats due to extreme verbosity and poor human readability.
+
+✨ Consequences
+-----------------
+The choice of TypeSpec provides a clean, modern syntax that mirrors TypeScript/IDL, making it accessible to developers while retaining the full power of the OpenAPI ecosystem.
+
+**Positive:**
+* **Developer Velocity**: Rapid schema iteration with immediate feedback.
+* **Type Safety**: Strong alignment between schema definitions and the Python orchestration layer.
+* **CI/CD Integration**: Easy implementation of synchronization checks (``make check-sync``).
+* **Maintainability**: Clear separation of concerns between standard definitions and implementation.
+
+**Negative:**
+* **Tooling Overhead**: Requires Node.js and specific TypeSpec packages (``@typespec/compiler``, etc.).
+* **Generator Complexity**: ``datamodel-code-generator`` flags require careful tuning to ensure correct inheritance and enum behavior.

@@ -39,7 +39,7 @@ Then, we initialize the template and run the experiment.
     >>> task = BinomialABTaskSpec(
     ...     arms=["control", "treatment"],
     ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
-    ...     futility=GST.FutilityRequirement(power=0.8),
+    ...     futility=GST.FutilityRequirement(power=0.8, binding=True),
     ...     hypotheses=GST.HypothesisSpec(
     ...         h_null="Difference <= 0",
     ...         h_alt="Difference > 0.02",
@@ -70,26 +70,26 @@ Then, we initialize the template and run the experiment.
     ...     template.update(batch)
     ...     result = template.report_progress()
     ...     # Check if we crossed a boundary or stopped for futility
-    ...     if result['status'] != "CONTINUE":
+    ...     if result['status'] != DecisionStatus.CONTINUE_:
     ...         break
 
     >>> # 5. Generate Final Report
     >>> final_result = template.report_result()
     >>> print(f"Final Status: {final_result['final_status']}")
-    Final Status: DecisionStatus.STOP_EFFICACY
+    Final Status: stop_plan_end_reached
     >>> print(f"Is Rejected: {final_result['is_rejected']}")
-    Is Rejected: True
+    Is Rejected: False
 
 In practice, each iteration may run in a different process.
 To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.schema.ES3.GST.Log.Analysis import DecisionStatus
+from earlysign.schema.ES3.GST.Log import DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol import AutoNameMixin
 from earlysign.v1.framework.session import Session
@@ -116,12 +116,10 @@ from earlysign.v1.methods.group_sequential.report import (
 
 
 class BinomialABTaskSpec(GST.TaskSpec):
-    response_type: Literal["binary"] = "binary"
+    response_type: GST.ResponseType = GST.ResponseType.BINARY
     # Design Requirements
-    efficacy: GST.EfficacyRequirement = GST.EfficacyRequirement(alpha=0.025)
-    futility: GST.FutilityRequirement = GST.FutilityRequirement(
-        power=0.8, binding=False
-    )
+    efficacy: GST.EfficacyRequirement
+    futility: GST.FutilityRequirement
 
     hypotheses: GST.HypothesisSpec
 
@@ -279,7 +277,7 @@ class BinomialABTemplate:
         for i, batch in enumerate(batches):
             self.update(batch if isinstance(batch, list) else [batch])
             prog = self.report_progress()
-            if prog.get("decision") != DecisionStatus.CONTINUE:
+            if prog.get("decision") != DecisionStatus.CONTINUE_:
                 return self.report_result()
 
         return self.report_result()

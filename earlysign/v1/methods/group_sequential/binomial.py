@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 # Import protocol types for type hinting if needed (avoid circular if possible)
 import earlysign.schema.ES3.GST as GST
-from earlysign.schema.ES3.GST import DecisionStatus
+from earlysign.schema.ES3.GST.Log import DecisionStatus
 from earlysign.v1.methods.binomial import BinomialSummary
 from earlysign.v1.methods.group_sequential.engine import GSTStoppingRuleEngine
 
@@ -111,7 +111,7 @@ class BinomialGSTEngine:
         is_efficacy_crossed = False
         futility_boundary = None
         is_futility_crossed = False
-        status = DecisionStatus.CONTINUE
+        status = DecisionStatus.CONTINUE_
 
         if look_idx >= 0:
             # Get Boundaries
@@ -129,12 +129,12 @@ class BinomialGSTEngine:
                 )
                 if futility_boundary is not None and z_stat < futility_boundary:
                     is_futility_crossed = True
-                    if status == DecisionStatus.CONTINUE:
+                    if status == DecisionStatus.CONTINUE_:
                         status = DecisionStatus.STOP_FUTILITY
 
             # Check Final Look
             if look_idx == len(points) - 1:
-                if status == DecisionStatus.CONTINUE:
+                if status == DecisionStatus.CONTINUE_:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
         return BinomialTestResult(
