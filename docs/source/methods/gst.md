@@ -322,10 +322,10 @@ The actual optimization is: find {tᵢ*} that minimizes ASN while respecting N_m
 |  | `spending_optimization.optimize_spending_for_power` | ✅ |
 | `ScheduleOptimization` | `optimize_timing.minimize_asn.minimize_asn_schedule` | ✅ |
 |  | `optimize_timing.minimize_asn.summarize_schedule` | ✅ |
-| `ConditionalUpdate` | `conditional_update.conditional_power` | ✅ |
+| `ConditionalUpdate` | `group_sequential.sample_size_reestimation.operators.ConditionalPowerCalculation` | ✅ |
 |  | `conditional_update.update_remaining_boundaries` | ✅ |
 |  | `conditional_update.promising_zone_decision` | ✅ |
 
 **Legend**: ✅ Implemented
 
-**Module locations**: Core `essentials` live in `earlysign.methods.group_sequential.<module>` with adaptive-routine implementations in `earlysign.methods.adaptive_group_sequential.conditional_update`. Execution-layer operators live in `earlysign.methods.group_sequential.<module>` and adaptive operators in `earlysign.methods.adaptive_group_sequential.conditional_update`.
+**Module locations**: Core `essentials` live in `earlysign.methods.group_sequential.<module>` with adaptive-routine implementations in `earlysign.methods.adaptive_group_sequential.conditional_update`. Execution-layer adaptive operators/records live in `earlysign.methods.group_sequential.sample_size_reestimation`.

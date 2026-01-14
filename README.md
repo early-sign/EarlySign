@@ -43,6 +43,59 @@ This library supports the following steps that emerge in your implementation of 
 1. Reporting / Visualizing
 1. (optionally) Educating
 
+## ✨ Key Features
+
+<table border="1" style="border-collapse: collapse; border: 2px solid #ddd;">
+<tr>
+<td width="50%" align="center" style="border: 1px solid #ddd; padding: 20px;">
+
+<div style="font-size: 48px; margin-bottom: 10px;">🗄</div>
+
+### Auditable by Design
+**via Event Sourcing Pattern**
+
+</td>
+<td width="50%" align="center" style="border: 1px solid #ddd; padding: 20px;">
+
+<div style="font-size: 48px; margin-bottom: 10px;">🎁</div>
+
+### Usage Templates
+**for Off-the-shelf Usability**
+
+</td>
+</tr>
+<tr>
+<td width="50%" align="center" style="border: 1px solid #ddd; padding: 20px;">
+
+<div style="font-size: 48px; margin-bottom: 10px;">🔧</div>
+
+### Development Framework
+**for Customizability**
+
+</td>
+<td width="50%" align="center" style="border: 1px solid #ddd; padding: 20px;">
+
+<div style="font-size: 48px; margin-bottom: 10px;">📙</div>
+
+### Standardized Schema
+**the ES3 Spec Format**
+
+</td>
+</tr>
+</table>
+
+**1. Auditable by Design (via Event Sourcing Pattern)**
+Every statistical decision is traceable and reproducible. The event sourcing pattern ensures complete audit trails of your sequential testing procedures, making your analyses transparent and verifiable.
+
+**2. Usage Templates for Off-the-shelf Usability**
+Get started quickly with pre-built protocol templates. Common experimental designs (A/B tests, monitoring, etc.) are ready to use out of the box, allowing you to focus on your experiments.
+
+**3. Development Framework for Customizability**
+Develop your own sequential testing procedures to fit your needs. EarlySign is a platform for building custom methods while taking advantage of the utilities provided by the framework.
+
+**4. Standardized Schema for Protocol Specification (the ES3 Spec Format)**
+We have a clearly defined and declared protocol specification schema, ES3 (EarlySign Schema Specification), that ensures consistency, portability, and clear communication of experimental designs across teams and tools.
+
 ## Citing
 If you use EarlySign in publications, presentations, or reports, please consider citing it.
 Example citations are provided below.
