@@ -21,7 +21,7 @@ These tests verify:
 >>> from earlysign.v1.framework.projector import Projector, ProjectionResult
 >>> from earlysign.v1.framework.session import Session
 >>> from earlysign.v1.framework.trace import Traced, TraceId, extract_traces
->>> from earlysign.v1.framework.write_models import WriteModel
+>>> from earlysign.v1.framework.writer import Writer
 
 --- Test Models ---
 >>> class Fact(BaseModel):
@@ -92,8 +92,8 @@ True
 >>> ledger.ensure()
 
 >>> with Session(ledger) as sess:
-...     WriteModel.Commit(sess, Fact(val=10), trace=[])
-...     WriteModel.Commit(sess, Fact(val=20), trace=[])
+...     Writer.Commit(sess, Fact(val=10), trace=[])
+...     Writer.Commit(sess, Fact(val=20), trace=[])
 
 # Trace comes from Read, not from Commit return values
 >>> with Session(ledger) as sess:
@@ -117,7 +117,7 @@ True
 # When Commit is called without explicit trace, session.trace is used
 >>> with Session(ledger) as sess:
 ...     _ = sess.Read(FactProjector())  # Populates session.trace
-...     WriteModel.Commit(sess, Result(total=30))  # Uses implicit trace
+...     Writer.Commit(sess, Result(total=30))  # Uses implicit trace
 
 # Verify the Result was committed with trace from the Read
 >>> df = ledger.t.execute()
@@ -130,7 +130,7 @@ True
 
 >>> with Session(ledger) as sess:
 ...     _ = sess.Read(FactProjector())  # Populates session.trace with 2 items
-...     WriteModel.Commit(sess, Result(total=99), trace=[])  # Explicit empty trace
+...     Writer.Commit(sess, Result(total=99), trace=[])  # Explicit empty trace
 
 >>> df2 = ledger.t.execute()
 >>> result_rows = df2[df2["payload_type"] == "Result"]

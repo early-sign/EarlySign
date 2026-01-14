@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.framework.trace import Traced
-from earlysign.v1.framework.write_models import WriteModel
+from earlysign.v1.framework.writer import Writer
 
 if TYPE_CHECKING:
     from earlysign.v1.framework.session import Session
@@ -35,9 +35,17 @@ class Snapshot(BaseModel, Generic[T]):
     uuid: Optional[str] = None  # Record uuid for trace reference
 
 
-class IntermediateFact(Projector[T], ABC):
+class EntityState(Projector[T], ABC):
     """
-    Base class for recomputable intermediate facts using Incremental Folding.
+    Base class for recomputable entity state using Incremental Folding.
+
+    In Event Sourcing, all entity state is reconstructed from the event source
+    via a fold operation. In practice, such state may need to be cached as we do here.
+
+    Among the various facts composed of events recorded in the Ledger, for those
+    that can be identified as Entities, this class provides a useful support mechanism.
+    It enables differential updates by tracking the latest snapshot and computing
+    only the delta from new events.
     """
 
     data_type: Type[T]
@@ -133,4 +141,4 @@ class IntermediateFact(Projector[T], ABC):
         )
 
         # We use a custom Commit that ensures identity is set in labels
-        WriteModel.Commit(session, snap_record, labels={"identity": self.identity})
+        Writer.Commit(session, snap_record, labels={"identity": self.identity})

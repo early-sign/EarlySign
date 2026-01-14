@@ -3,7 +3,7 @@ from typing import Optional
 import ibis
 from pydantic import BaseModel
 
-from earlysign.v1.framework.intermediate_fact import IntermediateFact, Snapshot
+from earlysign.v1.framework.entity_state import EntityState, Snapshot
 from earlysign.v1.framework.projector import ProjectionResult
 from earlysign.v1.framework.trace import TraceId
 
@@ -24,10 +24,10 @@ class BatchObservation(BaseModel):
     arm: str
 
 
-class BinomialSummaryFact(IntermediateFact[BinomialSummary]):
+class BinomialSummaryFact(EntityState[BinomialSummary]):
     """
     Incremental Projector for Binomial data.
-    Implements IntermediateFact to optimize state reconstruction.
+    Implements EntityState to optimize state reconstruction.
     """
 
     data_type = BinomialSummary

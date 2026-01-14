@@ -91,9 +91,9 @@ from pydantic import BaseModel, Field
 import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.GST.Log import DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
-from earlysign.v1.framework.protocol import AutoNameMixin
+from earlysign.v1.framework.protocol_mixin import AutoNameMixin
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.write_models import WriteModel
+from earlysign.v1.framework.writer import Writer
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
 from earlysign.v1.methods.binomial import BinomialSummaryFact
 from earlysign.v1.methods.group_sequential.binomial import (
@@ -227,7 +227,7 @@ class BinomialABTemplate:
             )
 
             # 4. Commit the result (trace comes from session's accumulated reads)
-            WriteModel.Commit(sess, test_result)
+            Writer.Commit(sess, test_result)
 
             # 5. Record Decision if stopping
             if test_result.status in (

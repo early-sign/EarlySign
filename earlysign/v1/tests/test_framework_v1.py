@@ -2,12 +2,12 @@
 Doctests for earlysign.v1.framework integration.
 
 Covers the flow:
-  Session -> Ingest -> Read (Projector) -> WriteModel (derived fact)
+  Session -> Ingest -> Read (Projector) -> Writer (derived fact)
 
 >>> import ibis
 >>> from earlysign.core.ledger import Ledger
 >>> from earlysign.v1.framework.session import Session
->>> from earlysign.v1.framework.write_models import WriteModel
+>>> from earlysign.v1.framework.writer import Writer
 >>> from earlysign.v1.methods.actions import Ingest, Decision, UpdateProtocol
 >>> from earlysign.v1.methods.binomial import BatchObservation, BinomialSummaryFact
 >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec, BinomialABProtocol

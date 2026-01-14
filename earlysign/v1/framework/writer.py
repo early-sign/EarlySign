@@ -1,8 +1,8 @@
 """
-Write models for the framework.
+Writer module for the framework.
 
-Design Philosophy:
-==================
+Design Philosophy (Event Sourcing):
+====================================
 In event sourcing, ALL state and lineage flows through Read operations (Projectors).
 Write operations (Commit, Ingest) are "fire and forget" - they record events to the
 ledger but do not return identifiers. If you need to reference data after writing,
@@ -30,12 +30,14 @@ if TYPE_CHECKING:
 B = TypeVar("B", bound=BaseModel)
 
 
-class WriteModel:
+class Writer:
     """
     Fundamental operations for asserting events into the Ledger.
 
-    These operations record events with their scientific trace (parent uuids).
-    They do NOT return identifiers - trace flows through Read, not Write.
+    In Event Sourcing, the Writer is responsible for appending events to the
+    event store (Ledger). These operations record events with their scientific
+    trace (parent uuids). They do NOT return identifiers - trace flows through
+    Read operations (Projectors), not Write operations.
     """
 
     @staticmethod

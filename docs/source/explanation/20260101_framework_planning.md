@@ -23,11 +23,11 @@ Therefore, any variable holding computed results must be generated via Read from
 
 ```python
 # ❌ Wrong design: managing dependencies via Commit return value
-uuid = WriteModel.Commit(sess, my_record)
+uuid = Writer.Commit(sess, my_record)
 next_result = some_function(uuid)  # passing uuid around
 
 # ✅ Correct design: all state comes from Read
-WriteModel.Commit(sess, my_record)  # just record, no return
+Writer.Commit(sess, my_record)  # just record, no return
 traced_data = sess.Read(MyProjector())  # get dependencies via Read
 # traced_data.trace contains the list of parent uuids
 ```
@@ -77,7 +77,7 @@ When you call Commit without an explicit trace, this accumulated trace is used a
 - **`_session_trace`**: Accumulates TraceIds from all Read operations.
 - **`Read(projector)`**: Executes projection and accumulates trace.
 
-#### write_models.py (Write Side: Primitives)
+#### writer.py (Write Side: Primitives)
 - **`Commit(session, record, trace=None)`**: Records a Pydantic model with its parent trace. Returns the new record's uuid as TraceId.
 - **`CallAndCommit(session, result_type, func, *args)`**: Executes function and commits result with lineage from input traces.
 
