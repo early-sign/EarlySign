@@ -14,7 +14,8 @@ Existing software packages for sequential analysis
 - rpact
 - MAMS
 - gsDesign
-- (what else?)
+- SAS sequential analysis procedures
+- ...
 
 # High-level Design 
 
@@ -24,7 +25,7 @@ Existing software packages for sequential analysis
 - Auditability and Robustness to Unpredictability: Sequential methods often introduce complex dependencies between events. Tracking the history of these events and their dependencies is crucial, especially when methods are adopted that were not anticipated during the design phase. Comprehensive recording of statistical events and actions enables that the methods introduced mid-stream can have access to an accurate and complete history.
 
 
-## Design Patterns
+## Core Design Patterns
 
 - Event sourcing
 - Command Query Responsibility Segregation (CQRS)
@@ -48,7 +49,19 @@ The package is evolved around
 - Entity State (Entity)
 
 ## Ledger
-Schema is shown in Table 1.
+Ledger is our realization of the event source.
+Its schema is shown in Table 1.
+
+- Supports timestamp, UID, and other labels.
+- Supports entity identities and version numbers.
+
+- We use ibis framework to support various backends.
+
+- All statistical events and decisions are registered in the ledger.
+
+- Records are immutable and append-only, ensuring auditability.
+
+- In the vanilla core layer, we can write and read any record to and from the ledger.
 
 ## Standardized Schema: EarlySign Standard Schema (ES3)
 We also provide a standardized schema for sequential analysis methods.
