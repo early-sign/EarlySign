@@ -4,7 +4,7 @@ import numpy as np
 
 import earlysign.schema.ES3.GST as GST
 from earlysign.v1.methods.group_sequential.canonical_dist import (
-    CanonicalJointDistribution,
+    CanonicalJointModel,
 )
 
 
@@ -14,31 +14,28 @@ class ProtocolDesigner:
     Translates scientific intent (alpha, power, delta) into a realized design (boundaries, sample size).
     """
 
-    def __init__(self, cjd: Optional[CanonicalJointDistribution] = None):
-        self._cjd = cjd or CanonicalJointDistribution()
+    def __init__(self, model: Optional[CanonicalJointModel] = None):
+        self._model = model
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]) -> "ProtocolDesigner":
         """
         Creates a ProtocolDesigner instance from a configuration dictionary.
-
-        Args:
-            config: A dictionary containing initialization parameters.
-                Supported keys:
-                - model: (str) Model type to use (default: "canonical_gaussian").
-                - model_params: (dict) Parameters to pass to the model constructor (e.g., {"rng_seed": 42}).
-
-        Returns:
-            An initialized ProtocolDesigner instance.
+        Supported keys:
+            - 'model': 'canonical_joint' (mapped to CanonicalJointModel)
+            - 'model_params': Dict containing 'rng_seed', etc.
         """
-        model_type = config.get("model", "canonical_gaussian")
+        model = None
+        model_type = config.get("model")
         model_params = config.get("model_params", {})
-
-        if model_type == "canonical_gaussian":
-            cjd = CanonicalJointDistribution(**model_params)
-            return cls(cjd=cjd)
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
+        
+        if model_type == "canonical_joint":
+            from earlysign.v1.methods.group_sequential.canonical_dist import Config
+            model = CanonicalJointModel(Config(
+                info_times=np.array([1.0]), # Placeholder for design-phase use
+                rng_seed=model_params.get("rng_seed")
+            ))
+        return cls(model=model)
 
     def plan_binomial_ab(
         self,
@@ -73,8 +70,11 @@ class ProtocolDesigner:
 
         info_times = np.linspace(1 / k, 1.0, k)
 
-        # 1. Solve for boundary constant c
-        c_val = self._cjd.solve_boundary_constant(
+        if self._model is None:
+            raise ValueError("ProtocolDesigner must be initialized with a CanonicalJointModel for planning.")
+        model = self._model
+
+        c_val = model.solve_boundary_constant(
             info_times.tolist(), alpha, shape_type=shape_type
         )
 
@@ -88,7 +88,7 @@ class ProtocolDesigner:
         boundaries = (c_val * c_shape).tolist()
 
         # 2. Solve for standardized drift delta = theta * sqrt(I_max)
-        drift = self._cjd.solve_drift(
+        drift = model.solve_drift(
             info_times.tolist(), boundaries, target_power=power
         )
 

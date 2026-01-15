@@ -56,7 +56,7 @@ Then, we initialize the template and run the experiment.
     ...     task=task,
     ...     looks=2,
     ...     spending_function="obrien_fleming",
-    ...     designer_params={"model": "canonical_gaussian", "model_params": {"rng_seed": 42}}
+    ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
 
     >>> print(f"Designed Max Sample Size: {int(protocol.method.efficacy.schedule.interim_points[-1])}")

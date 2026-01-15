@@ -37,7 +37,10 @@ Covers the flow:
 ...     )
 ... )
 >>> # Design a simple 1-look protocol (effectively fixed sample / simple Z-test)
->>> protocol = BinomialABTemplate.design(task, looks=1, spending_function="pocock")
+>>> protocol = BinomialABTemplate.design(
+...     task, looks=1, spending_function="pocock",
+...     designer_params={"model": "canonical_joint"}
+... )
 >>> with Session(ledger) as sess:
 ...     _ = UpdateProtocol(sess, protocol)
 
