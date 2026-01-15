@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 from scipy.stats import norm
 
-from earlysign.v1.methods.group_sequential.spending import SpendingFunction
+from earlysign.v0.methods.group_sequential.spending import SpendingFunction
 
 
 class CanonicalJointDistribution:
@@ -407,11 +407,11 @@ class CanonicalJointDistribution:
         """Compute boundaries a and b for a given R_OS inflation factor using fixed Z samples."""
         info_times = np.linspace(1 / K, 1.0, K)
         if alpha_cum is None:
-            from earlysign.v1.methods.group_sequential.spending import RhoFamilySpending
+            from earlysign.v0.methods.group_sequential.spending import RhoFamilySpending
 
             alpha_cum = RhoFamilySpending(alpha=alpha, rho=rho).cumulative(info_times)
         if beta_cum is None:
-            from earlysign.v1.methods.group_sequential.spending import RhoFamilySpending
+            from earlysign.v0.methods.group_sequential.spending import RhoFamilySpending
 
             beta_cum = RhoFamilySpending(alpha=beta, rho=rho).cumulative(info_times)
 
@@ -520,7 +520,7 @@ class CanonicalJointDistribution:
         info_times = np.linspace(1 / K, 1.0, K)
         z_h0 = self._generate_joint_z(info_times)
 
-        from earlysign.v1.methods.group_sequential.spending import RhoFamilySpending
+        from earlysign.v0.methods.group_sequential.spending import RhoFamilySpending
 
         alpha_cum = RhoFamilySpending(alpha=alpha, rho=rho).cumulative(info_times)
         beta_cum = RhoFamilySpending(alpha=beta, rho=rho).cumulative(info_times)
