@@ -4,7 +4,7 @@
 - There are statistical software packages that facilitate the adoption of these procedures. However, they mainly focus on the design phase of the study, and do not provide tools for the analysis phase.
 - With the advent of a variety of sequential analysis methods, it is becoming increasingly important to have a tool that can serve as a unified platform for implementing and serving sequential analysis methods.
 
-- This article identifies key requirements for statistical software in sequential analysis and outlines design patterns to address them, establishing a unified foundation for software architecture for sequential analysis.
+- In this article, we articulate the desiderata of sequential analysis software and identify the design patterns that fulfill them. By doing so, we establish the guiding principles for a unified architectural implementation.
 
 - As proof of concept and practical application, we present EarlySign, a statistical software package that provides tools for the analysis phase of sequential analysis methods.
 
@@ -31,9 +31,20 @@ Existing software packages for sequential analysis
 - Command Query Responsibility Segregation (CQRS)
 
 ### Practical considerations
-Entity for snapshots:
+- Entity with Snapshots
+
+Not all concepts in this framework are entities, and not all events are related to entities. However, some concepts can be extracted as entities, which are specifically supported for the sake of computational efficiency.
+
 Some (not all) aggregates of the events can be represented as entities. 
-This is realized by the Optimistic Concurrency Control (OCC) pattern.
+
+Under the CQRS pattern, the following complications arise:
+- the latest entity state should be computed by a projection
+- to support snapshots, the result of the projection should be saved to the event store by a write model
+- the entities are the most effective when they are used across multiple projections.
+- however, the projections are assumed parallelizable. They are read operations and multiple projections may try to find the latest entity state at the same time, resulting in a race condition of updating the entity state.
+
+To resolve this, we use the Optimistic Concurrency Control (OCC) pattern.
+The OCC pattern is a concurrency control method that uses version numbers to ensure that updates are applied only if the data has not been modified by another process.
 
 Therefore, entities have a version number and they are conditionally updated only if the version number does not exist in the entity's state snapshots.
 
