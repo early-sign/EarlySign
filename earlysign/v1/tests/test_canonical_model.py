@@ -35,7 +35,7 @@ Canonical Joint Model from ES3 protocol specifications.
 ...                 boundary_scale=GST.BoundaryScale.Z_SCORE,
 ...                 binding=True,
 ...                 reference_model=GST.BinaryModel(
-...                     kind="binary", test_statistic=GST.TestStatistic.Z, 
+...                     kind="binary", test_statistic=GST.TestStatistic.Z,
 ...                     link_function=GST.LinkFunction.IDENTITY, use_canonical_joint_distribution=True
 ...                 ),
 ...                 spending_function=GST.SpendingFunctionSpec(type="obrien_fleming")
@@ -111,7 +111,7 @@ True
 ...                 boundary_scale=GST.BoundaryScale.Z_SCORE,
 ...                 binding=True,
 ...                 reference_model=GST.BinaryModel(
-...                     kind="binary", test_statistic=GST.TestStatistic.Z, 
+...                     kind="binary", test_statistic=GST.TestStatistic.Z,
 ...                     link_function=GST.LinkFunction.IDENTITY, use_canonical_joint_distribution=True
 ...                 ),
 ...                 spending_function=GST.SpendingFunctionSpec(type="obrien_fleming")
@@ -149,7 +149,7 @@ True
 ...                 boundary_scale=GST.BoundaryScale.Z_SCORE,
 ...                 binding=True,
 ...                 reference_model=GST.BinaryModel(
-...                     kind="binary", test_statistic=GST.TestStatistic.Z, 
+...                     kind="binary", test_statistic=GST.TestStatistic.Z,
 ...                     link_function=GST.LinkFunction.IDENTITY, use_canonical_joint_distribution=True
 ...                 ),
 ...                 spending_function=GST.SpendingFunctionSpec(type="obrien_fleming")

@@ -8,7 +8,9 @@ from matplotlib.figure import Figure
 from pydantic import ValidationError
 
 from earlysign.v0.methods.group_sequential.boundary import BoundaryCalculator
-from earlysign.v0.methods.group_sequential.design.records.design import DesignPayloadModel
+from earlysign.v0.methods.group_sequential.design.records.design import (
+    DesignPayloadModel,
+)
 
 
 def plot_design_boundaries(

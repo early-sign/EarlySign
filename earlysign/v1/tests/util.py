@@ -1,4 +1,5 @@
-from typing import Iterator, List, Optional
+from pathlib import Path
+from typing import Iterator, List, Optional, Union
 
 import numpy as np
 
@@ -59,3 +60,40 @@ class BinomialStream:
             BatchObservation(n=batch_size, success=k_c, arm="C"),
             BatchObservation(n=batch_size, success=k_t, arm="T"),
         ]
+
+
+def corresponding_scenario_path(caller_file: Union[str, Path]) -> Path:
+    """Get the path to the feature file corresponding to the calling test file."""
+    import earlysign
+
+    caller_path = Path(caller_file).resolve()
+    repo_root = Path(earlysign.__file__).parent.parent
+    # We look for features in repo_root/spec/
+
+    # Extract relative path from earlysign/v1/tests/spec_tests/
+    # format: earlysign/v1/tests/spec_tests/jennison_turnbull_2000/test_foo.py
+    # -> spec/jennison_turnbull_2000/foo.feature
+
+    spec_tests_dir = Path(earlysign.__file__).parent / "v1" / "tests" / "spec_tests"
+
+    try:
+        relative_path = caller_path.relative_to(spec_tests_dir)
+    except ValueError:
+        # Fallback
+        relative_path = caller_path.name
+        return repo_root / "spec" / relative_path.replace(".py", ".feature")
+
+    # test_feature.py -> feature.feature
+    name = relative_path.name
+    if name.startswith("test_"):
+        name = name[5:]
+    feature_name = name.replace(".py", ".feature")
+
+    feature_path = repo_root / "spec" / relative_path.parent / feature_name
+
+    if not feature_path.exists():
+        raise FileNotFoundError(
+            f"Corresponding feature file not found at: {feature_path}"
+        )
+
+    return feature_path

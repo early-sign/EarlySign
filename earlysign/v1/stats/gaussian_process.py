@@ -5,7 +5,7 @@ with specialized support for the canonical joint distribution used in
 group sequential tests.
 """
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -38,9 +38,14 @@ class GaussianProcess:
         self.dims = dims
         self.mean_func = mean_func or (lambda t: np.zeros((len(t), dims)))
         self.cov_func = cov_func or (
-            lambda t1, t2: np.where(t1 == t2, 1.0, 0.0)
-            if dims == 1
-            else (np.where(t1 == t2, 1.0, 0.0)[..., np.newaxis, np.newaxis] * np.eye(dims))
+            lambda t1, t2: (
+                np.where(t1 == t2, 1.0, 0.0)
+                if dims == 1
+                else (
+                    np.where(t1 == t2, 1.0, 0.0)[..., np.newaxis, np.newaxis]
+                    * np.eye(dims)
+                )
+            )
         )
         self._rng = rng or np.random.default_rng()
 
@@ -178,6 +183,20 @@ class CanonicalGaussianProcess(GaussianProcess):
             rng=rng,
             dims=1,
         )
+
+    def sample(self, t: NDArray[Any], n_sims: int) -> NDArray[Any]:
+        """Sample multiple paths using Brownian motion increments."""
+        t_arr = np.asarray(t)
+        k = len(t_arr)
+        dt = np.diff(np.insert(t_arr, 0, 0))
+
+        # B(t) has drift self.drift and unit variance per unit time
+        db = self._rng.normal(self.drift * dt, np.sqrt(dt), (n_sims, k))
+        b = np.cumsum(db, axis=1)
+
+        # Z(t) = B(t) / sqrt(t)
+        z = b / np.sqrt(t_arr)
+        return cast(NDArray[Any], z)
 
     @staticmethod
     def _canonical_cov(t1: NDArray[Any], t2: NDArray[Any]) -> NDArray[Any]:

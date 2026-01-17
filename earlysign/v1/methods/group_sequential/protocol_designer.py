@@ -28,13 +28,16 @@ class ProtocolDesigner:
         model = None
         model_type = config.get("model")
         model_params = config.get("model_params", {})
-        
+
         if model_type == "canonical_joint":
             from earlysign.v1.methods.group_sequential.canonical_dist import Config
-            model = CanonicalJointModel(Config(
-                info_times=np.array([1.0]), # Placeholder for design-phase use
-                rng_seed=model_params.get("rng_seed")
-            ))
+
+            model = CanonicalJointModel(
+                Config(
+                    info_times=np.array([1.0]),  # Placeholder for design-phase use
+                    rng_seed=model_params.get("rng_seed"),
+                )
+            )
         return cls(model=model)
 
     def plan_binomial_ab(
@@ -71,7 +74,9 @@ class ProtocolDesigner:
         info_times = np.linspace(1 / k, 1.0, k)
 
         if self._model is None:
-            raise ValueError("ProtocolDesigner must be initialized with a CanonicalJointModel for planning.")
+            raise ValueError(
+                "ProtocolDesigner must be initialized with a CanonicalJointModel for planning."
+            )
         model = self._model
 
         c_val = model.solve_boundary_constant(
@@ -88,9 +93,7 @@ class ProtocolDesigner:
         boundaries = (c_val * c_shape).tolist()
 
         # 2. Solve for standardized drift delta = theta * sqrt(I_max)
-        drift = model.solve_drift(
-            info_times.tolist(), boundaries, target_power=power
-        )
+        drift = model.solve_drift(info_times.tolist(), boundaries, target_power=power)
 
         # 3. Calculate I_max = (drift / theta)^2
         i_max = (drift / theta) ** 2

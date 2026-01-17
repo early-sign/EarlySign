@@ -1,7 +1,11 @@
 """Binomial arm records and snapshot utilities for two-proportion experiments."""
 
 from earlysign.core.ledger import Ledger
-from earlysign.v0.framework.records import LedgerRecord, QueryMixin, SnapshotLedgerRecord
+from earlysign.v0.framework.records import (
+    LedgerRecord,
+    QueryMixin,
+    SnapshotLedgerRecord,
+)
 
 
 class BinomialArmResultRecord(LedgerRecord, QueryMixin):

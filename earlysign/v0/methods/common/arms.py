@@ -4,7 +4,11 @@ from enum import Enum
 
 from pydantic import Field
 
-from earlysign.v0.framework.records import LedgerRecord, QueryMixin, SnapshotLedgerRecord
+from earlysign.v0.framework.records import (
+    LedgerRecord,
+    QueryMixin,
+    SnapshotLedgerRecord,
+)
 
 
 class ArmStatus(str, Enum):

@@ -14,7 +14,10 @@ from earlysign.v0.stats.schemes.survival.effect_size import (
     TimeToEventEffect,
     TimeToEventSampleSize,
 )
-from earlysign.v0.stats.schemes.two_means.effect_size import MeansEffect, MeansSampleSize
+from earlysign.v0.stats.schemes.two_means.effect_size import (
+    MeansEffect,
+    MeansSampleSize,
+)
 from earlysign.v0.stats.schemes.two_proportions.effect_size import (
     ProportionsEffect,
     ProportionsSampleSize,
