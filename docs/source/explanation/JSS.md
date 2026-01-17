@@ -15,6 +15,11 @@ Existing software packages for sequential analysis
 - MAMS
 - gsDesign
 - SAS sequential analysis procedures
+- Ax
+- PlanOut
+- Confidence by Spotify
+- ExpAn
+- seqabpy
 - ...
 
 # High-level Design 
@@ -28,10 +33,17 @@ Existing software packages for sequential analysis
 ## Core Design Patterns
 
 - Event sourcing
+  - append-only, immutable
 - Command Query Responsibility Segregation (CQRS)
 
 ### Practical considerations
 - Entity with Snapshots
+
+Entities are special types of objects that maintain identity.
+Under the event sourcing pattern, entities are derivatives: they are computed from the events.
+In terms of the CQRS pattern, entities can be seen as special types of projections with snapshots.
+
+Entities enable snapshots: Entities are beings with identity. The consistent identity enables us to create snapshots, thereby providing computation efficiency.
 
 Not all concepts in this framework are entities, and not all events are related to entities. However, some concepts can be extracted as entities, which are specifically supported for the sake of computational efficiency.
 
@@ -47,6 +59,17 @@ To resolve this, we use the Optimistic Concurrency Control (OCC) pattern.
 The OCC pattern is a concurrency control method that uses version numbers to ensure that updates are applied only if the data has not been modified by another process.
 
 Therefore, entities have a version number and they are conditionally updated only if the version number does not exist in the entity's state snapshots.
+
+We support two types of entities:
+- (Standard) Entities
+- Sequential Entities
+
+Standard entities are entities that have a unique identity.
+Sequential entities are entities that have a sequential identity.
+Sequential entities are also entities but their identity is defined for the trajectory of the entity, i.e., their being carries the history of the states.
+For example, in a sequential analysis, the state of the trial is a standard entity as their latest state is what is of interest, while the Z statistic (the stochastic process) is more naturally considered as a sequential entity since the entire history of their realizations are used to perform the operation of the protocol (e.g., to compute the decision boundary for the next step).
+The distinction is not necessarily clear-cut, and it is up to the user to decide which entity is more appropriate for their use case.
+In either case, the entities are derivatives of the events in this framework, and they can be safely recomputed if necessary.
 
 # EarlySign Implementation
 
