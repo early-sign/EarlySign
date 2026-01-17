@@ -1,6 +1,6 @@
 # Optimistic Concurrency Control (OCC) in Event Store
 
-EarlySign's development framework supports defining special types of aggregates, namely Entities.
+EarlySign's development framework supports defining a special type of aggregate, namely Entities.
 In the Event Sourcing pattern, there are no first-class entities, but all constructs are derived from events.
 However, for efficiency of computation, we support the concept of entities as special types of aggregates having consistent identity.
 Not all aggregates appearing in sequential procedures are entities.
@@ -101,3 +101,43 @@ def append_event(self, stream_id, expected_version, event):
 
 ---
 *Note: Since this implementation uses "Optimistic Concurrency Control," it is recommended to use partitioning (routing events for specific IDs to specific servers) in high-load environments to minimize conflict frequency.*
+
+## 7. Sequential Entities
+A **Sequential Entity** is a specialized aggregate for sequential procedures (e.g., sequential testing) where the state is indexed by a temporal or ordinal coordinate (the **Index**). Unlike a standard entity, the Sequential Entity must ensure the monotonicity of its information trajectory.
+
+### 7.1 Intrinsic Indexing
+The `index` (e.g., Look $N$ or Sample $N$) is a first-class property of the Sequential Entity's snapshot. The transition $S_n \rightarrow S_{n+1}$ is governed by a **Sequential-OCC** pattern where the database ensures that the next index is strictly successor to the current one, preventing gaps or out-of-order computations.
+
+### 7.2 History Retention Strategies
+Sequential Entities support two canonical modes for maintaining the trajectory (history) of values. The choice depends on the trade-off between update frequency and read requirements.
+
+#### Strategy A: Projective Mode (Lean Snapshot)
+- **Concept**: Stores the value at the current index and the **Sufficient Statistics** required for the next computation.
+- **Snapshot Composition**: $(v_n, \theta_n)$ where $\theta$ represents the cumulative information required to compute $S_{n+1}$ without re-reading the whole history.
+- **Trajectory Reconstruction**: To view the full path, the system collects all previous index records.
+- **Best Use Case**: High-frequency real-time updates where storage overhead is a concern.
+
+#### Strategy B: Cumulative Mode (Fat Snapshot)
+- **Concept**: Stores the entire history of values up to the current index, alongside the Sufficient Statistics.
+- **Snapshot Composition**: $(\{v_i\}_{i=1}^n, \theta_n)$.
+- **Trajectory Reconstruction**: The latest snapshot provides the full trajectory instantly without extra lookups.
+- **Best Use Case**: Low-to-moderate frequency updates (e.g., Group Sequential Design) where instant visualization of the trajectory is required.
+
+### 7.3 Summary of Projections
+Sequential Entities provide two canonical projections:
+1. **Latest State Projection**: The head of the snapshot, providing the current value and statistical status.
+2. **Trajectory Projection**: The history of the process, retrieved via collection (Projective Mode) or direct reading (Cumulative Mode).
+
+```json
+# Example of a Sequential Snapshot structure
+{
+    "entity_id": "uuid",
+    "index": 12,
+    "strategy": "collective", 
+    "data": {
+        "current_value": 2.45,
+        "sufficient_stats": { "sum_x": 120.5, "n": 100 },
+        "history": [1.1, 1.5, ..., 2.45] # Empty if PROJECTIVE
+    }
+}
+```

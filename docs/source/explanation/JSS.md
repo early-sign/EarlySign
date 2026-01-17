@@ -39,9 +39,22 @@ Existing software packages for sequential analysis
 ### Practical considerations
 - Entity with Snapshots
 
+<!-- Entity = Identity + Special Projection with Snapshot -->
 Entities are special types of objects that maintain identity.
 Under the event sourcing pattern, entities are derivatives: they are computed from the events.
 In terms of the CQRS pattern, entities can be seen as special types of projections with snapshots.
+An Entity is not a pure CQRS Write Model nor a pure Read Model; it's a hybrid concept.
+It represents a consistently-identifiable aggregate whose state is derived from event projections but can be cached as Snapshots.
+
+<!-- SequentialEntity = Entity with Indexed Trajectory -->
+For sequential procedures (e.g., GST), certain entities are better represented as sequential entities.
+In this case, the state is indexed by a temporal/ordinal coordinate (the Index),
+and the state becomes a trajectory $(S_0, S_1, \ldots, S_n)$.
+This trajectory is treated as a single coherent Entity.
+
+In implementation, sequential entity may have two snapshot strategies (`SnapshotStrategy`):
+- `collective`: Snapshot of the entire trajectory $[(i_1, S_{i_1}), \ldots, (i_n, S_{i_n})]$ (all states stored in one record)
+- `pointwise`: Persist only the latest point $(i, S_i)$; the trajectory is reconstructed on demand by collecting pointwise snapshots.
 
 Entities enable snapshots: Entities are beings with identity. The consistent identity enables us to create snapshots, thereby providing computation efficiency.
 
