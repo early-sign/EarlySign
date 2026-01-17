@@ -52,7 +52,8 @@ class Session:
         # Execute projection
         result = projector.project(filtered_data)
 
-        # Accumulate trace
-        self._session_trace.extend(result.trace)
+        # Accumulate trace from the result (Expected to be Traced[T] or ProjectionResult[T])
+        if hasattr(result, "trace") and result.trace:
+            self._session_trace.extend(result.trace)
 
-        return Traced(data=result.data, trace=result.trace)
+        return result
