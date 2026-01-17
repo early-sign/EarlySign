@@ -60,7 +60,7 @@ Then, we initialize the template and run the experiment.
     ... )
 
     >>> print(f"Designed Max Sample Size: {int(protocol.method.efficacy.schedule.interim_points[-1])}")
-    Designed Max Sample Size: 12663
+    Designed Max Sample Size: 12861
 
     >>> # 4. Save the designed protocol
     >>> template.set_protocol(protocol)

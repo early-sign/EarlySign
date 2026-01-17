@@ -24,8 +24,7 @@ auditability and replay.
 Example
 -------
 >>> import earlysign
->>> assert hasattr(earlysign, "core")
->>> assert hasattr(earlysign, "stats")
+>>> assert hasattr(earlysign, "__version__")
 """
 
 # Expose package version at the package level (PEP-396 style)

@@ -77,9 +77,9 @@ class BinomialABTest(tpl.TemplateBase):
     Example:
     >>> import ibis
     >>> BinomialABTest(ibis.connect("duckdb://:memory:"), "my_exp")
-    <earlysign.v0.templates.ab_tests.BinomialABTest object at 0x...>
+    <...BinomialABTest object at 0x...>
     >>> BinomialABTest("duckdb://:memory:", "my_exp")
-    <earlysign.v0.templates.ab_tests.BinomialABTest object at 0x...>
+    <...BinomialABTest object at 0x...>
     """
 
     def __init__(
