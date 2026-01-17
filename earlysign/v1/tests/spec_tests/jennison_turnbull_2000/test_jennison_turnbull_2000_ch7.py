@@ -182,6 +182,7 @@ def when_compute_rld(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             efficacy_spending=eff_sf,
             tails=tails,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     i_fixed = (norm.ppf(1 - alpha / tails) + norm.ppf(power)) ** 2
@@ -223,6 +224,7 @@ def when_eval_asn(thetas: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             efficacy_spending=RhoFamilySpending(res["alpha"], res["rho"]),
             tails=res["tails"],
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a, _ = model.solve_boundaries(drift=0.0)
@@ -282,6 +284,7 @@ def when_under_run(
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a_plan, _ = model_plan.solve_boundaries(drift=0.0)
@@ -301,6 +304,7 @@ def when_under_run(
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a, _ = model_act.solve_boundaries(drift=0.0)
@@ -337,6 +341,7 @@ def when_over_run(
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a_plan, _ = model_plan.solve_boundaries(drift=0.0)
@@ -359,6 +364,7 @@ def when_over_run(
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a, _ = model_act.solve_boundaries(drift=0.0)
@@ -395,6 +401,7 @@ def when_mismatched_schedule(
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a_plan, _ = model_plan.solve_boundaries(drift=0.0)
@@ -417,6 +424,7 @@ def when_mismatched_schedule(
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a, _ = model_act.solve_boundaries(drift=0.0)
@@ -448,6 +456,7 @@ def when_different_k(K_val: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=2,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a_plan, _ = model_plan.solve_boundaries(drift=0.0)
@@ -467,6 +476,7 @@ def when_different_k(K_val: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             efficacy_spending=RhoFamilySpending(alpha, rho),
             tails=2,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a, _ = model_act.solve_boundaries(drift=0.0)
@@ -509,6 +519,7 @@ def when_bhat_deaths(deaths: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             efficacy_spending=RhoFamilySpending(0.05, rho),
             tails=2,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a, _ = model.solve_boundaries(drift=0.0)
@@ -610,6 +621,7 @@ def when_eval_ros_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             futility_spending=RhoFamilySpending(1 - power, rho),
             tails=1,
             n_sims=ch7_params["n_sims"],
+            rng_seed=42,
         )
     )
     a, b = model.solve_boundaries(drift=drift_h1)

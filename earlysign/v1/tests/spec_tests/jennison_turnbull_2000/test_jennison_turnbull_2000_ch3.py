@@ -271,7 +271,7 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
     info_times = np.linspace(1 / k, 1.0, k)
     spending_family = design_params.get("spending_family", "obrien_fleming")
 
-    model = CanonicalJointModel(Config(info_times=info_times, n_sims=2000))
+    model = CanonicalJointModel(Config(info_times=info_times, n_sims=2000, rng_seed=42))
     delta_wt = design_params.get("delta_wt")
     shape_params = {"delta_wt": float(delta_wt)} if delta_wt is not None else None
 
@@ -359,6 +359,7 @@ def when_table32_eval(
         efficacy_spending=spending,
         n_sims=n_sims,
         tails=2,
+        rng_seed=42,
     )
     model = CanonicalJointModel(config=config)
     boundaries_plan, _ = model.solve_boundaries()
@@ -373,7 +374,7 @@ def when_table32_eval(
     i_actual_fractions = pi * (ks / k) ** r
     t_actual = i_actual_fractions / i_actual_fractions[-1]
 
-    sim = OperatingCharacteristicSimulator(n_sims=n_sims)
+    sim = OperatingCharacteristicSimulator(n_sims=n_sims, rng_seed=42)
     oc_h0 = sim.simulate_statistical(
         info_times=t_actual, upper=boundaries_plan, lower=-boundaries_plan, drift=0.0
     )
