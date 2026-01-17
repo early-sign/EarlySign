@@ -98,6 +98,7 @@ disallow_untyped_decorators = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 exclude = [
+    "earlysign/v0/templates/.*",
     "earlysign/v1/templates/.*",
     "earlysign/v1/tests/.*",
 ]
