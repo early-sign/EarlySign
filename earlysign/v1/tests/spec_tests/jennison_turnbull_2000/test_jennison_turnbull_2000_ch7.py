@@ -57,7 +57,7 @@ def given_power_effect(power: str, ch7_params: Dict[str, Any], desc: str = "") -
 
 @given(
     parsers.re(
-        r"(?i)(?:a maximum of )?(?P<K>\d+) (?:equally[- ]spaced )?looks with rho-family spending (?P<rho>[\d.]+).*"
+        r"(?i)(?:a maximum of )?(?P<K>\d+) (?:equally[- ]spaced )?looks with rho-family spending (?P<rho>[\d.]+)\s*$"
     )
 )
 def given_looks_rho(K: str, rho: str, ch7_params: Dict[str, Any]) -> None:
