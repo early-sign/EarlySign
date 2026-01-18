@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.framework.trace import Traced
-from earlysign.v1.framework.writer import Writer
 
 if TYPE_CHECKING:
     from earlysign.v1.framework.session import Session
