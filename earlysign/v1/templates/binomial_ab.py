@@ -246,7 +246,6 @@ class BinomialABTemplate:
     def report_progress(self) -> Dict[str, Any]:
         """
         Returns the current progress report.
-        Reconstructs state via BinomialProgressProjector.
         """
         with Session(self.ledger) as sess:
             return sess.Read(

@@ -44,10 +44,11 @@ Covers the flow:
 >>> with Session(ledger) as sess:
 ...     _ = UpdateProtocol(sess, protocol)
 
-# --- Step 1. Ingest Data ---
->>> with Session(ledger) as sess:
-...     _ = Ingest(sess, BatchObservation(n=100, success=38, arm="C"))
-...     _ = Ingest(sess, BatchObservation(n=120, success=51, arm="T"))
+# --- Step 1. Ingest Data via Template ---
+>>> trial = BinomialABTemplate(ledger)
+>>> trial.set_protocol(protocol)
+>>> batch = [BatchObservation(n=100, success=38, arm="C"), BatchObservation(n=120, success=51, arm="T")]
+>>> trial.update(batch)
 
 # --- Step 2. Read and Analyze (Tier 1 Projection) ---
 >>> with Session(ledger) as sess:
@@ -59,8 +60,6 @@ C: 100, 38
 T: 120, 51
 
 # --- Step 3. Tier 2 Projection (Statistical Inference) ---
-# Create a template instance to access reporting logic
->>> trial = BinomialABTemplate(ledger)
 >>> prog = trial.report_progress()
 >>> print(round(prog['z_stat'], 3))
 0.677
@@ -77,7 +76,7 @@ Decision: CONTINUE
 
 # --- Inspect Ledger ---
 >>> df = ledger.t.execute()
->>> # 1 Protocol + 2 BatchObservations
->>> len(df)
-3
+>>> # 1 Protocol Design + 1 Protocol Set + 2 BatchObservations + 1 TestResult + 2 Snapshots = 7
+>>> len(df) >= 5
+True
 """

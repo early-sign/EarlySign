@@ -4,7 +4,7 @@ Doctests for the trace system (TraceId, Traced, explicit/implicit trace propagat
 Design Philosophy:
 ==================
 In event sourcing, ALL state and lineage flows through Read operations (Projectors).
-Write operations (Commit, Ingest) are "fire and forget" - they record facts to the
+Write operations (Session.Commit, Ingest) are "fire and forget" - they record facts to the
 ledger but do not return identifiers. Trace information comes from projecting
 the ledger via Read, which provides Traced[T] with proper lineage.
 
@@ -92,8 +92,8 @@ True
 >>> ledger.ensure()
 
 >>> with Session(ledger) as sess:
-...     Writer.Commit(sess, Fact(val=10), trace=[])
-...     Writer.Commit(sess, Fact(val=20), trace=[])
+...     sess.Commit(Fact(val=10), trace=[])
+...     sess.Commit(Fact(val=20), trace=[])
 
 # Trace comes from Read, not from Commit return values
 >>> with Session(ledger) as sess:
@@ -114,10 +114,10 @@ True
 
 --- Test: Implicit trace used when not specified in Commit ---
 
-# When Commit is called without explicit trace, session.trace is used
+# When Session.Commit is called without explicit trace, session.trace is used
 >>> with Session(ledger) as sess:
 ...     _ = sess.Read(FactProjector())  # Populates session.trace
-...     Writer.Commit(sess, Result(total=30))  # Uses implicit trace
+...     sess.Commit(Result(total=30))  # Uses implicit trace
 
 # Verify the Result was committed with trace from the Read
 >>> df = ledger.t.execute()
@@ -130,7 +130,7 @@ True
 
 >>> with Session(ledger) as sess:
 ...     _ = sess.Read(FactProjector())  # Populates session.trace with 2 items
-...     Writer.Commit(sess, Result(total=99), trace=[])  # Explicit empty trace
+...     sess.Commit(Result(total=99), trace=[])  # Explicit empty trace
 
 >>> df2 = ledger.t.execute()
 >>> result_rows = df2[df2["payload_type"] == "Result"]

@@ -77,11 +77,11 @@ True
 
 # Framework features
 ## Write Model
-The Framework provides `Writer` to record events with scientific lineage.
-`Writer.Commit` records a model, while `Writer.CallAndCommit` records the result of a function.
+The Framework provides `Session.Commit` to record events with scientific lineage.
+`sess.Commit` records a model, while `sess.CallAndCommit` records the result of a function.
 
 >>> with Session(ledger) as sess:
-...    Writer.Commit(sess, MyDecision(action="STOP", reason="Safety concern"))
+...    sess.Commit(MyDecision(action="STOP", reason="Safety concern"))
 
 ## Projector
 Projectors are "State-as-a-Fold" operators. They reconstruct high-level facts
@@ -108,7 +108,7 @@ Analysis within a session is protected from concurrent writes.
 >>> # 1. Define Horizon and start session
 >>> with Session(ledger) as sess:
 ...     # 2. Write something within the session
-...     Writer.Commit(sess, MyDecision(action="A", reason="within"))
+...     sess.Commit(MyDecision(action="A", reason="within"))
 ...
 ...     # 3. Write something outside (directly to ledger) AFTER session started
 ...     ledger.insert("MyDecision", MyDecision(action="B", reason="outside").model_dump())
@@ -128,12 +128,12 @@ Scientific Lineage (Trace) is automatically accumulated as you Read data in a Se
 True
 
 ## Entity
-Entities are special aggregates with identity. `EntityState` supports differential folding.
+Entities are special aggregates with identity. `Entity` supports differential folding.
 
 >>> fact = BinomialSummaryFact(identity="arm_a", filter_arm="A")
 >>> # Pre-populate data in a separate session so it's visible in the next horizon
 >>> with Session(ledger) as sess:
-...     Writer.Commit(sess, BatchObservation(n=10, success=2, arm="A"))
+...     sess.Commit(BatchObservation(n=10, success=2, arm="A"))
 
 >>> with Session(ledger) as sess:
 ...     state = sess.Read(fact)
