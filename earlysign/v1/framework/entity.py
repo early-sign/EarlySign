@@ -141,4 +141,4 @@ class EntityState(Projector[T], ABC):
         )
 
         # We use a custom Commit that ensures identity is set in labels
-        Writer.Commit(session, snap_record, labels={"identity": self.identity})
+        session.Commit(snap_record, labels={"identity": self.identity})

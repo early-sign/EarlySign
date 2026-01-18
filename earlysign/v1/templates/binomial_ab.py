@@ -227,7 +227,7 @@ class BinomialABTemplate:
             )
 
             # 4. Commit the result (trace comes from session's accumulated reads)
-            Writer.Commit(sess, test_result)
+            sess.Commit(test_result)
 
             # 5. Record Decision if stopping
             if test_result.status in (
@@ -284,12 +284,11 @@ class BinomialABTemplate:
             matplotlib.figure.Figure: The generated plot figure.
         """
         with Session(self.ledger) as sess:
-            protocol_res = sess.Read(ProtocolProjector(BinomialABProtocol))
-            p = protocol_res.data
+            protocol = sess.Read(ProtocolProjector(BinomialABProtocol)).data
 
             # Retrieve Z-statistic history for visualization
             # Use sess.table to respect snapshot isolation
             history_n, history_z = reconstruct_binomial_z_history(sess.table, p)
 
             # Generate Plot
-            return plot_gst_summary(p, history_n, history_z)
+            return plot_gst_summary(protocol, history_n, history_z)

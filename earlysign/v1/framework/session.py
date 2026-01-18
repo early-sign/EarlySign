@@ -1,12 +1,16 @@
-from typing import TYPE_CHECKING, Any, List, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, TypeVar
+
+from pydantic import BaseModel
 
 from earlysign.v1.framework.projector import Projector
-from earlysign.v1.framework.trace import Traced, TraceId
+from earlysign.v1.framework.trace import Traced, TraceId, extract_traces
+from earlysign.v1.framework.writer import Writer
 
 if TYPE_CHECKING:
     from earlysign.core.ledger import Ledger
 
 T = TypeVar("T")
+B = TypeVar("B", bound=BaseModel)
 
 
 class Session:
@@ -57,3 +61,52 @@ class Session:
             self._session_trace.extend(result.trace)
 
         return result
+
+    def Commit(
+        self,
+        record: BaseModel,
+        trace: Optional[List[TraceId]] = None,
+        labels: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Records a model into the Ledger with implicit context.
+
+        Automatically attaches the session's scientific horizon and
+        implicit trace if no explicit trace is provided.
+        """
+        target_trace = trace if trace is not None else self.trace
+        combined_labels = {"horizon": str(self.horizon_id)}
+        if labels:
+            combined_labels.update(labels)
+
+        Writer.Commit(self, record, trace=target_trace, labels=combined_labels)
+
+    def CallAndCommit(
+        self,
+        result_type: Type[B],
+        func: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Executes a function and commits its result with implicit lineage.
+
+        Accepts an explicit 'trace' via kwargs. If not provided, extracts
+        traces from args/kwargs or falls back to the session's implicit trace.
+        """
+        # 1. Resolve target trace
+        explicit_trace = kwargs.pop("trace", None)
+        if explicit_trace is not None:
+            target_trace = explicit_trace
+        else:
+            arg_traces = extract_traces(*args, **kwargs)
+            target_trace = arg_traces if arg_traces is not None else self.trace
+
+        Writer.CallAndCommit(
+            self,
+            result_type,
+            func,
+            *args,
+            trace=target_trace,
+            **kwargs,
+        )

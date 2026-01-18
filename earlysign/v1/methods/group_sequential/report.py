@@ -62,7 +62,7 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
 
         # 1. Read Protocol
         protocol_traced = ProtocolProjector(self.protocol_type).project(table)
-        p = protocol_traced.data
+        protocol = protocol_traced.data
 
         # 2. Read Summary
         sc_traced = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(
@@ -75,7 +75,7 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
 
         # 3. Calculate Operating Stats
         # Extract n_max and milestones from ES3 Protocol
-        schedule = p.method.efficacy.schedule
+        schedule = protocol.method.efficacy.schedule
         if schedule.unit == "sample_size" and schedule.interim_points:
             look_ns = [int(n) for n in schedule.interim_points]
             n_max = max(look_ns)
@@ -86,9 +86,9 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
                 GSTStoppingRuleEngine,
             )
 
-            alpha = p.task.efficacy.alpha
+            alpha = protocol.task.efficacy.alpha
             engine = GSTStoppingRuleEngine(
-                p.method.efficacy, "efficacy", total_budget=alpha
+                protocol.method.efficacy, "efficacy", total_budget=alpha
             )
             boundaries_vals = [
                 engine.get_boundary_at_look(i, m) for i, m in enumerate(milestones)
@@ -156,7 +156,7 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
         from earlysign.v1.framework.projector import ProtocolProjector
 
         protocol_res = ProtocolProjector(self.protocol_type).project(table)
-        p = protocol_res.data
+        protocol = protocol_res.data
 
         sc = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(table)
         st = BinomialSummaryFact(identity="summary_t", filter_arm="T").project(table)
@@ -188,7 +188,7 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
             n_total = n_c + n_t
 
             # Extract n_max
-            schedule = p.method.efficacy.schedule
+            schedule = protocol.method.efficacy.schedule
             n_max = schedule.interim_points[-1] if schedule.interim_points else 0
 
             if n_max > 0 and n_total >= n_max:
