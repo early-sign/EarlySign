@@ -5,27 +5,26 @@ from pydantic import BaseModel
 
 # Import protocol types for type hinting if needed (avoid circular if possible)
 import earlysign.schema.ES3.GST as GST
+from earlysign.schema.ES3.Binomial import ArmMetrics
 from earlysign.schema.ES3.GST.Log import DecisionStatus
-from earlysign.v1.methods.binomial import BinomialSummary
 from earlysign.v1.methods.group_sequential.engine import GSTStoppingRuleEngine
 
 
-class BinomialTestResult(BaseModel):
-    """Result of a sequential Binomial Test evaluation."""
+class LookResult(BaseModel):
+    """Result of a statistical test/evaluation for the study at a look."""
 
-    look: Optional[int]
+    look: Optional[int] = None
+    sample_n: int
     info_frac: float
     z_stat: float
-    # Efficacy
-    efficacy_boundary: Optional[float]
+
+    efficacy_boundary: Optional[float] = None
     is_efficacy_crossed: bool
-    # Futility
-    futility_boundary: Optional[float]
+
+    futility_boundary: Optional[float] = None
     is_futility_crossed: bool
 
-    status: Union[
-        DecisionStatus, str
-    ]  # "CONTINUE", "STOP_EFFICACY", "STOP_FUTILITY", "STOP_PLAN_END_REACHED"
+    status: Union[DecisionStatus, str]
 
 
 class BinomialGSTEngine:
@@ -75,8 +74,8 @@ class BinomialGSTEngine:
         self.n_max = self.efficacy_engine.get_max_sample_size()
 
     def run(
-        self, summary_c: "BinomialSummary", summary_t: "BinomialSummary", **kwargs: Any
-    ) -> BinomialTestResult:
+        self, summary_c: ArmMetrics, summary_t: ArmMetrics, **kwargs: Any
+    ) -> LookResult:
         """
         Computes the test result given current summary statistics.
         """
@@ -137,8 +136,9 @@ class BinomialGSTEngine:
                 if status == DecisionStatus.CONTINUE_:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
-        return BinomialTestResult(
+        return LookResult(
             look=look_idx + 1 if look_idx >= 0 else None,
+            sample_n=int(cumulative_n),
             info_frac=info_frac,
             z_stat=float(z_stat),
             efficacy_boundary=efficacy_boundary,

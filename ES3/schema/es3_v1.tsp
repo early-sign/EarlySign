@@ -101,6 +101,7 @@ namespace Base {
     /** Schema version */
     ES3_version?: string = ES3_VERSION;
   }
+
 }
 
 namespace GST {
@@ -417,3 +418,38 @@ namespace GST.Multivariate {
   }
 }
 
+
+namespace Binomial {
+  /**
+   * Raw evidence: data for a single arm.
+   */
+  model ArmData extends Base.Log {
+    n: int32;
+    success: int32;
+    arm: string;
+  }
+
+  /**
+   * Standard statistics for a single arm (Bernoulli/Binomial).
+   */
+  model ArmMetrics {
+    n: int32;
+    successes: int32;
+    p_hat: float64;
+  }
+
+  /**
+   * Latest status and metrics for a single arm.
+   */
+  model ArmStatus {
+    metrics: ArmMetrics;
+    is_active: boolean = true;
+  }
+
+  /**
+   * Collective state of all arms (Scoreboard).
+   */
+  model Scoreboard {
+    arms: Record<ArmStatus>;
+  }
+}

@@ -3,7 +3,7 @@ from typing import Iterator, List, Optional, Union
 
 import numpy as np
 
-from earlysign.v1.methods.binomial import BatchObservation
+from earlysign.schema.ES3.Binomial import ArmData
 
 
 class BinomialStream:
@@ -33,10 +33,10 @@ class BinomialStream:
         self.current_n = 0
         self.rng = np.random.default_rng(seed)
 
-    def __iter__(self) -> Iterator[List[BatchObservation]]:
+    def __iter__(self) -> Iterator[List[ArmData]]:
         return self
 
-    def __next__(self) -> List[BatchObservation]:
+    def __next__(self) -> List[ArmData]:
         if self.n_max is not None and self.current_n >= self.n_max:
             raise StopIteration
 
@@ -57,8 +57,8 @@ class BinomialStream:
         self.current_n += batch_size
 
         return [
-            BatchObservation(n=batch_size, success=k_c, arm="C"),
-            BatchObservation(n=batch_size, success=k_t, arm="T"),
+            ArmData(n=batch_size, success=k_c, arm="C"),
+            ArmData(n=batch_size, success=k_t, arm="T"),
         ]
 
 

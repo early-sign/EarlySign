@@ -1,103 +1,76 @@
 from typing import Optional
 
 import ibis
-from pydantic import BaseModel
 
-from earlysign.v1.framework.entity_state import EntityState, Snapshot
+from earlysign.schema.ES3.Binomial import (
+    ArmMetrics,
+    ArmStatus,
+    Scoreboard as ScoreboardSchema,
+)
+from earlysign.v1.framework.entity import Entity, Snapshot
 from earlysign.v1.framework.projector import ProjectionResult
 from earlysign.v1.framework.trace import TraceId
 
 
-class BinomialSummary(BaseModel):
-    """Standard Bernoulli/Binomial summary statistics."""
-
-    n: int
-    successes: int
-    p_hat: float
-
-
-class BatchObservation(BaseModel):
-    """Raw evidence: a batch of Bernoulli trials."""
-
-    n: int
-    success: int
-    arm: str
-
-
-class BinomialSummaryFact(EntityState[BinomialSummary]):
+class Scoreboard(Entity[ScoreboardSchema]):
     """
-    Incremental Projector for Binomial data.
-    Implements EntityState to optimize state reconstruction.
+    Projector that tracks the status and metrics of all arms.
+    Represented as a Scoreboard domain model.
+
+    Aggregates ArmData across all arms and tracks which ones are
+    still active based on decision events.
     """
 
-    data_type = BinomialSummary
-
-    def __init__(self, identity: str, filter_arm: Optional[str] = None):
-        super().__init__(identity)
-        self.filter_arm = filter_arm
+    data_type = ScoreboardSchema
 
     def compute(
         self,
-        snapshot: Optional[Snapshot[BinomialSummary]],
+        snapshot: Optional[Snapshot[ScoreboardSchema]],
         delta_expr: ibis.Expr,
         full_table: ibis.Expr,
-    ) -> ProjectionResult[BinomialSummary]:
-        """
-        Projects raw delta onto a Snapshot.
-        """
-        # 1. Prepare delta aggregation
-        obs_table = delta_expr.filter(delta_expr.payload_type == "Observation")
-        batch_table = delta_expr.filter(delta_expr.payload_type == "BatchObservation")
+    ) -> ProjectionResult[ScoreboardSchema]:
+        # 1. Start with previous state
+        current_arms = snapshot.data.arms.copy() if snapshot else {}
 
-        if self.filter_arm:
-            arm_val = self.filter_arm
-            obs_table = obs_table.filter(
-                obs_table.payload["arm"].cast("string").re_replace('^"|"$', "")
-                == arm_val
-            )
-            batch_table = batch_table.filter(
-                batch_table.payload["arm"].cast("string").re_replace('^"|"$', "")
-                == arm_val
-            )
+        # 2. Process Delta: Data Ingestion
+        # Look for both 'Observation' and 'ArmData' (and legacy BinomialData)
+        batch_table = delta_expr.filter(
+            (delta_expr.payload_type == "ArmData")
+            | (delta_expr.payload_type == "BinomialData")
+            | (delta_expr.payload_type == "Observation")
+        )
 
-        # 2. Execute once to get both data and uuids
-        obs_df = obs_table.select(
-            "uuid",
-            success=obs_table.payload["success"].cast("int"),
-        ).execute()
-
+        is_arm_data = (batch_table.payload_type == "ArmData") | (
+            batch_table.payload_type == "BinomialData"
+        )
+        # Simple iteration for prototype:
         batch_df = batch_table.select(
             "uuid",
-            n=batch_table.payload["n"].cast("int"),
+            arm=batch_table.payload["arm"].cast("string").re_replace('^"|"$', ""),
+            n=is_arm_data.ifelse(batch_table.payload["n"], 1).cast("int"),
             success=batch_table.payload["success"].cast("int"),
         ).execute()
 
-        # 3. Aggregate from dataframes
-        n_obs = len(obs_df)
-        s_obs = int(obs_df["success"].sum()) if n_obs > 0 else 0
+        # 3. Aggregate deltas into current_arms
+        for _, row in batch_df.iterrows():
+            arm_name = row["arm"]
+            if arm_name not in current_arms:
+                current_arms[arm_name] = ArmStatus(
+                    metrics=ArmMetrics(n=0, successes=0, p_hat=0.0),
+                    is_active=True,
+                )
 
-        n_batch = int(batch_df["n"].sum()) if len(batch_df) > 0 else 0
-        s_batch = int(batch_df["success"].sum()) if len(batch_df) > 0 else 0
+            status = current_arms[arm_name]
+            status.metrics.n += int(row["n"])
+            status.metrics.successes += int(row["success"])
+            if status.metrics.n > 0:
+                status.metrics.p_hat = status.metrics.successes / status.metrics.n
 
-        # 4. Incremental Folding (Snapshot + Delta)
-        n_snap = snapshot.data.n if snapshot else 0
-        s_snap = snapshot.data.successes if snapshot else 0
+        # 4. Lineage Management
+        tracked_uuids = [TraceId(str(uid)) for uid in batch_df["uuid"].tolist()]
+        if snapshot and snapshot.uuid:
+            tracked_uuids.insert(0, TraceId(str(snapshot.uuid)))
 
-        n_total = n_snap + n_obs + n_batch
-        s_total = s_snap + s_obs + s_batch
-        p_hat = s_total / n_total if n_total > 0 else 0.0
-
-        summary = BinomialSummary(n=n_total, successes=s_total, p_hat=p_hat)
-
-        # 5. Lineage Management - uuids already fetched above
-        trace: list[TraceId] = []
-        if snapshot:
-            snapshot_uuid = getattr(snapshot, "uuid", None)
-            if snapshot_uuid:
-                trace.append(TraceId(str(snapshot_uuid)))
-
-        # Collect delta uuids from already-executed dataframes
-        trace.extend([TraceId(str(uid)) for uid in obs_df["uuid"].tolist()])
-        trace.extend([TraceId(str(uid)) for uid in batch_df["uuid"].tolist()])
-
-        return ProjectionResult(data=summary, trace=trace)
+        return ProjectionResult(
+            data=ScoreboardSchema(arms=current_arms), trace=tracked_uuids
+        )

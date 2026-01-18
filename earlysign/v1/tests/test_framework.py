@@ -9,7 +9,8 @@ This module provides a comprehensive introduction to the EarlySign framework thr
 >>> from earlysign.v1.framework.writer import Writer
 >>> from earlysign.v1.framework.projector import ProtocolProjector
 >>> from earlysign.v1.framework.trace import Traced, TraceId
->>> from earlysign.v1.methods.binomial import BinomialSummaryFact, BatchObservation
+>>> from earlysign.v1.methods.binomial import Scoreboard
+>>> from earlysign.schema.ES3.Binomial import ArmData
 >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
 >>> import earlysign.schema.ES3.GST as GST
 >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
@@ -130,14 +131,14 @@ True
 ## Entity
 Entities are special aggregates with identity. `Entity` supports differential folding.
 
->>> fact = BinomialSummaryFact(identity="arm_a", filter_arm="A")
+>>> fact = Scoreboard(identity="metrics")
 >>> # Pre-populate data in a separate session so it's visible in the next horizon
 >>> with Session(ledger) as sess:
-...     sess.Commit(BatchObservation(n=10, success=2, arm="A"))
+...     sess.Commit(ArmData(n=10, success=2, arm="A"))
 
 >>> with Session(ledger) as sess:
 ...     state = sess.Read(fact)
->>> state.data.n
+>>> state.data.arms["A"].metrics.n
 10
 
 ## Sequential Entity
@@ -211,7 +212,7 @@ Templates provide a high-level API for running standard trial designs.
 ... )
 >>> template.set_protocol(protocol)
 >>> # Update & Report
->>> batch = [BatchObservation(n=100, success=25, arm="C"), BatchObservation(n=100, success=35, arm="T")]
+>>> batch = [ArmData(n=100, success=25, arm="C"), ArmData(n=100, success=35, arm="T")]
 >>> template.update(batch)
 >>> report = template.report_progress()
 >>> report['status']

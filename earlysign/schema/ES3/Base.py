@@ -8,8 +8,7 @@ from pydantic import BaseModel, Field
 
 class Log(BaseModel):
     """
-    Base log/event model for versioning.
-    Can be extended by log/event models that need version tracking.
+    Base log/event model for metadata inclusion.
     """
 
     ES3_version: str | None = Field("v1.0.0", description="Schema version")
@@ -18,7 +17,6 @@ class Log(BaseModel):
 class Metadata(BaseModel):
     """
     Metadata for EarlySign events and records.
-    Can be used to track schema version at the Ledger/event level.
     """
 
     ES3_version: str | None = Field("v1.0.0", description="Schema version")

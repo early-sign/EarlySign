@@ -9,7 +9,8 @@ Covers the flow:
 >>> from earlysign.v1.framework.session import Session
 >>> from earlysign.v1.framework.writer import Writer
 >>> from earlysign.v1.methods.actions import Ingest, Decision, UpdateProtocol
->>> from earlysign.v1.methods.binomial import BatchObservation, BinomialSummaryFact
+>>> from earlysign.v1.methods.binomial import Scoreboard
+>>> from earlysign.schema.ES3.Binomial import ArmData
 >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec, BinomialABProtocol
 >>> import earlysign.schema.ES3.GST as GST
 >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
@@ -47,13 +48,14 @@ Covers the flow:
 # --- Step 1. Ingest Data via Template ---
 >>> trial = BinomialABTemplate(ledger)
 >>> trial.set_protocol(protocol)
->>> batch = [BatchObservation(n=100, success=38, arm="C"), BatchObservation(n=120, success=51, arm="T")]
+>>> batch = [ArmData(n=100, success=38, arm="C"), ArmData(n=120, success=51, arm="T")]
 >>> trial.update(batch)
 
 # --- Step 2. Read and Analyze (Tier 1 Projection) ---
 >>> with Session(ledger) as sess:
-...     summary_c = sess.Read(BinomialSummaryFact(identity="s_c", filter_arm="C")).data
-...     summary_t = sess.Read(BinomialSummaryFact(identity="s_t", filter_arm="T")).data
+...     metrics = sess.Read(Scoreboard(identity="metrics")).data
+...     summary_c = metrics.arms["C"].metrics
+...     summary_t = metrics.arms["T"].metrics
 ...     print(f"C: {summary_c.n}, {summary_c.successes}")
 ...     print(f"T: {summary_t.n}, {summary_t.successes}")
 C: 100, 38
@@ -76,7 +78,7 @@ Decision: CONTINUE
 
 # --- Inspect Ledger ---
 >>> df = ledger.t.execute()
->>> # 1 Protocol Design + 1 Protocol Set + 2 BatchObservations + 1 TestResult + 2 Snapshots = 7
+>>> # 1 Protocol Design + 1 Protocol Set + 2 ArmDatas + 1 TestResult + 2 Snapshots = 7
 >>> len(df) >= 5
 True
 """

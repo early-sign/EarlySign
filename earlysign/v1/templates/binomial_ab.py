@@ -89,25 +89,22 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.GST as GST
+from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus
 from earlysign.schema.ES3.GST.Log import DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol_mixin import AutoNameMixin
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.writer import Writer
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
-from earlysign.v1.methods.binomial import BinomialSummaryFact
-from earlysign.v1.methods.group_sequential.binomial import (
-    BinomialGSTEngine,
-)
+from earlysign.v1.methods.binomial import Scoreboard
+from earlysign.v1.methods.group_sequential.binomial import BinomialGSTEngine
+from earlysign.v1.methods.group_sequential.interim_analyses import InterimAnalyses
 from earlysign.v1.methods.group_sequential.protocol_designer import (
     ProtocolDesigner,
 )
 from earlysign.v1.methods.group_sequential.report import (
     ABDecisionRecord,
     BinomialFinalProjector,
-    BinomialProgressProjector,
     plot_gst_summary,
-    reconstruct_binomial_z_history,
 )
 
 # --- ES3 Protocol Manifest ---
@@ -211,18 +208,25 @@ class BinomialABTemplate:
             # Reconstruct Protocol from Ledger
             protocol = sess.Read(ProtocolProjector(BinomialABProtocol))
 
-            summary_c = sess.Read(
-                BinomialSummaryFact(identity="summary_c", filter_arm="C")
-            )
-            summary_t = sess.Read(
-                BinomialSummaryFact(identity="summary_t", filter_arm="T")
-            )
+            metrics = sess.Read(Scoreboard(identity="metrics")).data
+            summary_c = metrics.arms.get(
+                "C",
+                ArmStatus(
+                    metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
+                ),
+            ).metrics
+            summary_t = metrics.arms.get(
+                "T",
+                ArmStatus(
+                    metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
+                ),
+            ).metrics
 
             # 3. Engine Execution - compute result
             engine = BinomialGSTEngine(protocol.data)
             test_result = engine.run(
-                summary_c=summary_c.data,
-                summary_t=summary_t.data,
+                summary_c=summary_c,
+                summary_t=summary_t,
                 protocol=protocol.data,
             )
 
@@ -248,9 +252,18 @@ class BinomialABTemplate:
         Returns the current progress report.
         """
         with Session(self.ledger) as sess:
-            return sess.Read(
-                BinomialProgressProjector(protocol_type=BinomialABProtocol)
-            ).data.model_dump(mode="json")
+            latest = sess.Read(InterimAnalyses(identity="interim_analyses").latest).data
+
+            if latest is None:
+                # No analyses yet - return default continuing status
+                return {
+                    "look": None,
+                    "status": DecisionStatus.CONTINUE_.value,
+                    "z_stat": None,
+                    "info_frac": 0.0,
+                }
+
+            return latest.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
@@ -265,13 +278,13 @@ class BinomialABTemplate:
         Returns a FinalReport.
 
         Args:
-           batches: Iterator yielding `BatchObservation` objects or lists of them.
-                    Each `BatchObservation` must have `n`, `success`, and `arm`.
+           batches: Iterator yielding `ArmData` objects or lists of them.
+                    Each `ArmData` must have `n`, `success`, and `arm`.
         """
         for i, batch in enumerate(batches):
             self.update(batch if isinstance(batch, list) else [batch])
             prog = self.report_progress()
-            if prog.get("decision") != DecisionStatus.CONTINUE_:
+            if prog.get("status") != DecisionStatus.CONTINUE_:
                 return self.report_result()
 
         return self.report_result()
@@ -286,9 +299,17 @@ class BinomialABTemplate:
         with Session(self.ledger) as sess:
             protocol = sess.Read(ProtocolProjector(BinomialABProtocol)).data
 
-            # Retrieve Z-statistic history for visualization
-            # Use sess.table to respect snapshot isolation
-            history_n, history_z = reconstruct_binomial_z_history(sess.table, p)
+            # Retrieve trajectory from InterimAnalyses entity
+            trajectory = sess.Read(InterimAnalyses(identity="interim_analyses")).data
+
+            # Extract history from trajectory
+            history_n: List[int] = []
+            history_z: List[float] = []
+
+            for _, state in trajectory:
+                # Use pre-computed sample_n from the state (LookResult)
+                history_n.append(state.sample_n)
+                history_z.append(state.z_stat)
 
             # Generate Plot
             return plot_gst_summary(protocol, history_n, history_z)

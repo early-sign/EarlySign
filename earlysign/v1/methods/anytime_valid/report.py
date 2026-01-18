@@ -1,8 +1,9 @@
 import ibis
 from pydantic import BaseModel
 
+from earlysign.schema.ES3.Binomial import ArmMetrics
 from earlysign.v1.framework.projector import ProjectionResult, Projector
-from earlysign.v1.methods.binomial import BinomialSummaryFact
+from earlysign.v1.methods.binomial import Scoreboard
 
 
 class MonitoringProgressReport(BaseModel):
@@ -44,11 +45,13 @@ class MonitoringProgressProjector(Projector[MonitoringProgressReport]):
         protocol_traced = ProtocolProjector(EProcessProtocol).project(table)
         p = protocol_traced.data
 
-        # 2. Read Summary
-        traced_summary = BinomialSummaryFact(identity="monitoring_summary").project(
-            table
-        )
-        s = traced_summary.data
+        # 2. Read Metrics
+        metrics_traced = Scoreboard(identity="metrics").project(table)
+        metrics = metrics_traced.data
+        n_total = sum(a.metrics.n for a in metrics.arms.values())
+        s_total = sum(a.metrics.successes for a in metrics.arms.values())
+        p_total = s_total / n_total if n_total > 0 else 0.0
+        s = ArmMetrics(n=n_total, successes=s_total, p_hat=p_total)
 
         # 3. Compute e-value
         if p.alt_p is None:
@@ -73,7 +76,7 @@ class MonitoringProgressProjector(Projector[MonitoringProgressReport]):
             status=status,
         )
         return ProjectionResult(
-            data=report, trace=traced_summary.trace + protocol_traced.trace
+            data=report, trace=metrics_traced.trace + protocol_traced.trace
         )
 
 
@@ -94,11 +97,13 @@ class MonitoringFinalProjector(Projector[MonitoringFinalReport]):
         protocol_traced = ProtocolProjector(EProcessProtocol).project(table)
         p = protocol_traced.data
 
-        # 2. Read Summary
-        traced_summary = BinomialSummaryFact(identity="monitoring_summary").project(
-            table
-        )
-        s = traced_summary.data
+        # 2. Read Metrics
+        metrics_traced = Scoreboard(identity="metrics").project(table)
+        metrics = metrics_traced.data
+        n_total = sum(a.metrics.n for a in metrics.arms.values())
+        s_total = sum(a.metrics.successes for a in metrics.arms.values())
+        p_total = s_total / n_total if n_total > 0 else 0.0
+        s = ArmMetrics(n=n_total, successes=s_total, p_hat=p_total)
 
         # 3. Compute e-value
         if p.alt_p is None:
@@ -127,5 +132,5 @@ class MonitoringFinalProjector(Projector[MonitoringFinalReport]):
             final_status=final_status,
         )
         return ProjectionResult(
-            data=report, trace=traced_summary.trace + protocol_traced.trace
+            data=report, trace=metrics_traced.trace + protocol_traced.trace
         )

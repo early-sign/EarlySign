@@ -5,9 +5,10 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
+from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus
 from earlysign.schema.ES3.GST.Log import DecisionStatus
 from earlysign.v1.framework.projector import ProjectionResult, Projector
-from earlysign.v1.methods.binomial import BinomialSummaryFact
+from earlysign.v1.methods.binomial import Scoreboard
 
 
 class ABDecisionRecord(BaseModel):
@@ -64,14 +65,18 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
         protocol_traced = ProtocolProjector(self.protocol_type).project(table)
         protocol = protocol_traced.data
 
-        # 2. Read Summary
-        sc_traced = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(
-            table
-        )
-        st_traced = BinomialSummaryFact(identity="summary_t", filter_arm="T").project(
-            table
-        )
-        sc, st = sc_traced.data, st_traced.data
+        # 2. Read Scoreboard
+        metrics_traced = Scoreboard(identity="metrics").project(table)
+        metrics = metrics_traced.data
+
+        sc = metrics.arms.get(
+            "C",
+            ArmStatus(metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True),
+        ).metrics
+        st = metrics.arms.get(
+            "T",
+            ArmStatus(metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True),
+        ).metrics
 
         # 3. Calculate Operating Stats
         # Extract n_max and milestones from ES3 Protocol
@@ -138,7 +143,7 @@ class BinomialProgressProjector(Projector[BinomialProgressReport]):
             status=status,
         )
         return ProjectionResult(
-            data=report, trace=sc_traced.trace + st_traced.trace + protocol_traced.trace
+            data=report, trace=metrics_traced.trace + protocol_traced.trace
         )
 
 
@@ -158,15 +163,24 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
         protocol_res = ProtocolProjector(self.protocol_type).project(table)
         protocol = protocol_res.data
 
-        sc = BinomialSummaryFact(identity="summary_c", filter_arm="C").project(table)
-        st = BinomialSummaryFact(identity="summary_t", filter_arm="T").project(table)
+        metrics_traced = Scoreboard(identity="metrics").project(table)
+        metrics = metrics_traced.data
 
-        n_c, n_t = sc.data.n, st.data.n
+        sc = metrics.arms.get(
+            "C",
+            ArmStatus(metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True),
+        ).metrics
+        st = metrics.arms.get(
+            "T",
+            ArmStatus(metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True),
+        ).metrics
+
+        n_c, n_t = sc.n, st.n
         z_stat = 0.0
         if n_c >= 2 and n_t >= 2:
-            p_pool = (sc.data.successes + st.data.successes) / (n_c + n_t)
+            p_pool = (sc.successes + st.successes) / (n_c + n_t)
             se = np.sqrt(p_pool * (1 - p_pool) * (1 / n_c + 1 / n_t))
-            z_stat = float((st.data.p_hat - sc.data.p_hat) / se) if se > 0 else 0.0
+            z_stat = float((st.p_hat - sc.p_hat) / se) if se > 0 else 0.0
 
         # Determinie Final Status from Ledger (Decision Event or Max Sample)
         is_rejected = False
@@ -200,17 +214,17 @@ class BinomialFinalProjector(Projector[BinomialFinalReport]):
         report = BinomialFinalReport(
             n_c=n_c,
             n_t=n_t,
-            successes_c=sc.data.successes,
-            successes_t=st.data.successes,
-            p_hat_c=sc.data.p_hat,
-            p_hat_t=st.data.p_hat,
-            delta_hat=st.data.p_hat - sc.data.p_hat,
+            successes_c=sc.successes,
+            successes_t=st.successes,
+            p_hat_c=sc.p_hat,
+            p_hat_t=st.p_hat,
+            delta_hat=st.p_hat - sc.p_hat,
             z_stat=z_stat,
             is_rejected=is_rejected,
             final_status=final_status,
         )
 
-        trace = sc.trace + st.trace + protocol_res.trace
+        trace = metrics_traced.trace + protocol_res.trace
         if "decision_res" in locals():
             trace += decision_res.trace
 
