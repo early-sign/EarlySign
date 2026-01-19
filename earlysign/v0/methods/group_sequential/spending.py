@@ -237,7 +237,6 @@ def get_spending_class(name: str) -> Type[SpendingFunction]:
     key = str(name).strip().lower()
     if key not in _SPENDING_REGISTRY:
         raise KeyError(
-            f"Unknown spending family '{name}'. "
-            f"Available: {sorted(_SPENDING_REGISTRY)}"
+            f"Unknown spending family '{name}'. Available: {sorted(_SPENDING_REGISTRY)}"
         )
     return _SPENDING_REGISTRY[key]

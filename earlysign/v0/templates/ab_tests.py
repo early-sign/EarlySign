@@ -488,18 +488,18 @@ class BinomialABTest(tpl.TemplateBase):
         )
 
         summary = f"""
-{'=' * 70}
+{"=" * 70}
 TRIAL RESULTS: {self.experiment_id}
-{'=' * 70}
-Looks: {res['n_looks']} | Stopped: {res['stopped']} | Signal: {res['final_signal']}
+{"=" * 70}
+Looks: {res["n_looks"]} | Stopped: {res["stopped"]} | Signal: {res["final_signal"]}
 
 FINAL STATISTICS:
-  Control (A):   {stats['mA']}/{stats['nA']} = {stats['pA']:.3%}
-  Treatment (B): {stats['mB']}/{stats['nB']} = {stats['pB']:.3%}
-  Difference:    {stats['diff']:.3%}
+  Control (A):   {stats["mA"]}/{stats["nA"]} = {stats["pA"]:.3%}
+  Treatment (B): {stats["mB"]}/{stats["nB"]} = {stats["pB"]:.3%}
+  Difference:    {stats["diff"]:.3%}
 {wald_z_text}
 ANALYSIS HISTORY:
 {"".join(history_lines)}
-{'=' * 70}
+{"=" * 70}
 """
         print(summary)
