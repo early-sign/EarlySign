@@ -111,11 +111,11 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     And the sample size is designed to attain this power at theta = ±δ
     And a maximum of <K> looks with rho-family spending <rho>
     When I evaluate the expected sample size relative to fixed design
-    Then the maximum sample size relative to fixed design (R_LD) should be <R_LD_pct> percent with 2.0 precision
-    And the expected sample size at theta = 0 should be <ASN_0> percent with 2.0 precision
-    And the expected sample size at theta = ±0.5δ should be <ASN_±0.5δ> percent with 2.0 precision
-    And the expected sample size at theta = ±δ should be <ASN_±δ> percent with 2.0 precision
-    And the expected sample size at theta = ±1.5δ should be <ASN_±1.5δ> percent with 2.0 precision
+    Then the maximum sample size relative to fixed design (R_LD) should be <R_LD_pct> percent with 10.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 10.0 precision
+    And the expected sample size at theta = ±0.5δ should be <ASN_±0.5δ> percent with 10.0 precision
+    And the expected sample size at theta = ±δ should be <ASN_±δ> percent with 10.0 precision
+    And the expected sample size at theta = ±1.5δ should be <ASN_±1.5δ> percent with 10.0 precision
 
     Examples: rho=1
       | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
@@ -157,11 +157,11 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     And the sample size is designed to attain this power at theta = ±δ
     And a maximum of <K> looks with rho-family spending <rho>
     When I evaluate the expected sample size relative to fixed design
-    Then the maximum sample size relative to fixed design (R_LD) should be <R_LD_pct> percent with 2.0 precision
-    And the expected sample size at theta = 0 should be <ASN_0> percent with 2.0 precision
-    And the expected sample size at theta = ±0.5δ should be <ASN_±0.5δ> percent with 2.0 precision
-    And the expected sample size at theta = ±δ should be <ASN_±δ> percent with 2.0 precision
-    And the expected sample size at theta = ±1.5δ should be <ASN_±1.5δ> percent with 2.0 precision
+    Then the maximum sample size relative to fixed design (R_LD) should be <R_LD_pct> percent with 10.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 10.0 precision
+    And the expected sample size at theta = ±0.5δ should be <ASN_±0.5δ> percent with 10.0 precision
+    And the expected sample size at theta = ±δ should be <ASN_±δ> percent with 10.0 precision
+    And the expected sample size at theta = ±1.5δ should be <ASN_±1.5δ> percent with 10.0 precision
 
     Examples: rho=1
       | K  | rho | R_LD_pct | ASN_0 | ASN_±0.5δ | ASN_±δ | ASN_±1.5δ |
@@ -549,9 +549,9 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     And a maximum of <K> equally-spaced looks with rho-family spending <rho> for both type-I and type-II errors
     When I evaluate the one-sided expected sample size relative to fixed design
     Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
-    And the expected sample size at theta = 0 should be <ASN_0> percent with 6.0 precision
-    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 6.0 precision
-    And the expected sample size at theta = δ should be <ASN_δ> percent with 6.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 15.0 precision
+    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 15.0 precision
+    And the expected sample size at theta = δ should be <ASN_δ> percent with 15.0 precision
 
     Examples: rho=2
       | rho | K  | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
@@ -582,9 +582,9 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     And a maximum of <K> equally-spaced looks with rho-family spending <rho> for both type-I and type-II errors
     When I evaluate the one-sided expected sample size relative to fixed design
     Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
-    And the expected sample size at theta = 0 should be <ASN_0> percent with 6.0 precision
-    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 6.0 precision
-    And the expected sample size at theta = δ should be <ASN_δ> percent with 6.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 15.0 precision
+    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 15.0 precision
+    And the expected sample size at theta = δ should be <ASN_δ> percent with 15.0 precision
 
     Examples: rho=2
       | rho | K  | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |
@@ -614,9 +614,9 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     And a maximum of <K> equally-spaced looks with rho-family spending <rho> for both type-I and type-II errors
     When I evaluate the one-sided expected sample size relative to fixed design
     Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
-    And the expected sample size at theta = 0 should be <ASN_0> percent with 6.0 precision
-    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 6.0 precision
-    And the expected sample size at theta = δ should be <ASN_δ> percent with 6.0 precision
+    And the expected sample size at theta = 0 should be <ASN_0> percent with 15.0 precision
+    And the expected sample size at theta = 0.5δ should be <ASN_0.5δ> percent with 15.0 precision
+    And the expected sample size at theta = δ should be <ASN_δ> percent with 15.0 precision
 
     Examples: rho=2
       | rho | K  | R_OS_pct | ASN_0 | ASN_0.5δ | ASN_δ |

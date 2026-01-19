@@ -683,8 +683,17 @@ def then_check_val_exact(
         r"(?i)(?:the )?(?P<key>R_LD|R_OS) should be (?P<val>[-+]?\d*\.\d+|\d+) ± (?P<atol>[-+]?\d*\.\d+|\d+)"
     )
 )
-def then_check_val_pm(results: Dict[str, Any], key: str, val: str, atol: str) -> None:
-    assert results[key] == pytest.approx(float(val), abs=float(atol))
+def then_check_val_key_pm(
+    results: Dict[str, Any], key: str, val: str, atol: str
+) -> None:
+    lookup = {
+        "R_LD": "R_LD_pct",
+        "R_OS": "R_OS",
+        "alpha": "alpha",
+        "power": "power",
+        "rho": "rho",
+    }
+    assert results[lookup[key]] == pytest.approx(float(val), abs=float(atol))
 
 
 @then(parsers.re(r"(?i)relative ASN should be (?P<vals>.*) ± (?P<atol>[\d.]+)"))
@@ -713,7 +722,7 @@ def then_check_rejection(results: Dict[str, Any], stats: str, look: str) -> None
         r"(?i)(?:the )?boundaries should be (?P<vals>.*) with (?P<atol>[\d.]+) precision"
     )
 )
-def then_check_seq_bounds(results: Dict[str, Any], vals: str, atol: str) -> None:
+def then_check_boundary_list(results: Dict[str, Any], vals: str, atol: str) -> None:
     expected = [float(x.strip().strip('"')) for x in vals.strip('"').split(",")]
     assert np.allclose(
         results["boundaries"][: len(expected)], expected, atol=float(atol)
@@ -770,7 +779,7 @@ def then_check_stop_look(results: Dict[str, Any], look: str) -> None:
         r"(?i)(?:the )?final maximum information should be (?P<val>[\d.]+) with (?P<atol>[\d.]+) precision"
     )
 )
-def then_check_final_imax(results: Dict[str, Any], val: str, atol: str) -> None:
+def then_check_imax(results: Dict[str, Any], val: str, atol: str) -> None:
     assert results["i_max"] == pytest.approx(float(val), abs=float(atol))
 
 
@@ -807,7 +816,7 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     power = ch7_params["power"]
     k = ch7_params["k"]
     rho = ch7_params["rho"]
-    n_sims = 200000  # Hardcode for benchmark matching
+    n_sims = ch7_params["n_sims"]
     seed = 42
 
     from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
@@ -881,8 +890,8 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     power = ch7_params.get("power", 0.95)
     k = ch7_params.get("k", 5)
     rho = ch7_params.get("rho", 2.0)
-    n_sims_iter = 50000
-    n_sims_final = 200000
+    n_sims_final = ch7_params["n_sims"]
+    n_sims_iter = n_sims_final // 4
     seed = 42
 
     from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
