@@ -3,7 +3,7 @@ from typing import Any, Optional
 import numpy as np
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.schema.ES3.Binomial import ArmMetrics
+from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus, Scoreboard
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.methods.group_sequential.shared.boundary import (
     BoundaryCalculator,
@@ -146,12 +146,38 @@ class BinomialGSTEngine:
 
         return None
 
-    def run(
-        self, summary_c: ArmMetrics, summary_t: ArmMetrics, **kwargs: Any
-    ) -> LookResult:
+    def run(self, metrics: Scoreboard, **kwargs: Any) -> LookResult:
         """
         Computes the test result given current summary statistics.
+
+        The arm names are retrieved from the protocol's task specification.
+        The first arm in protocol.task.arms is treated as control,
+        and the second arm as treatment.
+
+        Args:
+            metrics: Scoreboard containing the aggregated metrics for all arms.
+            **kwargs: Additional keyword arguments (unused, for interface compatibility).
+
+        Returns:
+            LookResult containing the test statistic, boundaries, crossing status,
+            and decision (CONTINUE, STOP_EFFICACY, STOP_FUTILITY, STOP_PLAN_END_REACHED).
         """
+        # Extract arm names from protocol
+        arms = self.protocol.task.arms
+        if len(arms) < 2:
+            raise ValueError(
+                "Protocol must define at least 2 arms (control and treatment)."
+            )
+        control_key = arms[0]
+        treatment_key = arms[1]
+
+        # Default empty metrics if arm not present
+        default_arm = ArmStatus(
+            metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
+        )
+        summary_c = metrics.arms.get(control_key, default_arm).metrics
+        summary_t = metrics.arms.get(treatment_key, default_arm).metrics
+
         n_c, n_t = summary_c.n, summary_t.n
         cumulative_n = n_c + n_t
 

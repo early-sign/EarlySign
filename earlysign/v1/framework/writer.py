@@ -105,7 +105,7 @@ class Writer:
             record = result_data
 
         session.ledger.insert(
-            payload_type=f"Result.{result_type.__name__}",
+            payload_type=result_type.__name__,
             payload=record.model_dump(),
             labels={"is_result": True},
             trace=[str(t) for t in target_trace],

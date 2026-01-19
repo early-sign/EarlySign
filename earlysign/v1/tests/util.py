@@ -11,24 +11,43 @@ class BinomialStream:
     Simulates a stream of binomial batch observations for testing/examples.
 
     Args:
-        n_per_batch: Number of samples per variant in each batch.
-        p_control: True conversion rate for the control group.
-        p_treatment: True conversion rate for the treatment group.
-        n_max: Maximum number of samples (per variant) to generate. If None, infinite.
+        n_per_batch: Number of samples per arm in each batch.
+        arms: Dictionary mapping arm name to its true conversion rate.
+              Example: {"control": 0.20, "treatment": 0.25}
+        n_max: Maximum number of samples (per arm) to generate. If None, infinite.
         seed: Random seed for reproducibility.
+
+    Examples:
+        >>> # Two-arm A/B test
+        >>> stream = BinomialStream(
+        ...     n_per_batch=100,
+        ...     arms={"control": 0.20, "treatment": 0.25},
+        ...     n_max=500,
+        ...     seed=42
+        ... )
+        >>> batch = next(stream)
+        >>> len(batch)
+        2
+        >>> batch[0].arm
+        'control'
+
+        >>> # Multi-arm bandit scenario
+        >>> stream = BinomialStream(
+        ...     n_per_batch=50,
+        ...     arms={"A": 0.10, "B": 0.15, "C": 0.12},
+        ...     seed=123
+        ... )
     """
 
     def __init__(
         self,
         n_per_batch: int,
-        p_control: float,
-        p_treatment: float,
+        arms: dict[str, float],
         n_max: Optional[int] = None,
         seed: int = 42,
     ):
         self.n_per_batch = n_per_batch
-        self.p_control = p_control
-        self.p_treatment = p_treatment
+        self.arms = arms
         self.n_max = n_max
         self.current_n = 0
         self.rng = np.random.default_rng(seed)
@@ -41,7 +60,6 @@ class BinomialStream:
             raise StopIteration
 
         # Determine actual batch size (handle remaining samples)
-        # We ensure we don't exceed n_max samples per variant
         if self.n_max is not None:
             batch_size = min(self.n_per_batch, self.n_max - self.current_n)
         else:
@@ -50,16 +68,14 @@ class BinomialStream:
         if batch_size <= 0:
             raise StopIteration
 
-        # Generate data
-        k_c = self.rng.binomial(batch_size, self.p_control)
-        k_t = self.rng.binomial(batch_size, self.p_treatment)
+        # Generate data for each arm
+        batch = []
+        for arm_name, p in self.arms.items():
+            k = self.rng.binomial(batch_size, p)
+            batch.append(ArmData(n=batch_size, success=k, arm=arm_name))
 
         self.current_n += batch_size
-
-        return [
-            ArmData(n=batch_size, success=k_c, arm="C"),
-            ArmData(n=batch_size, success=k_t, arm="T"),
-        ]
+        return batch
 
 
 def corresponding_scenario_path(caller_file: Union[str, Path]) -> Path:

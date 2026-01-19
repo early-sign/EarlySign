@@ -9,33 +9,26 @@ Usage
 The following example demonstrates how to set up and run a sequential A/B test
 simulating a scenario with a 20% baseline conversion rate and a relative 10% lift (Treatment = 22%).
 
-For demonstration, we prepare the following datastream.
-
-    >>> # We simulate a stream where Treatment actually has the lift (p=0.25 vs p=0.20)
-    >>> from earlysign.v1.tests.util import BinomialStream
-    >>> stream = BinomialStream(
-    ...     n_per_batch=100,
-    ...     p_control=0.20,
-    ...     p_treatment=0.25,
-    ...     seed=42
-    ... )
-
-Then, we initialize the template and run the experiment.
+First, we set up the environment and import the necessary modules.
 
     >>> import ibis
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
+    >>> from earlysign.v1.tests.util import BinomialStream
 
-    >>> # 1. Setup Environment (In-memory DuckDB)
+We use an in-memory DuckDB ledger for this example. In production, you would
+typically connect to a persistent database.
+
     >>> conn = ibis.connect("duckdb://:memory:")
     >>> ledger = Ledger(conn, "events")
     >>> ledger.ensure()
-    >>> ledger = ledger.bind(experiment_id="test_experiment_001")
+    >>> ledger = ledger.bind(experiment_id="example_001")
 
-    >>> # 2. Define Task and Design Protocol
-    >>> # Scenario: Detecting a 10% relative lift (20% -> 22%) with 80% power.
+Next, we define the experimental task. Here we are testing for a 10% relative lift
+(from 20% to 22% conversion rate) with standard error control (alpha=0.05, power=0.80).
+
     >>> task = BinomialABTaskSpec(
     ...     arms=["control", "treatment"],
     ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
@@ -50,9 +43,10 @@ Then, we initialize the template and run the experiment.
     ...     )
     ... )
 
-    >>> # 3. Initialize Template and Design
-    >>> template = BinomialABTemplate(ledger)
-    >>> protocol = template.design(
+Now we design the protocol with 2 interim looks using the O'Brien-Fleming spending function.
+The designer calculates the required sample size and decision boundaries.
+
+    >>> protocol = BinomialABTemplate.design(
     ...     task=task,
     ...     looks=2,
     ...     spending_function="obrien_fleming",
@@ -62,22 +56,37 @@ Then, we initialize the template and run the experiment.
     >>> print(f"Designed Max Sample Size: {int(protocol.method.efficacy.schedule.interim_points[-1])}")
     Designed Max Sample Size: 12861
 
-    >>> # 4. Save the designed protocol
+With the protocol designed, we initialize the template and persist it to the ledger.
+
+    >>> template = BinomialABTemplate(ledger)
     >>> template.set_protocol(protocol)
 
-    >>> # 5. Run Experiment
+For demonstration, we simulate a data stream where the treatment actually has a larger
+effect than designed for (p=0.25 vs p=0.20, a 25% relative lift). The arm names in
+the stream must match those defined in the protocol.
+
+    >>> stream = BinomialStream(
+    ...     n_per_batch=1000,
+    ...     arms={"control": 0.20, "treatment": 0.25},
+    ...     n_max=13000,
+    ...     seed=42
+    ... )
+
+We run the experiment by iterating through data batches. After each update, we check
+if a stopping boundary has been crossed.
+
     >>> for batch in stream:
     ...     template.update(batch)
-    ...     result = template.report_progress()
-    ...     # Check if we crossed a boundary or stopped for futility
-    ...     if result['status'] != DecisionStatus.CONTINUE_:
+    ...     progress = template.report_progress()
+    ...     if progress['status'] != DecisionStatus.CONTINUE_:
     ...         break
 
-    >>> # 6. Generate Final Report
-    >>> final_result = template.report_result()
-    >>> print(f"Final Status: {final_result['final_status']}")
+Finally, we generate the final report to see the study outcome.
+
+    >>> final = template.report_result()
+    >>> print(f"Final Status: {final['final_status']}")
     Final Status: stop_plan_end_reached
-    >>> print(f"Is Rejected: {final_result['is_rejected']}")
+    >>> print(f"Is Rejected: {final['is_rejected']}")
     Is Rejected: False
 
 In practice, each iteration may run in a different process.
@@ -89,8 +98,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus
-from earlysign.schema.ES3.GST.Log import Decision, DecisionStatus
+from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol_mixin import AutoNameMixin
 from earlysign.v1.framework.session import Session
@@ -204,44 +212,20 @@ class BinomialABTemplate:
             # Reconstruct Protocol from Ledger
             protocol = sess.Read(ProtocolProjector(BinomialABProtocol))
 
-            metrics = sess.Read(Scoreboard(identity="metrics")).data
-            summary_c = metrics.arms.get(
-                "C",
-                ArmStatus(
-                    metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
-                ),
-            ).metrics
-            summary_t = metrics.arms.get(
-                "T",
-                ArmStatus(
-                    metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
-                ),
-            ).metrics
+            metrics = sess.Read(Scoreboard(identity="metrics"))
 
             # 3. Engine Execution - compute result
+            # The engine extracts arm names from protocol.task.arms internally.
             engine = BinomialGSTEngine(protocol.data)
-            test_result = engine.run(
-                summary_c=summary_c,
-                summary_t=summary_t,
-                protocol=protocol.data,
+
+            # 4. Commit the result via CallAndCommit to automate lineage tracking.
+            # This ensures causality between the input metrics and the LookResult.
+            # Decision flow is handled downstream in callers (e.g. by checking status).
+            sess.CallAndCommit(
+                LookResult,
+                engine.run,
+                metrics=metrics,
             )
-
-            # 4. Commit the result (trace comes from session's accumulated reads)
-            sess.Commit(test_result)
-
-            # 5. Record Decision if stopping
-            if test_result.status in (
-                DecisionStatus.STOP_EFFICACY,
-                DecisionStatus.STOP_FUTILITY,
-            ):
-                DecisionAction(
-                    sess,
-                    Decision(
-                        status=test_result.status,
-                        message=f"Stopped: {test_result.status} at Look {test_result.look}",
-                    ),
-                    # Uses implicit session.trace from the Reads
-                )
 
     def report_progress(self) -> Dict[str, Any]:
         """
@@ -280,16 +264,16 @@ class BinomialABTemplate:
             matplotlib.figure.Figure: The generated plot figure.
         """
         with Session(self.ledger) as sess:
-            protocol = sess.Read(ProtocolProjector(BinomialABProtocol)).data
+            protocol = sess.Read(ProtocolProjector(BinomialABProtocol))
 
             # Retrieve trajectory from InterimAnalyses entity
-            trajectory = sess.Read(InterimAnalyses(identity="interim_analyses")).data
+            trajectory = sess.Read(InterimAnalyses(identity="interim_analyses"))
 
             # Extract history from trajectory
             history_n: List[int] = []
             history_z: List[float] = []
 
-            for _, state in trajectory:
+            for _, state in trajectory.data:
                 history_n.append(state.sample_n)
                 history_z.append(state.z_stat)
 
