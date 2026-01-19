@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
 from earlysign.v1.framework.session import Session
-from earlysign.v1.methods.actions import Decision, UpdateProtocol
 from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
 from earlysign.v1.methods.anytime_valid.report import (
     MonitoringFinalProjector,
@@ -42,7 +41,7 @@ class BinomialMonitoringTemplate:
         Persists the monitoring protocol to the ledger.
         """
         with Session(self.ledger) as sess:
-            UpdateProtocol(sess, protocol)
+            sess.Commit(protocol)
 
     def report_progress(self) -> Dict[str, Any]:
         """
@@ -53,14 +52,6 @@ class BinomialMonitoringTemplate:
             # 1. Read Report (Projector handles protocol and summary reconstruction internally)
             traced_report = sess.Read(MonitoringProgressProjector())
             report = traced_report.data
-
-            # 2. Record Decision if rejected
-            if report.is_rejected:
-                Decision(
-                    sess,
-                    DecisionRecord(action="Reject H0", e_value=float(report.e_value)),
-                    trace=traced_report.trace,
-                )
 
             return report.model_dump(mode="json")
 
@@ -78,13 +69,11 @@ class BinomialMonitoringTemplate:
         - `batches`: Iterator yielding `BatchObservation` objects or lists of them.
         - Each `BatchObservation` must have `n`, `success`, and `arm`.
         """
-        from earlysign.v1.methods.actions import Ingest
-
         for i, batch in enumerate(batches):
             with Session(self.ledger) as sess:
                 items = batch if isinstance(batch, list) else [batch]
                 for item in items:
-                    Ingest(sess, item)
+                    sess.Commit(item, trace=[])
 
             res = self.report_progress()
             if res["is_rejected"]:
@@ -105,7 +94,6 @@ class BinomialMonitoringTemplate:
         from earlysign.v1.methods.anytime_valid.e_process import (
             compute_binomial_e_value,
         )
-        from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
 
         # 1. Get Final Result & Protocol
         final_res = self.report_result()

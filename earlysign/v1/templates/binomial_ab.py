@@ -94,7 +94,6 @@ from earlysign.schema.ES3.GST.Log import Decision, DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol_mixin import AutoNameMixin
 from earlysign.v1.framework.session import Session
-from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 from earlysign.v1.methods.group_sequential.execution.entities import InterimAnalyses
@@ -187,7 +186,7 @@ class BinomialABTemplate:
         Persists the trial protocol to the ledger.
         """
         with Session(self.ledger) as sess:
-            UpdateProtocol(sess, protocol)
+            sess.Commit(protocol)
 
     def update(self, batch: List[BaseModel]) -> None:
         """
@@ -198,7 +197,7 @@ class BinomialABTemplate:
         if batch:
             with Session(self.ledger) as sess:
                 for item in batch:
-                    Ingest(sess, item)
+                    sess.Commit(item, trace=[])
 
         # 2. Analysis
         with Session(self.ledger) as sess:
@@ -260,7 +259,6 @@ class BinomialABTemplate:
     def backtest(self, batches: Any) -> Dict[str, Any]:
         """
         Historical Analysis: Replays data and stops immediately on a stopping decision.
-        Returns a FinalReport.
 
         Args:
            batches: Iterator yielding `ArmData` objects or lists of them.

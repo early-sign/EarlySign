@@ -8,7 +8,6 @@ Covers the flow:
 >>> from earlysign.core.ledger import Ledger
 >>> from earlysign.v1.framework.session import Session
 >>> from earlysign.v1.framework.writer import Writer
->>> from earlysign.v1.methods.actions import Ingest, Decision, UpdateProtocol
 >>> from earlysign.v1.methods.binomial import Scoreboard
 >>> from earlysign.schema.ES3.Binomial import ArmData
 >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec, BinomialABProtocol
@@ -43,7 +42,7 @@ Covers the flow:
 ...     designer_params={"model": "canonical_joint"}
 ... )
 >>> with Session(ledger) as sess:
-...     _ = UpdateProtocol(sess, protocol)
+...     sess.Commit(protocol)
 
 # --- Step 1. Ingest Data via Template ---
 >>> trial = BinomialABTemplate(ledger)
