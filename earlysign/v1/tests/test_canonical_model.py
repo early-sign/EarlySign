@@ -7,8 +7,8 @@ Canonical Joint Model from ES3 protocol specifications.
 --- Setup ---
 >>> import numpy as np
 >>> import earlysign.schema.ES3.GST as GST
->>> from earlysign.v1.methods.group_sequential.canonical_dist import CanonicalJointModel, Config
->>> from earlysign.v1.methods.group_sequential.spending import OBFSpending
+>>> from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import CanonicalJointModel, Config
+>>> from earlysign.v1.methods.group_sequential.shared.spending import OBFSpending
 
 --- Test: Model from Spec Basic ---
 >>> info_times = [0.5, 1.0]

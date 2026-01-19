@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.v1.methods.group_sequential.spending import (
+from earlysign.v1.methods.group_sequential.shared.spending import (
     SpendingFunction,
     get_spending_class,
 )

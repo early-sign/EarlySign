@@ -26,7 +26,7 @@ Then, we initialize the template and run the experiment.
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
     >>> import earlysign.schema.ES3.GST as GST
-    >>> from earlysign.v1.tests.util import BinomialStream
+    >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
 
     >>> # 1. Setup Environment (In-memory DuckDB)
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -65,7 +65,7 @@ Then, we initialize the template and run the experiment.
     >>> # 4. Save the designed protocol
     >>> template.set_protocol(protocol)
 
-    >>> # 4. Run Experiment
+    >>> # 5. Run Experiment
     >>> for batch in stream:
     ...     template.update(batch)
     ...     result = template.report_progress()
@@ -73,7 +73,7 @@ Then, we initialize the template and run the experiment.
     ...     if result['status'] != DecisionStatus.CONTINUE_:
     ...         break
 
-    >>> # 5. Generate Final Report
+    >>> # 6. Generate Final Report
     >>> final_result = template.report_result()
     >>> print(f"Final Status: {final_result['final_status']}")
     Final Status: stop_plan_end_reached
@@ -90,24 +90,22 @@ from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus
-from earlysign.schema.ES3.GST.Log import DecisionStatus
+from earlysign.schema.ES3.GST.Log import Decision, DecisionStatus
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol_mixin import AutoNameMixin
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.actions import Decision, Ingest, UpdateProtocol
 from earlysign.v1.methods.binomial import Scoreboard
-from earlysign.v1.methods.group_sequential.binomial import BinomialGSTEngine
-from earlysign.v1.methods.group_sequential.interim_analyses import InterimAnalyses
-from earlysign.v1.methods.group_sequential.protocol_designer import (
-    ProtocolDesigner,
+from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
+from earlysign.v1.methods.group_sequential.execution.entities import InterimAnalyses
+from earlysign.v1.methods.group_sequential.plan.protocol_design import ProtocolDesigner
+from earlysign.v1.methods.group_sequential.reporting.projectors import (
+    FinalProjector,
+    ProgressProjector,
 )
-from earlysign.v1.methods.group_sequential.report import (
-    ABDecisionRecord,
-    BinomialFinalProjector,
+from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-
-# --- ES3 Protocol Manifest ---
 
 
 class BinomialABTaskSpec(GST.TaskSpec):
@@ -187,7 +185,6 @@ class BinomialABTemplate:
     def set_protocol(self, protocol: BinomialABProtocol) -> None:
         """
         Persists the trial protocol to the ledger.
-        This handles both initial intent and realized designs.
         """
         with Session(self.ledger) as sess:
             UpdateProtocol(sess, protocol)
@@ -238,9 +235,9 @@ class BinomialABTemplate:
                 DecisionStatus.STOP_EFFICACY,
                 DecisionStatus.STOP_FUTILITY,
             ):
-                Decision(
+                DecisionAction(
                     sess,
-                    ABDecisionRecord(
+                    Decision(
                         status=test_result.status,
                         message=f"Stopped: {test_result.status} at Look {test_result.look}",
                     ),
@@ -252,25 +249,13 @@ class BinomialABTemplate:
         Returns the current progress report.
         """
         with Session(self.ledger) as sess:
-            latest = sess.Read(InterimAnalyses(identity="interim_analyses").latest).data
-
-            if latest is None:
-                # No analyses yet - return default continuing status
-                return {
-                    "look": None,
-                    "status": DecisionStatus.CONTINUE_.value,
-                    "z_stat": None,
-                    "info_frac": 0.0,
-                }
-
-            return latest.model_dump(mode="json")
+            report = sess.Read(ProgressProjector()).data
+            return report.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
-            return sess.Read(
-                BinomialFinalProjector(protocol_type=BinomialABProtocol)
-            ).data.model_dump(mode="json")
+            return sess.Read(FinalProjector()).data.model_dump(mode="json")
 
     def backtest(self, batches: Any) -> Dict[str, Any]:
         """
@@ -307,7 +292,6 @@ class BinomialABTemplate:
             history_z: List[float] = []
 
             for _, state in trajectory:
-                # Use pre-computed sample_n from the state (LookResult)
                 history_n.append(state.sample_n)
                 history_z.append(state.z_stat)
 

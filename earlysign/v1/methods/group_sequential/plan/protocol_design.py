@@ -3,8 +3,9 @@ from typing import Any, Dict, Literal, Optional
 import numpy as np
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.v1.methods.group_sequential.canonical_dist import (
+from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
+    Config,
 )
 
 
@@ -30,8 +31,6 @@ class ProtocolDesigner:
         model_params = config.get("model_params", {})
 
         if model_type == "canonical_joint":
-            from earlysign.v1.methods.group_sequential.canonical_dist import Config
-
             model = CanonicalJointModel(
                 Config(
                     info_times=np.array([1.0]),  # Placeholder for design-phase use
@@ -53,19 +52,6 @@ class ProtocolDesigner:
     ) -> GST.Protocol:
         """
         Plans a binomial A/B design and returns a fully populated GST.Protocol.
-
-        Args:
-            alpha: Type-1 error rate.
-            power: Target power (1 - beta).
-            delta: Minimum clinically meaningful difference.
-            k: Number of looks.
-            p_control: Baseline conversion rate (for variance estimation).
-            shape_type: Spending function / boundary shape.
-            side: Number of sides (1 or 2).
-            rho: Parameter for spending function if applicable.
-
-        Returns:
-            GST.Protocol with design fields populated.
         """
         # Average variance under H0 approx: p_control * (1 - p_control)
         sigma2 = p_control * (1.0 - p_control)
@@ -95,11 +81,10 @@ class ProtocolDesigner:
         # 2. Solve for standardized drift delta = theta * sqrt(I_max)
         drift = model.solve_drift(info_times.tolist(), boundaries, target_power=power)
 
-        # 3. Calculate I_max = (drift / theta)^2
+        # 3. Calculate I_max = (drift / theta) ** 2
         i_max = (drift / theta) ** 2
 
         # 4. Map to sample size n_max (total for both arms)
-        # Information I = n_total / (4 * sigma^2) => n_total = 4 * I * sigma^2
         n_max_float = 4 * i_max * sigma2
         n_max = int(np.ceil(n_max_float))
 
@@ -112,7 +97,7 @@ class ProtocolDesigner:
             name="Designed Protocol",
             task=GST.TaskSpec(
                 kind="group_sequential",
-                arms=["control", "treatment"],  # Default/Placeholder
+                arms=["control", "treatment"],
                 response_type=GST.ResponseType.BINARY,
                 hypotheses=GST.HypothesisSpec(
                     h_null="Difference <= 0",
@@ -134,7 +119,7 @@ class ProtocolDesigner:
                     schedule=GST.ScheduleSpec(
                         unit=GST.Unit.SAMPLE_SIZE,
                         n_looks=k,
-                        interim_points=n_schedule,  # Store the sample sizes
+                        interim_points=n_schedule,
                     ),
                     boundary=GST.SpendingBoundary(
                         kind="spending",
@@ -157,13 +142,6 @@ class ProtocolDesigner:
     ) -> GST.MethodSpec:
         """
         Derives a MethodSpec from a TaskSpec effectively serving as a 'Design Strategy'.
-
-        Args:
-            task: The generic task specification containing requirements.
-            params: Dictionary containing design parameters (e.g. 'looks', 'spending_function').
-
-        Returns:
-            A populated GST.MethodSpec.
         """
         efficacy = task.efficacy
         if not efficacy:
@@ -190,7 +168,6 @@ class ProtocolDesigner:
         # Heuristic to find treatment or second value
         p_t = props.get("treatment")
         if p_t is None:
-            # Fallback: if there is a second key
             keys = list(props.keys())
             if len(keys) > 1 and keys[1] != "control":
                 p_t = props[keys[1]]

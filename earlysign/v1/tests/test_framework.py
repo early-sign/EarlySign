@@ -12,6 +12,7 @@ This module provides a comprehensive introduction to the EarlySign framework thr
 >>> from earlysign.v1.methods.binomial import Scoreboard
 >>> from earlysign.schema.ES3.Binomial import ArmData
 >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
+>>> from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 >>> import earlysign.schema.ES3.GST as GST
 >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
 
@@ -149,7 +150,6 @@ They are projected similarly but represent a path of decisions.
 The library provides off-the-shelf entities for common trial components.
 
 >>> # Experiment State (via summary facts), Boundaries, and Test Statistics
->>> from earlysign.v1.methods.group_sequential.engine import GSTStoppingRuleEngine
 >>> rule_spec = GST.StoppingRule(
 ...     schedule=GST.ScheduleSpec(unit=GST.Unit.INFORMATION_FRACTION, interim_points=[0.5, 1.0]),
 ...     boundary=GST.SpendingBoundary(
@@ -163,15 +163,6 @@ The library provides off-the-shelf entities for common trial components.
 ...         )
 ...     )
 ... )
->>> engine = GSTStoppingRuleEngine(rule=rule_spec, rule_type="efficacy", total_budget=0.05)
->>> # Projection of boundary at 50% info time
->>> engine.get_boundary_at_look(0, 0.5)
-2.326...
-
-# ES3 Schema
-## Protocol
-ES3 provides a standardized schema for trial protocols.
-
 >>> protocol = GST.Protocol(
 ...     name="Example Trial",
 ...     task=GST.TaskSpec(
@@ -187,6 +178,14 @@ ES3 provides a standardized schema for trial protocols.
 ...     ),
 ...     method=GST.MethodSpec(kind="group_sequential", efficacy=rule_spec)
 ... )
+>>> engine = BinomialGSTEngine(protocol=protocol)
+>>> # Projection of boundary at 50% info time
+>>> engine.get_boundary_at_look(0, 0.5)
+2.326...
+
+## ES3 Schema
+### Protocol
+ES3 provides a standardized schema for trial protocols.
 >>> protocol.name
 'Example Trial'
 

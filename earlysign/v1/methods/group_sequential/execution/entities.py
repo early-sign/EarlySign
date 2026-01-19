@@ -9,11 +9,11 @@ from typing import Any, List, Optional, Tuple, Type
 
 import ibis
 
+from earlysign.schema.ES3.GST.Log import LookResult
 from earlysign.v1.framework.entity import (
     SequentialEntity,
 )
 from earlysign.v1.framework.projector import ProjectionResult
-from earlysign.v1.methods.group_sequential.binomial import LookResult
 
 
 class InterimAnalyses(SequentialEntity[int, LookResult]):
@@ -26,19 +26,6 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     - z_stat: the test statistic
     - efficacy_boundary / futility_boundary: decision thresholds
     - status: continue, stop_efficacy, stop_futility, etc.
-
-    The full trajectory can be retrieved via project(), which returns
-    List[(look, LookResult)] representing the complete analysis history.
-
-    Attributes:
-        identity: Unique identifier for this analysis (e.g., experiment ID)
-        snapshot_strategy: COLLECTIVE stores full trajectory in one snapshot
-
-    Example:
-        analyses = InterimAnalyses(identity="experiment_001")
-        # trajectory = sess.Read(analyses)
-        # for look, state in trajectory.data:
-        #     print(f"Look {look}: z={state.z_stat:.2f}")
     """
 
     state_type: Type[LookResult] = LookResult
@@ -51,9 +38,6 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     ) -> List[Tuple[int, ProjectionResult[LookResult]]]:
         """
         Collect trajectory by finding all LookResult records in the ledger.
-
-        Overrides the parent method to search for LookResult payload types
-        rather than Snapshot payloads.
         """
         # Look for LookResult records in table
         test_results = table.filter(table.payload_type == "LookResult")
@@ -75,7 +59,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
             idx = look_val if look_val is not None else 0
 
             if idx not in seen_looks:
-                result = LookResult(**payload)
+                result = LookResult.model_validate(payload)
                 trajectory.append((idx, ProjectionResult(data=result, trace=[])))
                 seen_looks.add(idx)
 

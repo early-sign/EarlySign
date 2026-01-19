@@ -23,6 +23,22 @@ class DecisionStatus(StrEnum):
     STOP = "stop"
 
 
+class LookResult(BaseModel):
+    """
+    Result of a statistical test/evaluation for the study at a look.
+    """
+
+    look: int | None = None
+    sample_n: int
+    info_frac: float
+    z_stat: float
+    efficacy_boundary: float | None = None
+    is_efficacy_crossed: bool
+    futility_boundary: float | None = None
+    is_futility_crossed: bool
+    status: DecisionStatus | str
+
+
 class Trigger(BaseModel):
     """
     Defines the reason / cause for an operational event (e.g., Analysis Execution).

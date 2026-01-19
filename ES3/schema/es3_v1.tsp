@@ -348,6 +348,24 @@ namespace GST {
       status: DecisionStatus | string;
       message: string;
     }
+
+    /**
+     * Result of a statistical test/evaluation for the study at a look.
+     */
+    model LookResult {
+      look?: int32;
+      sample_n: int32;
+      info_frac: float64;
+      z_stat: float64;
+
+      efficacy_boundary?: float64;
+      is_efficacy_crossed: boolean;
+
+      futility_boundary?: float64;
+      is_futility_crossed: boolean;
+
+      status: DecisionStatus | string;
+    }
   }
 
   model AdaptationSpec {

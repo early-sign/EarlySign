@@ -6,12 +6,12 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from scipy import stats
 
-from earlysign.v1.methods.group_sequential.canonical_dist import (
+from earlysign.v1.methods.group_sequential.plan.simulator import (
+    OperatingCharacteristicSimulator,
+)
+from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
-)
-from earlysign.v1.methods.group_sequential.simulator import (
-    OperatingCharacteristicSimulator,
 )
 from earlysign.v1.stats.t_distribution import CanonicalTProcess, TDistributionResolver
 from earlysign.v1.tests.util import corresponding_scenario_path
@@ -340,7 +340,7 @@ def when_table32_eval(
 
     t_plan = np.linspace(1 / k, 1.0, k)
 
-    from earlysign.v1.methods.group_sequential.spending import (
+    from earlysign.v1.methods.group_sequential.shared.spending import (
         OBFSpending,
         PocockSpending,
     )

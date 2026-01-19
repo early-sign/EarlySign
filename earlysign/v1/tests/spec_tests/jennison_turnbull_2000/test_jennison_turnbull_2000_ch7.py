@@ -6,14 +6,14 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from scipy import stats
 from scipy.stats import norm
 
-from earlysign.v1.methods.group_sequential.canonical_dist import (
+from earlysign.v1.methods.group_sequential.plan.simulator import (
+    OperatingCharacteristicSimulator,
+)
+from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
 )
-from earlysign.v1.methods.group_sequential.simulator import (
-    OperatingCharacteristicSimulator,
-)
-from earlysign.v1.methods.group_sequential.spending import RhoFamilySpending
+from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
 from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 from earlysign.v1.tests.util import corresponding_scenario_path
 
@@ -699,9 +699,10 @@ def then_check_asn_list(results: Dict[str, Any], vals: str, atol: str) -> None:
     )
 )
 def then_check_rejection(results: Dict[str, Any], stats: str, look: str) -> None:
-    bounds, seq = results["boundaries"], [
-        float(x.strip().strip('"')) for x in stats.split(",")
-    ]
+    bounds, seq = (
+        results["boundaries"],
+        [float(x.strip().strip('"')) for x in stats.split(",")],
+    )
     # Sequence might be shorter than bounds if it only shows stats up to rejection
     found = next((i + 1 for i, (z, b) in enumerate(zip(seq, bounds)) if abs(z) > b), -1)
     assert found == int(look)
@@ -809,7 +810,7 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     n_sims = 200000  # Hardcode for benchmark matching
     seed = 42
 
-    from earlysign.v1.methods.group_sequential.spending import RhoFamilySpending
+    from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
 
     spending = RhoFamilySpending(alpha=alpha, rho=rho)
     info_times = np.linspace(1 / k, 1.0, k)
@@ -884,7 +885,7 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     n_sims_final = 200000
     seed = 42
 
-    from earlysign.v1.methods.group_sequential.spending import RhoFamilySpending
+    from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
 
     eff_spending = RhoFamilySpending(alpha=alpha, rho=rho)
     # For Table 7.9, symmetric futility spending means beta spending matches alpha
