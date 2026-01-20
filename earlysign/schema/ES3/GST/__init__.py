@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Any, Literal, Union
+from typing import Any, Literal
 
-from pydantic import BaseModel, Discriminator
+from pydantic import BaseModel, Field, RootModel
 
 from ..Base import (
     MethodSpec as MethodSpec_1,
@@ -17,6 +17,11 @@ from ..Base import (
 
 class AdaptationSpec(BaseModel):
     type: str
+
+
+class Sided(StrEnum):
+    ONE = "one"
+    TWO = "two"
 
 
 class TestStatistic(StrEnum):
@@ -142,7 +147,7 @@ class SpendingFunctionType(StrEnum):
     HWANG_SHIH_DECANI = "hwang_shih_decani"
 
 
-class StoppingPolicySpec(BaseModel):
+class StoppingPolicyBase(BaseModel):
     """
     Abstract Base for Stopping Policy.
     """
@@ -190,6 +195,17 @@ class TaskSpec(TaskSpec_1):
     hypotheses: HypothesisSpec
     efficacy: EfficacyRequirement | None = None
     futility: FutilityRequirement | None = None
+
+
+class WhiteheadPolicy(StoppingPolicyBase):
+    """
+    Whitehead's Triangular Test Policy.
+    Typically defines both efficacy and futility boundaries.
+    """
+
+    kind: Literal["whitehead"] = "whitehead"
+    alpha: float
+    power: float
 
 
 class BinaryEffectSize(EffectSizeSpec):
@@ -248,14 +264,15 @@ class FixedBoundary(BoundarySpec):
     value: float
 
 
-class Protocol(Protocol_1):
+class OBrienFlemingPolicy(StoppingPolicyBase):
     """
-    GST-Specific Protocol Container.
-    Enforces that task and method belong to the GST domain.
+    Classic O'Brien-Fleming Policy.
+    Shortcut for O'Brien-Fleming spending.
     """
 
-    task: TaskSpec
-    method: "MethodSpec"  # Forward reference
+    kind: Literal["obrien_fleming"] = "obrien_fleming"
+    alpha: float
+    sided: Sided
 
 
 class SpendingFunctionSpec(BaseModel):
@@ -268,7 +285,7 @@ class StoppingRule(BaseModel):
     boundary: BoundarySpec
 
 
-class AlphaBetaSpendingPolicy(StoppingPolicySpec):
+class AlphaBetaSpendingPolicy(StoppingPolicyBase):
     """
     Combined Alpha-Beta Spending Policy.
     Efficacy (upper) + Futility (lower) boundaries.
@@ -279,11 +296,11 @@ class AlphaBetaSpendingPolicy(StoppingPolicySpec):
     beta_spending_fn: SpendingFunctionSpec
     alpha: float
     beta: float
-    alpha_binding: bool = True
-    beta_binding: bool = False
+    alpha_binding: bool | None = True
+    beta_binding: bool | None = False
 
 
-class AlphaSpendingPolicy(StoppingPolicySpec):
+class AlphaSpendingPolicy(StoppingPolicyBase):
     """
     Alpha (Efficacy) Spending Policy.
     Supports one-sided or two-sided tests.
@@ -292,10 +309,10 @@ class AlphaSpendingPolicy(StoppingPolicySpec):
     kind: Literal["alpha_spending"] = "alpha_spending"
     spending_fn: SpendingFunctionSpec
     alpha: float
-    sided: Literal[1, 2] = 2
+    sided: Sided
 
 
-class BetaSpendingPolicy(StoppingPolicySpec):
+class BetaSpendingPolicy(StoppingPolicyBase):
     """
     Beta (Futility) Spending Policy.
     Always one-sided (lower boundary).
@@ -311,15 +328,22 @@ class SpendingBoundary(BoundarySpec):
     spending_function: SpendingFunctionSpec
 
 
-# Discriminated Union for StoppingPolicy types
-StoppingPolicy = Annotated[
-    Union[
-        AlphaSpendingPolicy,
-        BetaSpendingPolicy,
-        AlphaBetaSpendingPolicy,
-    ],
-    Discriminator("kind"),
-]
+class StoppingPolicySpec(
+    RootModel[
+        AlphaSpendingPolicy
+        | BetaSpendingPolicy
+        | AlphaBetaSpendingPolicy
+        | WhiteheadPolicy
+        | OBrienFlemingPolicy
+    ]
+):
+    root: (
+        AlphaSpendingPolicy
+        | BetaSpendingPolicy
+        | AlphaBetaSpendingPolicy
+        | WhiteheadPolicy
+        | OBrienFlemingPolicy
+    ) = Field(..., description="Discriminated Union for Stopping Policy types.")
 
 
 class MethodSpec(MethodSpec_1):
@@ -328,10 +352,16 @@ class MethodSpec(MethodSpec_1):
     """
 
     kind: Literal["group_sequential"] = "group_sequential"
-    stopping_policy: StoppingPolicy
+    stopping_policy: StoppingPolicySpec
     schedule: ScheduleSpec
     adaptation: AdaptationSpec | None = None
 
 
-# Update Protocol with concrete MethodSpec
-Protocol.model_rebuild()
+class Protocol(Protocol_1):
+    """
+    GST-Specific Protocol Container.
+    Enforces that task and method belong to the GST domain.
+    """
+
+    task: TaskSpec
+    method: MethodSpec

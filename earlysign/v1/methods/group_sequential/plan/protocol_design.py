@@ -114,10 +114,12 @@ class ProtocolDesigner:
             ),
             method=GST.MethodSpec(
                 kind="group_sequential",
-                stopping_policy=GST.AlphaSpendingPolicy(
-                    spending_fn=GST.SpendingFunctionSpec(family=shape_type),
-                    alpha=alpha,
-                    sided=1,
+                stopping_policy=GST.StoppingPolicySpec(
+                    GST.AlphaSpendingPolicy(
+                        spending_fn=GST.SpendingFunctionSpec(family=shape_type),
+                        alpha=alpha,
+                        sided=GST.Sided.ONE,
+                    )
                 ),
                 schedule=GST.ScheduleSpec(
                     unit=GST.Unit.SAMPLE_SIZE,
@@ -167,17 +169,23 @@ class ProtocolDesigner:
         if futility:
             power = futility.power
             beta = 1.0 - power
-            stopping_policy: GST.StoppingPolicy = GST.AlphaBetaSpendingPolicy(
+            stopping_policy: (
+                GST.AlphaSpendingPolicy
+                | GST.BetaSpendingPolicy
+                | GST.AlphaBetaSpendingPolicy
+            ) = GST.AlphaBetaSpendingPolicy(
                 alpha_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
                 beta_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
                 alpha=alpha,
                 beta=beta,
+                alpha_binding=True,
+                beta_binding=False,
             )
         else:
             stopping_policy = GST.AlphaSpendingPolicy(
                 spending_fn=GST.SpendingFunctionSpec(family=shape_type),
                 alpha=alpha,
-                sided=1,
+                sided=GST.Sided.ONE,
             )
 
         # Calculate schedule from planning
@@ -193,6 +201,6 @@ class ProtocolDesigner:
 
         return GST.MethodSpec(
             kind="group_sequential",
-            stopping_policy=stopping_policy,
+            stopping_policy=GST.StoppingPolicySpec(stopping_policy),
             schedule=generic_proto.method.schedule,
         )

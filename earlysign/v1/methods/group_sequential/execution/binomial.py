@@ -66,18 +66,18 @@ class BinomialGSTEngine:
         Public helper to project a boundary for a given look and information time.
         Useful for design and visualization.
         """
-        if rule_type == "efficacy" and self._alpha_factory and self._alpha_spending_fn:
-            sf = self._alpha_factory.from_spec(self._alpha_spending_fn)
+        if rule_type == "efficacy" and self.stopping_policy.efficacy_spending:
+            sf = self.stopping_policy.efficacy_spending
             alpha_spent = float(sf.cumulative(np.array([info_time]))[0])
             if alpha_spent > 0:
                 from scipy.stats import norm
 
-                if self._sided == 2:
+                if self.stopping_policy.sided == "two":
                     return float(norm.isf(alpha_spent / 2.0))
                 else:
                     return float(norm.isf(alpha_spent))
-        elif rule_type == "futility" and self._beta_factory and self._beta_spending_fn:
-            sf = self._beta_factory.from_spec(self._beta_spending_fn)
+        elif rule_type == "futility" and self.stopping_policy.futility_spending:
+            sf = self.stopping_policy.futility_spending
             beta_spent = float(sf.cumulative(np.array([info_time]))[0])
             if beta_spent > 0:
                 from scipy.stats import norm
