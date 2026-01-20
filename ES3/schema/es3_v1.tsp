@@ -186,7 +186,7 @@ namespace GST {
   model AlphaSpendingPolicy extends StoppingPolicyBase {
     kind: "alpha_spending" = "alpha_spending";
     spending_fn: SpendingFunctionSpec;
-    alpha: float64; // Fallback to Task.efficacy.alpha if omitted
+    budget: float64;
     sided: "one" | "two" = "two";  // default two-sided
   }
 
@@ -197,7 +197,7 @@ namespace GST {
   model BetaSpendingPolicy extends StoppingPolicyBase {
     kind: "beta_spending" = "beta_spending";
     spending_fn: SpendingFunctionSpec;
-    beta: float64; // Fallback to Task.futility.beta (1-power) if omitted
+    budget: float64;
   }
 
   /**
@@ -208,8 +208,8 @@ namespace GST {
     kind: "alpha_beta_spending" = "alpha_beta_spending";
     alpha_spending_fn: SpendingFunctionSpec;
     beta_spending_fn: SpendingFunctionSpec;
-    alpha: float64; // Fallback to Task.efficacy.alpha if omitted
-    beta: float64;  // Fallback to Task.futility.beta (1-power) if omitted
+    alpha_budget: float64;
+    beta_budget: float64;
     alpha_binding?: boolean = true;
     beta_binding?: boolean = false;
   }
@@ -220,7 +220,7 @@ namespace GST {
    */
   model OBrienFlemingPolicy extends StoppingPolicyBase {
     kind: "obrien_fleming" = "obrien_fleming";
-    alpha: float64; // Fallback to Task.efficacy.alpha if omitted
+    budget: float64;
     sided: "one" | "two" = "two";
   }
 
@@ -230,8 +230,8 @@ namespace GST {
    */
   model WhiteheadPolicy extends StoppingPolicyBase {
     kind: "whitehead" = "whitehead";
-    alpha: float64; // Fallback to Task.efficacy.alpha if omitted
-    power: float64; // Fallback to Task.futility.power if omitted
+    alpha_budget: float64;
+    beta_budget: float64;
   }
 
   /**

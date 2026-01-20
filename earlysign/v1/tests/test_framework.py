@@ -167,7 +167,7 @@ The library provides off-the-shelf entities for common trial components.
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(GST.AlphaSpendingPolicy(
 ...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
-...             alpha=0.05,
+...             budget=0.05,
 ...             sided=GST.Sided.ONE,
 ...         )),
 ...         schedule=GST.ScheduleSpec(

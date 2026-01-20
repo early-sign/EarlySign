@@ -30,7 +30,7 @@ Canonical Joint Model from ES3 protocol specifications.
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(GST.AlphaSpendingPolicy(
 ...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
-...             alpha=0.025,
+...             budget=0.025,
 ...             sided=GST.Sided.ONE,
 ...         )),
 ...         schedule=GST.ScheduleSpec(
@@ -51,8 +51,8 @@ True
 >>> info_times_arr = np.array([0.5, 1.0])
 >>> config = Config(
 ...     info_times=info_times_arr, alpha=0.025, power=0.9,
-...     efficacy_spending=OBFSpending(alpha=0.025),
-...     futility_spending=OBFSpending(alpha=0.1),
+...     efficacy_spending=OBFSpending(budget=0.025),
+...     futility_spending=OBFSpending(budget=0.1),
 ...     binding_futility=True, n_sims=5000, rng_seed=42
 ... )
 >>> model = CanonicalJointModel(config)
@@ -67,8 +67,8 @@ True
 True
 
 --- Test: Binding vs Non-binding ---
->>> eff_sf = OBFSpending(alpha=0.025)
->>> fut_sf = OBFSpending(alpha=0.1)
+>>> eff_sf = OBFSpending(budget=0.025)
+>>> fut_sf = OBFSpending(budget=0.1)
 >>> config_bind = Config(
 ...     info_times=info_times_arr, alpha=0.025, power=0.9,
 ...     efficacy_spending=eff_sf, futility_spending=fut_sf,
@@ -102,7 +102,7 @@ True
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(GST.AlphaSpendingPolicy(
 ...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
-...             alpha=0.05,
+...             budget=0.05,
 ...             sided=GST.Sided.ONE,
 ...         )),
 ...         schedule=GST.ScheduleSpec(
@@ -136,7 +136,7 @@ True
 ...         kind="group_sequential",
 ...         stopping_policy=GST.BetaSpendingPolicy(
 ...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
-...             beta=0.2,
+...             budget=0.2,
 ...         ),
 ...         schedule=GST.ScheduleSpec(
 ...             unit=GST.Unit.INFORMATION_FRACTION,
@@ -158,7 +158,7 @@ True
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(GST.OBrienFlemingPolicy(
-...             alpha=0.05,
+...             budget=0.05,
 ...             sided=GST.Sided.ONE,
 ...         )),
 ...         schedule=GST.ScheduleSpec(
@@ -176,12 +176,19 @@ True
 --- Test: Whitehead (Triangular) Policy Shortcut ---
 >>> spec_wh = GST.Protocol(
 ...     name="Whitehead Shortcut",
-...     task=spec_eff.task,
+...     task=GST.TaskSpec(
+...         kind="group_sequential",
+...         arms=["C", "T"],
+...         response_type=GST.ResponseType.BINARY,
+...         efficacy=GST.EfficacyRequirement(alpha=0.05),
+...         futility=GST.FutilityRequirement(power=0.9),
+...         hypotheses=spec_eff.task.hypotheses,
+...     ),
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(GST.WhiteheadPolicy(
-...             alpha=0.05,
-...             power=0.9,
+...             alpha_budget=0.05,
+...             beta_budget=0.1,
 ...         )),
 ...         schedule=GST.ScheduleSpec(
 ...             unit=GST.Unit.INFORMATION_FRACTION,

@@ -821,7 +821,7 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
 
     from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
 
-    spending = RhoFamilySpending(alpha=alpha, rho=rho)
+    spending = RhoFamilySpending(budget=alpha, rho=rho)
     info_times = np.linspace(1 / k, 1.0, k)
 
     config = Config(
@@ -896,9 +896,9 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
 
     from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
 
-    eff_spending = RhoFamilySpending(alpha=alpha, rho=rho)
+    eff_spending = RhoFamilySpending(budget=alpha, rho=rho)
     # For Table 7.9, symmetric futility spending means beta spending matches alpha
-    fut_spending = RhoFamilySpending(alpha=1 - power, rho=rho)
+    fut_spending = RhoFamilySpending(budget=1 - power, rho=rho)
     info_times = np.linspace(1 / k, 1.0, k)
 
     # Solve for drift and boundaries iteratively (interdependent)

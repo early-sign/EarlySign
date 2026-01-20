@@ -346,11 +346,11 @@ def when_table32_eval(
     )
 
     if spending_family == "pocock":
-        spending = PocockSpending(alpha=alpha)
+        spending = PocockSpending(budget=alpha)
     elif spending_family == "obrien_fleming":
-        spending = OBFSpending(alpha=alpha)
+        spending = OBFSpending(budget=alpha)
     else:
-        spending = OBFSpending(alpha=alpha)
+        spending = OBFSpending(budget=alpha)
 
     config = Config(
         info_times=t_plan,

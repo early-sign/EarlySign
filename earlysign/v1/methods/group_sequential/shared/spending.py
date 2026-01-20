@@ -18,7 +18,7 @@ class SpendingFunction(Protocol):
     @property
     def name(self) -> str: ...
 
-    alpha: float
+    budget: float
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]: ...
     def boundaries_from_stage_alpha(
@@ -29,12 +29,12 @@ class SpendingFunction(Protocol):
 class OBFSpending(SpendingFunction):
     """Lan–DeMets O'Brien–Fleming style spending."""
 
-    def __init__(self, alpha: float, sided: int = 2) -> None:
+    def __init__(self, budget: float, sided: int = 2) -> None:
         if sided not in (1, 2):
             raise ValueError("sided must be 1 or 2")
-        if not (0.0 < alpha < 1.0):
-            raise ValueError("alpha must be in (0, 1)")
-        self.alpha = float(alpha)
+        if not (0.0 < budget < 1.0):
+            raise ValueError("budget must be in (0, 1)")
+        self.budget = float(budget)
         self.sided = int(sided)
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
@@ -42,10 +42,10 @@ class OBFSpending(SpendingFunction):
         t_arr = np.clip(t_arr, 0.0, 1.0)
         t_arr = np.maximum(t_arr, 1e-12)
         if self.sided == 2:
-            z = float(norm.isf(self.alpha / 2.0))
+            z = float(norm.isf(self.budget / 2.0))
             return np.asarray(2.0 - 2.0 * norm.cdf(z / np.sqrt(t_arr)), dtype=float)
         else:
-            z = float(norm.isf(self.alpha))
+            z = float(norm.isf(self.budget))
             return np.asarray(1.0 - norm.cdf(z / np.sqrt(t_arr)), dtype=float)
 
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
@@ -60,14 +60,14 @@ class OBFSpending(SpendingFunction):
 class PocockSpending(SpendingFunction):
     """Pocock-like spending (approximate continuous form)."""
 
-    def __init__(self, alpha: float) -> None:
-        if not (0.0 < alpha < 1.0):
-            raise ValueError("alpha must be in (0, 1)")
-        self.alpha = float(alpha)
+    def __init__(self, budget: float) -> None:
+        if not (0.0 < budget < 1.0):
+            raise ValueError("budget must be in (0, 1)")
+        self.budget = float(budget)
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.clip(np.asarray(t, dtype=float), 0.0, 1.0)
-        return np.asarray(self.alpha * np.log1p((math.e - 1.0) * t_arr), dtype=float)
+        return np.asarray(self.budget * np.log1p((math.e - 1.0) * t_arr), dtype=float)
 
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
@@ -81,19 +81,19 @@ class PocockSpending(SpendingFunction):
 class HSDSpending(SpendingFunction):
     """Hwang–Shih–DeCani family."""
 
-    def __init__(self, alpha: float, gamma: float = -4.0) -> None:
-        if not (0.0 < alpha < 1.0):
-            raise ValueError("alpha must be in (0, 1)")
-        self.alpha = float(alpha)
+    def __init__(self, budget: float, gamma: float = -4.0) -> None:
+        if not (0.0 < budget < 1.0):
+            raise ValueError("budget must be in (0, 1)")
+        self.budget = float(budget)
         self.gamma = float(gamma)
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.clip(np.asarray(t, dtype=float), 0.0, 1.0)
         if abs(self.gamma) < 1e-12:
-            return np.asarray(self.alpha * t_arr, dtype=float)
+            return np.asarray(self.budget * t_arr, dtype=float)
         num = 1.0 - np.exp(-self.gamma * t_arr)
         den = 1.0 - math.exp(-self.gamma)
-        return np.asarray(self.alpha * (num / den), dtype=float)
+        return np.asarray(self.budget * (num / den), dtype=float)
 
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
@@ -107,17 +107,17 @@ class HSDSpending(SpendingFunction):
 class RhoFamilySpending(SpendingFunction):
     """Rho-family power spending function."""
 
-    def __init__(self, alpha: float, rho: float = 2.0) -> None:
-        if not (0.0 < alpha < 1.0):
-            raise ValueError("alpha must be in (0, 1)")
+    def __init__(self, budget: float, rho: float = 2.0) -> None:
+        if not (0.0 < budget < 1.0):
+            raise ValueError("budget must be in (0, 1)")
         if rho <= 0:
             raise ValueError("rho must be positive")
-        self.alpha = float(alpha)
+        self.budget = float(budget)
         self.rho = float(rho)
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.clip(np.asarray(t, dtype=float), 0.0, 1.0)
-        return np.asarray(self.alpha * (t_arr**self.rho), dtype=float)
+        return np.asarray(self.budget * (t_arr**self.rho), dtype=float)
 
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
@@ -176,4 +176,4 @@ class SpendingFunctionFactory:
         family = str(spec.family).strip().lower()
         spending_cls = get_spending_class(family)
         params = dict(spec.params) if spec.params else {}
-        return spending_cls(alpha=self.budget, **params)  # type: ignore[call-arg]
+        return spending_cls(budget=self.budget, **params)  # type: ignore[call-arg]

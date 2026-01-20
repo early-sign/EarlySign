@@ -117,7 +117,7 @@ class ProtocolDesigner:
                 stopping_policy=GST.StoppingPolicySpec(
                     GST.AlphaSpendingPolicy(
                         spending_fn=GST.SpendingFunctionSpec(family=shape_type),
-                        alpha=alpha,
+                        budget=alpha,
                         sided=GST.Sided.ONE,
                     )
                 ),
@@ -176,15 +176,15 @@ class ProtocolDesigner:
             ) = GST.AlphaBetaSpendingPolicy(
                 alpha_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
                 beta_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
-                alpha=alpha,
-                beta=beta,
+                alpha_budget=alpha,
+                beta_budget=beta,
                 alpha_binding=True,
                 beta_binding=False,
             )
         else:
             stopping_policy = GST.AlphaSpendingPolicy(
                 spending_fn=GST.SpendingFunctionSpec(family=shape_type),
-                alpha=alpha,
+                budget=alpha,
                 sided=GST.Sided.ONE,
             )
 

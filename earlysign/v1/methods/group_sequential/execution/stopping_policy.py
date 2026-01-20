@@ -50,22 +50,22 @@ class StoppingPolicyFactory:
         policy = spec.root
 
         if isinstance(policy, GST.AlphaSpendingPolicy):
-            factory = SpendingFunctionFactory(budget=policy.alpha)
+            factory = SpendingFunctionFactory(budget=policy.budget)
             return StoppingPolicy(
                 efficacy_spending=factory.build_from_spec(policy.spending_fn),
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
         if isinstance(policy, GST.BetaSpendingPolicy):
-            factory = SpendingFunctionFactory(budget=policy.beta)
+            factory = SpendingFunctionFactory(budget=policy.budget)
             return StoppingPolicy(
                 futility_spending=factory.build_from_spec(policy.spending_fn),
                 sided="one",  # Futility is typically 1-sided
             )
 
         if isinstance(policy, GST.AlphaBetaSpendingPolicy):
-            eff_factory = SpendingFunctionFactory(budget=policy.alpha)
-            fut_factory = SpendingFunctionFactory(budget=policy.beta)
+            eff_factory = SpendingFunctionFactory(budget=policy.alpha_budget)
+            fut_factory = SpendingFunctionFactory(budget=policy.beta_budget)
             return StoppingPolicy(
                 efficacy_spending=eff_factory.build_from_spec(policy.alpha_spending_fn),
                 futility_spending=fut_factory.build_from_spec(policy.beta_spending_fn),
@@ -82,15 +82,15 @@ class StoppingPolicyFactory:
             # Shortcut for Lan-DeMets OBF
             sided_val = 2 if policy.sided == "two" else 1
             return StoppingPolicy(
-                efficacy_spending=OBFSpending(alpha=policy.alpha, sided=sided_val),
+                efficacy_spending=OBFSpending(budget=policy.budget, sided=sided_val),
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
         if isinstance(policy, GST.WhiteheadPolicy):
             # Whitehead (Triangular) approx: OBF for efficacy, Pocock for futility
             return StoppingPolicy(
-                efficacy_spending=OBFSpending(alpha=policy.alpha, sided=1),
-                futility_spending=PocockSpending(alpha=1.0 - policy.power),
+                efficacy_spending=OBFSpending(budget=policy.alpha_budget, sided=1),
+                futility_spending=PocockSpending(budget=policy.beta_budget),
                 alpha_binding=True,
                 beta_binding=False,
                 sided="one",

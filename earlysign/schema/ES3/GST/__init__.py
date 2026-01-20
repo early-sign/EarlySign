@@ -204,8 +204,8 @@ class WhiteheadPolicy(StoppingPolicyBase):
     """
 
     kind: Literal["whitehead"] = "whitehead"
-    alpha: float
-    power: float
+    alpha_budget: float
+    beta_budget: float
 
 
 class BinaryEffectSize(EffectSizeSpec):
@@ -271,7 +271,7 @@ class OBrienFlemingPolicy(StoppingPolicyBase):
     """
 
     kind: Literal["obrien_fleming"] = "obrien_fleming"
-    alpha: float
+    budget: float
     sided: Sided
 
 
@@ -294,8 +294,8 @@ class AlphaBetaSpendingPolicy(StoppingPolicyBase):
     kind: Literal["alpha_beta_spending"] = "alpha_beta_spending"
     alpha_spending_fn: SpendingFunctionSpec
     beta_spending_fn: SpendingFunctionSpec
-    alpha: float
-    beta: float
+    alpha_budget: float
+    beta_budget: float
     alpha_binding: bool | None = True
     beta_binding: bool | None = False
 
@@ -308,7 +308,7 @@ class AlphaSpendingPolicy(StoppingPolicyBase):
 
     kind: Literal["alpha_spending"] = "alpha_spending"
     spending_fn: SpendingFunctionSpec
-    alpha: float
+    budget: float
     sided: Sided
 
 
@@ -320,7 +320,7 @@ class BetaSpendingPolicy(StoppingPolicyBase):
 
     kind: Literal["beta_spending"] = "beta_spending"
     spending_fn: SpendingFunctionSpec
-    beta: float
+    budget: float
 
 
 class SpendingBoundary(BoundarySpec):
