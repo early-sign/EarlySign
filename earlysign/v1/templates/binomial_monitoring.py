@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING, Any, Dict
+from typing import Any, Dict
 
 from pydantic import BaseModel
 
+from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
@@ -19,10 +20,6 @@ class BinomialMonitoringProtocol(AVIProtocol):
     method: MethodSpec
 
 
-if TYPE_CHECKING:
-    from earlysign.core.ledger import Ledger
-
-
 class DecisionRecord(BaseModel):
     action: str
     e_value: float
@@ -33,7 +30,7 @@ class BinomialMonitoringTemplate:
     Safe testing / Continuous monitoring template using e-processes.
     """
 
-    def __init__(self, ledger: "Ledger"):
+    def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
     def set_protocol(self, protocol: EProcessProtocol) -> None:

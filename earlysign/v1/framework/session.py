@@ -1,13 +1,11 @@
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
+from earlysign.core.ledger import Ledger
 from earlysign.v1.framework.projector import Projector
 from earlysign.v1.framework.trace import Traced, TraceId, extract_traces
 from earlysign.v1.framework.writer import Writer
-
-if TYPE_CHECKING:
-    from earlysign.core.ledger import Ledger
 
 T = TypeVar("T")
 B = TypeVar("B", bound=BaseModel)
@@ -22,7 +20,7 @@ class Session:
     to automatically track causality.
     """
 
-    def __init__(self, ledger: "Ledger"):
+    def __init__(self, ledger: Ledger):
         self.ledger = ledger
         self.horizon_id = ledger.latest_ts  # Define the Scientific Horizon
         self._session_trace: List[TraceId] = []

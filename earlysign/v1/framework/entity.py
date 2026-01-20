@@ -29,7 +29,6 @@ import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
-    TYPE_CHECKING,
     Any,
     Dict,
     Generic,
@@ -45,10 +44,8 @@ import ibis
 from pydantic import BaseModel
 
 from earlysign.v1.framework.projector import ProjectionResult, Projector
+from earlysign.v1.framework.session import Session
 from earlysign.v1.framework.trace import Traced
-
-if TYPE_CHECKING:
-    from earlysign.v1.framework.session import Session
 
 T = TypeVar("T", bound=BaseModel)
 S = TypeVar("S", bound=BaseModel)
@@ -199,7 +196,7 @@ class Entity(Projector[T], ABC):
             )
         return None
 
-    def save(self, session: "Session", result: Traced[T]) -> None:
+    def save(self, session: Session, result: Traced[T]) -> None:
         """
         Standardizes how a new entity snapshot is committed.
 

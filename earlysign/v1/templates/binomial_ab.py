@@ -93,11 +93,12 @@ In practice, each iteration may run in a different process.
 To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.GST as GST
+from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.protocol_mixin import AutoNameMixin
@@ -128,10 +129,6 @@ class BinomialABProtocol(GST.Protocol, AutoNameMixin):
     task: BinomialABTaskSpec
     method: GST.MethodSpec
     name: str = Field(default="")
-
-
-if TYPE_CHECKING:
-    from earlysign.core.ledger import Ledger
 
 
 class BinomialABTemplate:
@@ -175,7 +172,7 @@ class BinomialABTemplate:
             ),
         )
 
-    def __init__(self, ledger: "Ledger"):
+    def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
     def set_protocol(self, protocol: BinomialABProtocol) -> None:
