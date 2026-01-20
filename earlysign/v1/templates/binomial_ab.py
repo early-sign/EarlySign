@@ -179,6 +179,8 @@ class BinomialABTemplate:
         """
         Persists the trial protocol to the ledger.
         """
+        # Validate against schema
+        protocol = BinomialABProtocol.model_validate(protocol)
         with Session(self.ledger) as sess:
             sess.Commit(protocol)
 
