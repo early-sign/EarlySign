@@ -132,20 +132,15 @@ namespace GST {
   }
 
   /**
-   * GST-Specific Task Definition (Univariate).
+   * Discriminated Union for Stopping Policy types.
    */
-  model TaskSpec extends Base.TaskSpec {
-    kind: "group_sequential" = "group_sequential"; // Discriminator value for Base
-    
-    arms: string[]; 
-    response_type: "binary" | "continuous" | "time_to_event";
-    hypotheses: HypothesisSpec; 
-
-    // Design Requirements (Designer Input)
-    // Presence implies the intent to stop for this reason.
-    efficacy?: EfficacyRequirement;
-    futility?: FutilityRequirement;
-  }  
+  union StoppingPolicySpec {
+    AlphaSpendingPolicy,
+    BetaSpendingPolicy,
+    AlphaBetaSpendingPolicy,
+    WhiteheadPolicy,
+    OBrienFlemingPolicy,
+  }
 
   /**
    * GST-Specific Method Definition (Univariate).
@@ -153,9 +148,9 @@ namespace GST {
   model MethodSpec extends Base.MethodSpec {
     kind: "group_sequential" = "group_sequential"; 
     
-    // Method Implementation Components
-    efficacy?: StoppingRule;
-    futility?: StoppingRule;
+    // Stopping Policy (discriminated union)
+    stopping_policy: StoppingPolicySpec;
+    schedule: ScheduleSpec;
     
     adaptation?: AdaptationSpec;
   }
@@ -269,9 +264,89 @@ namespace GST {
   }
 
   model SpendingFunctionSpec {
-    type: SpendingFunctionType | string;
-    params?: Record<float64>; // e.g. { "rho": 2.0, "alpha": 0.025 }
+    family: SpendingFunctionType | string;
+    params?: Record<float64>; // e.g. { "rho": 2.0, "gamma": -4.0 }
   }
+
+  // --- Stopping Policy Definitions ---
+
+  /**
+   * Abstract Base for Stopping Policy.
+   */
+  model StoppingPolicyBase {
+    kind: string;
+  }
+
+  /**
+   * Alpha (Efficacy) Spending Policy.
+   * Supports one-sided or two-sided tests.
+   */
+  model AlphaSpendingPolicy extends StoppingPolicyBase {
+    kind: "alpha_spending" = "alpha_spending";
+    spending_fn: SpendingFunctionSpec;
+    alpha: float64;
+    sided: "one" | "two" = "two";  // default two-sided
+  }
+
+  /**
+   * Beta (Futility) Spending Policy.
+   * Always one-sided (lower boundary).
+   */
+  model BetaSpendingPolicy extends StoppingPolicyBase {
+    kind: "beta_spending" = "beta_spending";
+    spending_fn: SpendingFunctionSpec;
+    beta: float64;
+  }
+
+  /**
+   * Combined Alpha-Beta Spending Policy.
+   * Efficacy (upper) + Futility (lower) boundaries.
+   */
+  model AlphaBetaSpendingPolicy extends StoppingPolicyBase {
+    kind: "alpha_beta_spending" = "alpha_beta_spending";
+    alpha_spending_fn: SpendingFunctionSpec;
+    beta_spending_fn: SpendingFunctionSpec;
+    alpha: float64;
+    beta: float64;
+    alpha_binding?: boolean = true;
+    beta_binding?: boolean = false;
+  }
+
+  /**
+   * Classic O'Brien-Fleming Policy.
+   * Shortcut for O'Brien-Fleming spending.
+   */
+  model OBrienFlemingPolicy extends StoppingPolicyBase {
+    kind: "obrien_fleming" = "obrien_fleming";
+    alpha: float64;
+    sided: "one" | "two" = "two";
+  }
+
+  /**
+   * Whitehead's Triangular Test Policy.
+   * Typically defines both efficacy and futility boundaries.
+   */
+  model WhiteheadPolicy extends StoppingPolicyBase {
+    kind: "whitehead" = "whitehead";
+    alpha: float64;
+    power: float64;
+  }
+
+  /**
+   * GST-Specific Task Definition (Univariate).
+   */
+  model TaskSpec extends Base.TaskSpec {
+    kind: "group_sequential" = "group_sequential"; // Discriminator value for Base
+    
+    arms: string[]; 
+    response_type: "binary" | "continuous" | "time_to_event";
+    hypotheses: HypothesisSpec; 
+
+    // Design Requirements (Designer Input)
+    // Presence implies the intent to stop for this reason.
+    efficacy?: EfficacyRequirement;
+    futility?: FutilityRequirement;
+  }  
 
   model SpendingBoundary extends BoundarySpec {
     kind: "spending";

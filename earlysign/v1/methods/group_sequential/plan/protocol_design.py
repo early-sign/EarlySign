@@ -91,9 +91,8 @@ class ProtocolDesigner:
         # 5. Calculate Schedule Points
         n_schedule = [float(int(np.ceil(n_max * t))) for t in info_times]
 
-        # Construct the realized protocol
+        # Construct the realized protocol with new schema
         return GST.Protocol(
-            # Intent
             name="Designed Protocol",
             task=GST.TaskSpec(
                 kind="group_sequential",
@@ -115,24 +114,15 @@ class ProtocolDesigner:
             ),
             method=GST.MethodSpec(
                 kind="group_sequential",
-                efficacy=GST.StoppingRule(
-                    schedule=GST.ScheduleSpec(
-                        unit=GST.Unit.SAMPLE_SIZE,
-                        n_looks=k,
-                        interim_points=n_schedule,
-                    ),
-                    boundary=GST.SpendingBoundary(
-                        kind="spending",
-                        boundary_scale=GST.BoundaryScale.Z_SCORE,
-                        binding=True,
-                        reference_model=GST.BinaryModel(
-                            kind="binary",
-                            test_statistic=GST.TestStatistic.Z,
-                            link_function=GST.LinkFunction.IDENTITY,
-                            use_canonical_joint_distribution=True,
-                        ),
-                        spending_function=GST.SpendingFunctionSpec(type=shape_type),
-                    ),
+                stopping_policy=GST.AlphaSpendingPolicy(
+                    spending_fn=GST.SpendingFunctionSpec(family=shape_type),
+                    alpha=alpha,
+                    sided=1,
+                ),
+                schedule=GST.ScheduleSpec(
+                    unit=GST.Unit.SAMPLE_SIZE,
+                    n_looks=k,
+                    interim_points=n_schedule,
                 ),
             ),
         )
@@ -149,9 +139,6 @@ class ProtocolDesigner:
         alpha = efficacy.alpha
 
         futility = task.futility
-        if not futility:
-            raise ValueError("Task is missing futility requirements.")
-        power = futility.power
         k = params.get("looks", 2)
         shape_type = params.get("spending_function", "obrien_fleming")
 
@@ -176,14 +163,36 @@ class ProtocolDesigner:
 
         delta = abs(p_t - p_c)
 
-        # 2. Plan the design
+        # Determine stopping policy based on presence of futility
+        if futility:
+            power = futility.power
+            beta = 1.0 - power
+            stopping_policy: GST.StoppingPolicy = GST.AlphaBetaSpendingPolicy(
+                alpha_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
+                beta_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
+                alpha=alpha,
+                beta=beta,
+            )
+        else:
+            stopping_policy = GST.AlphaSpendingPolicy(
+                spending_fn=GST.SpendingFunctionSpec(family=shape_type),
+                alpha=alpha,
+                sided=1,
+            )
+
+        # Calculate schedule from planning
+        power_for_plan = futility.power if futility else 0.8
         generic_proto = self.plan_binomial_ab(
             alpha=alpha,
-            power=power,
+            power=power_for_plan,
             delta=delta,
             k=k,
             p_control=p_c,
             shape_type=shape_type,
         )
 
-        return generic_proto.method
+        return GST.MethodSpec(
+            kind="group_sequential",
+            stopping_policy=stopping_policy,
+            schedule=generic_proto.method.schedule,
+        )

@@ -141,3 +141,39 @@ def get_spending_class(name: str) -> Type[SpendingFunction]:
     if key not in _SPENDING_REGISTRY:
         raise KeyError(f"Unknown spending family '{name}'")
     return _SPENDING_REGISTRY[key]
+
+
+class SpendingFunctionFactory:
+    """Factory for creating SpendingFunction instances from ES3 specs.
+
+    Example::
+
+        >>> from earlysign.schema.ES3.GST import SpendingFunctionSpec
+        >>> factory = SpendingFunctionFactory(budget=0.025)
+        >>> spec = SpendingFunctionSpec(family="obrien_fleming")
+        >>> sf = factory.from_spec(spec)
+        >>> sf.name
+        'obrien_fleming'
+    """
+
+    def __init__(self, budget: float) -> None:
+        """Initialize factory with error budget.
+
+        Args:
+            budget: The alpha or beta budget for spending functions.
+        """
+        self.budget = budget
+
+    def from_spec(self, spec: Any) -> SpendingFunction:
+        """Create a SpendingFunction from an ES3 SpendingFunctionSpec.
+
+        Args:
+            spec: SpendingFunctionSpec with family and optional params.
+
+        Returns:
+            Instantiated SpendingFunction.
+        """
+        family = str(spec.family).strip().lower()
+        spending_cls = get_spending_class(family)
+        params = dict(spec.params) if spec.params else {}
+        return spending_cls(alpha=self.budget, **params)  # type: ignore[call-arg]

@@ -55,12 +55,10 @@ def plot_gst_summary(
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # 1. Theoretical Boundaries
-    # Use BinomialGSTEngine logic to reconstruct boundaries for visualization
-    # (Even if the test isn't binomial, the GST structure for boundaries is shared)
     try:
         engine = BinomialGSTEngine(protocol)
 
-        schedule = protocol.method.efficacy.schedule
+        schedule = protocol.method.schedule
         look_ns = schedule.interim_points or []
         n_max = max(look_ns) if look_ns else 1
 
@@ -70,17 +68,11 @@ def plot_gst_summary(
         for i, n in enumerate(look_ns):
             frac = n / n_max
             # Efficacy
-            eb = engine._get_boundary(
-                protocol.method.efficacy, engine.efficacy_calc, "efficacy", i, frac
-            )
+            eb = engine.get_boundary_at_look(i, frac, "efficacy")
             eff_boundaries.append(eb)
 
             # Futility
-            fb = None
-            if protocol.method.futility:
-                fb = engine._get_boundary(
-                    protocol.method.futility, engine.futility_calc, "futility", i, frac
-                )
+            fb = engine.get_boundary_at_look(i, frac, "futility")
             fut_boundaries.append(fb)
 
         if look_ns:

@@ -28,19 +28,15 @@ Canonical Joint Model from ES3 protocol specifications.
 ...     ),
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
-...         efficacy=GST.StoppingRule(
-...             schedule=GST.ScheduleSpec(unit=GST.Unit.INFORMATION_FRACTION, interim_points=info_times),
-...             boundary=GST.SpendingBoundary(
-...                 kind="spending",
-...                 boundary_scale=GST.BoundaryScale.Z_SCORE,
-...                 binding=True,
-...                 reference_model=GST.BinaryModel(
-...                     kind="binary", test_statistic=GST.TestStatistic.Z,
-...                     link_function=GST.LinkFunction.IDENTITY, use_canonical_joint_distribution=True
-...                 ),
-...                 spending_function=GST.SpendingFunctionSpec(type="obrien_fleming")
-...             )
-...         )
+...         stopping_policy=GST.StoppingPolicySpec(GST.AlphaSpendingPolicy(
+...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
+...             alpha=0.025,
+...             sided=GST.Sided.ONE,
+...         )),
+...         schedule=GST.ScheduleSpec(
+...             unit=GST.Unit.INFORMATION_FRACTION,
+...             interim_points=info_times
+...         ),
 ...     )
 ... )
 >>> model = CanonicalJointModel.from_spec(spec, n_sims=5000)
@@ -104,19 +100,15 @@ True
 ...     ),
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
-...         efficacy=GST.StoppingRule(
-...             schedule=GST.ScheduleSpec(unit=GST.Unit.INFORMATION_FRACTION, interim_points=info_times),
-...             boundary=GST.SpendingBoundary(
-...                 kind="spending",
-...                 boundary_scale=GST.BoundaryScale.Z_SCORE,
-...                 binding=True,
-...                 reference_model=GST.BinaryModel(
-...                     kind="binary", test_statistic=GST.TestStatistic.Z,
-...                     link_function=GST.LinkFunction.IDENTITY, use_canonical_joint_distribution=True
-...                 ),
-...                 spending_function=GST.SpendingFunctionSpec(type="obrien_fleming")
-...             )
-...         )
+...         stopping_policy=GST.StoppingPolicySpec(GST.AlphaSpendingPolicy(
+...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
+...             alpha=0.05,
+...             sided=GST.Sided.ONE,
+...         )),
+...         schedule=GST.ScheduleSpec(
+...             unit=GST.Unit.INFORMATION_FRACTION,
+...             interim_points=info_times
+...         ),
 ...     )
 ... )
 >>> model_eff = CanonicalJointModel.from_spec(spec_eff)
@@ -142,19 +134,14 @@ True
 ...     ),
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
-...         futility=GST.StoppingRule(
-...             schedule=GST.ScheduleSpec(unit=GST.Unit.INFORMATION_FRACTION, interim_points=info_times),
-...             boundary=GST.SpendingBoundary(
-...                 kind="spending",
-...                 boundary_scale=GST.BoundaryScale.Z_SCORE,
-...                 binding=True,
-...                 reference_model=GST.BinaryModel(
-...                     kind="binary", test_statistic=GST.TestStatistic.Z,
-...                     link_function=GST.LinkFunction.IDENTITY, use_canonical_joint_distribution=True
-...                 ),
-...                 spending_function=GST.SpendingFunctionSpec(type="obrien_fleming")
-...             )
-...         )
+...         stopping_policy=GST.BetaSpendingPolicy(
+...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
+...             beta=0.2,
+...         ),
+...         schedule=GST.ScheduleSpec(
+...             unit=GST.Unit.INFORMATION_FRACTION,
+...             interim_points=info_times
+...         ),
 ...     )
 ... )
 >>> model_fut = CanonicalJointModel.from_spec(spec_fut)
@@ -162,5 +149,51 @@ True
 0.8
 >>> a_fut, b_fut = model_fut.solve_boundaries(drift=2.48)
 >>> a_fut is None and b_fut is not None
+True
+
+--- Test: O'Brien-Fleming Policy Shortcut ---
+>>> spec_obf = GST.Protocol(
+...     name="OBF Shortcut",
+...     task=spec_eff.task,
+...     method=GST.MethodSpec(
+...         kind="group_sequential",
+...         stopping_policy=GST.StoppingPolicySpec(GST.OBrienFlemingPolicy(
+...             alpha=0.05,
+...             sided=GST.Sided.ONE,
+...         )),
+...         schedule=GST.ScheduleSpec(
+...             unit=GST.Unit.INFORMATION_FRACTION,
+...             interim_points=[0.5, 1.0]
+...         ),
+...     )
+... )
+>>> model_obf = CanonicalJointModel.from_spec(spec_obf)
+>>> model_obf.config.alpha
+0.05
+>>> model_obf.config.efficacy_spending.name
+'obrien_fleming'
+
+--- Test: Whitehead (Triangular) Policy Shortcut ---
+>>> spec_wh = GST.Protocol(
+...     name="Whitehead Shortcut",
+...     task=spec_eff.task,
+...     method=GST.MethodSpec(
+...         kind="group_sequential",
+...         stopping_policy=GST.StoppingPolicySpec(GST.WhiteheadPolicy(
+...             alpha=0.05,
+...             power=0.9,
+...         )),
+...         schedule=GST.ScheduleSpec(
+...             unit=GST.Unit.INFORMATION_FRACTION,
+...             interim_points=[0.5, 1.0]
+...         ),
+...     )
+... )
+>>> model_wh = CanonicalJointModel.from_spec(spec_wh)
+>>> model_wh.config.alpha
+0.05
+>>> model_wh.config.power
+0.9
+>>> model_wh.config.efficacy_spending is not None and model_wh.config.futility_spending is not None
 True
 """

@@ -5,11 +5,8 @@ import numpy as np
 import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus, Scoreboard
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
-from earlysign.v1.methods.group_sequential.shared.boundary import (
-    BoundaryCalculator,
-    BoundaryCalculatorSpec,
-    EfficacySpec,
-    FutilitySpec,
+from earlysign.v1.methods.group_sequential.shared.spending import (
+    SpendingFunctionFactory,
 )
 
 
@@ -18,86 +15,49 @@ class BinomialGSTEngine:
     Orchestrator for Binomial Group Sequential Testing.
 
     Responsibilities:
-    1. Manages Efficacy and Futility stopping rule engines (via BoundaryCalculator).
-    2. Computes Z-statistics from summary data.
-    3. Evaluates stopping criteria.
+    1. Computes Z-statistics from summary data.
+    2. Evaluates stopping criteria using StoppingPolicySpec.
+    3. Returns LookResult with boundary crossings and status.
     """
 
     def __init__(self, protocol: GST.Protocol):
         self.protocol = protocol
-        task = protocol.task
         method = protocol.method
+        policy = method.stopping_policy
+        schedule = method.schedule
 
-        if not method.efficacy:
-            raise ValueError("BinomialGSTEngine requires an efficacy stopping rule.")
+        # Extract alpha/beta and spending functions based on policy type
+        self._alpha_factory: Optional[SpendingFunctionFactory] = None
+        self._beta_factory: Optional[SpendingFunctionFactory] = None
+        self._alpha_spending_fn: Optional[GST.SpendingFunctionSpec] = None
+        self._beta_spending_fn: Optional[GST.SpendingFunctionSpec] = None
+        self._sided: int = 1
 
-        # Efficacy Setup
-        alpha = float(task.efficacy.alpha) if task.efficacy else 0.05
-        self.efficacy_calc = self._setup_calculator(method.efficacy, "efficacy", alpha)
+        if isinstance(policy, GST.AlphaSpendingPolicy):
+            self._alpha_factory = SpendingFunctionFactory(budget=policy.alpha)
+            self._alpha_spending_fn = policy.spending_fn
+            self._sided = policy.sided
+        elif isinstance(policy, GST.BetaSpendingPolicy):
+            self._beta_factory = SpendingFunctionFactory(budget=policy.beta)
+            self._beta_spending_fn = policy.spending_fn
+        elif isinstance(policy, GST.AlphaBetaSpendingPolicy):
+            self._alpha_factory = SpendingFunctionFactory(budget=policy.alpha)
+            self._beta_factory = SpendingFunctionFactory(budget=policy.beta)
+            self._alpha_spending_fn = policy.alpha_spending_fn
+            self._beta_spending_fn = policy.beta_spending_fn
+            self._alpha_binding = policy.alpha_binding
+            self._beta_binding = policy.beta_binding
+        else:
+            raise ValueError(f"Unsupported stopping policy type: {type(policy)}")
 
-        # Futility Setup
-        self.futility_calc = None
-        if method.futility:
-            beta = 1.0 - float(task.futility.power) if task.futility else 0.1
-            self.futility_calc = self._setup_calculator(
-                method.futility, "futility", beta
-            )
+        # Schedule
+        self._schedule = schedule
+        self._points = schedule.interim_points or []
 
         # Max Sample Size
         self.n_max = 0
-        if method.efficacy.schedule.unit == "sample_size":
-            pts = method.efficacy.schedule.interim_points
-            if pts:
-                self.n_max = int(max(pts))
-
-    def _setup_calculator(
-        self, rule: GST.StoppingRule, rule_type: str, budget: float
-    ) -> Optional[BoundaryCalculator]:
-        """Maps ES3 StoppingRule to BoundaryCalculator."""
-        boundary = rule.boundary
-
-        if isinstance(boundary, GST.FixedBoundary):
-            return None
-
-        if isinstance(boundary, GST.SpendingBoundary):
-            params = boundary.spending_function.params or {}
-            gamma = params.get("gamma") or params.get("rho")
-
-            if rule_type == "efficacy":
-                eff_spec = EfficacySpec(
-                    style="alpha_spending",
-                    family=boundary.spending_function.type,
-                    gamma=float(gamma) if gamma is not None else None,
-                )
-                fut_spec = FutilitySpec(mode="none")
-                spec = BoundaryCalculatorSpec(
-                    alpha=budget,
-                    tails=1,  # Assuming 1-sided for now as standard GST engine
-                    scale="z",
-                    efficacy=eff_spec,
-                    futility=fut_spec,
-                )
-            else:
-                # Futility mapping
-                eff_spec = EfficacySpec(
-                    style="alpha_spending", family="obrien_fleming", alpha_levels=[]
-                )
-                fut_spec = FutilitySpec(
-                    mode="beta_spending",
-                    family=boundary.spending_function.type,
-                    gamma=float(gamma) if gamma is not None else None,
-                    beta=budget,
-                )
-                spec = BoundaryCalculatorSpec(
-                    alpha=0.025,  # Dummy
-                    tails=1,
-                    scale="z",
-                    efficacy=eff_spec,
-                    futility=fut_spec,
-                )
-            return BoundaryCalculator(spec)
-
-        return None
+        if schedule.unit == GST.Unit.SAMPLE_SIZE and self._points:
+            self.n_max = int(max(self._points))
 
     def get_boundary_at_look(
         self, look_index: int, info_time: float, rule_type: str = "efficacy"
@@ -106,44 +66,24 @@ class BinomialGSTEngine:
         Public helper to project a boundary for a given look and information time.
         Useful for design and visualization.
         """
-        if rule_type == "efficacy":
-            assert self.protocol.method.efficacy is not None
-            return self._get_boundary(
-                self.protocol.method.efficacy,
-                self.efficacy_calc,
-                "efficacy",
-                look_index,
-                info_time,
-            )
-        elif self.protocol.method.futility:
-            assert self.protocol.method.futility is not None
-            return self._get_boundary(
-                self.protocol.method.futility,
-                self.futility_calc,
-                "futility",
-                look_index,
-                info_time,
-            )
-        return None
+        if rule_type == "efficacy" and self._alpha_factory and self._alpha_spending_fn:
+            sf = self._alpha_factory.from_spec(self._alpha_spending_fn)
+            alpha_spent = float(sf.cumulative(np.array([info_time]))[0])
+            if alpha_spent > 0:
+                from scipy.stats import norm
 
-    def _get_boundary(
-        self,
-        rule: GST.StoppingRule,
-        calc: Optional[BoundaryCalculator],
-        rule_type: str,
-        look_index: int,
-        info_frac: float,
-    ) -> Optional[float]:
-        boundary_spec = rule.boundary
-        if isinstance(boundary_spec, GST.FixedBoundary):
-            return float(boundary_spec.value)
+                if self._sided == 2:
+                    return float(norm.isf(alpha_spent / 2.0))
+                else:
+                    return float(norm.isf(alpha_spent))
+        elif rule_type == "futility" and self._beta_factory and self._beta_spending_fn:
+            sf = self._beta_factory.from_spec(self._beta_spending_fn)
+            beta_spent = float(sf.cumulative(np.array([info_time]))[0])
+            if beta_spent > 0:
+                from scipy.stats import norm
 
-        if calc and isinstance(boundary_spec, GST.SpendingBoundary):
-            upper, lower, _ = calc.compute_boundary(
-                info_time=info_frac, look=look_index + 1
-            )
-            return upper if rule_type == "efficacy" else lower
-
+                z = float(norm.isf(beta_spent))
+                return -z  # Lower boundary is negative
         return None
 
     def run(self, metrics: Scoreboard, **kwargs: Any) -> LookResult:
@@ -195,13 +135,9 @@ class BinomialGSTEngine:
                 z_stat = (summary_t.p_hat - summary_c.p_hat) / se
 
         # 2. Determine Look
-        assert self.protocol.method.efficacy is not None
-        schedule = self.protocol.method.efficacy.schedule
-        points = schedule.interim_points or []
         look_idx = -1
-
-        for i, pt in enumerate(points):
-            if schedule.unit == GST.Unit.SAMPLE_SIZE:
+        for i, pt in enumerate(self._points):
+            if self._schedule.unit == GST.Unit.SAMPLE_SIZE:
                 if cumulative_n >= pt:
                     look_idx = i
             else:  # INFORMATION_FRACTION
@@ -215,35 +151,25 @@ class BinomialGSTEngine:
         status = DecisionStatus.CONTINUE_
 
         if look_idx >= 0:
-            # Efficacy
-            assert self.protocol.method.efficacy is not None
-            efficacy_boundary = self._get_boundary(
-                self.protocol.method.efficacy,
-                self.efficacy_calc,
-                "efficacy",
-                look_idx,
-                info_frac,
+            # Efficacy boundary
+            efficacy_boundary = self.get_boundary_at_look(
+                look_idx, info_frac, "efficacy"
             )
             if efficacy_boundary is not None and z_stat > efficacy_boundary:
                 is_efficacy_crossed = True
                 status = DecisionStatus.STOP_EFFICACY
 
-            # Futility
-            if self.protocol.method.futility:
-                futility_boundary = self._get_boundary(
-                    self.protocol.method.futility,
-                    self.futility_calc,
-                    "futility",
-                    look_idx,
-                    info_frac,
-                )
-                if futility_boundary is not None and z_stat < futility_boundary:
-                    is_futility_crossed = True
-                    if status == DecisionStatus.CONTINUE_:
-                        status = DecisionStatus.STOP_FUTILITY
+            # Futility boundary
+            futility_boundary = self.get_boundary_at_look(
+                look_idx, info_frac, "futility"
+            )
+            if futility_boundary is not None and z_stat < futility_boundary:
+                is_futility_crossed = True
+                if status == DecisionStatus.CONTINUE_:
+                    status = DecisionStatus.STOP_FUTILITY
 
             # Final Look check
-            if look_idx == len(points) - 1:
+            if look_idx == len(self._points) - 1:
                 if status == DecisionStatus.CONTINUE_:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 

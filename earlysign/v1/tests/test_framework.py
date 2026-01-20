@@ -150,19 +150,6 @@ They are projected similarly but represent a path of decisions.
 The library provides off-the-shelf entities for common trial components.
 
 >>> # Experiment State (via summary facts), Boundaries, and Test Statistics
->>> rule_spec = GST.StoppingRule(
-...     schedule=GST.ScheduleSpec(unit=GST.Unit.INFORMATION_FRACTION, interim_points=[0.5, 1.0]),
-...     boundary=GST.SpendingBoundary(
-...         kind="spending",
-...         spending_function=GST.SpendingFunctionSpec(type="obrien_fleming"),
-...         boundary_scale=GST.BoundaryScale.Z_SCORE,
-...         binding=True,
-...         reference_model=GST.BinaryModel(
-...             kind="binary", test_statistic=GST.TestStatistic.Z,
-...             link_function=GST.LinkFunction.IDENTITY, use_canonical_joint_distribution=True
-...         )
-...     )
-... )
 >>> protocol = GST.Protocol(
 ...     name="Example Trial",
 ...     task=GST.TaskSpec(
@@ -176,12 +163,23 @@ The library provides off-the-shelf entities for common trial components.
 ...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.2, "T": 0.3})
 ...         )
 ...     ),
-...     method=GST.MethodSpec(kind="group_sequential", efficacy=rule_spec)
+...     method=GST.MethodSpec(
+...         kind="group_sequential",
+...         stopping_policy=GST.StoppingPolicySpec(GST.AlphaSpendingPolicy(
+...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
+...             alpha=0.05,
+...             sided=GST.Sided.ONE,
+...         )),
+...         schedule=GST.ScheduleSpec(
+...             unit=GST.Unit.INFORMATION_FRACTION,
+...             interim_points=[0.5, 1.0]
+...         ),
+...     )
 ... )
 >>> engine = BinomialGSTEngine(protocol=protocol)
 >>> # Projection of boundary at 50% info time
 >>> engine.get_boundary_at_look(0, 0.5)
-2.326...
+2.537...
 
 ## ES3 Schema
 ### Protocol

@@ -62,19 +62,14 @@ class CanonicalJointModel:
         """Instantiate the model from an ES3 GST.Protocol specification."""
         task = spec.task
         method = spec.method
+        policy = method.stopping_policy
+        schedule = method.schedule
 
-        # 1. Extract alpha/power
+        # 1. Extract alpha/power from task
         alpha = float(task.efficacy.alpha) if task.efficacy else 0.05
         power = float(task.futility.power) if task.futility else 0.9
 
         # 2. Extract schedule
-        # We prefer information_fraction unit from the efficacy stopping rule
-        if method.efficacy:
-            schedule = method.efficacy.schedule
-        elif method.futility:
-            schedule = method.futility.schedule
-        else:
-            schedule = None
         if not schedule or schedule.interim_points is None:
             raise ValueError("Protocol must define interim_points.")
 
@@ -83,23 +78,35 @@ class CanonicalJointModel:
         if np.max(t) > 1.0:
             t = t / np.max(t)
 
-        # 3. Extract spending functions
+        # 3. Extract spending functions from policy
         eff_sf = None
-        if method.efficacy and method.efficacy.boundary.kind == "spending":
-            # Using casting because GST.SpendingBoundary is a child of BoundarySpec
-            b_eff = cast(GST.SpendingBoundary, method.efficacy.boundary)
-            sf_cls = get_spending_class(b_eff.spending_function.type)
-            params = b_eff.spending_function.params or {}
-            eff_sf = cast(Any, sf_cls)(alpha=alpha, **params)
-
         fut_sf = None
         binding_futility = True
-        if method.futility and method.futility.boundary.kind == "spending":
-            b_fut = cast(GST.SpendingBoundary, method.futility.boundary)
-            sf_cls = get_spending_class(b_fut.spending_function.type)
-            params = b_fut.spending_function.params or {}
-            fut_sf = cast(Any, sf_cls)(alpha=1.0 - power, **params)
-            binding_futility = b_fut.binding
+        binding_efficacy = True
+
+        if isinstance(policy, GST.AlphaSpendingPolicy):
+            sf_cls = get_spending_class(policy.spending_fn.family)
+            params = policy.spending_fn.params or {}
+            eff_sf = cast(Any, sf_cls)(alpha=policy.alpha, **params)
+
+        elif isinstance(policy, GST.BetaSpendingPolicy):
+            sf_cls = get_spending_class(policy.spending_fn.family)
+            params = policy.spending_fn.params or {}
+            fut_sf = cast(Any, sf_cls)(alpha=policy.beta, **params)
+
+        elif isinstance(policy, GST.AlphaBetaSpendingPolicy):
+            # Alpha (efficacy) spending
+            sf_cls = get_spending_class(policy.alpha_spending_fn.family)
+            params = policy.alpha_spending_fn.params or {}
+            eff_sf = cast(Any, sf_cls)(alpha=policy.alpha, **params)
+
+            # Beta (futility) spending
+            sf_cls = get_spending_class(policy.beta_spending_fn.family)
+            params = policy.beta_spending_fn.params or {}
+            fut_sf = cast(Any, sf_cls)(alpha=policy.beta, **params)
+
+            binding_futility = policy.beta_binding
+            binding_efficacy = policy.alpha_binding
 
         config = Config(
             info_times=t,
@@ -108,6 +115,7 @@ class CanonicalJointModel:
             efficacy_spending=eff_sf,
             futility_spending=fut_sf,
             binding_futility=binding_futility,
+            binding_efficacy=binding_efficacy,
             n_sims=n_sims,
             rng_seed=rng_seed,
         )

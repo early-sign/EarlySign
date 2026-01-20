@@ -53,7 +53,7 @@ The designer calculates the required sample size and decision boundaries.
     ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
 
-    >>> print(f"Designed Max Sample Size: {int(protocol.method.efficacy.schedule.interim_points[-1])}")
+    >>> print(f"Designed Max Sample Size: {int(protocol.method.schedule.interim_points[-1])}")
     Designed Max Sample Size: 12861
 
 With the protocol designed, we initialize the template and persist it to the ledger.
@@ -85,9 +85,9 @@ Finally, we generate the final report to see the study outcome.
 
     >>> final = template.report_result()
     >>> print(f"Final Status: {final['final_status']}")
-    Final Status: stop_plan_end_reached
+    Final Status: stop_efficacy
     >>> print(f"Is Rejected: {final['is_rejected']}")
-    Is Rejected: False
+    Is Rejected: True
 
 In practice, each iteration may run in a different process.
 To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
@@ -124,16 +124,9 @@ class BinomialABTaskSpec(GST.TaskSpec):
     hypotheses: GST.HypothesisSpec
 
 
-class BinomialABMethodSpec(GST.MethodSpec):
-    # Efficacy Stopping Rule
-    efficacy: GST.StoppingRule
-    # Futility Stopping Rule
-    futility: Optional[GST.StoppingRule] = None
-
-
 class BinomialABProtocol(GST.Protocol, AutoNameMixin):
     task: BinomialABTaskSpec
-    method: BinomialABMethodSpec
+    method: GST.MethodSpec
     name: str = Field(default="")
 
 
@@ -169,22 +162,18 @@ class BinomialABTemplate:
         designer = ProtocolDesigner.from_dict(designer_params or {})
 
         # Delegate logic to Designer
-        method_spec_base = designer.method_from_task_spec(
+        method_spec = designer.method_from_task_spec(
             task=task,
             params={"looks": looks, "spending_function": spending_function},
         )
 
-        if not method_spec_base.efficacy:
-            raise ValueError("Designed method is missing efficacy rule.")
-
-        # Wrap in specific Protocol Method Spec
-        method_spec = BinomialABMethodSpec(
-            kind="group_sequential",
-            efficacy=method_spec_base.efficacy,
-            futility=method_spec_base.futility,
+        return BinomialABProtocol(
+            task=task,
+            method=GST.MethodSpec(
+                stopping_policy=method_spec.stopping_policy,
+                schedule=method_spec.schedule,
+            ),
         )
-
-        return BinomialABProtocol(task=task, method=method_spec)
 
     def __init__(self, ledger: "Ledger"):
         self.ledger = ledger

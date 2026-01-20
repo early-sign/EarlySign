@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Discriminator
 
 from ..Base import (
     MethodSpec as MethodSpec_1,
@@ -142,6 +142,14 @@ class SpendingFunctionType(StrEnum):
     HWANG_SHIH_DECANI = "hwang_shih_decani"
 
 
+class StoppingPolicySpec(BaseModel):
+    """
+    Abstract Base for Stopping Policy.
+    """
+
+    kind: str
+
+
 class SuperiorityHypothesis(HypothesisParameters):
     kind: Literal["superiority"] = "superiority"
     superiority_margin: float
@@ -240,8 +248,18 @@ class FixedBoundary(BoundarySpec):
     value: float
 
 
+class Protocol(Protocol_1):
+    """
+    GST-Specific Protocol Container.
+    Enforces that task and method belong to the GST domain.
+    """
+
+    task: TaskSpec
+    method: "MethodSpec"  # Forward reference
+
+
 class SpendingFunctionSpec(BaseModel):
-    type: SpendingFunctionType | str
+    family: SpendingFunctionType | str
     params: dict[str, float] | None = None
 
 
@@ -250,27 +268,70 @@ class StoppingRule(BaseModel):
     boundary: BoundarySpec
 
 
+class AlphaBetaSpendingPolicy(StoppingPolicySpec):
+    """
+    Combined Alpha-Beta Spending Policy.
+    Efficacy (upper) + Futility (lower) boundaries.
+    """
+
+    kind: Literal["alpha_beta_spending"] = "alpha_beta_spending"
+    alpha_spending_fn: SpendingFunctionSpec
+    beta_spending_fn: SpendingFunctionSpec
+    alpha: float
+    beta: float
+    alpha_binding: bool = True
+    beta_binding: bool = False
+
+
+class AlphaSpendingPolicy(StoppingPolicySpec):
+    """
+    Alpha (Efficacy) Spending Policy.
+    Supports one-sided or two-sided tests.
+    """
+
+    kind: Literal["alpha_spending"] = "alpha_spending"
+    spending_fn: SpendingFunctionSpec
+    alpha: float
+    sided: Literal[1, 2] = 2
+
+
+class BetaSpendingPolicy(StoppingPolicySpec):
+    """
+    Beta (Futility) Spending Policy.
+    Always one-sided (lower boundary).
+    """
+
+    kind: Literal["beta_spending"] = "beta_spending"
+    spending_fn: SpendingFunctionSpec
+    beta: float
+
+
+class SpendingBoundary(BoundarySpec):
+    kind: Literal["spending"] = "spending"
+    spending_function: SpendingFunctionSpec
+
+
+# Discriminated Union for StoppingPolicy types
+StoppingPolicy = Annotated[
+    Union[
+        AlphaSpendingPolicy,
+        BetaSpendingPolicy,
+        AlphaBetaSpendingPolicy,
+    ],
+    Discriminator("kind"),
+]
+
+
 class MethodSpec(MethodSpec_1):
     """
     GST-Specific Method Definition (Univariate).
     """
 
     kind: Literal["group_sequential"] = "group_sequential"
-    efficacy: StoppingRule | None = None
-    futility: StoppingRule | None = None
+    stopping_policy: StoppingPolicy
+    schedule: ScheduleSpec
     adaptation: AdaptationSpec | None = None
 
 
-class Protocol(Protocol_1):
-    """
-    GST-Specific Protocol Container.
-    Enforces that task and method belong to the GST domain.
-    """
-
-    task: TaskSpec
-    method: MethodSpec
-
-
-class SpendingBoundary(BoundarySpec):
-    kind: Literal["spending"] = "spending"
-    spending_function: SpendingFunctionSpec
+# Update Protocol with concrete MethodSpec
+Protocol.model_rebuild()
