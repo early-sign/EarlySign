@@ -5,8 +5,9 @@ import numpy as np
 import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus, Scoreboard
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
-from earlysign.v1.methods.group_sequential.shared.spending import (
-    SpendingFunctionFactory,
+from earlysign.v1.methods.group_sequential.execution.stopping_policy import (
+    StoppingPolicy,
+    StoppingPolicyFactory,
 )
 
 
@@ -20,35 +21,20 @@ class BinomialGSTEngine:
     3. Returns LookResult with boundary crossings and status.
     """
 
+    _schedule: GST.ScheduleSpec
+    _points: list[float]
+    n_max: int
+    stopping_policy: StoppingPolicy
+
     def __init__(self, protocol: GST.Protocol):
         self.protocol = protocol
         method = protocol.method
-        policy = method.stopping_policy
         schedule = method.schedule
 
-        # Extract alpha/beta and spending functions based on policy type
-        self._alpha_factory: Optional[SpendingFunctionFactory] = None
-        self._beta_factory: Optional[SpendingFunctionFactory] = None
-        self._alpha_spending_fn: Optional[GST.SpendingFunctionSpec] = None
-        self._beta_spending_fn: Optional[GST.SpendingFunctionSpec] = None
-        self._sided: int = 1
-
-        if isinstance(policy, GST.AlphaSpendingPolicy):
-            self._alpha_factory = SpendingFunctionFactory(budget=policy.alpha)
-            self._alpha_spending_fn = policy.spending_fn
-            self._sided = policy.sided
-        elif isinstance(policy, GST.BetaSpendingPolicy):
-            self._beta_factory = SpendingFunctionFactory(budget=policy.beta)
-            self._beta_spending_fn = policy.spending_fn
-        elif isinstance(policy, GST.AlphaBetaSpendingPolicy):
-            self._alpha_factory = SpendingFunctionFactory(budget=policy.alpha)
-            self._beta_factory = SpendingFunctionFactory(budget=policy.beta)
-            self._alpha_spending_fn = policy.alpha_spending_fn
-            self._beta_spending_fn = policy.beta_spending_fn
-            self._alpha_binding = policy.alpha_binding
-            self._beta_binding = policy.beta_binding
-        else:
-            raise ValueError(f"Unsupported stopping policy type: {type(policy)}")
+        # 1. Resolve stopping policy logic
+        self.stopping_policy = StoppingPolicyFactory.build_from_spec(
+            method.stopping_policy
+        )
 
         # Schedule
         self._schedule = schedule

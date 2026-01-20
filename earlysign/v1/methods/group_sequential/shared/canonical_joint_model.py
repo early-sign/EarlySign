@@ -1,15 +1,15 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Tuple, cast
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.v1.methods.group_sequential.shared.spending import (
-    SpendingFunction,
-    get_spending_class,
+from earlysign.v1.methods.group_sequential.execution.stopping_policy import (
+    StoppingPolicyFactory,
 )
+from earlysign.v1.methods.group_sequential.shared.spending import SpendingFunction
 from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 
 
@@ -62,12 +62,12 @@ class CanonicalJointModel:
         """Instantiate the model from an ES3 GST.Protocol specification."""
         task = spec.task
         method = spec.method
-        policy = method.stopping_policy
         schedule = method.schedule
 
-        # 1. Extract alpha/power from task
-        alpha = float(task.efficacy.alpha) if task.efficacy else 0.05
-        power = float(task.futility.power) if task.futility else 0.9
+        # 1. Extract fallback alpha/power from task
+        task_alpha = float(task.efficacy.alpha) if task.efficacy else 0.05
+        task_power = float(task.futility.power) if task.futility else 0.9
+        1.0 - task_power
 
         # 2. Extract schedule
         if not schedule or schedule.interim_points is None:
@@ -78,44 +78,18 @@ class CanonicalJointModel:
         if np.max(t) > 1.0:
             t = t / np.max(t)
 
-        # 3. Extract spending functions from policy
-        eff_sf = None
-        fut_sf = None
-        binding_futility = True
-        binding_efficacy = True
-
-        if isinstance(policy, GST.AlphaSpendingPolicy):
-            sf_cls = get_spending_class(policy.spending_fn.family)
-            params = policy.spending_fn.params or {}
-            eff_sf = cast(Any, sf_cls)(alpha=policy.alpha, **params)
-
-        elif isinstance(policy, GST.BetaSpendingPolicy):
-            sf_cls = get_spending_class(policy.spending_fn.family)
-            params = policy.spending_fn.params or {}
-            fut_sf = cast(Any, sf_cls)(alpha=policy.beta, **params)
-
-        elif isinstance(policy, GST.AlphaBetaSpendingPolicy):
-            # Alpha (efficacy) spending
-            sf_cls = get_spending_class(policy.alpha_spending_fn.family)
-            params = policy.alpha_spending_fn.params or {}
-            eff_sf = cast(Any, sf_cls)(alpha=policy.alpha, **params)
-
-            # Beta (futility) spending
-            sf_cls = get_spending_class(policy.beta_spending_fn.family)
-            params = policy.beta_spending_fn.params or {}
-            fut_sf = cast(Any, sf_cls)(alpha=policy.beta, **params)
-
-            binding_futility = policy.beta_binding
-            binding_efficacy = policy.alpha_binding
+        # 3. Resolve stopping policy from protocol method
+        stopping_policy = StoppingPolicyFactory.build_from_spec(method.stopping_policy)
 
         config = Config(
             info_times=t,
-            alpha=alpha,
-            power=power,
-            efficacy_spending=eff_sf,
-            futility_spending=fut_sf,
-            binding_futility=binding_futility,
-            binding_efficacy=binding_efficacy,
+            alpha=task_alpha,
+            power=task_power,
+            efficacy_spending=stopping_policy.efficacy_spending,
+            futility_spending=stopping_policy.futility_spending,
+            binding_futility=stopping_policy.alpha_binding,
+            binding_efficacy=stopping_policy.beta_binding,
+            tails=2 if stopping_policy.sided == "two" else 1,
             n_sims=n_sims,
             rng_seed=rng_seed,
         )
