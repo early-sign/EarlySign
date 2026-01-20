@@ -102,7 +102,7 @@ Its schema is shown in Table 1.
 - Supports timestamp, UID, and other labels.
 - Supports entity identities and version numbers.
 
-- We use ibis framework to support various backends.
+- In implementation, we use ibis framework to support various backends. It natively supports Google BigQuery and many other backends.
 
 - All statistical events and decisions are registered in the ledger.
 
