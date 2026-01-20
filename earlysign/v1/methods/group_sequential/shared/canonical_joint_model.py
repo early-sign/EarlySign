@@ -67,7 +67,6 @@ class CanonicalJointModel:
         # 1. Extract fallback alpha/power from task
         task_alpha = float(task.efficacy.alpha) if task.efficacy else 0.05
         task_power = float(task.futility.power) if task.futility else 0.9
-        1.0 - task_power
 
         # 2. Extract schedule
         if not schedule or schedule.interim_points is None:
