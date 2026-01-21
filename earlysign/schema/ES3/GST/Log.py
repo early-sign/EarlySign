@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..Base import Log
 
@@ -54,7 +54,7 @@ class Analysis(Log):
     """
 
     trigger: Trigger | None = None
-    look: int
+    look: int = Field(..., description="Results")
     statistic: float
     info_frac: float
     decision: DecisionStatus | str

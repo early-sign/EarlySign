@@ -24,33 +24,19 @@ class Sided(StrEnum):
     TWO = "two"
 
 
-class TestStatistic(StrEnum):
-    Z = "Z"
-    CHI_SQUARE = "chi_square"
-    EXACT = "exact"
-
-
 class LinkFunction(StrEnum):
+    """
+    Link function for the effect scale (Risk Difference, Risk Ratio, Odds Ratio).
+    """
+
     IDENTITY = "identity"
     LOG = "log"
     LOGIT = "logit"
 
 
-class BoundaryScale(StrEnum):
-    Z_SCORE = "z_score"
-    P_VALUE = "p_value"
-    SCORE_STATISTIC = "score_statistic"
-
-
-class TestStatisticModel(StrEnum):
-    Z = "Z"
-    T = "t"
-
-
 class VarianceAssumption(StrEnum):
     KNOWN = "known"
-    UNKNOWN = "unknown"
-    HETEROSCEDASTIC = "heteroscedastic"
+    ESTIMATED = "estimated"
 
 
 class EffectSizeSpec(BaseModel):
@@ -77,8 +63,10 @@ class FutilityRequirement(BaseModel):
     Specifies the target power (1 - beta) and binding behavior.
     """
 
-    power: float
-    binding: bool | None = False
+    power: float = Field(..., description="Target Power (1 - Beta)")
+    binding: bool | None = Field(
+        False, description="Non-binding default (regulatory best practice)"
+    )
 
 
 class HypothesisParameters(BaseModel):
@@ -99,14 +87,6 @@ class HypothesisSpec(BaseModel):
 class NonInferiorityHypothesis(HypothesisParameters):
     kind: Literal["non_inferiority"] = "non_inferiority"
     non_inferiority_margin: float
-
-
-class ReferenceModelSpec(BaseModel):
-    """
-    The "Core": Reference Model (Statistical Engine Assumptions).
-    """
-
-    kind: str
 
 
 class Method(StrEnum):
@@ -130,8 +110,12 @@ class Unit(StrEnum):
 
 class ScheduleSpec(BaseModel):
     unit: Unit
-    n_looks: int | None = None
-    interim_points: list[float] | None = None
+    n_looks: int | None = Field(
+        None, description="Usually defined by N looks and spacing, or specific points."
+    )
+    interim_points: list[float] | None = Field(
+        None, description="Optional explicit points"
+    )
 
 
 class SpendingFunctionType(StrEnum):
@@ -147,9 +131,9 @@ class SpendingFunctionType(StrEnum):
     HWANG_SHIH_DECANI = "hwang_shih_decani"
 
 
-class StoppingPolicyBase(BaseModel):
+class StatisticalModel(BaseModel):
     """
-    Abstract Base for Stopping Policy.
+    The "Model": Statistical Assumptions for Inference.The "Model": Statistical Assumptions for Inference.
     """
 
     kind: str
@@ -162,20 +146,20 @@ class SuperiorityHypothesis(HypothesisParameters):
 
 class SurvivalEffectSize(EffectSizeSpec):
     type: Literal["time_to_event"] = "time_to_event"
-    hazard_ratios: dict[str, float]
-    median_survival_times: dict[str, float] | None = None
-    event_rate: float | None = None
+    hazard_ratios: dict[str, float] = Field(
+        ..., description="Arm name -> Hazard Ratio (relative to control)"
+    )
+    median_survival_times: dict[str, float] | None = Field(
+        None, description="Optional: for sample size calc"
+    )
+    event_rate: float | None = Field(None, description="Overall event rate if needed")
 
 
-class TestStatisticModel1(StrEnum):
-    LOG_RANK = "log_rank"
-    COX_PH = "cox_ph"
-
-
-class SurvivalModel(ReferenceModelSpec):
-    kind: Literal["time_to_event"] = "time_to_event"
-    test_statistic: TestStatisticModel1
-    use_canonical_joint_distribution: bool
+class TProcessModel(StatisticalModel):
+    kind: Literal["t_process"] = "t_process"
+    degrees_of_freedom_method: str = Field(
+        ..., description='Degrees of Freedom method (e.g., "satterthwaite")'
+    )
 
 
 class ResponseType(StrEnum):
@@ -193,55 +177,86 @@ class TaskSpec(TaskSpec_1):
     arms: list[str]
     response_type: ResponseType
     hypotheses: HypothesisSpec
-    efficacy: EfficacyRequirement | None = None
+    efficacy: EfficacyRequirement | None = Field(
+        None,
+        description="Design Requirements (Designer Input)\nPresence implies the intent to stop for this reason.",
+    )
     futility: FutilityRequirement | None = None
+
+
+class TestStatisticSpec(BaseModel):
+    """
+    The "Statistic": Operational Definition of the Test Statistic.
+    """
+
+    kind: str
+
+
+class TwoArmBinomialScoreZ(TestStatisticSpec):
+    """
+    Two-Arm Score Z-Statistic.
+    """
+
+    kind: Literal["two_arm_binomial_score_z"] = "two_arm_binomial_score_z"
+
+
+class VarianceEstimation(StrEnum):
+    """
+    Variance estimation: pooled (common p) or unpooled.
+    """
+
+    POOLED = "pooled"
+    UNPOOLED = "unpooled"
+
+
+class TwoArmBinomialWaldZ(TestStatisticSpec):
+    """
+    Two-Arm Wald Z-Statistic.
+    Computes Z = (p_t - p_c) / SE.
+    """
+
+    kind: Literal["two_arm_binomial_wald_z"] = "two_arm_binomial_wald_z"
+    variance_estimation: VarianceEstimation = Field(
+        ..., description="Variance estimation: pooled (common p) or unpooled."
+    )
 
 
 class BinaryEffectSize(EffectSizeSpec):
     type: Literal["binary"] = "binary"
-    proportions: dict[str, float]
+    proportions: dict[str, float] = Field(..., description="Arm name -> Expected rate")
 
 
-class BinaryModel(ReferenceModelSpec):
-    kind: Literal["binary"] = "binary"
-    test_statistic: TestStatistic
-    link_function: LinkFunction
-    use_canonical_joint_distribution: bool
+class BinomialExactStatistic(TestStatisticSpec):
+    kind: Literal["binomial_exact"] = "binomial_exact"
 
 
-class BoundaryFunctionStoppingPolicyBase(StoppingPolicyBase):
-    """
-    Abstract Base for Shape-Based Boundary Policies.
-    """
-
-
-class BoundarySpec(BaseModel):
-    """
-    Abstract Base for a Boundary Definition.
-    """
-
-    kind: str
-    reference_model: ReferenceModelSpec
-    boundary_scale: BoundaryScale
-    binding: bool
+class CanonicalGaussianModel(StatisticalModel):
+    kind: Literal["canonical_gaussian"] = "canonical_gaussian"
+    link_function: LinkFunction | None = Field(
+        None,
+        description="Link function for the effect scale (Risk Difference, Risk Ratio, Odds Ratio).",
+    )
 
 
 class ContinuousEffectSize(EffectSizeSpec):
     type: Literal["continuous"] = "continuous"
-    means: dict[str, float]
+    means: dict[str, float] = Field(..., description="Arm name -> Expected mean")
     standard_deviation: float
 
 
-class ContinuousModel(ReferenceModelSpec):
-    kind: Literal["continuous"] = "continuous"
-    test_statistic: TestStatisticModel
+class ContinuousWaldZ(TestStatisticSpec):
+    kind: Literal["continuous_wald_z"] = "continuous_wald_z"
     variance_assumption: VarianceAssumption
-    use_canonical_joint_distribution: bool
 
 
-class CustomBoundary(BoundarySpec):
-    kind: Literal["custom"] = "custom"
-    values: list[float]
+class DecisionStrategyBase(BaseModel):
+    """
+    Abstract Base for Decision Strategy.
+    Holds the Inferential Model (Assumption).
+    """
+
+    kind: str
+    statistical_model: StatisticalModel
 
 
 class EqualityHypothesis(HypothesisParameters):
@@ -254,15 +269,75 @@ class EquivalenceHypothesis(HypothesisParameters):
     upper_margin: float
 
 
-class FixedBoundary(BoundarySpec):
-    kind: Literal["fixed"] = "fixed"
-    value: float
+class ExactBinomialModel(StatisticalModel):
+    kind: Literal["exact_binomial"] = "exact_binomial"
 
 
-class OBrienFlemingBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
+class OneArmBinomialWaldZ(TestStatisticSpec):
     """
-    Classic O'Brien-Fleming Policy.
-    Shortcut for O'Brien-Fleming spending.
+    One-Arm Wald Z-Statistic.
+    """
+
+    kind: Literal["one_arm_binomial_wald_z"] = "one_arm_binomial_wald_z"
+
+
+class SpendingFunction(BaseModel):
+    family: SpendingFunctionType | str
+    params: dict[str, float] | None = Field(
+        None, description='e.g. { "rho": 2.0, "gamma": -4.0 }'
+    )
+
+
+class SpendingFunctionStrategyBase(DecisionStrategyBase):
+    """
+    Abstract Base for Spending-Function Strategies.
+    """
+
+
+class AlphaBetaSpendingStrategy(SpendingFunctionStrategyBase):
+    """
+    Combined Alpha-Beta Spending Strategy.
+    """
+
+    kind: Literal["alpha_beta_spending"] = "alpha_beta_spending"
+    alpha_spending_fn: SpendingFunction
+    beta_spending_fn: SpendingFunction
+    alpha_budget: float
+    beta_budget: float
+    alpha_binding: bool | None = True
+    beta_binding: bool | None = False
+
+
+class AlphaSpendingStrategy(SpendingFunctionStrategyBase):
+    """
+    Alpha (Efficacy) Spending Strategy.
+    """
+
+    kind: Literal["alpha_spending"] = "alpha_spending"
+    spending_fn: SpendingFunction
+    budget: float
+    sided: Sided
+
+
+class BetaSpendingStrategy(SpendingFunctionStrategyBase):
+    """
+    Beta (Futility) Spending Strategy.
+    """
+
+    kind: Literal["beta_spending"] = "beta_spending"
+    spending_fn: SpendingFunction
+    budget: float
+
+
+class BoundaryFunctionStrategyBase(DecisionStrategyBase):
+    """
+    Abstract Base for Shape-Based Boundary Strategies.
+    """
+
+
+class OBrienFlemingStrategy(BoundaryFunctionStrategyBase):
+    """
+    Classic O'Brien-Fleming Strategy.
     """
 
     kind: Literal["obrien_fleming"] = "obrien_fleming"
@@ -270,9 +345,9 @@ class OBrienFlemingBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
     sided: Sided
 
 
-class PocockBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
+class PocockStrategy(BoundaryFunctionStrategyBase):
     """
-    Pocock Policy (Constant Boundary).
+    Pocock Strategy.
     """
 
     kind: Literal["pocock"] = "pocock"
@@ -280,26 +355,9 @@ class PocockBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
     sided: Sided
 
 
-class SpendingFunctionSpec(BaseModel):
-    family: SpendingFunctionType | str
-    params: dict[str, float] | None = None
-
-
-class SpendingFunctionStoppingPolicyBase(StoppingPolicyBase):
+class WangTsiatisStrategy(BoundaryFunctionStrategyBase):
     """
-    Abstract Base for Spending-Function Policies.
-    """
-
-
-class StoppingRule(BaseModel):
-    schedule: ScheduleSpec
-    boundary: BoundarySpec
-
-
-class WangTsiatisBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
-    """
-    Wang-Tsiatis Power Family Policy.
-    Parameterized by delta and alpha.
+    Wang-Tsiatis Power Family Strategy.
     """
 
     kind: Literal["wang_tsiatis"] = "wang_tsiatis"
@@ -308,10 +366,9 @@ class WangTsiatisBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
     sided: Sided
 
 
-class WhiteheadBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
+class WhiteheadStrategy(BoundaryFunctionStrategyBase):
     """
-    Whitehead's Triangular Test Policy.
-    Typically defines both efficacy and futility boundaries.
+    Whitehead's Triangular Test Strategy.
     """
 
     kind: Literal["whitehead"] = "whitehead"
@@ -319,69 +376,38 @@ class WhiteheadBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
     beta: float
 
 
-class AlphaBetaSpendingPolicy(SpendingFunctionStoppingPolicyBase):
-    """
-    Combined Alpha-Beta Spending Policy.
-    Efficacy (upper) + Futility (lower) boundaries.
-    """
-
-    kind: Literal["alpha_beta_spending"] = "alpha_beta_spending"
-    alpha_spending_fn: SpendingFunctionSpec
-    beta_spending_fn: SpendingFunctionSpec
-    alpha_budget: float
-    beta_budget: float
-    alpha_binding: bool | None = True
-    beta_binding: bool | None = False
-
-
-class AlphaSpendingPolicy(SpendingFunctionStoppingPolicyBase):
-    """
-    Alpha (Efficacy) Spending Policy.
-    Supports one-sided or two-sided tests.
-    """
-
-    kind: Literal["alpha_spending"] = "alpha_spending"
-    spending_fn: SpendingFunctionSpec
-    budget: float
-    sided: Sided
-
-
-class BetaSpendingPolicy(SpendingFunctionStoppingPolicyBase):
-    """
-    Beta (Futility) Spending Policy.
-    Always one-sided (lower boundary).
-    """
-
-    kind: Literal["beta_spending"] = "beta_spending"
-    spending_fn: SpendingFunctionSpec
-    budget: float
-
-
-class SpendingBoundary(BoundarySpec):
-    kind: Literal["spending"] = "spending"
-    spending_function: SpendingFunctionSpec
-
-
-class StoppingPolicySpec(
+class DecisionStrategy(
     RootModel[
-        AlphaSpendingPolicy
-        | BetaSpendingPolicy
-        | AlphaBetaSpendingPolicy
-        | WhiteheadBoundaryPolicy
-        | OBrienFlemingBoundaryPolicy
-        | PocockBoundaryPolicy
-        | WangTsiatisBoundaryPolicy
+        AlphaSpendingStrategy
+        | BetaSpendingStrategy
+        | AlphaBetaSpendingStrategy
+        | WhiteheadStrategy
+        | OBrienFlemingStrategy
+        | PocockStrategy
+        | WangTsiatisStrategy
     ]
 ):
     root: (
-        AlphaSpendingPolicy
-        | BetaSpendingPolicy
-        | AlphaBetaSpendingPolicy
-        | WhiteheadBoundaryPolicy
-        | OBrienFlemingBoundaryPolicy
-        | PocockBoundaryPolicy
-        | WangTsiatisBoundaryPolicy
-    ) = Field(..., description="Discriminated Union for Stopping Policy types.")
+        AlphaSpendingStrategy
+        | BetaSpendingStrategy
+        | AlphaBetaSpendingStrategy
+        | WhiteheadStrategy
+        | OBrienFlemingStrategy
+        | PocockStrategy
+        | WangTsiatisStrategy
+    ) = Field(
+        ..., description='Discriminated Union for Decision Strategies (The "Rule").'
+    )
+
+
+class StoppingPolicySpec(BaseModel):
+    """
+    Composite Policy Container.
+    """
+
+    statistic: TestStatisticSpec
+    strategy: DecisionStrategy
+    schedule: ScheduleSpec
 
 
 class MethodSpec(MethodSpec_1):
@@ -390,8 +416,9 @@ class MethodSpec(MethodSpec_1):
     """
 
     kind: Literal["group_sequential"] = "group_sequential"
-    stopping_policy: StoppingPolicySpec
-    schedule: ScheduleSpec
+    stopping_policy: StoppingPolicySpec = Field(
+        ..., description="Stopping Policy (discriminated union)"
+    )
     adaptation: AdaptationSpec | None = None
 
 

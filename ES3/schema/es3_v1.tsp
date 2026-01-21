@@ -115,6 +115,14 @@ namespace GST {
 
   /**
    * GST-Specific Task Definition (Univariate).
+   * @example
+   * {
+   *   "kind": "group_sequential",
+   *   "arms": ["treatment", "control"],
+   *   "response_type": "binary",
+   *   "hypotheses": { ... },
+   *   "efficacy": { "alpha": 0.025 }
+   * }
    */
   model TaskSpec extends Base.TaskSpec {
     kind: "group_sequential" = "group_sequential"; // Discriminator value for Base
@@ -123,8 +131,10 @@ namespace GST {
     response_type: "binary" | "continuous" | "time_to_event";
     hypotheses: HypothesisSpec; 
 
-    // Design Requirements (Designer Input)
-    // Presence implies the intent to stop for this reason.
+    /**
+     * Design Requirements (Designer Input)
+     * Presence implies the intent to stop for this reason.
+     */
     efficacy?: EfficacyRequirement;
     futility?: FutilityRequirement;
   }
@@ -134,10 +144,9 @@ namespace GST {
    */
   model MethodSpec extends Base.MethodSpec {
     kind: "group_sequential" = "group_sequential"; 
-    
-    // Stopping Policy (discriminated union)
+
+    /** Stopping Policy (discriminated union) */
     stopping_policy: StoppingPolicySpec;
-    schedule: ScheduleSpec;
     
     adaptation?: AdaptationSpec;
   }
@@ -145,11 +154,29 @@ namespace GST {
   // --- Sub-Components ---
 
   /**
+   * Available spending function types for group sequential design.
+   */
+  enum SpendingFunctionType {
+    ObrienFleming: "obrien_fleming",
+    Pocock: "pocock",
+    KimDemets: "kim_demets",
+    LanDemets: "lan_demets",
+    PowerFamily: "power_family",
+    HwangShihDecani: "hwang_shih_decani",
+  }
+
+  model SpendingFunction {
+    family: SpendingFunctionType | string;
+    /** e.g. { "rho": 2.0, "gamma": -4.0 } */
+    params?: Record<float64>;
+  }
+
+  /**
    * Efficacy requirement for group sequential design.
    * Specifies the Type I error rate (alpha) to control.
    */
   model EfficacyRequirement {
-    alpha: float64; // Type I Error target
+    alpha: float64;
   }
 
   /**
@@ -157,69 +184,70 @@ namespace GST {
    * Specifies the target power (1 - beta) and binding behavior.
    */
   model FutilityRequirement {
-    power: float64; // Target Power (1 - Beta)
-    binding?: boolean = false; // Non-binding default (regulatory best practice)
+    /** Target Power (1 - Beta) */
+    power: float64;
+    /** Non-binding default (regulatory best practice) */
+    binding?: boolean = false;
   }
 
   /**
-   * Discriminated Union for Stopping Policy types.
+   * Discriminated Union for Decision Strategies (The "Rule").
    */
-  union StoppingPolicySpec {
-    AlphaSpendingPolicy,
-    BetaSpendingPolicy,
-    AlphaBetaSpendingPolicy,
-    WhiteheadBoundaryPolicy,
-    OBrienFlemingBoundaryPolicy,
-    PocockBoundaryPolicy,
-    WangTsiatisBoundaryPolicy,
+  union DecisionStrategy {
+    AlphaSpendingStrategy,
+    BetaSpendingStrategy,
+    AlphaBetaSpendingStrategy,
+    WhiteheadStrategy,
+    OBrienFlemingStrategy,
+    PocockStrategy,
+    WangTsiatisStrategy,
   }
 
   /**
-   * Abstract Base for Stopping Policy.
+   * Abstract Base for Decision Strategy.
+   * Holds the Inferential Model (Assumption).
    */
-  model StoppingPolicyBase {
+  model DecisionStrategyBase {
     kind: string;
+    statistical_model: StatisticalModel;
   }
 
   /**
-   * Abstract Base for Spending-Function Policies.
+   * Abstract Base for Spending-Function Strategies.
    */
-  model SpendingFunctionStoppingPolicyBase extends StoppingPolicyBase {}
+  model SpendingFunctionStrategyBase extends DecisionStrategyBase {}
 
   /**
-   * Abstract Base for Shape-Based Boundary Policies.
+   * Abstract Base for Shape-Based Boundary Strategies.
    */
-  model BoundaryFunctionStoppingPolicyBase extends StoppingPolicyBase {}
+  model BoundaryFunctionStrategyBase extends DecisionStrategyBase {}
 
   /**
-   * Alpha (Efficacy) Spending Policy.
-   * Supports one-sided or two-sided tests.
+   * Alpha (Efficacy) Spending Strategy.
    */
-  model AlphaSpendingPolicy extends SpendingFunctionStoppingPolicyBase {
+  model AlphaSpendingStrategy extends SpendingFunctionStrategyBase {
     kind: "alpha_spending" = "alpha_spending";
-    spending_fn: SpendingFunctionSpec;
+    spending_fn: SpendingFunction;
     budget: float64;
-    sided: "one" | "two" = "two";  // default two-sided
+    sided: "one" | "two" = "two";
   }
 
   /**
-   * Beta (Futility) Spending Policy.
-   * Always one-sided (lower boundary).
+   * Beta (Futility) Spending Strategy.
    */
-  model BetaSpendingPolicy extends SpendingFunctionStoppingPolicyBase {
+  model BetaSpendingStrategy extends SpendingFunctionStrategyBase {
     kind: "beta_spending" = "beta_spending";
-    spending_fn: SpendingFunctionSpec;
+    spending_fn: SpendingFunction;
     budget: float64;
   }
 
   /**
-   * Combined Alpha-Beta Spending Policy.
-   * Efficacy (upper) + Futility (lower) boundaries.
+   * Combined Alpha-Beta Spending Strategy.
    */
-  model AlphaBetaSpendingPolicy extends SpendingFunctionStoppingPolicyBase {
+  model AlphaBetaSpendingStrategy extends SpendingFunctionStrategyBase {
     kind: "alpha_beta_spending" = "alpha_beta_spending";
-    alpha_spending_fn: SpendingFunctionSpec;
-    beta_spending_fn: SpendingFunctionSpec;
+    alpha_spending_fn: SpendingFunction;
+    beta_spending_fn: SpendingFunction;
     alpha_budget: float64;
     beta_budget: float64;
     alpha_binding?: boolean = true;
@@ -227,39 +255,36 @@ namespace GST {
   }
 
   /**
-   * Classic O'Brien-Fleming Policy.
-   * Shortcut for O'Brien-Fleming spending.
+   * Classic O'Brien-Fleming Strategy.
    */
-  model OBrienFlemingBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
+  model OBrienFlemingStrategy extends BoundaryFunctionStrategyBase {
     kind: "obrien_fleming" = "obrien_fleming";
     alpha: float64;
     sided: "one" | "two" = "two";
   }
 
   /**
-   * Whitehead's Triangular Test Policy.
-   * Typically defines both efficacy and futility boundaries.
+   * Whitehead's Triangular Test Strategy.
    */
-  model WhiteheadBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
+  model WhiteheadStrategy extends BoundaryFunctionStrategyBase {
     kind: "whitehead" = "whitehead";
     alpha: float64;
     beta: float64;
   }
 
   /**
-   * Pocock Policy (Constant Boundary).
+   * Pocock Strategy.
    */
-  model PocockBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
+  model PocockStrategy extends BoundaryFunctionStrategyBase {
     kind: "pocock" = "pocock";
     alpha: float64;
     sided: "one" | "two" = "two";
   }
 
   /**
-   * Wang-Tsiatis Power Family Policy.
-   * Parameterized by delta and alpha.
+   * Wang-Tsiatis Power Family Strategy.
    */
-  model WangTsiatisBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
+  model WangTsiatisStrategy extends BoundaryFunctionStrategyBase {
     kind: "wang_tsiatis" = "wang_tsiatis";
     alpha: float64;
     delta: float64;
@@ -295,104 +320,111 @@ namespace GST {
 
   model BinaryEffectSize extends EffectSizeSpec {
     type: "binary";
-    proportions: Record<float64>; // Arm name -> Expected rate
+    /** Arm name -> Expected rate */
+    proportions: Record<float64>;
   }
 
   model ContinuousEffectSize extends EffectSizeSpec {
     type: "continuous";
-    means: Record<float64>; // Arm name -> Expected mean
+    /** Arm name -> Expected mean */
+    means: Record<float64>;
     standard_deviation: float64;
   }
 
   model SurvivalEffectSize extends EffectSizeSpec {
     type: "time_to_event";
-    hazard_ratios: Record<float64>; // Arm name -> Hazard Ratio (relative to control)
-    median_survival_times?: Record<float64>; // Optional: for sample size calc
-    event_rate?: float64; // Overall event rate if needed
+    /** Arm name -> Hazard Ratio (relative to control) */
+    hazard_ratios: Record<float64>;
+    /** Optional: for sample size calc */
+    median_survival_times?: Record<float64>;
+    /** Overall event rate if needed */
+    event_rate?: float64;
   }
 
   /**
-   * The "Core": Reference Model (Statistical Engine Assumptions).
+   * The "Model": Statistical Assumptions for Inference.
    */
-  model ReferenceModelSpec {
+  /**
+   * The "Model": Statistical Assumptions for Inference.
+   */
+  model StatisticalModel {
     kind: string;
   }
 
-  model BinaryModel extends ReferenceModelSpec {
-    kind: "binary" = "binary";
-    test_statistic: "Z" | "chi_square" | "exact";
-    link_function: "identity" | "log" | "logit" = "identity";
-    use_canonical_joint_distribution: boolean;
+  model CanonicalGaussianModel extends StatisticalModel {
+    kind: "canonical_gaussian" = "canonical_gaussian";
+    /** Link function for the effect scale (Risk Difference, Risk Ratio, Odds Ratio). */
+    link_function?: "identity" | "log" | "logit";
   }
 
-  model ContinuousModel extends ReferenceModelSpec {
-    kind: "continuous" = "continuous";
-    test_statistic: "Z" | "t";
-    variance_assumption: "known" | "unknown" | "heteroscedastic";
-    use_canonical_joint_distribution: boolean;
+  model ExactBinomialModel extends StatisticalModel {
+    kind: "exact_binomial" = "exact_binomial";
   }
 
-  model SurvivalModel extends ReferenceModelSpec {
-    kind: "time_to_event" = "time_to_event";
-    test_statistic: "log_rank" | "cox_ph";
-    use_canonical_joint_distribution: boolean;
+  model TProcessModel extends StatisticalModel {
+    kind: "t_process" = "t_process";
+    /** Degrees of Freedom method (e.g., "satterthwaite") */
+    degrees_of_freedom_method: string;
+  }
+
+  /**
+   * The "Statistic": Operational Definition of the Test Statistic.
+   */
+  model TestStatisticSpec {
+    kind: string;
+  }
+
+  /**
+   * Two-Arm Wald Z-Statistic.
+   * Computes Z = (p_t - p_c) / SE.
+   */
+  model TwoArmBinomialWaldZ extends TestStatisticSpec {
+    kind: "two_arm_binomial_wald_z" = "two_arm_binomial_wald_z";
+    /** Variance estimation: pooled (common p) or unpooled. */
+    variance_estimation: "pooled" | "unpooled" = "pooled";
+  }
+
+  /**
+   * Two-Arm Score Z-Statistic.
+   */
+  model TwoArmBinomialScoreZ extends TestStatisticSpec {
+    kind: "two_arm_binomial_score_z" = "two_arm_binomial_score_z";
+  }
+
+  /**
+   * One-Arm Wald Z-Statistic.
+   */
+  model OneArmBinomialWaldZ extends TestStatisticSpec {
+    kind: "one_arm_binomial_wald_z" = "one_arm_binomial_wald_z";
+  }
+
+  model BinomialExactStatistic extends TestStatisticSpec {
+    kind: "binomial_exact" = "binomial_exact";
+  }
+
+  model ContinuousWaldZ extends TestStatisticSpec {
+    kind: "continuous_wald_z" = "continuous_wald_z";
+    variance_assumption: "known" | "estimated";
+  }
+
+  /**
+   * Composite Policy Container.
+   */
+  model StoppingPolicySpec {
+    statistic: TestStatisticSpec;
+    strategy: DecisionStrategy;
+    schedule: ScheduleSpec;
   }
 
   model ScheduleSpec {
     unit: "sample_size" | "information_fraction" | "calendar_time" | "events";
-    // Usually defined by N looks and spacing, or specific points.
+    /** Usually defined by N looks and spacing, or specific points. */
     n_looks?: int32;
-    interim_points?: float64[]; // Optional explicit points
+    /** Optional explicit points */
+    interim_points?: float64[];
   }
 
-  model StoppingRule {
-    schedule: ScheduleSpec; // The timing of the tests
-    boundary: BoundarySpec; // The decision rule
-  }
 
-  // --- Boundary Definitions ---
-
-  /**
-   * Abstract Base for a Boundary Definition.
-   */
-  model BoundarySpec {
-    kind: string;
-    reference_model: ReferenceModelSpec; 
-    boundary_scale: "z_score" | "p_value" | "score_statistic" = "z_score";
-    binding: boolean = true;
-  }
-
-  /**
-   * Available spending function types for group sequential design.
-   */
-  enum SpendingFunctionType {
-    ObrienFleming: "obrien_fleming",
-    Pocock: "pocock",
-    KimDemets: "kim_demets",
-    LanDemets: "lan_demets",
-    PowerFamily: "power_family",
-    HwangShihDecani: "hwang_shih_decani",
-  }
-
-  model SpendingFunctionSpec {
-    family: SpendingFunctionType | string;
-    params?: Record<float64>; // e.g. { "rho": 2.0, "gamma": -4.0 }
-  }
-
-  model SpendingBoundary extends BoundarySpec {
-    kind: "spending";
-    spending_function: SpendingFunctionSpec;
-  }
-
-  model FixedBoundary extends BoundarySpec {
-    kind: "fixed";
-    value: float64; // The fixed constant (e.g., 3.0)
-  }
-
-  model CustomBoundary extends BoundarySpec {
-    kind: "custom";
-    values: float64[]; // Explicit boundary values per look
-  }
 
   namespace Log {
     /**
@@ -437,7 +469,7 @@ namespace GST {
     model Analysis extends Base.Log {
       trigger?: Trigger;
       
-      // Results
+      /** Results */
       look: int32;
       statistic: float64;
       info_frac: float64;
@@ -514,10 +546,12 @@ namespace GST.Multivariate {
   model TaskSpec extends Base.TaskSpec {
     kind: "group_sequential_multivariate" = "group_sequential_multivariate"; 
     
-    sub_tasks: GST.TaskSpec[]; // Reusing the Standard GST TaskSpec
+    /** Reusing the Standard GST TaskSpec */
+    sub_tasks: GST.TaskSpec[]; 
     
-    // Global parameters
-    arms: string[]; // Study-wide arms (must be consistent with sub_tasks)
+    /** Global parameters */
+    /** Study-wide arms (must be consistent with sub_tasks) */
+    arms: string[];
     
     /**
      * Global Hypothesis (e.g., "At least one effective" or "Global Null").
@@ -525,8 +559,10 @@ namespace GST.Multivariate {
      */
     hypotheses: GST.HypothesisSpec; 
     
-    alpha?: float64; // Global FWER
-    beta?: float64;  // Global Power
+    /** Global FWER */
+    alpha?: float64;
+    /** Global Power */
+    beta?: float64;
   }
 
   model MethodSpec extends Base.MethodSpec {

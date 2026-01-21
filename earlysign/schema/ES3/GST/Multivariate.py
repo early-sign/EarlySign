@@ -37,14 +37,19 @@ class TaskSpec(TaskSpec_2):
     """
 
     kind: Literal["group_sequential_multivariate"] = "group_sequential_multivariate"
-    sub_tasks: list[TaskSpec_1]
-    arms: list[str]
+    sub_tasks: list[TaskSpec_1] = Field(
+        ..., description="Reusing the Standard GST TaskSpec"
+    )
+    arms: list[str] = Field(
+        ...,
+        description="Global parametersStudy-wide arms (must be consistent with sub_tasks)",
+    )
     hypotheses: HypothesisSpec = Field(
         ...,
         description='Global Hypothesis (e.g., "At least one effective" or "Global Null").\nTypically represents the Union-Intersection or Intersection-Union test.',
     )
-    alpha: float | None = None
-    beta: float | None = None
+    alpha: float | None = Field(None, description="Global FWER")
+    beta: float | None = Field(None, description="Global Power")
 
 
 class Protocol(Protocol_1):
