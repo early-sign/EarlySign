@@ -27,7 +27,10 @@ class SpendingFunction(Protocol):
 
 
 class OBFSpending(SpendingFunction):
-    """Lan–DeMets O'Brien–Fleming style spending."""
+    """Lan–DeMets O'Brien–Fleming style spending (1-sided).
+
+    For two-sided tests, provide budget=alpha/2.
+    """
 
     def __init__(self, budget: float) -> None:
         if not (0.0 < budget < 1.0):
@@ -39,7 +42,8 @@ class OBFSpending(SpendingFunction):
         t_arr = np.clip(t_arr, 0.0, 1.0)
         t_arr = np.maximum(t_arr, 1e-12)
         z = float(norm.isf(self.budget))
-        return np.asarray(2.0 * (1.0 - norm.cdf(z / np.sqrt(t_arr))), dtype=float)
+        # 1-sided formula: α(t) = 1 - Φ(z_α / √t)
+        return np.asarray(1.0 - norm.cdf(z / np.sqrt(t_arr)), dtype=float)
 
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)

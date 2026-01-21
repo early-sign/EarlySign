@@ -54,7 +54,7 @@ The designer calculates the required sample size and decision boundaries.
     ... )
 
     >>> print(f"Designed Max Sample Size: {int(protocol.method.schedule.interim_points[-1])}")
-    Designed Max Sample Size: 12861
+    Designed Max Sample Size: 12805
 
 With the protocol designed, we initialize the template and persist it to the ledger.
 

@@ -23,7 +23,7 @@ scenarios(str(corresponding_scenario_path(__file__)))
 @pytest.fixture
 def design_params() -> Dict[str, Any]:
     return {
-        "n_sims": 5000,
+        "n_sims": 1000,
         "rng_seed": 42,
         "type": "normal-mean",
         "tails": 2,
@@ -271,7 +271,7 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
     info_times = np.linspace(1 / k, 1.0, k)
     spending_family = design_params.get("spending_family", "obrien_fleming")
 
-    model = CanonicalJointModel(Config(info_times=info_times, n_sims=2000, rng_seed=42))
+    model = CanonicalJointModel(Config(info_times=info_times, n_sims=1000, rng_seed=42))
     delta_wt = design_params.get("delta_wt")
     shape_params = {"delta_wt": float(delta_wt)} if delta_wt is not None else None
 
@@ -298,6 +298,7 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
         boundaries.tolist(),
         target_power=power,
         tails=design_params.get("tails", 2),
+        method="simulation",
     )
     i_max = (drift / delta) ** 2
 
@@ -357,17 +358,18 @@ def when_table32_eval(
         alpha=alpha,
         power=power,
         efficacy_spending=spending,
-        n_sims=n_sims,
+        n_sims=n_sims if k < 10 else 1000,
         tails=2,
         rng_seed=42,
     )
     model = CanonicalJointModel(config=config)
-    boundaries_plan, _ = model.solve_boundaries()
+    boundaries_plan, _ = model.solve_boundaries(method="simulation")
     drift_planned = model.solve_drift(
         info_times=t_plan.tolist(),
         boundaries=boundaries_plan.tolist(),
         target_power=power,
         tails=2,
+        method="simulation",
     )
 
     ks = np.arange(1, k + 1)

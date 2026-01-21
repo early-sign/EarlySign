@@ -5,10 +5,11 @@ with specialized support for the canonical joint distribution used in
 group sequential tests.
 """
 
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Optional, Sequence, cast
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import multivariate_normal, norm
 
 
 class GaussianProcess:
@@ -49,17 +50,21 @@ class GaussianProcess:
         )
         self._rng = rng or np.random.default_rng()
 
-    def sample(self, t: NDArray[Any], n_sims: int) -> NDArray[Any]:
+    def sample(
+        self, t: NDArray[Any], n_sims: int, rng: Optional[np.random.Generator] = None
+    ) -> NDArray[Any]:
         """Sample multiple paths from the Gaussian Process at given time points.
 
         Args:
             t: Time points to sample at, shape (k,).
             n_sims: Number of simulations (paths) to generate.
+            rng: Optional RNG override (useful for CRN).
 
         Returns:
             Array of shape (n_sims, k, D) containing sampled values.
             If D=1, returns (n_sims, k).
         """
+        gen = rng or self._rng
         t_arr = np.asarray(t)
         k = len(t_arr)
         mean = self.mean_func(t_arr)  # (k, D)
@@ -74,7 +79,7 @@ class GaussianProcess:
             cov = cov_blocks.transpose(0, 2, 1, 3).reshape(k * self.dims, k * self.dims)
 
         cov = (cov + cov.T) / 2.0
-        samples_flat = self._rng.multivariate_normal(
+        samples_flat = gen.multivariate_normal(
             mean_flat, cov, size=n_sims
         )  # (n_sims, kD)
 
@@ -184,14 +189,17 @@ class CanonicalGaussianProcess(GaussianProcess):
             dims=1,
         )
 
-    def sample(self, t: NDArray[Any], n_sims: int) -> NDArray[Any]:
+    def sample(
+        self, t: NDArray[Any], n_sims: int, rng: Optional[np.random.Generator] = None
+    ) -> NDArray[Any]:
         """Sample multiple paths using Brownian motion increments."""
+        gen = rng or self._rng
         t_arr = np.asarray(t)
         k = len(t_arr)
         dt = np.diff(np.insert(t_arr, 0, 0))
 
         # B(t) has drift self.drift and unit variance per unit time
-        db = self._rng.normal(self.drift * dt, np.sqrt(dt), (n_sims, k))
+        db = gen.normal(self.drift * dt, np.sqrt(dt), (n_sims, k))
         b = np.cumsum(db, axis=1)
 
         # Z(t) = B(t) / sqrt(t)
@@ -208,3 +216,101 @@ class CanonicalGaussianProcess(GaussianProcess):
         mask = t_max > 0
         res[mask] = np.sqrt(t_min[mask] / t_max[mask])
         return res
+
+    def compute_crossing_probability(
+        self,
+        t: Sequence[float] | NDArray[Any],
+        upper: Optional[Sequence[float] | NDArray[Any]] = None,
+        lower: Optional[Sequence[float] | NDArray[Any]] = None,
+        n_sims: int = 20000,
+        method: str = "simulation",
+        seed: Optional[int] = None,
+    ) -> float:
+        """Compute the probability of crossing the specified boundaries.
+
+        This serves as a high-level interface for numerical integration or simulation
+        engines to determine stopping probabilities for a given boundary shape.
+
+        Args:
+            t: Information times.
+            upper: Upper boundary vector.
+            lower: Lower boundary vector.
+            n_sims: Number of simulations to use (if method="simulation").
+            method: "simulation" (Monte Carlo) or "numerical_integration" (Jennison-Turnbull).
+            seed: Optional seed for reproducibility (CRN) in simulation mode.
+
+        Returns:
+            Probability of crossing either upper or lower boundary at any look.
+        """
+        t_arr = np.asarray(t)
+        u_arr = np.asarray(upper) if upper is not None else None
+        l_arr = np.asarray(lower) if lower is not None else None
+
+        if method == "numerical_integration":
+            return self._compute_crossing_numerical(t_arr, u_arr, l_arr)
+        elif method == "simulation":
+            return self._compute_crossing_simulation(t_arr, u_arr, l_arr, n_sims, seed)
+        else:
+            raise ValueError(f"Method '{method}' is not implemented.")
+
+    def _compute_crossing_numerical(
+        self,
+        t_arr: NDArray[Any],
+        u_arr: Optional[NDArray[Any]],
+        l_arr: Optional[NDArray[Any]],
+    ) -> float:
+        """Numerical integration engine for crossing probability."""
+        k = len(t_arr)
+        if k == 1:
+            # Efficient 1D case
+            mu = self.drift * np.sqrt(t_arr[0])
+            u = u_arr[0] if u_arr is not None else np.inf
+            lower_bound = l_arr[0] if l_arr is not None else -np.inf
+            return 1.0 - float(norm.cdf(u, loc=mu) - norm.cdf(lower_bound, loc=mu))
+
+        # Canonical covariance: Cov(Z_i, Z_j) = sqrt(t_i/t_j) for i <= j
+        cov = np.zeros((k, k))
+        for i in range(k):
+            for j in range(k):
+                if t_arr[i] > 0 and t_arr[j] > 0:
+                    cov[i, j] = np.sqrt(
+                        min(t_arr[i], t_arr[j]) / max(t_arr[i], t_arr[j])
+                    )
+                elif i == j:
+                    cov[i, j] = 1.0
+
+        mean = self.drift * np.sqrt(t_arr)
+
+        upper_bound = u_arr if u_arr is not None else np.full(k, np.inf)
+        lower_bound = l_arr if l_arr is not None else np.full(k, -np.inf)
+
+        try:
+            # P(no crossing) = P(l < Z < u)
+            # P(crossing) = 1 - P(no crossing)
+            prob_within = multivariate_normal.cdf(
+                upper_bound,
+                mean=mean,
+                cov=cov,
+                lower_limit=lower_bound,
+                allow_singular=True,
+                abseps=1e-5,
+            )
+            return 1.0 - float(prob_within)
+        except Exception as e:
+            raise RuntimeError(f"Numerical integration failed: {e}") from e
+
+    def _compute_crossing_simulation(
+        self,
+        t_arr: NDArray[Any],
+        u_arr: Optional[NDArray[Any]],
+        l_arr: Optional[NDArray[Any]],
+        n_sims: int,
+        seed: Optional[int] = None,
+    ) -> float:
+        """Simulation (Monte Carlo) engine for crossing probability."""
+        # Use localized RNG sequence if seed provided (CRN)
+        gen = np.random.default_rng(seed) if seed is not None else self._rng
+        samples = self.sample(t_arr, n_sims, rng=gen)
+
+        stopped, _ = self.apply_stopping_rule(samples, upper=u_arr, lower=l_arr)
+        return float(np.mean(stopped))

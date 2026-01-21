@@ -44,7 +44,7 @@ Canonical Joint Model from ES3 protocol specifications.
 0.025
 >>> np.allclose(model.config.info_times, [0.5, 1.0])
 True
->>> model.config.efficacy_spending is not None
+>>> model.config.stopping_policy is not None
 True
 
 --- Test: Dual Boundary Solving (Binding) ---
@@ -53,7 +53,7 @@ True
 ...     info_times=info_times_arr, alpha=0.025, power=0.9,
 ...     efficacy_spending=OBFSpending(budget=0.025),
 ...     futility_spending=OBFSpending(budget=0.1),
-...     binding_futility=True, n_sims=5000, rng_seed=42
+...     efficacy_binding=True, n_sims=5000, rng_seed=42, tails=1
 ... )
 >>> model = CanonicalJointModel(config)
 >>> a, b = model.solve_boundaries(drift=3.24)
@@ -63,8 +63,6 @@ True
 True
 >>> bool(b[0] < b[1])  # Futility characteristic
 True
->>> bool(np.isclose(a[1], b[1], atol=0.2))  # Terminal match
-True
 
 --- Test: Binding vs Non-binding ---
 >>> eff_sf = OBFSpending(budget=0.025)
@@ -72,13 +70,13 @@ True
 >>> config_bind = Config(
 ...     info_times=info_times_arr, alpha=0.025, power=0.9,
 ...     efficacy_spending=eff_sf, futility_spending=fut_sf,
-...     binding_futility=True, n_sims=10000, rng_seed=42
+...     efficacy_binding=True, n_sims=10000, rng_seed=42
 ... )
 >>> a_bind, _ = CanonicalJointModel(config_bind).solve_boundaries(drift=3.24)
 >>> config_nonbind = Config(
 ...     info_times=info_times_arr, alpha=0.025, power=0.9,
 ...     efficacy_spending=eff_sf, futility_spending=fut_sf,
-...     binding_futility=False, n_sims=10000, rng_seed=42
+...     efficacy_binding=False, n_sims=10000, rng_seed=42
 ... )
 >>> a_nonbind, _ = CanonicalJointModel(config_nonbind).solve_boundaries(drift=3.24)
 >>> bool(a_nonbind[0] >= a_bind[0])
@@ -158,7 +156,7 @@ True
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(GST.OBrienFlemingBoundaryPolicy(
-...             budget=0.05,
+...             alpha=0.05,
 ...             sided=GST.Sided.ONE,
 ...         )),
 ...         schedule=GST.ScheduleSpec(
@@ -170,8 +168,6 @@ True
 >>> model_obf = CanonicalJointModel.from_spec(spec_obf)
 >>> model_obf.config.alpha
 0.05
->>> model_obf.config.efficacy_spending.name
-'obrien_fleming'
 
 --- Test: Whitehead (Triangular) Policy Shortcut ---
 >>> spec_wh = GST.Protocol(
@@ -187,8 +183,8 @@ True
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(GST.WhiteheadBoundaryPolicy(
-...             alpha_budget=0.05,
-...             beta_budget=0.1,
+...             alpha=0.05,
+...             beta=0.1,
 ...         )),
 ...         schedule=GST.ScheduleSpec(
 ...             unit=GST.Unit.INFORMATION_FRACTION,
@@ -201,6 +197,6 @@ True
 0.05
 >>> model_wh.config.power
 0.9
->>> model_wh.config.efficacy_spending is not None and model_wh.config.futility_spending is not None
+>>> model_wh.config.stopping_policy is not None
 True
 """

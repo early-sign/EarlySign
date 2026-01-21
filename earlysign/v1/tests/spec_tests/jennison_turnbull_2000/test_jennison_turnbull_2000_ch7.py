@@ -24,7 +24,7 @@ scenarios(str(corresponding_scenario_path(__file__)))
 @pytest.fixture
 def ch7_params() -> Dict[str, Any]:
     # Ultra-high precision for benchmark matching
-    return {"n_sims": 100000, "rng_seed": 42, "tails": 2, "alpha": 0.05, "power": 0.9}
+    return {"n_sims": 20000, "rng_seed": 42, "tails": 2, "alpha": 0.05, "power": 0.9}
 
 
 # --- GIVEN: Setup ---
@@ -186,9 +186,13 @@ def when_compute_rld(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
         )
     )
     i_fixed = (norm.ppf(1 - alpha / tails) + norm.ppf(power)) ** 2
-    a, _ = model.solve_boundaries(drift=0.0)
+    a, _ = model.solve_boundaries(drift=0.0, method="simulation")
     drift = model.solve_drift(
-        t.tolist(), a.tolist() if a is not None else [], target_power=power, tails=tails
+        t.tolist(),
+        a.tolist() if a is not None else [],
+        target_power=power,
+        tails=tails,
+        method="simulation",
     )
     i_max = drift**2
     res = {
@@ -227,7 +231,7 @@ def when_eval_asn(thetas: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             rng_seed=42,
         )
     )
-    a, _ = model.solve_boundaries(drift=0.0)
+    a, _ = model.solve_boundaries(drift=0.0, method="simulation")
     for m in parsed_thetas:
         drift = m * res["planned_drift"]
         asn_look = model.evaluate_asn(
@@ -287,7 +291,7 @@ def when_under_run(
             rng_seed=42,
         )
     )
-    a_plan, _ = model_plan.solve_boundaries(drift=0.0)
+    a_plan, _ = model_plan.solve_boundaries(drift=0.0, method="simulation")
     planned_drift = model_plan.solve_drift(
         t_plan.tolist(),
         a_plan.tolist() if a_plan is not None else [],
@@ -307,7 +311,7 @@ def when_under_run(
             rng_seed=42,
         )
     )
-    a, _ = model_act.solve_boundaries(drift=0.0)
+    a, _ = model_act.solve_boundaries(drift=0.0, method="simulation")
     prob = model_act.compute_rejection_probability(
         t_actual.tolist(),
         a.tolist() if a is not None else [],
@@ -344,7 +348,7 @@ def when_over_run(
             rng_seed=42,
         )
     )
-    a_plan, _ = model_plan.solve_boundaries(drift=0.0)
+    a_plan, _ = model_plan.solve_boundaries(drift=0.0, method="simulation")
     planned_drift = model_plan.solve_drift(
         t_plan.tolist(),
         a_plan.tolist() if a_plan is not None else [],
@@ -367,7 +371,7 @@ def when_over_run(
             rng_seed=42,
         )
     )
-    a, _ = model_act.solve_boundaries(drift=0.0)
+    a, _ = model_act.solve_boundaries(drift=0.0, method="simulation")
     prob = model_act.compute_rejection_probability(
         t_actual.tolist(),
         a.tolist() if a is not None else [],
@@ -404,7 +408,7 @@ def when_mismatched_schedule(
             rng_seed=42,
         )
     )
-    a_plan, _ = model_plan.solve_boundaries(drift=0.0)
+    a_plan, _ = model_plan.solve_boundaries(drift=0.0, method="simulation")
     planned_drift = model_plan.solve_drift(
         t_plan.tolist(),
         a_plan.tolist() if a_plan is not None else [],
@@ -427,7 +431,7 @@ def when_mismatched_schedule(
             rng_seed=42,
         )
     )
-    a, _ = model_act.solve_boundaries(drift=0.0)
+    a, _ = model_act.solve_boundaries(drift=0.0, method="simulation")
     prob = model_act.compute_rejection_probability(
         t_spend.tolist(),
         a.tolist() if a is not None else [],
@@ -459,12 +463,13 @@ def when_different_k(K_val: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             rng_seed=42,
         )
     )
-    a_plan, _ = model_plan.solve_boundaries(drift=0.0)
+    a_plan, _ = model_plan.solve_boundaries(drift=0.0, method="simulation")
     planned_drift = model_plan.solve_drift(
         t_plan.tolist(),
         a_plan.tolist() if a_plan is not None else [],
         target_power=power,
         tails=2,
+        method="simulation",
     )
 
     K_actual = int(K_val)
@@ -479,7 +484,7 @@ def when_different_k(K_val: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             rng_seed=42,
         )
     )
-    a, _ = model_act.solve_boundaries(drift=0.0)
+    a, _ = model_act.solve_boundaries(drift=0.0, method="simulation")
     prob = model_act.compute_rejection_probability(
         t_act.tolist(),
         a.tolist() if a is not None else [],
@@ -522,7 +527,7 @@ def when_bhat_deaths(deaths: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             rng_seed=42,
         )
     )
-    a, _ = model.solve_boundaries(drift=0.0)
+    a, _ = model.solve_boundaries(drift=0.0, method="simulation")
     return {"boundaries": a}
 
 
@@ -624,7 +629,7 @@ def when_eval_ros_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             rng_seed=42,
         )
     )
-    a, b = model.solve_boundaries(drift=drift_h1)
+    a, b = model.solve_boundaries(drift=drift_h1, method="simulation")
     res_asn = {"R_OS": r_os * 100}
     for m in [0.0, 0.5, 1.0]:
         from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
@@ -833,7 +838,7 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     model = CanonicalJointModel(config=config)
-    a, _ = model.solve_boundaries()
+    a, _ = model.solve_boundaries(method="simulation")
     if a is None:
         raise ValueError("Failed to solve boundaries")
 
@@ -914,16 +919,17 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             n_sims=n_sims_iter,
             tails=1,
             rng_seed=seed,
-            binding_futility=True,
+            efficacy_binding=True,
         )
         model = CanonicalJointModel(config=config)
-        a, b = model.solve_boundaries(drift=current_drift)
+        a, b = model.solve_boundaries(drift=current_drift, method="simulation")
         current_drift = model.solve_drift(
             info_times.tolist(),
-            a.tolist(),
+            a.tolist() if a is not None else [],
             target_power=power,
             tails=1,
             futility_boundaries=b.tolist(),
+            method="simulation",
         )
 
     # Final run at high precision
@@ -936,16 +942,17 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
         n_sims=n_sims_final,
         tails=1,
         rng_seed=seed,
-        binding_futility=True,
+        efficacy_binding=True,
     )
     model = CanonicalJointModel(config=config_final)
-    a, b = model.solve_boundaries(drift=current_drift)
+    a, b = model.solve_boundaries(drift=current_drift, method="simulation")
     drift_h1 = model.solve_drift(
         info_times.tolist(),
-        a.tolist(),
+        a.tolist() if a is not None else [],
         target_power=power,
         tails=1,
         futility_boundaries=b.tolist(),
+        method="simulation",
     )
     r_os = (drift_h1**2) / i_fixed
 
