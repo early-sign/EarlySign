@@ -197,17 +197,6 @@ class TaskSpec(TaskSpec_1):
     futility: FutilityRequirement | None = None
 
 
-class WhiteheadPolicy(StoppingPolicyBase):
-    """
-    Whitehead's Triangular Test Policy.
-    Typically defines both efficacy and futility boundaries.
-    """
-
-    kind: Literal["whitehead"] = "whitehead"
-    alpha_budget: float
-    beta_budget: float
-
-
 class BinaryEffectSize(EffectSizeSpec):
     type: Literal["binary"] = "binary"
     proportions: dict[str, float]
@@ -218,6 +207,12 @@ class BinaryModel(ReferenceModelSpec):
     test_statistic: TestStatistic
     link_function: LinkFunction
     use_canonical_joint_distribution: bool
+
+
+class BoundaryFunctionStoppingPolicyBase(StoppingPolicyBase):
+    """
+    Abstract Base for Shape-Based Boundary Policies.
+    """
 
 
 class BoundarySpec(BaseModel):
@@ -264,14 +259,24 @@ class FixedBoundary(BoundarySpec):
     value: float
 
 
-class OBrienFlemingPolicy(StoppingPolicyBase):
+class OBrienFlemingBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
     """
     Classic O'Brien-Fleming Policy.
     Shortcut for O'Brien-Fleming spending.
     """
 
     kind: Literal["obrien_fleming"] = "obrien_fleming"
-    budget: float
+    alpha: float
+    sided: Sided
+
+
+class PocockBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
+    """
+    Pocock Policy (Constant Boundary).
+    """
+
+    kind: Literal["pocock"] = "pocock"
+    alpha: float
     sided: Sided
 
 
@@ -280,12 +285,41 @@ class SpendingFunctionSpec(BaseModel):
     params: dict[str, float] | None = None
 
 
+class SpendingFunctionStoppingPolicyBase(StoppingPolicyBase):
+    """
+    Abstract Base for Spending-Function Policies.
+    """
+
+
 class StoppingRule(BaseModel):
     schedule: ScheduleSpec
     boundary: BoundarySpec
 
 
-class AlphaBetaSpendingPolicy(StoppingPolicyBase):
+class WangTsiatisBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
+    """
+    Wang-Tsiatis Power Family Policy.
+    Parameterized by delta and alpha.
+    """
+
+    kind: Literal["wang_tsiatis"] = "wang_tsiatis"
+    alpha: float
+    delta: float
+    sided: Sided
+
+
+class WhiteheadBoundaryPolicy(BoundaryFunctionStoppingPolicyBase):
+    """
+    Whitehead's Triangular Test Policy.
+    Typically defines both efficacy and futility boundaries.
+    """
+
+    kind: Literal["whitehead"] = "whitehead"
+    alpha: float
+    beta: float
+
+
+class AlphaBetaSpendingPolicy(SpendingFunctionStoppingPolicyBase):
     """
     Combined Alpha-Beta Spending Policy.
     Efficacy (upper) + Futility (lower) boundaries.
@@ -300,7 +334,7 @@ class AlphaBetaSpendingPolicy(StoppingPolicyBase):
     beta_binding: bool | None = False
 
 
-class AlphaSpendingPolicy(StoppingPolicyBase):
+class AlphaSpendingPolicy(SpendingFunctionStoppingPolicyBase):
     """
     Alpha (Efficacy) Spending Policy.
     Supports one-sided or two-sided tests.
@@ -312,7 +346,7 @@ class AlphaSpendingPolicy(StoppingPolicyBase):
     sided: Sided
 
 
-class BetaSpendingPolicy(StoppingPolicyBase):
+class BetaSpendingPolicy(SpendingFunctionStoppingPolicyBase):
     """
     Beta (Futility) Spending Policy.
     Always one-sided (lower boundary).
@@ -333,16 +367,20 @@ class StoppingPolicySpec(
         AlphaSpendingPolicy
         | BetaSpendingPolicy
         | AlphaBetaSpendingPolicy
-        | WhiteheadPolicy
-        | OBrienFlemingPolicy
+        | WhiteheadBoundaryPolicy
+        | OBrienFlemingBoundaryPolicy
+        | PocockBoundaryPolicy
+        | WangTsiatisBoundaryPolicy
     ]
 ):
     root: (
         AlphaSpendingPolicy
         | BetaSpendingPolicy
         | AlphaBetaSpendingPolicy
-        | WhiteheadPolicy
-        | OBrienFlemingPolicy
+        | WhiteheadBoundaryPolicy
+        | OBrienFlemingBoundaryPolicy
+        | PocockBoundaryPolicy
+        | WangTsiatisBoundaryPolicy
     ) = Field(..., description="Discriminated Union for Stopping Policy types.")
 
 

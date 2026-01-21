@@ -168,8 +168,10 @@ namespace GST {
     AlphaSpendingPolicy,
     BetaSpendingPolicy,
     AlphaBetaSpendingPolicy,
-    WhiteheadPolicy,
-    OBrienFlemingPolicy,
+    WhiteheadBoundaryPolicy,
+    OBrienFlemingBoundaryPolicy,
+    PocockBoundaryPolicy,
+    WangTsiatisBoundaryPolicy,
   }
 
   /**
@@ -180,10 +182,20 @@ namespace GST {
   }
 
   /**
+   * Abstract Base for Spending-Function Policies.
+   */
+  model SpendingFunctionStoppingPolicyBase extends StoppingPolicyBase {}
+
+  /**
+   * Abstract Base for Shape-Based Boundary Policies.
+   */
+  model BoundaryFunctionStoppingPolicyBase extends StoppingPolicyBase {}
+
+  /**
    * Alpha (Efficacy) Spending Policy.
    * Supports one-sided or two-sided tests.
    */
-  model AlphaSpendingPolicy extends StoppingPolicyBase {
+  model AlphaSpendingPolicy extends SpendingFunctionStoppingPolicyBase {
     kind: "alpha_spending" = "alpha_spending";
     spending_fn: SpendingFunctionSpec;
     budget: float64;
@@ -194,7 +206,7 @@ namespace GST {
    * Beta (Futility) Spending Policy.
    * Always one-sided (lower boundary).
    */
-  model BetaSpendingPolicy extends StoppingPolicyBase {
+  model BetaSpendingPolicy extends SpendingFunctionStoppingPolicyBase {
     kind: "beta_spending" = "beta_spending";
     spending_fn: SpendingFunctionSpec;
     budget: float64;
@@ -204,7 +216,7 @@ namespace GST {
    * Combined Alpha-Beta Spending Policy.
    * Efficacy (upper) + Futility (lower) boundaries.
    */
-  model AlphaBetaSpendingPolicy extends StoppingPolicyBase {
+  model AlphaBetaSpendingPolicy extends SpendingFunctionStoppingPolicyBase {
     kind: "alpha_beta_spending" = "alpha_beta_spending";
     alpha_spending_fn: SpendingFunctionSpec;
     beta_spending_fn: SpendingFunctionSpec;
@@ -218,9 +230,9 @@ namespace GST {
    * Classic O'Brien-Fleming Policy.
    * Shortcut for O'Brien-Fleming spending.
    */
-  model OBrienFlemingPolicy extends StoppingPolicyBase {
+  model OBrienFlemingBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
     kind: "obrien_fleming" = "obrien_fleming";
-    budget: float64;
+    alpha: float64;
     sided: "one" | "two" = "two";
   }
 
@@ -228,10 +240,30 @@ namespace GST {
    * Whitehead's Triangular Test Policy.
    * Typically defines both efficacy and futility boundaries.
    */
-  model WhiteheadPolicy extends StoppingPolicyBase {
+  model WhiteheadBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
     kind: "whitehead" = "whitehead";
-    alpha_budget: float64;
-    beta_budget: float64;
+    alpha: float64;
+    beta: float64;
+  }
+
+  /**
+   * Pocock Policy (Constant Boundary).
+   */
+  model PocockBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
+    kind: "pocock" = "pocock";
+    alpha: float64;
+    sided: "one" | "two" = "two";
+  }
+
+  /**
+   * Wang-Tsiatis Power Family Policy.
+   * Parameterized by delta and alpha.
+   */
+  model WangTsiatisBoundaryPolicy extends BoundaryFunctionStoppingPolicyBase {
+    kind: "wang_tsiatis" = "wang_tsiatis";
+    alpha: float64;
+    delta: float64;
+    sided: "one" | "two" = "two";
   }
 
   /**

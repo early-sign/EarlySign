@@ -9,6 +9,9 @@ from earlysign.v1.methods.group_sequential.execution.stopping_policy import (
     StoppingPolicy,
     StoppingPolicyFactory,
 )
+from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
+    CanonicalJointModel,
+)
 
 
 class BinomialGSTEngine:
@@ -45,6 +48,12 @@ class BinomialGSTEngine:
         if schedule.unit == GST.Unit.SAMPLE_SIZE and self._points:
             self.n_max = int(max(self._points))
 
+        # Initialize Canonical Model and pre-calculate boundaries
+        self.canonical_model = CanonicalJointModel.from_spec(protocol)
+        self.efficacy_boundaries, self.futility_boundaries = (
+            self.canonical_model.solve_boundaries()
+        )
+
     def get_boundary_at_look(
         self, look_index: int, info_time: float, rule_type: str = "efficacy"
     ) -> Optional[float]:
@@ -52,24 +61,26 @@ class BinomialGSTEngine:
         Public helper to project a boundary for a given look and information time.
         Useful for design and visualization.
         """
-        if rule_type == "efficacy" and self.stopping_policy.efficacy_spending:
-            sf = self.stopping_policy.efficacy_spending
-            alpha_spent = float(sf.cumulative(np.array([info_time]))[0])
-            if alpha_spent > 0:
-                from scipy.stats import norm
+        # Note: This implementation assumes look_index aligns with the model's schedule.
+        # If info_time deviates significantly from the schedule, this might be inaccurate
+        # for spending designs that depend on exact info time.
+        # However, for the Engine execution, we typically look up by index.
 
-                if self.stopping_policy.sided == "two":
-                    return float(norm.isf(alpha_spent / 2.0))
-                else:
-                    return float(norm.isf(alpha_spent))
-        elif rule_type == "futility" and self.stopping_policy.futility_spending:
-            sf = self.stopping_policy.futility_spending
-            beta_spent = float(sf.cumulative(np.array([info_time]))[0])
-            if beta_spent > 0:
-                from scipy.stats import norm
+        if look_index < 0:
+            return None
 
-                z = float(norm.isf(beta_spent))
-                return -z  # Lower boundary is negative
+        if rule_type == "efficacy":
+            if self.efficacy_boundaries is not None and look_index < len(
+                self.efficacy_boundaries
+            ):
+                return float(self.efficacy_boundaries[look_index])
+
+        elif rule_type == "futility":
+            if self.futility_boundaries is not None and look_index < len(
+                self.futility_boundaries
+            ):
+                return float(self.futility_boundaries[look_index])
+
         return None
 
     def run(self, metrics: Scoreboard, **kwargs: Any) -> LookResult:

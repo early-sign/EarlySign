@@ -13,7 +13,7 @@ from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
 )
-from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
+from earlysign.v1.methods.group_sequential.shared.spending import PowerFamilySpending
 from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 from earlysign.v1.tests.util import corresponding_scenario_path
 
@@ -174,7 +174,7 @@ def when_compute_rld(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
         ch7_params.get("tails", 2),
     )
     t = np.linspace(1 / k, 1.0, k)
-    eff_sf = RhoFamilySpending(alpha, rho)
+    eff_sf = PowerFamilySpending(alpha, rho)
     model = CanonicalJointModel(
         Config(
             t,
@@ -221,7 +221,7 @@ def when_eval_asn(thetas: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
         Config(
             t,
             alpha=res["alpha"],
-            efficacy_spending=RhoFamilySpending(res["alpha"], res["rho"]),
+            efficacy_spending=PowerFamilySpending(res["alpha"], res["rho"]),
             tails=res["tails"],
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -281,7 +281,7 @@ def when_under_run(
         Config(
             t_plan,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -301,7 +301,7 @@ def when_under_run(
         Config(
             t_actual,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -338,7 +338,7 @@ def when_over_run(
         Config(
             t_plan,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -361,7 +361,7 @@ def when_over_run(
         Config(
             t_actual,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -398,7 +398,7 @@ def when_mismatched_schedule(
         Config(
             t_plan,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -421,7 +421,7 @@ def when_mismatched_schedule(
         Config(
             t_spend,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=tails,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -453,7 +453,7 @@ def when_different_k(K_val: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
         Config(
             t_plan,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=2,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -473,7 +473,7 @@ def when_different_k(K_val: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
         Config(
             t_act,
             alpha=alpha,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
             tails=2,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -516,7 +516,7 @@ def when_bhat_deaths(deaths: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             t_info,
             spending_times=t_spend,
             alpha=0.05,
-            efficacy_spending=RhoFamilySpending(0.05, rho),
+            efficacy_spending=PowerFamilySpending(0.05, rho),
             tails=2,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -617,8 +617,8 @@ def when_eval_ros_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             t,
             alpha=alpha,
             power=power,
-            efficacy_spending=RhoFamilySpending(alpha, rho),
-            futility_spending=RhoFamilySpending(1 - power, rho),
+            efficacy_spending=PowerFamilySpending(alpha, rho),
+            futility_spending=PowerFamilySpending(1 - power, rho),
             tails=1,
             n_sims=ch7_params["n_sims"],
             rng_seed=42,
@@ -819,9 +819,7 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     n_sims = ch7_params["n_sims"]
     seed = 42
 
-    from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
-
-    spending = RhoFamilySpending(budget=alpha, rho=rho)
+    spending = PowerFamilySpending(budget=alpha, rho=rho)
     info_times = np.linspace(1 / k, 1.0, k)
 
     config = Config(
@@ -894,11 +892,9 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     n_sims_iter = n_sims_final // 4
     seed = 42
 
-    from earlysign.v1.methods.group_sequential.shared.spending import RhoFamilySpending
-
-    eff_spending = RhoFamilySpending(budget=alpha, rho=rho)
+    eff_spending = PowerFamilySpending(budget=alpha, rho=rho)
     # For Table 7.9, symmetric futility spending means beta spending matches alpha
-    fut_spending = RhoFamilySpending(budget=1 - power, rho=rho)
+    fut_spending = PowerFamilySpending(budget=1 - power, rho=rho)
     info_times = np.linspace(1 / k, 1.0, k)
 
     # Solve for drift and boundaries iteratively (interdependent)

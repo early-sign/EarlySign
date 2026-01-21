@@ -29,24 +29,17 @@ class SpendingFunction(Protocol):
 class OBFSpending(SpendingFunction):
     """Lan–DeMets O'Brien–Fleming style spending."""
 
-    def __init__(self, budget: float, sided: int = 2) -> None:
-        if sided not in (1, 2):
-            raise ValueError("sided must be 1 or 2")
+    def __init__(self, budget: float) -> None:
         if not (0.0 < budget < 1.0):
             raise ValueError("budget must be in (0, 1)")
         self.budget = float(budget)
-        self.sided = int(sided)
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.asarray(t, dtype=float)
         t_arr = np.clip(t_arr, 0.0, 1.0)
         t_arr = np.maximum(t_arr, 1e-12)
-        if self.sided == 2:
-            z = float(norm.isf(self.budget / 2.0))
-            return np.asarray(2.0 - 2.0 * norm.cdf(z / np.sqrt(t_arr)), dtype=float)
-        else:
-            z = float(norm.isf(self.budget))
-            return np.asarray(1.0 - norm.cdf(z / np.sqrt(t_arr)), dtype=float)
+        z = float(norm.isf(self.budget))
+        return np.asarray(2.0 * (1.0 - norm.cdf(z / np.sqrt(t_arr))), dtype=float)
 
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
@@ -104,8 +97,8 @@ class HSDSpending(SpendingFunction):
         return "hsd"
 
 
-class RhoFamilySpending(SpendingFunction):
-    """Rho-family power spending function."""
+class PowerFamilySpending(SpendingFunction):
+    """Power-family spending function (Kim-DeMets)."""
 
     def __init__(self, budget: float, rho: float = 2.0) -> None:
         if not (0.0 < budget < 1.0):
@@ -125,14 +118,14 @@ class RhoFamilySpending(SpendingFunction):
 
     @property
     def name(self) -> str:
-        return "rho"
+        return "power_family"
 
 
 _SPENDING_REGISTRY: Dict[str, Type[SpendingFunction]] = {
     "obrien_fleming": OBFSpending,
     "pocock": PocockSpending,
     "hsd": HSDSpending,
-    "rho": RhoFamilySpending,
+    "power_family": PowerFamilySpending,
 }
 
 

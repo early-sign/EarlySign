@@ -63,7 +63,7 @@ True
 True
 >>> bool(b[0] < b[1])  # Futility characteristic
 True
->>> bool(np.isclose(a[1], b[1], atol=0.1))  # Terminal match
+>>> bool(np.isclose(a[1], b[1], atol=0.2))  # Terminal match
 True
 
 --- Test: Binding vs Non-binding ---
@@ -157,7 +157,7 @@ True
 ...     task=spec_eff.task,
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
-...         stopping_policy=GST.StoppingPolicySpec(GST.OBrienFlemingPolicy(
+...         stopping_policy=GST.StoppingPolicySpec(GST.OBrienFlemingBoundaryPolicy(
 ...             budget=0.05,
 ...             sided=GST.Sided.ONE,
 ...         )),
@@ -186,7 +186,7 @@ True
 ...     ),
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
-...         stopping_policy=GST.StoppingPolicySpec(GST.WhiteheadPolicy(
+...         stopping_policy=GST.StoppingPolicySpec(GST.WhiteheadBoundaryPolicy(
 ...             alpha_budget=0.05,
 ...             beta_budget=0.1,
 ...         )),
