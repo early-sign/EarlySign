@@ -212,13 +212,13 @@ class CanonicalJointModel:
             res = root_scalar(
                 objective, bracket=[0.0, 10.0], method="brentq", xtol=1e-3
             )
-            return float(res)
+            return float(res.root)
         except ValueError:
             if objective(10.0) > 0:
                 res = root_scalar(
                     objective, bracket=[10.0, 50.0], method="brentq", xtol=1e-3
                 )
-                return float(res)
+                return float(res.root)
             raise
 
     def solve_boundaries_from_cumulative_targets(
@@ -379,7 +379,7 @@ class CanonicalJointModel:
                     res = root_scalar(
                         obj_a, bracket=[low, high], method="brentq", xtol=1e-6
                     )
-                    a[i] = res
+                    a[i] = res.root
 
             # Solve futility bound b[i]
             if b is not None and futility_targets is not None:
@@ -407,7 +407,7 @@ class CanonicalJointModel:
                     res = root_scalar(
                         obj_b, bracket=[low, high], method="brentq", xtol=1e-6
                     )
-                    b[i] = res
+                    b[i] = res.root
 
         return a, b
 
@@ -608,4 +608,4 @@ class CanonicalJointModel:
                 )
 
         res = root_scalar(f, bracket=bracket, xtol=1e-4)
-        return float(res)
+        return float(res.root)
