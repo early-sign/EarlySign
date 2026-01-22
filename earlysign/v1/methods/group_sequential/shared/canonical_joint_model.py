@@ -86,7 +86,7 @@ class CanonicalJointModel:
         """Instantiate the model from an ES3 GST.Protocol specification."""
         task = spec.task
         method = spec.method
-        schedule = method.schedule
+        schedule = method.stopping_policy.schedule
 
         task_alpha = float(task.efficacy.alpha) if task.efficacy else None
         task_power = float(task.futility.power) if task.futility else None

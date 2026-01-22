@@ -53,7 +53,7 @@ The designer calculates the required sample size and decision boundaries.
     ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
 
-    >>> print(f"Designed Max Sample Size: {int(protocol.method.schedule.interim_points[-1])}")
+    >>> print(f"Designed Max Sample Size: {int(protocol.method.stopping_policy.schedule.interim_points[-1])}")
     Designed Max Sample Size: 12805
 
 With the protocol designed, we initialize the template and persist it to the ledger.
@@ -166,10 +166,7 @@ class BinomialABTemplate:
 
         return BinomialABProtocol(
             task=task,
-            method=GST.MethodSpec(
-                stopping_policy=method_spec.stopping_policy,
-                schedule=method_spec.schedule,
-            ),
+            method=method_spec,
         )
 
     def __init__(self, ledger: Ledger):

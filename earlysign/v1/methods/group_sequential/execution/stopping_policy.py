@@ -209,23 +209,23 @@ class StoppingPolicyFactory:
     @staticmethod
     def build_from_spec(spec: GST.StoppingPolicySpec) -> StoppingPolicy:
         """Translates a StoppingPolicySpec into a concrete StoppingPolicy."""
-        policy = spec.root
+        policy = spec.strategy.root
 
-        if isinstance(policy, GST.AlphaSpendingPolicy):
+        if isinstance(policy, GST.AlphaSpendingStrategy):
             factory = SpendingFunctionFactory(budget=policy.budget)
             return SpendingFunctionStoppingPolicy(
                 efficacy_spending=factory.build_from_spec(policy.spending_fn),
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
-        if isinstance(policy, GST.BetaSpendingPolicy):
+        if isinstance(policy, GST.BetaSpendingStrategy):
             factory = SpendingFunctionFactory(budget=policy.budget)
             return SpendingFunctionStoppingPolicy(
                 futility_spending=factory.build_from_spec(policy.spending_fn),
                 sided="one",
             )
 
-        if isinstance(policy, GST.AlphaBetaSpendingPolicy):
+        if isinstance(policy, GST.AlphaBetaSpendingStrategy):
             eff_factory = SpendingFunctionFactory(budget=policy.alpha_budget)
             fut_factory = SpendingFunctionFactory(budget=policy.beta_budget)
             return SpendingFunctionStoppingPolicy(
@@ -240,13 +240,13 @@ class StoppingPolicyFactory:
                 sided="one",
             )
 
-        if isinstance(policy, GST.OBrienFlemingBoundaryPolicy):
+        if isinstance(policy, GST.OBrienFlemingStrategy):
             return OBrienFlemingStoppingPolicy(
                 alpha=policy.alpha,
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
-        if isinstance(policy, GST.WhiteheadBoundaryPolicy):
+        if isinstance(policy, GST.WhiteheadStrategy):
             return WhiteheadStoppingPolicy(
                 alpha=policy.alpha,
                 beta=policy.beta,
@@ -256,13 +256,13 @@ class StoppingPolicyFactory:
                 beta_binding=False,
             )
 
-        if isinstance(policy, GST.PocockBoundaryPolicy):
+        if isinstance(policy, GST.PocockStrategy):
             return PocockStoppingPolicy(
                 alpha=policy.alpha,
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
-        if isinstance(policy, GST.WangTsiatisBoundaryPolicy):
+        if isinstance(policy, GST.WangTsiatisStrategy):
             return WangTsiatisStoppingPolicy(
                 alpha=policy.alpha,
                 delta=policy.delta,

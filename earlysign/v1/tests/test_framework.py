@@ -165,21 +165,25 @@ The library provides off-the-shelf entities for common trial components.
 ...     ),
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
-...         stopping_policy=GST.StoppingPolicySpec(GST.AlphaSpendingPolicy(
-...             spending_fn=GST.SpendingFunctionSpec(family="obrien_fleming"),
-...             budget=0.05,
-...             sided=GST.Sided.ONE,
-...         )),
-...         schedule=GST.ScheduleSpec(
-...             unit=GST.Unit.INFORMATION_FRACTION,
-...             interim_points=[0.5, 1.0]
+...         stopping_policy=GST.StoppingPolicySpec(
+...             statistic=GST.TwoArmBinomialWaldZ(variance_estimation=GST.VarianceEstimation.POOLED),
+...             strategy=GST.DecisionStrategy(root=GST.AlphaSpendingStrategy(
+...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
+...                 budget=0.05,
+...                 sided=GST.Sided.ONE,
+...                 statistical_model=GST.CanonicalGaussianModel(),
+...             )),
+...             schedule=GST.ScheduleSpec(
+...                 unit=GST.Unit.INFORMATION_FRACTION,
+...                 interim_points=[0.5, 1.0]
+...             )
 ...         ),
 ...     )
 ... )
 >>> engine = BinomialGSTEngine(protocol=protocol)
 >>> # Projection of boundary at 50% info time
 >>> engine.get_boundary_at_look(0, 0.5)
-2.537...
+2.32617...
 
 ## ES3 Schema
 ### Protocol

@@ -115,16 +115,22 @@ class ProtocolDesigner:
             method=GST.MethodSpec(
                 kind="group_sequential",
                 stopping_policy=GST.StoppingPolicySpec(
-                    GST.AlphaSpendingPolicy(
-                        spending_fn=GST.SpendingFunctionSpec(family=shape_type),
-                        budget=alpha,
-                        sided=GST.Sided.ONE,
-                    )
-                ),
-                schedule=GST.ScheduleSpec(
-                    unit=GST.Unit.SAMPLE_SIZE,
-                    n_looks=k,
-                    interim_points=n_schedule,
+                    statistic=GST.TwoArmBinomialWaldZ(
+                        variance_estimation=GST.VarianceEstimation.POOLED
+                    ),
+                    strategy=GST.DecisionStrategy(
+                        root=GST.AlphaSpendingStrategy(
+                            spending_fn=GST.SpendingFunction(family=shape_type),
+                            budget=alpha,
+                            sided=GST.Sided.ONE,
+                            statistical_model=GST.CanonicalGaussianModel(),
+                        )
+                    ),
+                    schedule=GST.ScheduleSpec(
+                        unit=GST.Unit.SAMPLE_SIZE,
+                        n_looks=k,
+                        interim_points=n_schedule,
+                    ),
                 ),
             ),
         )
@@ -170,22 +176,24 @@ class ProtocolDesigner:
             power = futility.power
             beta = 1.0 - power
             stopping_policy: (
-                GST.AlphaSpendingPolicy
-                | GST.BetaSpendingPolicy
-                | GST.AlphaBetaSpendingPolicy
-            ) = GST.AlphaBetaSpendingPolicy(
-                alpha_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
-                beta_spending_fn=GST.SpendingFunctionSpec(family=shape_type),
+                GST.AlphaSpendingStrategy
+                | GST.BetaSpendingStrategy
+                | GST.AlphaBetaSpendingStrategy
+            ) = GST.AlphaBetaSpendingStrategy(
+                alpha_spending_fn=GST.SpendingFunction(family=shape_type),
+                beta_spending_fn=GST.SpendingFunction(family=shape_type),
                 alpha_budget=alpha,
                 beta_budget=beta,
                 alpha_binding=True,
                 beta_binding=False,
+                statistical_model=GST.CanonicalGaussianModel(),
             )
         else:
-            stopping_policy = GST.AlphaSpendingPolicy(
-                spending_fn=GST.SpendingFunctionSpec(family=shape_type),
+            stopping_policy = GST.AlphaSpendingStrategy(
+                spending_fn=GST.SpendingFunction(family=shape_type),
                 budget=alpha,
                 sided=GST.Sided.ONE,
+                statistical_model=GST.CanonicalGaussianModel(),
             )
 
         # Calculate schedule from planning
@@ -201,6 +209,11 @@ class ProtocolDesigner:
 
         return GST.MethodSpec(
             kind="group_sequential",
-            stopping_policy=GST.StoppingPolicySpec(stopping_policy),
-            schedule=generic_proto.method.schedule,
+            stopping_policy=GST.StoppingPolicySpec(
+                statistic=GST.TwoArmBinomialWaldZ(
+                    variance_estimation=GST.VarianceEstimation.POOLED
+                ),
+                strategy=GST.DecisionStrategy(root=stopping_policy),
+                schedule=generic_proto.method.stopping_policy.schedule,
+            ),
         )

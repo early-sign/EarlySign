@@ -32,7 +32,7 @@ class BinomialGSTEngine:
     def __init__(self, protocol: GST.Protocol):
         self.protocol = protocol
         method = protocol.method
-        schedule = method.schedule
+        schedule = method.stopping_policy.schedule
 
         # 1. Resolve stopping policy logic
         self.stopping_policy = StoppingPolicyFactory.build_from_spec(
