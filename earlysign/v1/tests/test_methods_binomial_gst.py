@@ -1,7 +1,4 @@
-
-import json
 import ibis
-import pytest
 
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import DecisionStatus
