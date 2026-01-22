@@ -24,7 +24,7 @@ class BinomialGSTEngine:
     3. Returns LookResult with boundary crossings and status.
     """
 
-    _schedule: GST.ScheduleSpec
+    _schedule: GST.FixedSchedule | GST.EquidistantSchedule
     _points: list[float]
     n_max: int
     stopping_policy: StoppingPolicy
@@ -40,13 +40,20 @@ class BinomialGSTEngine:
         )
 
         # Schedule
-        self._schedule = schedule
-        self._points = schedule.interim_points or []
+        self._schedule = schedule.root
+        schedule_inner = self._schedule
+        self._points = []
+        if isinstance(schedule_inner, GST.FixedSchedule):
+            self._points = schedule_inner.analyses
+        elif isinstance(schedule_inner, GST.EquidistantSchedule):
+            k = schedule_inner.n_looks
+            self._points = list(np.linspace(1 / k, 1.0, k))
 
         # Max Sample Size
         self.n_max = 0
-        if schedule.unit == GST.Unit.SAMPLE_SIZE and self._points:
-            self.n_max = int(max(self._points))
+        timer = method.stopping_policy.timer.root
+        if isinstance(timer, GST.SampleSizeTimer):
+            self.n_max = timer.max_sample_size
 
         # Initialize Canonical Model and pre-calculate boundaries
         self.canonical_model = CanonicalJointModel.from_spec(protocol)
@@ -134,12 +141,8 @@ class BinomialGSTEngine:
         # 2. Determine Look
         look_idx = -1
         for i, pt in enumerate(self._points):
-            if self._schedule.unit == GST.Unit.SAMPLE_SIZE:
-                if cumulative_n >= pt:
-                    look_idx = i
-            else:  # INFORMATION_FRACTION
-                if info_frac >= pt:
-                    look_idx = i
+            if info_frac >= pt:
+                look_idx = i
 
         efficacy_boundary = None
         is_efficacy_crossed = False

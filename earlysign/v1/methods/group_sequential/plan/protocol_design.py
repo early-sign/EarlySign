@@ -88,9 +88,6 @@ class ProtocolDesigner:
         n_max_float = 4 * i_max * sigma2
         n_max = int(np.ceil(n_max_float))
 
-        # 5. Calculate Schedule Points
-        n_schedule = [float(int(np.ceil(n_max * t))) for t in info_times]
-
         # Construct the realized protocol with new schema
         return GST.Protocol(
             name="Designed Protocol",
@@ -115,7 +112,7 @@ class ProtocolDesigner:
             method=GST.MethodSpec(
                 kind="group_sequential",
                 stopping_policy=GST.StoppingPolicySpec(
-                    statistic=GST.TwoArmBinomialWaldZ(
+                    statistic=GST.TwoArmBinomialZ(
                         variance_estimation=GST.VarianceEstimation.POOLED
                     ),
                     strategy=GST.DecisionStrategy(
@@ -126,10 +123,12 @@ class ProtocolDesigner:
                             statistical_model=GST.CanonicalGaussianModel(),
                         )
                     ),
-                    schedule=GST.ScheduleSpec(
-                        unit=GST.Unit.SAMPLE_SIZE,
-                        n_looks=k,
-                        interim_points=n_schedule,
+                    timer=GST.SampleSizeTimer(
+                        unit=GST.Unit.INDIVIDUALS,
+                        max_sample_size=n_max,
+                    ),
+                    schedule=GST.FixedSchedule(
+                        analyses=info_times.tolist(),
                     ),
                 ),
             ),
@@ -210,10 +209,11 @@ class ProtocolDesigner:
         return GST.MethodSpec(
             kind="group_sequential",
             stopping_policy=GST.StoppingPolicySpec(
-                statistic=GST.TwoArmBinomialWaldZ(
+                statistic=GST.TwoArmBinomialZ(
                     variance_estimation=GST.VarianceEstimation.POOLED
                 ),
                 strategy=GST.DecisionStrategy(root=stopping_policy),
+                timer=generic_proto.method.stopping_policy.timer,
                 schedule=generic_proto.method.stopping_policy.schedule,
             ),
         )

@@ -353,8 +353,6 @@ namespace GST {
 
   model CanonicalGaussianModel extends StatisticalModel {
     kind: "canonical_gaussian" = "canonical_gaussian";
-    /** Link function for the effect scale (Risk Difference, Risk Ratio, Odds Ratio). */
-    link_function?: "identity" | "log" | "logit";
   }
 
   model ExactBinomialModel extends StatisticalModel {
@@ -375,36 +373,149 @@ namespace GST {
   }
 
   /**
-   * Two-Arm Wald Z-Statistic.
-   * Computes Z = (p_t - p_c) / SE.
+   * Two-Arm Binomial Z-Statistic.
+   * Covers both Wald Z (unpooled) and Score Z (pooled).
    */
-  model TwoArmBinomialWaldZ extends TestStatisticSpec {
-    kind: "two_arm_binomial_wald_z" = "two_arm_binomial_wald_z";
-    /** Variance estimation: pooled (common p) or unpooled. */
+  model TwoArmBinomialZ extends TestStatisticSpec {
+    kind: "two_arm_binomial_z" = "two_arm_binomial_z";
+    information_unit: "fisher_information" = "fisher_information";
+
+    /** 
+     * Variance estimation method.
+     * - "unpooled": Wald Z (Observed).
+     * - "pooled": Score Z (Null/Common).
+     */
     variance_estimation: "pooled" | "unpooled" = "pooled";
   }
 
   /**
-   * Two-Arm Score Z-Statistic.
+   * One-Arm Binomial Z-Statistic.
    */
-  model TwoArmBinomialScoreZ extends TestStatisticSpec {
-    kind: "two_arm_binomial_score_z" = "two_arm_binomial_score_z";
-  }
+  model OneArmBinomialZ extends TestStatisticSpec {
+    kind: "one_arm_binomial_z" = "one_arm_binomial_z";
+    information_unit: "fisher_information" = "fisher_information";
 
-  /**
-   * One-Arm Wald Z-Statistic.
-   */
-  model OneArmBinomialWaldZ extends TestStatisticSpec {
-    kind: "one_arm_binomial_wald_z" = "one_arm_binomial_wald_z";
+    /**
+     * Variance source.
+     * - "sample": Uses observed estimate (Wald-like).
+     * - "null_hypothesis": Uses null parameter (Score-like).
+     */
+    variance_source: "sample" | "null_hypothesis" = "null_hypothesis"; 
   }
 
   model BinomialExactStatistic extends TestStatisticSpec {
     kind: "binomial_exact" = "binomial_exact";
   }
 
-  model ContinuousWaldZ extends TestStatisticSpec {
-    kind: "continuous_wald_z" = "continuous_wald_z";
-    variance_assumption: "known" | "estimated";
+  /**
+   * Two-Arm Continuous Z-Statistic.
+   */
+  model TwoArmContinuousZ extends TestStatisticSpec {
+    kind: "two_arm_continuous_z" = "two_arm_continuous_z";
+    information_unit: "fisher_information" = "fisher_information";
+    variance: TwoArmContinuousVariance;
+  }
+
+  /**
+   * One-Arm Continuous Z-Statistic.
+   */
+  model OneArmContinuousZ extends TestStatisticSpec {
+    kind: "one_arm_continuous_z" = "one_arm_continuous_z";
+    information_unit: "fisher_information" = "fisher_information";
+    variance: OneArmContinuousVariance; 
+  }
+
+  /**
+   * Discriminated Union for Timer (The "Clock").
+   */
+  union InformationTimer {
+    SampleSizeTimer,
+    FisherInformationTimer,
+    EventCountTimer,
+  }
+
+  model InformationTimerBase {
+    kind: string;
+  }
+
+  model SampleSizeTimer extends InformationTimerBase {
+    kind: "sample_size" = "sample_size";
+    /**
+     * "individuals": Count individuals (e.g. n1 + n2).
+     * "effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).
+     */
+    unit: "individuals" | "effective_size" = "individuals"; 
+    max_sample_size: int32; 
+  }
+
+  model FisherInformationTimer extends InformationTimerBase {
+    kind: "fisher_information" = "fisher_information";
+    max_information: float64;
+  }
+
+  model EventCountTimer extends InformationTimerBase {
+    kind: "event_count" = "event_count";
+    max_events: int32;
+  }
+
+  /**
+   * Discriminated Union for Schedule (The "Checkpoints").
+   */
+  union ScheduleSpec {
+    FixedSchedule,
+    EquidistantSchedule,
+  }
+
+  model ScheduleBase {
+    kind: string;
+  }
+
+  model FixedSchedule extends ScheduleBase {
+    kind: "fixed" = "fixed";
+    analyses: float64[]; // Explicit list of information fractions (e.g. [0.5, 1.0])
+  }
+
+  model EquidistantSchedule extends ScheduleBase {
+    kind: "equidistant" = "equidistant";
+    n_looks: int32; // Number of equally spaced looks
+  }
+
+  /**
+   * Shared Known Variance model.
+   */
+  model KnownVariance {
+    kind: "known" = "known";
+    value: float64; // sigma^2
+  }
+
+  /**
+   * Two-Arm Variance options.
+   */
+  model TwoArmEstimatedVariance {
+    kind: "estimated" = "estimated";
+    /**
+     * - "pooled": Equal variance assumption.
+     * - "unpooled": Unequal variance (Welch).
+     */
+    method: "pooled" | "unpooled" = "pooled";
+  }
+
+  union TwoArmContinuousVariance {
+    KnownVariance,
+    TwoArmEstimatedVariance,
+  }
+
+  /**
+   * One-Arm Variance options.
+   */
+  model OneArmEstimatedVariance {
+    kind: "estimated" = "estimated"; 
+    // No options (always sample variance)
+  }
+
+  union OneArmContinuousVariance {
+    KnownVariance,
+    OneArmEstimatedVariance,
   }
 
   /**
@@ -413,16 +524,10 @@ namespace GST {
   model StoppingPolicySpec {
     statistic: TestStatisticSpec;
     strategy: DecisionStrategy;
+    timer: InformationTimer;
     schedule: ScheduleSpec;
   }
 
-  model ScheduleSpec {
-    unit: "sample_size" | "information_fraction" | "calendar_time" | "events";
-    /** Usually defined by N looks and spacing, or specific points. */
-    n_looks?: int32;
-    /** Optional explicit points */
-    interim_points?: float64[];
-  }
 
 
 

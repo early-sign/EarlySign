@@ -86,17 +86,22 @@ class CanonicalJointModel:
         """Instantiate the model from an ES3 GST.Protocol specification."""
         task = spec.task
         method = spec.method
-        schedule = method.stopping_policy.schedule
-
         task_alpha = float(task.efficacy.alpha) if task.efficacy else None
         task_power = float(task.futility.power) if task.futility else None
 
-        if not schedule or schedule.interim_points is None:
-            raise ValueError("Protocol must define interim_points.")
+        schedule_spec = method.stopping_policy.schedule
+        schedule = schedule_spec.root
 
-        t = np.asarray(schedule.interim_points)
-        if np.max(t) > 1.0:
-            t = t / np.max(t)
+        if isinstance(schedule, GST.FixedSchedule):
+            t = np.asarray(schedule.analyses)
+        elif isinstance(schedule, GST.EquidistantSchedule):
+            k = schedule.n_looks
+            t = np.linspace(1 / k, 1.0, k)
+        else:
+            raise ValueError("Unsupported schedule type.")
+
+        if t.size == 0:
+            raise ValueError("Schedule has no points.")
 
         stopping_policy = StoppingPolicyFactory.build_from_spec(method.stopping_policy)
 

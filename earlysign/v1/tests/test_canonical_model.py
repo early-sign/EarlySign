@@ -29,17 +29,15 @@ Canonical Joint Model from ES3 protocol specifications.
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(
-...             statistic=GST.TwoArmBinomialWaldZ(variance_estimation=GST.VarianceEstimation.POOLED),
+...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
 ...             strategy=GST.DecisionStrategy(root=GST.AlphaSpendingStrategy(
 ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
 ...                 budget=0.025,
 ...                 sided=GST.Sided.ONE,
 ...                 statistical_model=GST.CanonicalGaussianModel(),
 ...             )),
-...             schedule=GST.ScheduleSpec(
-...                 unit=GST.Unit.INFORMATION_FRACTION,
-...                 interim_points=info_times
-...             )
+...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+...             schedule=GST.FixedSchedule(analyses=info_times)
 ...         ),
 ...     )
 ... )
@@ -103,17 +101,15 @@ True
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(
-...             statistic=GST.TwoArmBinomialWaldZ(variance_estimation=GST.VarianceEstimation.POOLED),
+...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
 ...             strategy=GST.DecisionStrategy(root=GST.AlphaSpendingStrategy(
 ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
 ...                 budget=0.05,
 ...                 sided=GST.Sided.ONE,
 ...                 statistical_model=GST.CanonicalGaussianModel(),
 ...             )),
-...             schedule=GST.ScheduleSpec(
-...                 unit=GST.Unit.INFORMATION_FRACTION,
-...                 interim_points=info_times
-...             )
+...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+...             schedule=GST.FixedSchedule(analyses=info_times)
 ...         ),
 ...     )
 ... )
@@ -141,16 +137,14 @@ True
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(
-...             statistic=GST.TwoArmBinomialWaldZ(variance_estimation=GST.VarianceEstimation.POOLED),
+...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
 ...             strategy=GST.DecisionStrategy(root=GST.BetaSpendingStrategy(
 ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
 ...                 budget=0.2,
 ...                 statistical_model=GST.CanonicalGaussianModel(),
 ...             )),
-...             schedule=GST.ScheduleSpec(
-...                 unit=GST.Unit.INFORMATION_FRACTION,
-...                 interim_points=info_times
-...             )
+...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+...             schedule=GST.FixedSchedule(analyses=info_times)
 ...         ),
 ...     )
 ... )
@@ -168,16 +162,14 @@ True
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(
-...             statistic=GST.TwoArmBinomialWaldZ(variance_estimation=GST.VarianceEstimation.POOLED),
+...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
 ...             strategy=GST.DecisionStrategy(root=GST.OBrienFlemingStrategy(
 ...                 alpha=0.05,
 ...                 sided=GST.Sided.ONE,
 ...                 statistical_model=GST.CanonicalGaussianModel(),
 ...             )),
-...             schedule=GST.ScheduleSpec(
-...                 unit=GST.Unit.INFORMATION_FRACTION,
-...                 interim_points=[0.5, 1.0]
-...             )
+...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+...             schedule=GST.FixedSchedule(analyses=[0.5, 1.0])
 ...         ),
 ...     )
 ... )
@@ -199,16 +191,14 @@ True
 ...     method=GST.MethodSpec(
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(
-...             statistic=GST.TwoArmBinomialWaldZ(variance_estimation=GST.VarianceEstimation.POOLED),
+...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
 ...             strategy=GST.DecisionStrategy(root=GST.WhiteheadStrategy(
 ...                 alpha=0.05,
 ...                 beta=0.1,
 ...                 statistical_model=GST.CanonicalGaussianModel(),
 ...             )),
-...             schedule=GST.ScheduleSpec(
-...                 unit=GST.Unit.INFORMATION_FRACTION,
-...                 interim_points=[0.5, 1.0]
-...             )
+...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+...             schedule=GST.FixedSchedule(analyses=[0.5, 1.0])
 ...         ),
 ...     )
 ... )

@@ -24,21 +24,6 @@ class Sided(StrEnum):
     TWO = "two"
 
 
-class LinkFunction(StrEnum):
-    """
-    Link function for the effect scale (Risk Difference, Risk Ratio, Odds Ratio).
-    """
-
-    IDENTITY = "identity"
-    LOG = "log"
-    LOGIT = "logit"
-
-
-class VarianceAssumption(StrEnum):
-    KNOWN = "known"
-    ESTIMATED = "estimated"
-
-
 class EffectSizeSpec(BaseModel):
     """
     Numerical assumptions for the Alternative Hypothesis (H1).
@@ -84,9 +69,41 @@ class HypothesisSpec(BaseModel):
     target_effect: EffectSizeSpec
 
 
+class InformationTimerBase(BaseModel):
+    kind: str
+
+
+class KnownVariance(BaseModel):
+    """
+    Shared Known Variance model.
+    """
+
+    kind: Literal["known"] = "known"
+    value: float
+
+
 class NonInferiorityHypothesis(HypothesisParameters):
     kind: Literal["non_inferiority"] = "non_inferiority"
     non_inferiority_margin: float
+
+
+class VarianceSource(StrEnum):
+    """
+    Variance source.
+    - "sample": Uses observed estimate (Wald-like).
+    - "null_hypothesis": Uses null parameter (Score-like).
+    """
+
+    SAMPLE = "sample"
+    NULL_HYPOTHESIS = "null_hypothesis"
+
+
+class OneArmEstimatedVariance(BaseModel):
+    """
+    One-Arm Variance options.
+    """
+
+    kind: Literal["estimated"] = "estimated"
 
 
 class Method(StrEnum):
@@ -102,20 +119,26 @@ class SampleSizeReestimationSpec(AdaptationSpec):
 
 
 class Unit(StrEnum):
-    SAMPLE_SIZE = "sample_size"
-    INFORMATION_FRACTION = "information_fraction"
-    CALENDAR_TIME = "calendar_time"
-    EVENTS = "events"
+    """
+    "individuals": Count individuals (e.g. n1 + n2).
+    "effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).
+    """
+
+    INDIVIDUALS = "individuals"
+    EFFECTIVE_SIZE = "effective_size"
 
 
-class ScheduleSpec(BaseModel):
-    unit: Unit
-    n_looks: int | None = Field(
-        None, description="Usually defined by N looks and spacing, or specific points."
+class SampleSizeTimer(InformationTimerBase):
+    kind: Literal["sample_size"] = "sample_size"
+    unit: Unit = Field(
+        ...,
+        description='"individuals": Count individuals (e.g. n1 + n2).\n"effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).',
     )
-    interim_points: list[float] | None = Field(
-        None, description="Optional explicit points"
-    )
+    max_sample_size: int
+
+
+class ScheduleBase(InformationTimerBase):
+    pass
 
 
 class SpendingFunctionType(StrEnum):
@@ -192,32 +215,50 @@ class TestStatisticSpec(BaseModel):
     kind: str
 
 
-class TwoArmBinomialScoreZ(TestStatisticSpec):
-    """
-    Two-Arm Score Z-Statistic.
-    """
-
-    kind: Literal["two_arm_binomial_score_z"] = "two_arm_binomial_score_z"
-
-
 class VarianceEstimation(StrEnum):
     """
-    Variance estimation: pooled (common p) or unpooled.
+    Variance estimation method.
+    - "unpooled": Wald Z (Observed).
+    - "pooled": Score Z (Null/Common).
     """
 
     POOLED = "pooled"
     UNPOOLED = "unpooled"
 
 
-class TwoArmBinomialWaldZ(TestStatisticSpec):
+class TwoArmBinomialZ(TestStatisticSpec):
     """
-    Two-Arm Wald Z-Statistic.
-    Computes Z = (p_t - p_c) / SE.
+    Two-Arm Binomial Z-Statistic.
+    Covers both Wald Z (unpooled) and Score Z (pooled).
     """
 
-    kind: Literal["two_arm_binomial_wald_z"] = "two_arm_binomial_wald_z"
+    kind: Literal["two_arm_binomial_z"] = "two_arm_binomial_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
     variance_estimation: VarianceEstimation = Field(
-        ..., description="Variance estimation: pooled (common p) or unpooled."
+        ...,
+        description='Variance estimation method.\n- "unpooled": Wald Z (Observed).\n- "pooled": Score Z (Null/Common).',
+    )
+
+
+class MethodModel(StrEnum):
+    """
+    - "pooled": Equal variance assumption.
+    - "unpooled": Unequal variance (Welch).
+    """
+
+    POOLED = "pooled"
+    UNPOOLED = "unpooled"
+
+
+class TwoArmEstimatedVariance(BaseModel):
+    """
+    Two-Arm Variance options.
+    """
+
+    kind: Literal["estimated"] = "estimated"
+    method: MethodModel = Field(
+        ...,
+        description='- "pooled": Equal variance assumption.\n- "unpooled": Unequal variance (Welch).',
     )
 
 
@@ -232,21 +273,12 @@ class BinomialExactStatistic(TestStatisticSpec):
 
 class CanonicalGaussianModel(StatisticalModel):
     kind: Literal["canonical_gaussian"] = "canonical_gaussian"
-    link_function: LinkFunction | None = Field(
-        None,
-        description="Link function for the effect scale (Risk Difference, Risk Ratio, Odds Ratio).",
-    )
 
 
 class ContinuousEffectSize(EffectSizeSpec):
     type: Literal["continuous"] = "continuous"
     means: dict[str, float] = Field(..., description="Arm name -> Expected mean")
     standard_deviation: float
-
-
-class ContinuousWaldZ(TestStatisticSpec):
-    kind: Literal["continuous_wald_z"] = "continuous_wald_z"
-    variance_assumption: VarianceAssumption
 
 
 class DecisionStrategyBase(BaseModel):
@@ -263,22 +295,75 @@ class EqualityHypothesis(HypothesisParameters):
     kind: Literal["equality"] = "equality"
 
 
+class EquidistantSchedule(ScheduleBase):
+    kind: Literal["equidistant"] = "equidistant"
+    n_looks: int
+
+
 class EquivalenceHypothesis(HypothesisParameters):
     kind: Literal["equivalence"] = "equivalence"
     lower_margin: float
     upper_margin: float
 
 
+class EventCountTimer(InformationTimerBase):
+    kind: Literal["event_count"] = "event_count"
+    max_events: int
+
+
 class ExactBinomialModel(StatisticalModel):
     kind: Literal["exact_binomial"] = "exact_binomial"
 
 
-class OneArmBinomialWaldZ(TestStatisticSpec):
+class FisherInformationTimer(InformationTimerBase):
+    kind: Literal["fisher_information"] = "fisher_information"
+    max_information: float
+
+
+class FixedSchedule(ScheduleBase):
+    kind: Literal["fixed"] = "fixed"
+    analyses: list[float]
+
+
+class InformationTimer(
+    RootModel[SampleSizeTimer | FisherInformationTimer | EventCountTimer]
+):
+    root: SampleSizeTimer | FisherInformationTimer | EventCountTimer = Field(
+        ..., description='Discriminated Union for Timer (The "Clock").'
+    )
+
+
+class OneArmBinomialZ(TestStatisticSpec):
     """
-    One-Arm Wald Z-Statistic.
+    One-Arm Binomial Z-Statistic.
     """
 
-    kind: Literal["one_arm_binomial_wald_z"] = "one_arm_binomial_wald_z"
+    kind: Literal["one_arm_binomial_z"] = "one_arm_binomial_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
+    variance_source: VarianceSource = Field(
+        ...,
+        description='Variance source.\n- "sample": Uses observed estimate (Wald-like).\n- "null_hypothesis": Uses null parameter (Score-like).',
+    )
+
+
+class OneArmContinuousVariance(RootModel[KnownVariance | OneArmEstimatedVariance]):
+    root: KnownVariance | OneArmEstimatedVariance
+
+
+class OneArmContinuousZ(TestStatisticSpec):
+    """
+    One-Arm Continuous Z-Statistic.
+    """
+
+    kind: Literal["one_arm_continuous_z"] = "one_arm_continuous_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
+    variance: OneArmContinuousVariance
+
+
+class ScheduleSpec(RootModel[FixedSchedule | EquidistantSchedule]):
+    root: FixedSchedule | EquidistantSchedule = Field(
+        ..., description='Discriminated Union for Schedule (The "Checkpoints").'
+    )
 
 
 class SpendingFunction(BaseModel):
@@ -292,6 +377,20 @@ class SpendingFunctionStrategyBase(DecisionStrategyBase):
     """
     Abstract Base for Spending-Function Strategies.
     """
+
+
+class TwoArmContinuousVariance(RootModel[KnownVariance | TwoArmEstimatedVariance]):
+    root: KnownVariance | TwoArmEstimatedVariance
+
+
+class TwoArmContinuousZ(TestStatisticSpec):
+    """
+    Two-Arm Continuous Z-Statistic.
+    """
+
+    kind: Literal["two_arm_continuous_z"] = "two_arm_continuous_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
+    variance: TwoArmContinuousVariance
 
 
 class AlphaBetaSpendingStrategy(SpendingFunctionStrategyBase):
@@ -407,6 +506,7 @@ class StoppingPolicySpec(BaseModel):
 
     statistic: TestStatisticSpec
     strategy: DecisionStrategy
+    timer: InformationTimer
     schedule: ScheduleSpec
 
 
