@@ -90,7 +90,7 @@ class CanonicalJointModel:
         task_power = float(task.futility.power) if task.futility else None
 
         schedule_spec = method.stopping_policy.schedule
-        schedule = schedule_spec.root
+        schedule = schedule_spec
 
         if isinstance(schedule, GST.FixedSchedule):
             t = np.asarray(schedule.analyses)
@@ -212,13 +212,13 @@ class CanonicalJointModel:
             res = root_scalar(
                 objective, bracket=[0.0, 10.0], method="brentq", xtol=1e-3
             )
-            return float(res.root)
+            return float(res)
         except ValueError:
             if objective(10.0) > 0:
                 res = root_scalar(
                     objective, bracket=[10.0, 50.0], method="brentq", xtol=1e-3
                 )
-                return float(res.root)
+                return float(res)
             raise
 
     def solve_boundaries_from_cumulative_targets(
@@ -379,7 +379,7 @@ class CanonicalJointModel:
                     res = root_scalar(
                         obj_a, bracket=[low, high], method="brentq", xtol=1e-6
                     )
-                    a[i] = res.root
+                    a[i] = res
 
             # Solve futility bound b[i]
             if b is not None and futility_targets is not None:
@@ -407,7 +407,7 @@ class CanonicalJointModel:
                     res = root_scalar(
                         obj_b, bracket=[low, high], method="brentq", xtol=1e-6
                     )
-                    b[i] = res.root
+                    b[i] = res
 
         return a, b
 
@@ -608,4 +608,4 @@ class CanonicalJointModel:
                 )
 
         res = root_scalar(f, bracket=bracket, xtol=1e-4)
-        return float(res.root)
+        return float(res)

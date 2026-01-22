@@ -53,7 +53,7 @@ The designer calculates the required sample size and decision boundaries.
     ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
 
-    >>> print(f"Designed Max Sample Size: {int(protocol.method.stopping_policy.timer.root.max_sample_size)}")
+    >>> print(f"Designed Max Sample Size: {int(protocol.method.stopping_policy.timer.max_sample_size)}")
     Designed Max Sample Size: 12805
 
 With the protocol designed, we initialize the template and persist it to the ledger.

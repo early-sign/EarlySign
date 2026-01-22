@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field
+from typing_extensions import TypeAliasType
 
 from ..Base import (
     MethodSpec as MethodSpec_1,
@@ -325,12 +326,13 @@ class FixedSchedule(ScheduleBase):
     analyses: list[float]
 
 
-class InformationTimer(
-    RootModel[SampleSizeTimer | FisherInformationTimer | EventCountTimer]
-):
-    root: SampleSizeTimer | FisherInformationTimer | EventCountTimer = Field(
-        ..., description='Discriminated Union for Timer (The "Clock").'
-    )
+InformationTimer = TypeAliasType(
+    "InformationTimer",
+    Annotated[
+        SampleSizeTimer | FisherInformationTimer | EventCountTimer,
+        Field(..., description='Discriminated Union for Timer (The "Clock").'),
+    ],
+)
 
 
 class OneArmBinomialZ(TestStatisticSpec):
@@ -346,8 +348,9 @@ class OneArmBinomialZ(TestStatisticSpec):
     )
 
 
-class OneArmContinuousVariance(RootModel[KnownVariance | OneArmEstimatedVariance]):
-    root: KnownVariance | OneArmEstimatedVariance
+OneArmContinuousVariance = TypeAliasType(
+    "OneArmContinuousVariance", KnownVariance | OneArmEstimatedVariance
+)
 
 
 class OneArmContinuousZ(TestStatisticSpec):
@@ -360,10 +363,13 @@ class OneArmContinuousZ(TestStatisticSpec):
     variance: OneArmContinuousVariance
 
 
-class ScheduleSpec(RootModel[FixedSchedule | EquidistantSchedule]):
-    root: FixedSchedule | EquidistantSchedule = Field(
-        ..., description='Discriminated Union for Schedule (The "Checkpoints").'
-    )
+ScheduleSpec = TypeAliasType(
+    "ScheduleSpec",
+    Annotated[
+        FixedSchedule | EquidistantSchedule,
+        Field(..., description='Discriminated Union for Schedule (The "Checkpoints").'),
+    ],
+)
 
 
 class SpendingFunction(BaseModel):
@@ -379,8 +385,9 @@ class SpendingFunctionStrategyBase(DecisionStrategyBase):
     """
 
 
-class TwoArmContinuousVariance(RootModel[KnownVariance | TwoArmEstimatedVariance]):
-    root: KnownVariance | TwoArmEstimatedVariance
+TwoArmContinuousVariance = TypeAliasType(
+    "TwoArmContinuousVariance", KnownVariance | TwoArmEstimatedVariance
+)
 
 
 class TwoArmContinuousZ(TestStatisticSpec):
@@ -475,28 +482,21 @@ class WhiteheadStrategy(BoundaryFunctionStrategyBase):
     beta: float
 
 
-class DecisionStrategy(
-    RootModel[
+DecisionStrategy = TypeAliasType(
+    "DecisionStrategy",
+    Annotated[
         AlphaSpendingStrategy
         | BetaSpendingStrategy
         | AlphaBetaSpendingStrategy
         | WhiteheadStrategy
         | OBrienFlemingStrategy
         | PocockStrategy
-        | WangTsiatisStrategy
-    ]
-):
-    root: (
-        AlphaSpendingStrategy
-        | BetaSpendingStrategy
-        | AlphaBetaSpendingStrategy
-        | WhiteheadStrategy
-        | OBrienFlemingStrategy
-        | PocockStrategy
-        | WangTsiatisStrategy
-    ) = Field(
-        ..., description='Discriminated Union for Decision Strategies (The "Rule").'
-    )
+        | WangTsiatisStrategy,
+        Field(
+            ..., description='Discriminated Union for Decision Strategies (The "Rule").'
+        ),
+    ],
+)
 
 
 class StoppingPolicySpec(BaseModel):

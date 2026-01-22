@@ -115,13 +115,11 @@ class ProtocolDesigner:
                     statistic=GST.TwoArmBinomialZ(
                         variance_estimation=GST.VarianceEstimation.POOLED
                     ),
-                    strategy=GST.DecisionStrategy(
-                        root=GST.AlphaSpendingStrategy(
-                            spending_fn=GST.SpendingFunction(family=shape_type),
-                            budget=alpha,
-                            sided=GST.Sided.ONE,
-                            statistical_model=GST.CanonicalGaussianModel(),
-                        )
+                    strategy=GST.AlphaSpendingStrategy(
+                        spending_fn=GST.SpendingFunction(family=shape_type),
+                        budget=alpha,
+                        sided=GST.Sided.ONE,
+                        statistical_model=GST.CanonicalGaussianModel(),
                     ),
                     timer=GST.SampleSizeTimer(
                         unit=GST.Unit.INDIVIDUALS,
@@ -212,7 +210,7 @@ class ProtocolDesigner:
                 statistic=GST.TwoArmBinomialZ(
                     variance_estimation=GST.VarianceEstimation.POOLED
                 ),
-                strategy=GST.DecisionStrategy(root=stopping_policy),
+                strategy=stopping_policy,
                 timer=generic_proto.method.stopping_policy.timer,
                 schedule=generic_proto.method.stopping_policy.schedule,
             ),

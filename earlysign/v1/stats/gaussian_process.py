@@ -161,7 +161,7 @@ class GaussianProcess:
             return bracket[0] if f(bracket[0]) > 0 else bracket[1]
 
         res = root_scalar(f, bracket=bracket, xtol=1e-5)
-        return float(res.root)
+        return float(res)
 
 
 class CanonicalGaussianProcess(GaussianProcess):

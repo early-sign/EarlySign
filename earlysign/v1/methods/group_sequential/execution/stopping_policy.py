@@ -209,7 +209,7 @@ class StoppingPolicyFactory:
     @staticmethod
     def build_from_spec(spec: GST.StoppingPolicySpec) -> StoppingPolicy:
         """Translates a StoppingPolicySpec into a concrete StoppingPolicy."""
-        policy = spec.strategy.root
+        policy = spec.strategy
 
         if isinstance(policy, GST.AlphaSpendingStrategy):
             factory = SpendingFunctionFactory(budget=policy.budget)

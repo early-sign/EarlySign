@@ -40,7 +40,7 @@ class BinomialGSTEngine:
         )
 
         # Schedule
-        self._schedule = schedule.root
+        self._schedule = schedule
         schedule_inner = self._schedule
         self._points = []
         if isinstance(schedule_inner, GST.FixedSchedule):
@@ -51,7 +51,7 @@ class BinomialGSTEngine:
 
         # Max Sample Size
         self.n_max = 0
-        timer = method.stopping_policy.timer.root
+        timer = method.stopping_policy.timer
         if isinstance(timer, GST.SampleSizeTimer):
             self.n_max = timer.max_sample_size
 

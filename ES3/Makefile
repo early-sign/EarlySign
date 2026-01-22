@@ -28,6 +28,7 @@ $(SENTINEL): $(TSP_SOURCE)
 		--treat-dot-as-module \
 		--target-python-version $(TARGET_PYTHON_VERSION) \
 		--reuse-model \
+		--use-type-alias \
 		--use-double-quotes \
 		--openapi-scopes schemas \
 		--enum-field-as-literal one \

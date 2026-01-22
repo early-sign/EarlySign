@@ -141,7 +141,7 @@ class CanonicalJointDistribution:
             )
 
         res = root_scalar(f, bracket=[low, high], xtol=1e-4)
-        return float(res.root)
+        return float(res)
 
     def solve_boundaries_from_spending(
         self,
@@ -196,7 +196,7 @@ class CanonicalJointDistribution:
                         )
 
                 res = root_scalar(f, bracket=[0, 10], xtol=1e-5)
-                boundaries[i] = float(res.root)
+                boundaries[i] = float(res)
 
         return boundaries
 
@@ -252,7 +252,7 @@ class CanonicalJointDistribution:
                         )
 
                 res = root_scalar(f, bracket=[0, 10], xtol=1e-5)
-                boundaries[i] = float(res.root)
+                boundaries[i] = float(res)
 
         return boundaries
 
@@ -360,7 +360,7 @@ class CanonicalJointDistribution:
                     ) - float(a_cum[i])
 
                 res_a = root_scalar(f_a, bracket=[-10, 10], xtol=1e-5)
-                a[i] = float(res_a.root)
+                a[i] = float(res_a)
 
             # 2. Solve for futility boundary b[i] under H1
             # Prob(stop for futility at look i | not stopped before) = beta_inc[i]
@@ -389,7 +389,7 @@ class CanonicalJointDistribution:
                         ) - float(b_cum[i])
 
                 res_b = root_scalar(f_b, bracket=[-10, 10], xtol=1e-5)
-                b[i] = float(res_b.root)
+                b[i] = float(res_b)
 
         return a, b
 
@@ -541,7 +541,7 @@ class CanonicalJointDistribution:
         try:
             # xtol=2e-3 provides sufficient precision for R_OS in Table 7.6
             res = root_scalar(f, bracket=[0.7, 3.0], xtol=2e-3)
-            result = float(res.root)
+            result = float(res)
         finally:
             self.n_sims = n_sims_original
             self._rng = rng_original

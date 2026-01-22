@@ -167,12 +167,12 @@ The library provides off-the-shelf entities for common trial components.
 ...         kind="group_sequential",
 ...         stopping_policy=GST.StoppingPolicySpec(
 ...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
-...             strategy=GST.DecisionStrategy(root=GST.AlphaSpendingStrategy(
+...             strategy=GST.AlphaSpendingStrategy(
 ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
 ...                 budget=0.05,
 ...                 sided=GST.Sided.ONE,
 ...                 statistical_model=GST.CanonicalGaussianModel(),
-...             )),
+...             ),
 ...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
 ...             schedule=GST.FixedSchedule(analyses=[0.5, 1.0])
 ...         ),
