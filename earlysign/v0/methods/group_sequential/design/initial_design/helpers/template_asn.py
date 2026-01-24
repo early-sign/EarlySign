@@ -10,9 +10,9 @@ Examples
 --------
 >>> from earlysign.v0.methods.group_sequential.design.initial_design.helpers.template_asn import TemplateASNAdapter
 >>> from earlysign.v0.stats.schemes.two_proportions.procedure import TwoProportionsProcedure
->>> from earlysign.v0.methods.group_sequential.spending import OBFSpending
+>>> from earlysign.v0.methods.group_sequential.spending import OBrienFlemingSpending
 >>> from earlysign.v0.stats.schemes.two_proportions.asn import build_asn_calculator
->>> spending = OBFSpending(alpha=0.05, sided=2)
+>>> spending = OBrienFlemingSpending(alpha=0.05, sided=2)
 >>> calc = build_asn_calculator(
 ...     alpha=0.05,
 ...     beta=0.2,

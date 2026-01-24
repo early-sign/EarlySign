@@ -8,7 +8,7 @@ Canonical Joint Model from ES3 protocol specifications.
 >>> import numpy as np
 >>> import earlysign.schema.ES3.GST as GST
 >>> from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import CanonicalJointModel, Config
->>> from earlysign.v1.methods.group_sequential.shared.spending import OBFSpending
+>>> from earlysign.v1.methods.group_sequential.shared.spending import OBrienFlemingSpending
 
 --- Test: Model from Spec Basic ---
 >>> info_times = [0.5, 1.0]
@@ -53,8 +53,8 @@ True
 >>> info_times_arr = np.array([0.5, 1.0])
 >>> config = Config(
 ...     info_times=info_times_arr, alpha=0.025, power=0.9,
-...     efficacy_spending=OBFSpending(budget=0.025),
-...     futility_spending=OBFSpending(budget=0.1),
+...     efficacy_spending=OBrienFlemingSpending(budget=0.025),
+...     futility_spending=OBrienFlemingSpending(budget=0.1),
 ...     efficacy_binding=True, n_sims=5000, rng_seed=42, tails=1
 ... )
 >>> model = CanonicalJointModel(config)
@@ -67,8 +67,8 @@ True
 True
 
 --- Test: Binding vs Non-binding ---
->>> eff_sf = OBFSpending(budget=0.025)
->>> fut_sf = OBFSpending(budget=0.1)
+>>> eff_sf = OBrienFlemingSpending(budget=0.025)
+>>> fut_sf = OBrienFlemingSpending(budget=0.1)
 >>> config_bind = Config(
 ...     info_times=info_times_arr, alpha=0.025, power=0.9,
 ...     efficacy_spending=eff_sf, futility_spending=fut_sf,

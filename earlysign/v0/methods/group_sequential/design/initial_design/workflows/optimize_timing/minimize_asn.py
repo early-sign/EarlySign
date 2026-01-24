@@ -33,9 +33,9 @@ class MinimizeASNOptimizer:
 
     Example (doctest)
     ------------------
-    >>> from earlysign.v0.methods.group_sequential.spending import OBFSpending
+    >>> from earlysign.v0.methods.group_sequential.spending import OBrienFlemingSpending
     >>> from earlysign.v0.stats.schemes.two_means.asn import NormalMeansASNCalculator
-    >>> sp = OBFSpending(alpha=0.05, sided=2)
+    >>> sp = OBrienFlemingSpending(alpha=0.05, sided=2)
     >>> calc = NormalMeansASNCalculator(alpha=0.05, beta=0.2, sided=2, alternative=0.2, st_dev=1.0, allocation_ratio=1.0, spending=sp)
     >>> opt = MinimizeASNOptimizer(calculator=calc, k_max=2, seed=42, n_jobs=1, n_restarts=2)
     >>> opt.minimize()

@@ -8,7 +8,7 @@ application modules.
 Examples
 --------
 >>> from earlysign.v0.methods.group_sequential import simulation
->>> from earlysign.v0.methods.group_sequential.spending import OBFSpending
+>>> from earlysign.v0.methods.group_sequential.spending import OBrienFlemingSpending
 >>> from earlysign.v0.stats.schemes.two_proportions.procedure import (
 ...     TwoProportionsBatchedProcedure,
 ... )
@@ -16,7 +16,7 @@ Examples
 ...     TwoProportionsSimulationRequest,
 ...     TwoProportionsSimulator,
 ... )
->>> spending = OBFSpending(alpha=0.05, sided=2)
+>>> spending = OBrienFlemingSpending(alpha=0.05, sided=2)
 >>> factory = TwoProportionsBatchedProcedure.factory_builder(
 ...     spending_obj=spending,
 ...     alpha=0.05,

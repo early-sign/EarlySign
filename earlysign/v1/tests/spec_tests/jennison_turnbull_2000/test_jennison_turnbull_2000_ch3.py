@@ -342,16 +342,16 @@ def when_table32_eval(
     t_plan = np.linspace(1 / k, 1.0, k)
 
     from earlysign.v1.methods.group_sequential.shared.spending import (
-        OBFSpending,
+        OBrienFlemingSpending,
         PocockSpending,
     )
 
     if spending_family == "pocock":
         spending = PocockSpending(budget=alpha)
     elif spending_family == "obrien_fleming":
-        spending = OBFSpending(budget=alpha)
+        spending = OBrienFlemingSpending(budget=alpha)
     else:
-        spending = OBFSpending(budget=alpha)
+        spending = OBrienFlemingSpending(budget=alpha)
 
     config = Config(
         info_times=t_plan,

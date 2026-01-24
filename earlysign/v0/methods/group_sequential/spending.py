@@ -20,7 +20,7 @@ per-stage increments, use ``np.diff(np.concatenate([[0.0], cum]))``.
 Examples (numeric sanity checks)
 --------------------------------
 >>> import numpy as np
->>> s = OBFSpending(alpha=0.05, sided=2)
+>>> s = OBrienFlemingSpending(alpha=0.05, sided=2)
 >>> round(float(s.cumulative(np.array([0.5]))[0]), 6)
 0.005575
 
@@ -39,7 +39,7 @@ Medicine, 9(12), 1439-1445.
 """
 
 import math
-from typing import Any, Dict, Protocol, Type
+from typing import Any, ClassVar, Dict, List, Protocol, Type
 
 import numpy as np
 from numpy.typing import NDArray
@@ -58,8 +58,7 @@ class SpendingFunction(Protocol):
         Convert per-stage α increments into one-sided z-critical values.
     """
 
-    @property
-    def name(self) -> str: ...
+    name: ClassVar[str]
 
     alpha: float
 
@@ -70,13 +69,13 @@ class SpendingFunction(Protocol):
     ) -> NDArray[Any]: ...
 
 
-class OBFSpending(SpendingFunction):
+class OBrienFlemingSpending(SpendingFunction):
     """Lan–DeMets O'Brien–Fleming style spending.
 
     Examples
     --------
     >>> import numpy as np
-    >>> s = OBFSpending(alpha=0.05, sided=2)
+    >>> s = OBrienFlemingSpending(alpha=0.05, sided=2)
     >>> round(float(s.cumulative(np.array([0.5]))[0]), 6)
     0.005575
 
@@ -121,9 +120,7 @@ class OBFSpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "obrien_fleming"
+    name = "obrien_fleming"
 
 
 class PocockSpending(SpendingFunction):
@@ -152,18 +149,16 @@ class PocockSpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "pocock"
+    name = "pocock"
 
 
-class HSDSpending(SpendingFunction):
+class HwangShihDeCaniSpending(SpendingFunction):
     """Hwang–Shih–DeCani family.
 
     Examples
     --------
     >>> import numpy as np
-    >>> s = HSDSpending(alpha=0.05, gamma=0.0)
+    >>> s = HwangShihDeCaniSpending(alpha=0.05, gamma=0.0)
     >>> round(float(s.cumulative(np.array([0.5]))[0]), 6)
     0.025
 
@@ -188,9 +183,7 @@ class HSDSpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "hsd"
+    name = "hwang_shih_decani"
 
 
 class RhoFamilySpending(SpendingFunction):
@@ -218,16 +211,18 @@ class RhoFamilySpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "rho"
+    name = "rho"
 
+
+_SPENDING_CLASSES: List[Type[SpendingFunction]] = [
+    OBrienFlemingSpending,
+    PocockSpending,
+    HwangShihDeCaniSpending,
+    RhoFamilySpending,
+]
 
 _SPENDING_REGISTRY: Dict[str, Type[SpendingFunction]] = {
-    "obrien_fleming": OBFSpending,
-    "pocock": PocockSpending,
-    "hsd": HSDSpending,
-    "rho": RhoFamilySpending,
+    cls.name: cls for cls in _SPENDING_CLASSES
 }
 
 

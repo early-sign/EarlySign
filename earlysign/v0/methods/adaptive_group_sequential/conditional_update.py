@@ -353,7 +353,11 @@ def update_remaining_boundaries(
         "alpha": alpha,
         "tails": 2,
         "scale": "z",
-        "efficacy": {"style": "alpha_spending", "family": "hsd", "gamma": alpha_gamma},
+        "efficacy": {
+            "style": "alpha_spending",
+            "family": "hwang_shih_decani",
+            "gamma": alpha_gamma,
+        },
         "futility": {"mode": "none"},  # Simplified for now
     }
 
