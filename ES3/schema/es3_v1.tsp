@@ -717,3 +717,46 @@ namespace Binomial {
     arms: Record<ArmStatus>;
   }
 }
+namespace Continuous {
+  /**
+   * Raw evidence: data for a single arm (continuous observation).
+   */
+  model Observation extends Base.Log {
+    value: float64;
+    arm: string;
+  }
+
+  /**
+   * Raw evidence: aggregated data for a single arm (continuous).
+   */
+  model ArmData extends Base.Log {
+    n: int32;
+    sum_x: float64;
+    sum_x2: float64;
+    arm: string;
+  }
+
+  /**
+   * Standard statistics for a single arm (Continuous).
+   */
+  model ArmMetrics {
+    n: int32;
+    mean: float64;
+    variance: float64;
+  }
+
+  /**
+   * Latest status and metrics for a single arm.
+   */
+  model ArmStatus {
+    metrics: ArmMetrics;
+    is_active: boolean = true;
+  }
+
+  /**
+   * Collective state of all arms (Scoreboard).
+   */
+  model Scoreboard {
+    arms: Record<ArmStatus>;
+  }
+}

@@ -3,6 +3,7 @@ namespace ES3.YEAST;
 model TaskSpec extends Base.TaskSpec {
   kind: "yeast" = "yeast";
   arms: string[];
+  response_type: "binary" | "continuous" = "binary";
 }
 
 model MethodSpec extends Base.MethodSpec {

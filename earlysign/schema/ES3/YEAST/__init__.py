@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field
@@ -29,6 +30,12 @@ class Protocol(Protocol_1):
     method: MethodSpec
 
 
+class ResponseType(StrEnum):
+    BINARY = "binary"
+    CONTINUOUS = "continuous"
+
+
 class TaskSpec(TaskSpec_1):
     kind: Literal["yeast"] = "yeast"
     arms: list[str]
+    response_type: ResponseType

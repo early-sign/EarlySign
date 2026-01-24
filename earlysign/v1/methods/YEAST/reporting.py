@@ -3,12 +3,15 @@ from typing import Any, Dict, Optional, Union
 import ibis
 from pydantic import BaseModel
 
+from earlysign.schema.ES3.YEAST import Protocol
 from earlysign.schema.ES3.YEAST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import (
     ProjectionResult,
     Projector,
+    ProtocolProjector,
 )
-from earlysign.v1.methods.binomial import Scoreboard
+from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
+from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 
 
 class ProgressReport(BaseModel):
@@ -63,8 +66,17 @@ class ProgressProjector(Projector[ProgressReport]):
 
         latest_look = LookResult.model_validate(payload)
 
-        # 2. Read Scoreboard for arm metrics
-        metrics_traced = Scoreboard(identity="metrics").project(table)
+        # 2. Determine response type from Protocol
+        # We need this to choose the right Scoreboard
+        protocol_traced = ProtocolProjector(Protocol).project(table)
+        response_type = getattr(protocol_traced.data.task, "response_type", "binary")
+
+        # 3. Read Scoreboard for arm metrics
+        if response_type == "binary":
+            metrics_traced = BinomialScoreboard(identity="metrics").project(table)
+        else:
+            metrics_traced = ContinuousScoreboard(identity="metrics").project(table)
+        
         metrics = metrics_traced.data
 
         report = ProgressReport(
@@ -99,8 +111,16 @@ class FinalProjector(Projector[FinalReport]):
 
         latest_look = LookResult.model_validate(payload)
 
-        # 2. Read Scoreboard
-        metrics_traced = Scoreboard(identity="metrics").project(table)
+        # 2. Determine response type from Protocol
+        protocol_traced = ProtocolProjector(Protocol).project(table)
+        response_type = getattr(protocol_traced.data.task, "response_type", "binary")
+
+        # 3. Read Scoreboard
+        if response_type == "binary":
+            metrics_traced = BinomialScoreboard(identity="metrics").project(table)
+        else:
+            metrics_traced = ContinuousScoreboard(identity="metrics").project(table)
+
         metrics = metrics_traced.data
 
         report = FinalReport(
