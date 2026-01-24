@@ -7,7 +7,6 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
-from typing_extensions import TypeAliasType
 
 from ..Base import (
     MethodSpec as MethodSpec_1,
@@ -175,9 +174,7 @@ class OneArmEstimatedVariance(BaseModel):
     kind: Literal["estimated"] = "estimated"
 
 
-OneArmContinuousVariance = TypeAliasType(
-    "OneArmContinuousVariance", KnownVariance | OneArmEstimatedVariance
-)
+type OneArmContinuousVariance = KnownVariance | OneArmEstimatedVariance
 
 
 class PocockStrategy(BoundaryFunctionStrategyBase):
@@ -222,13 +219,10 @@ class SampleSizeTimer(InformationTimerBase):
     max_sample_size: int
 
 
-InformationTimer = TypeAliasType(
-    "InformationTimer",
-    Annotated[
-        SampleSizeTimer | FisherInformationTimer | EventCountTimer,
-        Field(..., description='Discriminated Union for Timer (The "Clock").'),
-    ],
-)
+type InformationTimer = Annotated[
+    SampleSizeTimer | FisherInformationTimer | EventCountTimer,
+    Field(..., description='Discriminated Union for Timer (The "Clock").'),
+]
 
 
 class ScheduleBase(BaseModel):
@@ -245,13 +239,10 @@ class FixedSchedule(ScheduleBase):
     analyses: list[float]
 
 
-ScheduleSpec = TypeAliasType(
-    "ScheduleSpec",
-    Annotated[
-        FixedSchedule | EquidistantSchedule,
-        Field(..., description='Discriminated Union for Schedule (The "Checkpoints").'),
-    ],
-)
+type ScheduleSpec = Annotated[
+    FixedSchedule | EquidistantSchedule,
+    Field(..., description='Discriminated Union for Schedule (The "Checkpoints").'),
+]
 
 
 class Sided(StrEnum):
@@ -457,9 +448,7 @@ class TwoArmEstimatedVariance(BaseModel):
     )
 
 
-TwoArmContinuousVariance = TypeAliasType(
-    "TwoArmContinuousVariance", KnownVariance | TwoArmEstimatedVariance
-)
+type TwoArmContinuousVariance = KnownVariance | TwoArmEstimatedVariance
 
 
 class Unit(StrEnum):
@@ -515,18 +504,13 @@ class WhiteheadStrategy(BoundaryFunctionStrategyBase):
     beta: float
 
 
-DecisionStrategy = TypeAliasType(
-    "DecisionStrategy",
-    Annotated[
-        AlphaSpendingStrategy
-        | BetaSpendingStrategy
-        | AlphaBetaSpendingStrategy
-        | WhiteheadStrategy
-        | OBrienFlemingStrategy
-        | PocockStrategy
-        | WangTsiatisStrategy,
-        Field(
-            ..., description='Discriminated Union for Decision Strategies (The "Rule").'
-        ),
-    ],
-)
+type DecisionStrategy = Annotated[
+    AlphaSpendingStrategy
+    | BetaSpendingStrategy
+    | AlphaBetaSpendingStrategy
+    | WhiteheadStrategy
+    | OBrienFlemingStrategy
+    | PocockStrategy
+    | WangTsiatisStrategy,
+    Field(..., description='Discriminated Union for Decision Strategies (The "Rule").'),
+]

@@ -28,7 +28,6 @@ $(SENTINEL): $(TSP_SOURCES) Makefile
 		--base-class pydantic.BaseModel \
 		--use-schema-description \
 		--target-python-version $(TARGET_PYTHON_VERSION) \
-		--reuse-model \
 		--keep-model-order \
 		--use-type-alias \
 		--use-double-quotes \
