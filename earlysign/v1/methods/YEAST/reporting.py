@@ -4,23 +4,25 @@ import ibis
 from pydantic import BaseModel
 
 from earlysign.schema.ES3.YEAST.Log import DecisionStatus, LookResult
-from earlysign.v1.framework.projector import ProjectionResult, Projector
+from earlysign.v1.framework.projector import (
+    ProjectionResult,
+    Projector,
+)
 from earlysign.v1.methods.binomial import Scoreboard
 
 
-class YeastProgressReport(BaseModel):
-    """Interim progress report for YEAST."""
+class ProgressReport(BaseModel):
+    """YEAST interim progress report."""
 
     sample_n: int
     trajectory: float
     efficacy_boundary: Optional[float]
-    info_frac: float
     status: Union[DecisionStatus, str]
     arms: Dict[str, Any] = {}
 
 
-class YeastFinalReport(BaseModel):
-    """Final summary report for YEAST."""
+class FinalReport(BaseModel):
+    """YEAST final summary report."""
 
     sample_n: int
     trajectory: float
@@ -29,33 +31,29 @@ class YeastFinalReport(BaseModel):
     arms: Dict[str, Any] = {}
 
 
-class YeastProgressProjector(Projector[YeastProgressReport]):
+class ProgressProjector(Projector[ProgressReport]):
     """
-    Projector for interim monitoring of YEAST trials.
-    Reads the latest YEAST LookResult and Scoreboard.
+    Projector for YEAST interim monitoring.
+    Reads the latest LookResult and Scoreboard from the ledger.
     """
 
-    def project(self, table: ibis.Expr) -> ProjectionResult[YeastProgressReport]:
+    def project(self, table: ibis.Expr) -> ProjectionResult[ProgressReport]:
         # 1. Read the latest LookResult
-        # We look for the most recent 'LookResult' payload (YEAST namespace)
-        # Note: If multiple methods log 'LookResult', we might need stricter filtering
-        # but usually payload_type is just "LookResult". If GST and YEAST mix in same ledger,
-        # structure differs. Pydantic validation handles this discrimination.
         results_df = table.filter(table.payload_type == "LookResult").execute()
 
         if results_df.empty:
             # Fallback or empty report
             return ProjectionResult(
-                data=YeastProgressReport(
+                data=ProgressReport(
                     sample_n=0,
                     trajectory=0.0,
                     efficacy_boundary=None,
-                    info_frac=0.0,
                     status=DecisionStatus.CONTINUE_,
                 ),
                 trace=[],
             )
 
+        # Get latest by index
         latest_row = results_df.iloc[-1]
         payload = latest_row["payload"]
         if isinstance(payload, str):
@@ -63,18 +61,16 @@ class YeastProgressProjector(Projector[YeastProgressReport]):
 
             payload = json.loads(payload)
 
-        # Validate against YEAST.Log.LookResult
         latest_look = LookResult.model_validate(payload)
 
         # 2. Read Scoreboard for arm metrics
         metrics_traced = Scoreboard(identity="metrics").project(table)
         metrics = metrics_traced.data
 
-        report = YeastProgressReport(
+        report = ProgressReport(
             sample_n=latest_look.sample_n,
             trajectory=latest_look.trajectory,
             efficacy_boundary=latest_look.efficacy_boundary,
-            info_frac=latest_look.info_frac,
             status=latest_look.status,
             arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
         )
@@ -82,12 +78,13 @@ class YeastProgressProjector(Projector[YeastProgressReport]):
         return ProjectionResult(data=report, trace=metrics_traced.trace)
 
 
-class YeastFinalProjector(Projector[YeastFinalReport]):
+class FinalProjector(Projector[FinalReport]):
     """
-    Projector for final study summary of YEAST trials.
+    Projector for YEAST final study summary.
     """
 
-    def project(self, table: ibis.Expr) -> ProjectionResult[YeastFinalReport]:
+    def project(self, table: ibis.Expr) -> ProjectionResult[FinalReport]:
+        # 1. Read the latest LookResult
         results_df = table.filter(table.payload_type == "LookResult").execute()
 
         if results_df.empty:
@@ -102,10 +99,11 @@ class YeastFinalProjector(Projector[YeastFinalReport]):
 
         latest_look = LookResult.model_validate(payload)
 
+        # 2. Read Scoreboard
         metrics_traced = Scoreboard(identity="metrics").project(table)
         metrics = metrics_traced.data
 
-        report = YeastFinalReport(
+        report = FinalReport(
             sample_n=latest_look.sample_n,
             trajectory=latest_look.trajectory,
             is_rejected=latest_look.is_efficacy_crossed,

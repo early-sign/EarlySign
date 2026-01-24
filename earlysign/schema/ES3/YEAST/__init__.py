@@ -18,9 +18,9 @@ class MethodSpec(MethodSpec_1):
     kind: Literal["yeast"] = "yeast"
     significance_level: float
     expected_num_observations: int
-    increment_std: float = Field(
+    estimated_variance: float = Field(
         ...,
-        description="The standard deviation of a single increment (difference).\nIf not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).\nsqrt(0.5) approx 0.70710678",
+        description="The estimated variance of a single increment (difference).\nIf not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).",
     )
 
 

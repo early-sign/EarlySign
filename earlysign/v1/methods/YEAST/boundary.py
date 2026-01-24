@@ -31,7 +31,7 @@ class Boundary(Entity[BoundarySchema]):
         """
         Calculates the YEAST boundary value.
 
-        B = z_{alpha/2} * sqrt(N_max) * increment_std
+        B = z_{alpha/2} * sqrt(N_max * V_N)
 
         Args:
             protocol: The YEAST Protocol containing method parameters.
@@ -42,12 +42,13 @@ class Boundary(Entity[BoundarySchema]):
         method = protocol.method
         alpha = method.significance_level
         n_max = method.expected_num_observations
-        increment_std = method.increment_std
+        estimated_variance = method.estimated_variance
 
         # Two-sided critical value (using upper tail)
         z_crit = stats.norm.ppf(1 - alpha / 2)
 
-        boundary_value = z_crit * np.sqrt(n_max) * increment_std
+        # b^* = z_{1 - \alpha/2} \sqrt{N \hat{V}_N}
+        boundary_value = z_crit * np.sqrt(n_max * estimated_variance)
         return float(boundary_value)
 
     def compute(

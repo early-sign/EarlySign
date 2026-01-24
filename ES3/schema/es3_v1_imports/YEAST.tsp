@@ -10,11 +10,10 @@ model MethodSpec extends Base.MethodSpec {
   significance_level: float64;
   expected_num_observations: int32;
   /**
-   * The standard deviation of a single increment (difference).
+   * The estimated variance of a single increment (difference).
    * If not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).
-   * sqrt(0.5) approx 0.70710678
    */
-  increment_std: float64 = 0.70710678;
+  estimated_variance: float64 = 0.5;
 }
 
 model Protocol extends Base.Protocol {

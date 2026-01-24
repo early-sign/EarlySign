@@ -1,18 +1,22 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel
 
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.Binomial import ArmData
 from earlysign.schema.ES3.YEAST import MethodSpec, Protocol, TaskSpec
-from earlysign.schema.ES3.YEAST.Log import Boundary as BoundarySchema, DecisionStatus
+from earlysign.schema.ES3.YEAST.Log import Boundary as BoundarySchema, LookResult
+from earlysign.v1.framework.projector import ProtocolProjector
+from earlysign.v1.framework.session import Session
+from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.YEAST.boundary import Boundary
+from earlysign.v1.methods.YEAST.engine import BinomialYEASTEngine
+from earlysign.v1.methods.YEAST.reporting import FinalProjector, ProgressProjector
 
 
 class BinomialYeastTaskSpec(BaseModel):
     """
     User-facing Task Specification for Binomial YEAST.
-    This mimics GST.TaskSpec structure for consistency in the template.
     """
 
     kind: Literal["yeast"] = "yeast"
@@ -24,19 +28,23 @@ class BinomialYeastTaskSpec(BaseModel):
 class BinomialYeastTemplate:
     """
     Template for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
+    Standardized to use Session, Engine, and Projectors.
     """
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
-        self.protocol: Optional[Protocol] = None
-        self._boundary: Optional[BoundarySchema] = None
-        self._cumulative_counts: Dict[str, Dict[str, int]] = {}
 
     def set_protocol(self, protocol: Protocol) -> None:
-        self.protocol = protocol
-        # Calculate/Project boundary
-        val = Boundary.calculate(protocol)
-        self._boundary = BoundarySchema(value=val)
+        """
+        Persists the trial protocol to the ledger.
+        """
+        protocol = Protocol.model_validate(protocol)
+        with Session(self.ledger) as sess:
+            sess.Commit(protocol)
+
+            # Persist the initial boundary
+            boundary_val = Boundary.calculate(protocol)
+            sess.Commit(BoundarySchema(value=boundary_val))
 
     @classmethod
     def design(
@@ -44,21 +52,16 @@ class BinomialYeastTemplate:
         task: BinomialYeastTaskSpec,
         significance_level: float,
         expected_num_observations: int,
-        increment_std: Optional[float] = None,
+        estimated_variance: float,
     ) -> Protocol:
         """
         Design a YEAST protocol from parameters.
         """
-        # Default increment_std logic mirroring schema description
-        if increment_std is None:
-            # sqrt(0.5) approx 0.70710678
-            increment_std = 0.70710678
-
         method = MethodSpec(
             kind="yeast",
             significance_level=significance_level,
             expected_num_observations=expected_num_observations,
-            increment_std=increment_std,
+            estimated_variance=estimated_variance,
         )
 
         return Protocol(
@@ -70,50 +73,46 @@ class BinomialYeastTemplate:
     def update(self, batch: List[ArmData]) -> None:
         """
         Update the experiment with a batch of data.
-        Logic: Calculate trajectory and check boundary.
         """
-        if not self.protocol or not self._boundary:
-            raise RuntimeError("Protocol not set")
+        # 1. Ingest Data
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.Commit(item, trace=[])
 
-        for data in batch:
-            arm = data.arm
-            if arm not in self._cumulative_counts:
-                self._cumulative_counts[arm] = {"n": 0, "success": 0}
-            self._cumulative_counts[arm]["n"] += data.n
-            self._cumulative_counts[arm]["success"] += data.success
+        # 2. Analysis
+        with Session(self.ledger) as sess:
+            # Reconstruct Protocol from Ledger
+            protocol = sess.Read(ProtocolProjector(Protocol))
+
+            # Read Metrics
+            metrics = sess.Read(Scoreboard(identity="metrics"))
+
+            # Read Boundary
+            boundary = sess.Read(Boundary(identity="boundary"))
+
+            # 3. Engine Execution
+            engine = BinomialYEASTEngine(protocol.data)
+
+            # 4. Commit Result via CallAndCommit
+            sess.CallAndCommit(
+                LookResult,
+                engine.run,
+                metrics=metrics,
+                boundary=boundary.data,
+            )
 
     def report_progress(self) -> Dict[str, Any]:
         """
         Report current status.
         """
-        if not self._cumulative_counts:
-            return {"status": DecisionStatus.CONTINUE_, "trajectory": 0.0}
-
-        # Calculate trajectory from cumulative counts
-        control = self._cumulative_counts.get("control")
-        treatment = self._cumulative_counts.get("treatment")
-
-        traj = 0.0
-        if control and treatment:
-            traj = float(treatment["success"] - control["success"])
-
-        boundary_val = self._boundary.value if self._boundary else float("inf")
-        is_crossed = traj > boundary_val
-
-        status = (
-            DecisionStatus.STOP_EFFICACY if is_crossed else DecisionStatus.CONTINUE_
-        )
-
-        return {
-            "status": status,
-            "trajectory": traj,
-            "efficacy_boundary": boundary_val,
-            "is_efficacy_crossed": is_crossed,
-        }
+        with Session(self.ledger) as sess:
+            report = sess.Read(ProgressProjector()).data
+            return report.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
-        progress = self.report_progress()
-        return {
-            "is_rejected": progress["status"] == DecisionStatus.STOP_EFFICACY,
-            "final_status": progress["status"],
-        }
+        """
+        Report final result.
+        """
+        with Session(self.ledger) as sess:
+            return sess.Read(FinalProjector()).data.model_dump(mode="json")
