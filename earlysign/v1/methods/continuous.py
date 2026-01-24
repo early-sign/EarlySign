@@ -40,22 +40,20 @@ class Scoreboard(Entity[ScoreboardSchema]):
         )
 
         is_arm_data = batch_table.payload_type == "ArmData"
-        
+
         # Simple iteration for prototype:
         # We need sum_x2 for Observation too
         val = batch_table.payload["value"].cast("float")
         sum_x2_expr = is_arm_data.ifelse(
-            batch_table.payload["sum_x2"].cast("float"),
-            val * val
+            batch_table.payload["sum_x2"].cast("float"), val * val
         )
-        
+
         batch_df = batch_table.select(
             "uuid",
             arm=batch_table.payload["arm"].cast("string").re_replace('^"|"$', ""),
             n=is_arm_data.ifelse(batch_table.payload["n"], 1).cast("int"),
             sum_x=is_arm_data.ifelse(
-                batch_table.payload["sum_x"], 
-                batch_table.payload["value"]
+                batch_table.payload["sum_x"], batch_table.payload["value"]
             ).cast("float"),
             sum_x2=sum_x2_expr.cast("float"),
         ).execute()
@@ -70,12 +68,16 @@ class Scoreboard(Entity[ScoreboardSchema]):
                 )
 
             status = current_arms[arm_name]
-            
+
             # Reconstruct running sums to update easily
             n_old = status.metrics.n
             sum_x_old = status.metrics.mean * n_old
             # Var = E[X^2] - (E[X])^2 => sum_x2 / n - mean^2
-            sum_x2_old = (status.metrics.variance + status.metrics.mean**2) * n_old if n_old > 0 else 0.0
+            sum_x2_old = (
+                (status.metrics.variance + status.metrics.mean**2) * n_old
+                if n_old > 0
+                else 0.0
+            )
 
             n_new = n_old + int(row["n"])
             sum_x_new = sum_x_old + float(row["sum_x"])
@@ -85,7 +87,9 @@ class Scoreboard(Entity[ScoreboardSchema]):
             if n_new > 0:
                 status.metrics.mean = sum_x_new / n_new
                 # Var = (1/n) * sum(x^2) - mean^2
-                status.metrics.variance = (sum_x2_new / n_new) - (status.metrics.mean**2)
+                status.metrics.variance = (sum_x2_new / n_new) - (
+                    status.metrics.mean**2
+                )
             else:
                 status.metrics.mean = 0.0
                 status.metrics.variance = 0.0

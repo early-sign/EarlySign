@@ -1,7 +1,15 @@
 from typing import Any
 
-from earlysign.schema.ES3.Binomial import ArmMetrics as BinomialArmMetrics, ArmStatus as BinomialArmStatus, Scoreboard as BinomialScoreboard
-from earlysign.schema.ES3.Continuous import ArmMetrics as ContinuousArmMetrics, ArmStatus as ContinuousArmStatus, Scoreboard as ContinuousScoreboard
+from earlysign.schema.ES3.Binomial import (
+    ArmMetrics as BinomialArmMetrics,
+    ArmStatus as BinomialArmStatus,
+    Scoreboard as BinomialScoreboard,
+)
+from earlysign.schema.ES3.Continuous import (
+    ArmMetrics as ContinuousArmMetrics,
+    ArmStatus as ContinuousArmStatus,
+    Scoreboard as ContinuousScoreboard,
+)
 from earlysign.schema.ES3.YEAST import Protocol
 from earlysign.schema.ES3.YEAST.Log import (
     Boundary as BoundarySchema,

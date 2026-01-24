@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 import ibis
 from pydantic import BaseModel
 
+from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboardSchema
+from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboardSchema
 from earlysign.schema.ES3.YEAST import Protocol
 from earlysign.schema.ES3.YEAST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import (
@@ -72,12 +74,18 @@ class ProgressProjector(Projector[ProgressReport]):
         response_type = getattr(protocol_traced.data.task, "response_type", "binary")
 
         # 3. Read Scoreboard for arm metrics
+        metrics_traced: Union[
+            ProjectionResult[BinomialScoreboardSchema],
+            ProjectionResult[ContinuousScoreboardSchema],
+        ]
         if response_type == "binary":
             metrics_traced = BinomialScoreboard(identity="metrics").project(table)
         else:
             metrics_traced = ContinuousScoreboard(identity="metrics").project(table)
-        
-        metrics = metrics_traced.data
+
+        metrics: ContinuousScoreboardSchema | BinomialScoreboardSchema = (
+            metrics_traced.data
+        )
 
         report = ProgressReport(
             sample_n=latest_look.sample_n,
@@ -116,12 +124,19 @@ class FinalProjector(Projector[FinalReport]):
         response_type = getattr(protocol_traced.data.task, "response_type", "binary")
 
         # 3. Read Scoreboard
+        metrics_traced: Union[
+            ProjectionResult[BinomialScoreboardSchema],
+            ProjectionResult[ContinuousScoreboardSchema],
+        ]
         if response_type == "binary":
             metrics_traced = BinomialScoreboard(identity="metrics").project(table)
         else:
             metrics_traced = ContinuousScoreboard(identity="metrics").project(table)
 
-        metrics = metrics_traced.data
+        metrics: Union[
+            BinomialScoreboardSchema,
+            ContinuousScoreboardSchema,
+        ] = metrics_traced.data
 
         report = FinalReport(
             sample_n=latest_look.sample_n,

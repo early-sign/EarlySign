@@ -130,7 +130,7 @@ def test_continuous_yeast_template_e2e() -> None:
     task = ContinuousYeastTaskSpec(
         arms=["control", "treatment"],
         response_type="continuous",
-        hypotheses={}, # Placeholder
+        hypotheses={},  # Placeholder
     )
 
     template = ContinuousYeastTemplate(ledger)
@@ -150,7 +150,7 @@ def test_continuous_yeast_template_e2e() -> None:
         ContinuousArmData(n=10, sum_x=25.0, sum_x2=70.0, arm="treatment"),
     ]
     template.update(batch1)
-    
+
     report1 = template.report_progress()
     assert report1["status"] == DecisionStatus.CONTINUE_
     assert report1["trajectory"] == 15.0
@@ -192,7 +192,10 @@ def test_default_increment_std() -> None:
     BinomialYeastTemplate(ledger)
     # Don't provide estimated_variance, expect default variance 0.5
     protocol = BinomialYeastTemplate.design(
-        task=task, significance_level=0.05, expected_num_observations=100, estimated_variance=0.5
+        task=task,
+        significance_level=0.05,
+        expected_num_observations=100,
+        estimated_variance=0.5,
     )
 
     assert protocol.method.estimated_variance is not None
