@@ -4,7 +4,8 @@ import ibis
 import numpy as np
 from scipy import stats
 
-from earlysign.schema.ES3.YEAST import Boundary as BoundarySchema, Protocol
+from earlysign.schema.ES3.YEAST import Protocol
+from earlysign.schema.ES3.YEAST.Log import Boundary as BoundarySchema
 from earlysign.v1.framework.entity import Entity, Snapshot
 from earlysign.v1.framework.projector import ProjectionResult
 from earlysign.v1.framework.trace import TraceId
