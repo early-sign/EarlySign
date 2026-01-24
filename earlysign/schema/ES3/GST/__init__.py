@@ -20,9 +20,20 @@ class AdaptationSpec(BaseModel):
     type: str
 
 
-class Sided(StrEnum):
-    ONE = "one"
-    TWO = "two"
+class DecisionStrategyBase(BaseModel):
+    """
+    Abstract Base for Decision Strategy.
+    Holds the Inferential Model (Assumption).
+    """
+
+    kind: str
+    statistical_model: StatisticalModel
+
+
+class BoundaryFunctionStrategyBase(DecisionStrategyBase):
+    """
+    Abstract Base for Shape-Based Boundary Strategies.
+    """
 
 
 class EffectSizeSpec(BaseModel):
@@ -32,6 +43,17 @@ class EffectSizeSpec(BaseModel):
     """
 
     type: str
+
+
+class BinaryEffectSize(EffectSizeSpec):
+    type: Literal["binary"] = "binary"
+    proportions: dict[str, float] = Field(..., description="Arm name -> Expected rate")
+
+
+class ContinuousEffectSize(EffectSizeSpec):
+    type: Literal["continuous"] = "continuous"
+    means: dict[str, float] = Field(..., description="Arm name -> Expected mean")
+    standard_deviation: float
 
 
 class EfficacyRequirement(BaseModel):
@@ -63,6 +85,16 @@ class HypothesisParameters(BaseModel):
     kind: str
 
 
+class EqualityHypothesis(HypothesisParameters):
+    kind: Literal["equality"] = "equality"
+
+
+class EquivalenceHypothesis(HypothesisParameters):
+    kind: Literal["equivalence"] = "equivalence"
+    lower_margin: float
+    upper_margin: float
+
+
 class HypothesisSpec(BaseModel):
     h_null: str
     h_alt: str
@@ -74,6 +106,16 @@ class InformationTimerBase(BaseModel):
     kind: str
 
 
+class EventCountTimer(InformationTimerBase):
+    kind: Literal["event_count"] = "event_count"
+    max_events: int
+
+
+class FisherInformationTimer(InformationTimerBase):
+    kind: Literal["fisher_information"] = "fisher_information"
+    max_information: float
+
+
 class KnownVariance(BaseModel):
     """
     Shared Known Variance model.
@@ -83,162 +125,9 @@ class KnownVariance(BaseModel):
     value: float
 
 
-class NonInferiorityHypothesis(HypothesisParameters):
-    kind: Literal["non_inferiority"] = "non_inferiority"
-    non_inferiority_margin: float
-
-
-class VarianceSource(StrEnum):
-    """
-    Variance source.
-    - "sample": Uses observed estimate (Wald-like).
-    - "null_hypothesis": Uses null parameter (Score-like).
-    """
-
-    SAMPLE = "sample"
-    NULL_HYPOTHESIS = "null_hypothesis"
-
-
-class OneArmEstimatedVariance(BaseModel):
-    """
-    One-Arm Variance options.
-    """
-
-    kind: Literal["estimated"] = "estimated"
-
-
 class Method(StrEnum):
     CONDITIONAL_POWER = "conditional_power"
     PREDICTIVE_POWER = "predictive_power"
-
-
-class SampleSizeReestimationSpec(AdaptationSpec):
-    type: Literal["sample_size_reestimation"] = "sample_size_reestimation"
-    method: Method
-    target_power: float
-    n_range: list[Any]
-
-
-class Unit(StrEnum):
-    """
-    "individuals": Count individuals (e.g. n1 + n2).
-    "effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).
-    """
-
-    INDIVIDUALS = "individuals"
-    EFFECTIVE_SIZE = "effective_size"
-
-
-class SampleSizeTimer(InformationTimerBase):
-    kind: Literal["sample_size"] = "sample_size"
-    unit: Unit = Field(
-        ...,
-        description='"individuals": Count individuals (e.g. n1 + n2).\n"effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).',
-    )
-    max_sample_size: int
-
-
-class ScheduleBase(InformationTimerBase):
-    pass
-
-
-class SpendingFunctionType(StrEnum):
-    """
-    Available spending function types for group sequential design.
-    """
-
-    OBRIEN_FLEMING = "obrien_fleming"
-    POCOCK = "pocock"
-    KIM_DEMETS = "kim_demets"
-    LAN_DEMETS = "lan_demets"
-    POWER_FAMILY = "power_family"
-    HWANG_SHIH_DECANI = "hwang_shih_decani"
-
-
-class StatisticalModel(BaseModel):
-    """
-    The "Model": Statistical Assumptions for Inference.The "Model": Statistical Assumptions for Inference.
-    """
-
-    kind: str
-
-
-class SuperiorityHypothesis(HypothesisParameters):
-    kind: Literal["superiority"] = "superiority"
-    superiority_margin: float
-
-
-class SurvivalEffectSize(EffectSizeSpec):
-    type: Literal["time_to_event"] = "time_to_event"
-    hazard_ratios: dict[str, float] = Field(
-        ..., description="Arm name -> Hazard Ratio (relative to control)"
-    )
-    median_survival_times: dict[str, float] | None = Field(
-        None, description="Optional: for sample size calc"
-    )
-    event_rate: float | None = Field(None, description="Overall event rate if needed")
-
-
-class TProcessModel(StatisticalModel):
-    kind: Literal["t_process"] = "t_process"
-    degrees_of_freedom_method: str = Field(
-        ..., description='Degrees of Freedom method (e.g., "satterthwaite")'
-    )
-
-
-class ResponseType(StrEnum):
-    BINARY = "binary"
-    CONTINUOUS = "continuous"
-    TIME_TO_EVENT = "time_to_event"
-
-
-class TaskSpec(TaskSpec_1):
-    """
-    GST-Specific Task Definition (Univariate).
-    """
-
-    kind: Literal["group_sequential"] = "group_sequential"
-    arms: list[str]
-    response_type: ResponseType
-    hypotheses: HypothesisSpec
-    efficacy: EfficacyRequirement | None = Field(
-        None,
-        description="Design Requirements (Designer Input)\nPresence implies the intent to stop for this reason.",
-    )
-    futility: FutilityRequirement | None = None
-
-
-class TestStatisticSpec(BaseModel):
-    """
-    The "Statistic": Operational Definition of the Test Statistic.
-    """
-
-    kind: str
-
-
-class VarianceEstimation(StrEnum):
-    """
-    Variance estimation method.
-    - "unpooled": Wald Z (Observed).
-    - "pooled": Score Z (Null/Common).
-    """
-
-    POOLED = "pooled"
-    UNPOOLED = "unpooled"
-
-
-class TwoArmBinomialZ(TestStatisticSpec):
-    """
-    Two-Arm Binomial Z-Statistic.
-    Covers both Wald Z (unpooled) and Score Z (pooled).
-    """
-
-    kind: Literal["two_arm_binomial_z"] = "two_arm_binomial_z"
-    information_unit: Literal["fisher_information"] = "fisher_information"
-    variance_estimation: VarianceEstimation = Field(
-        ...,
-        description='Variance estimation method.\n- "unpooled": Wald Z (Observed).\n- "pooled": Score Z (Null/Common).',
-    )
 
 
 class MethodModel(StrEnum):
@@ -251,79 +140,86 @@ class MethodModel(StrEnum):
     UNPOOLED = "unpooled"
 
 
-class TwoArmEstimatedVariance(BaseModel):
+class MethodSpec(MethodSpec_1):
     """
-    Two-Arm Variance options.
+    GST-Specific Method Definition (Univariate).
+    """
+
+    kind: Literal["group_sequential"] = "group_sequential"
+    stopping_policy: StoppingPolicySpec = Field(
+        ..., description="Stopping Policy (discriminated union)"
+    )
+    adaptation: AdaptationSpec | None = None
+
+
+class NonInferiorityHypothesis(HypothesisParameters):
+    kind: Literal["non_inferiority"] = "non_inferiority"
+    non_inferiority_margin: float
+
+
+class OBrienFlemingStrategy(BoundaryFunctionStrategyBase):
+    """
+    Classic O'Brien-Fleming Strategy.
+    """
+
+    kind: Literal["obrien_fleming"] = "obrien_fleming"
+    alpha: float
+    sided: Sided
+
+
+class OneArmEstimatedVariance(BaseModel):
+    """
+    One-Arm Variance options.
     """
 
     kind: Literal["estimated"] = "estimated"
-    method: MethodModel = Field(
+
+
+OneArmContinuousVariance = TypeAliasType(
+    "OneArmContinuousVariance", KnownVariance | OneArmEstimatedVariance
+)
+
+
+class PocockStrategy(BoundaryFunctionStrategyBase):
+    """
+    Pocock Strategy.
+    """
+
+    kind: Literal["pocock"] = "pocock"
+    alpha: float
+    sided: Sided
+
+
+class Protocol(Protocol_1):
+    """
+    GST-Specific Protocol Container.
+    Enforces that task and method belong to the GST domain.
+    """
+
+    task: TaskSpec
+    method: MethodSpec
+
+
+class ResponseType(StrEnum):
+    BINARY = "binary"
+    CONTINUOUS = "continuous"
+    TIME_TO_EVENT = "time_to_event"
+
+
+class SampleSizeReestimationSpec(AdaptationSpec):
+    type: Literal["sample_size_reestimation"] = "sample_size_reestimation"
+    method: Method
+    target_power: float
+    n_range: list[Any]
+
+
+class SampleSizeTimer(InformationTimerBase):
+    kind: Literal["sample_size"] = "sample_size"
+    unit: Unit = Field(
         ...,
-        description='- "pooled": Equal variance assumption.\n- "unpooled": Unequal variance (Welch).',
+        description='"individuals": Count individuals (e.g. n1 + n2).\n"effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).',
     )
-
-
-class BinaryEffectSize(EffectSizeSpec):
-    type: Literal["binary"] = "binary"
-    proportions: dict[str, float] = Field(..., description="Arm name -> Expected rate")
-
-
-class BinomialExactStatistic(TestStatisticSpec):
-    kind: Literal["binomial_exact"] = "binomial_exact"
-
-
-class CanonicalGaussianModel(StatisticalModel):
-    kind: Literal["canonical_gaussian"] = "canonical_gaussian"
-
-
-class ContinuousEffectSize(EffectSizeSpec):
-    type: Literal["continuous"] = "continuous"
-    means: dict[str, float] = Field(..., description="Arm name -> Expected mean")
-    standard_deviation: float
-
-
-class DecisionStrategyBase(BaseModel):
-    """
-    Abstract Base for Decision Strategy.
-    Holds the Inferential Model (Assumption).
-    """
-
-    kind: str
-    statistical_model: StatisticalModel
-
-
-class EqualityHypothesis(HypothesisParameters):
-    kind: Literal["equality"] = "equality"
-
-
-class EquidistantSchedule(ScheduleBase):
-    kind: Literal["equidistant"] = "equidistant"
-    n_looks: int
-
-
-class EquivalenceHypothesis(HypothesisParameters):
-    kind: Literal["equivalence"] = "equivalence"
-    lower_margin: float
-    upper_margin: float
-
-
-class EventCountTimer(InformationTimerBase):
-    kind: Literal["event_count"] = "event_count"
-    max_events: int
-
-
-class ExactBinomialModel(StatisticalModel):
-    kind: Literal["exact_binomial"] = "exact_binomial"
-
-
-class FisherInformationTimer(InformationTimerBase):
-    kind: Literal["fisher_information"] = "fisher_information"
-    max_information: float
-
-
-class FixedSchedule(ScheduleBase):
-    kind: Literal["fixed"] = "fixed"
-    analyses: list[float]
+    max_sample_size: int
 
 
 InformationTimer = TypeAliasType(
@@ -335,32 +231,18 @@ InformationTimer = TypeAliasType(
 )
 
 
-class OneArmBinomialZ(TestStatisticSpec):
-    """
-    One-Arm Binomial Z-Statistic.
-    """
-
-    kind: Literal["one_arm_binomial_z"] = "one_arm_binomial_z"
-    information_unit: Literal["fisher_information"] = "fisher_information"
-    variance_source: VarianceSource = Field(
-        ...,
-        description='Variance source.\n- "sample": Uses observed estimate (Wald-like).\n- "null_hypothesis": Uses null parameter (Score-like).',
-    )
+class ScheduleBase(BaseModel):
+    kind: str
 
 
-OneArmContinuousVariance = TypeAliasType(
-    "OneArmContinuousVariance", KnownVariance | OneArmEstimatedVariance
-)
+class EquidistantSchedule(ScheduleBase):
+    kind: Literal["equidistant"] = "equidistant"
+    n_looks: int
 
 
-class OneArmContinuousZ(TestStatisticSpec):
-    """
-    One-Arm Continuous Z-Statistic.
-    """
-
-    kind: Literal["one_arm_continuous_z"] = "one_arm_continuous_z"
-    information_unit: Literal["fisher_information"] = "fisher_information"
-    variance: OneArmContinuousVariance
+class FixedSchedule(ScheduleBase):
+    kind: Literal["fixed"] = "fixed"
+    analyses: list[float]
 
 
 ScheduleSpec = TypeAliasType(
@@ -370,6 +252,11 @@ ScheduleSpec = TypeAliasType(
         Field(..., description='Discriminated Union for Schedule (The "Checkpoints").'),
     ],
 )
+
+
+class Sided(StrEnum):
+    ONE = "one"
+    TWO = "two"
 
 
 class SpendingFunction(BaseModel):
@@ -383,21 +270,6 @@ class SpendingFunctionStrategyBase(DecisionStrategyBase):
     """
     Abstract Base for Spending-Function Strategies.
     """
-
-
-TwoArmContinuousVariance = TypeAliasType(
-    "TwoArmContinuousVariance", KnownVariance | TwoArmEstimatedVariance
-)
-
-
-class TwoArmContinuousZ(TestStatisticSpec):
-    """
-    Two-Arm Continuous Z-Statistic.
-    """
-
-    kind: Literal["two_arm_continuous_z"] = "two_arm_continuous_z"
-    information_unit: Literal["fisher_information"] = "fisher_information"
-    variance: TwoArmContinuousVariance
 
 
 class AlphaBetaSpendingStrategy(SpendingFunctionStrategyBase):
@@ -435,30 +307,191 @@ class BetaSpendingStrategy(SpendingFunctionStrategyBase):
     budget: float
 
 
-class BoundaryFunctionStrategyBase(DecisionStrategyBase):
+class SpendingFunctionType(StrEnum):
     """
-    Abstract Base for Shape-Based Boundary Strategies.
-    """
-
-
-class OBrienFlemingStrategy(BoundaryFunctionStrategyBase):
-    """
-    Classic O'Brien-Fleming Strategy.
+    Available spending function types for group sequential design.
     """
 
-    kind: Literal["obrien_fleming"] = "obrien_fleming"
-    alpha: float
-    sided: Sided
+    OBRIEN_FLEMING = "obrien_fleming"
+    POCOCK = "pocock"
+    KIM_DEMETS = "kim_demets"
+    LAN_DEMETS = "lan_demets"
+    POWER_FAMILY = "power_family"
+    HWANG_SHIH_DECANI = "hwang_shih_decani"
 
 
-class PocockStrategy(BoundaryFunctionStrategyBase):
+class StatisticalModel(BaseModel):
     """
-    Pocock Strategy.
+    The "Model": Statistical Assumptions for Inference.The "Model": Statistical Assumptions for Inference.
     """
 
-    kind: Literal["pocock"] = "pocock"
-    alpha: float
-    sided: Sided
+    kind: str
+
+
+class CanonicalGaussianModel(StatisticalModel):
+    kind: Literal["canonical_gaussian"] = "canonical_gaussian"
+
+
+class ExactBinomialModel(StatisticalModel):
+    kind: Literal["exact_binomial"] = "exact_binomial"
+
+
+class StoppingPolicySpec(BaseModel):
+    """
+    Composite Policy Container.
+    """
+
+    statistic: TestStatisticSpec
+    strategy: DecisionStrategy
+    timer: InformationTimer
+    schedule: ScheduleSpec
+
+
+class SuperiorityHypothesis(HypothesisParameters):
+    kind: Literal["superiority"] = "superiority"
+    superiority_margin: float
+
+
+class SurvivalEffectSize(EffectSizeSpec):
+    type: Literal["time_to_event"] = "time_to_event"
+    hazard_ratios: dict[str, float] = Field(
+        ..., description="Arm name -> Hazard Ratio (relative to control)"
+    )
+    median_survival_times: dict[str, float] | None = Field(
+        None, description="Optional: for sample size calc"
+    )
+    event_rate: float | None = Field(None, description="Overall event rate if needed")
+
+
+class TProcessModel(StatisticalModel):
+    kind: Literal["t_process"] = "t_process"
+    degrees_of_freedom_method: str = Field(
+        ..., description='Degrees of Freedom method (e.g., "satterthwaite")'
+    )
+
+
+class TaskSpec(TaskSpec_1):
+    """
+    GST-Specific Task Definition (Univariate).
+    """
+
+    kind: Literal["group_sequential"] = "group_sequential"
+    arms: list[str]
+    response_type: ResponseType
+    hypotheses: HypothesisSpec
+    efficacy: EfficacyRequirement | None = Field(
+        None,
+        description="Design Requirements (Designer Input)\nPresence implies the intent to stop for this reason.",
+    )
+    futility: FutilityRequirement | None = None
+
+
+class TestStatisticSpec(BaseModel):
+    """
+    The "Statistic": Operational Definition of the Test Statistic.
+    """
+
+    kind: str
+
+
+class BinomialExactStatistic(TestStatisticSpec):
+    kind: Literal["binomial_exact"] = "binomial_exact"
+
+
+class OneArmBinomialZ(TestStatisticSpec):
+    """
+    One-Arm Binomial Z-Statistic.
+    """
+
+    kind: Literal["one_arm_binomial_z"] = "one_arm_binomial_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
+    variance_source: VarianceSource = Field(
+        ...,
+        description='Variance source.\n- "sample": Uses observed estimate (Wald-like).\n- "null_hypothesis": Uses null parameter (Score-like).',
+    )
+
+
+class OneArmContinuousZ(TestStatisticSpec):
+    """
+    One-Arm Continuous Z-Statistic.
+    """
+
+    kind: Literal["one_arm_continuous_z"] = "one_arm_continuous_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
+    variance: OneArmContinuousVariance
+
+
+class TwoArmBinomialZ(TestStatisticSpec):
+    """
+    Two-Arm Binomial Z-Statistic.
+    Covers both Wald Z (unpooled) and Score Z (pooled).
+    """
+
+    kind: Literal["two_arm_binomial_z"] = "two_arm_binomial_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
+    variance_estimation: VarianceEstimation = Field(
+        ...,
+        description='Variance estimation method.\n- "unpooled": Wald Z (Observed).\n- "pooled": Score Z (Null/Common).',
+    )
+
+
+class TwoArmContinuousZ(TestStatisticSpec):
+    """
+    Two-Arm Continuous Z-Statistic.
+    """
+
+    kind: Literal["two_arm_continuous_z"] = "two_arm_continuous_z"
+    information_unit: Literal["fisher_information"] = "fisher_information"
+    variance: TwoArmContinuousVariance
+
+
+class TwoArmEstimatedVariance(BaseModel):
+    """
+    Two-Arm Variance options.
+    """
+
+    kind: Literal["estimated"] = "estimated"
+    method: MethodModel = Field(
+        ...,
+        description='- "pooled": Equal variance assumption.\n- "unpooled": Unequal variance (Welch).',
+    )
+
+
+TwoArmContinuousVariance = TypeAliasType(
+    "TwoArmContinuousVariance", KnownVariance | TwoArmEstimatedVariance
+)
+
+
+class Unit(StrEnum):
+    """
+    "individuals": Count individuals (e.g. n1 + n2).
+    "effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).
+    """
+
+    INDIVIDUALS = "individuals"
+    EFFECTIVE_SIZE = "effective_size"
+
+
+class VarianceEstimation(StrEnum):
+    """
+    Variance estimation method.
+    - "unpooled": Wald Z (Observed).
+    - "pooled": Score Z (Null/Common).
+    """
+
+    POOLED = "pooled"
+    UNPOOLED = "unpooled"
+
+
+class VarianceSource(StrEnum):
+    """
+    Variance source.
+    - "sample": Uses observed estimate (Wald-like).
+    - "null_hypothesis": Uses null parameter (Score-like).
+    """
+
+    SAMPLE = "sample"
+    NULL_HYPOTHESIS = "null_hypothesis"
 
 
 class WangTsiatisStrategy(BoundaryFunctionStrategyBase):
@@ -497,36 +530,3 @@ DecisionStrategy = TypeAliasType(
         ),
     ],
 )
-
-
-class StoppingPolicySpec(BaseModel):
-    """
-    Composite Policy Container.
-    """
-
-    statistic: TestStatisticSpec
-    strategy: DecisionStrategy
-    timer: InformationTimer
-    schedule: ScheduleSpec
-
-
-class MethodSpec(MethodSpec_1):
-    """
-    GST-Specific Method Definition (Univariate).
-    """
-
-    kind: Literal["group_sequential"] = "group_sequential"
-    stopping_policy: StoppingPolicySpec = Field(
-        ..., description="Stopping Policy (discriminated union)"
-    )
-    adaptation: AdaptationSpec | None = None
-
-
-class Protocol(Protocol_1):
-    """
-    GST-Specific Protocol Container.
-    Enforces that task and method belong to the GST domain.
-    """
-
-    task: TaskSpec
-    method: MethodSpec

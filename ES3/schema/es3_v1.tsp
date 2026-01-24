@@ -1,4 +1,5 @@
 import "@typespec/openapi3";
+import "./es3_v1_imports/YEAST.tsp";
 
 @service(#{ title: "EarlySign Standard Schema (ES3)" })
 namespace ES3;
@@ -713,6 +714,7 @@ namespace Binomial {
   /**
    * Collective state of all arms (Scoreboard).
    */
+
   model Scoreboard {
     arms: Record<ArmStatus>;
   }

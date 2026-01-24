@@ -17,13 +17,13 @@ class MethodSpec(MethodSpec_1):
     growth_rate: float | None = None
 
 
+class Protocol(Protocol_1):
+    task: TaskSpec
+    method: MethodSpec
+
+
 class TaskSpec(TaskSpec_1):
     kind: Literal["anytime_valid"] = "anytime_valid"
     null_p: float
     alt_p: float | None = None
     alpha: float
-
-
-class Protocol(Protocol_1):
-    task: TaskSpec
-    method: MethodSpec

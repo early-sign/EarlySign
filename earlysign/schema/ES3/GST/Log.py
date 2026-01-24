@@ -11,6 +11,30 @@ from pydantic import BaseModel, Field
 from ..Base import Log
 
 
+class Analysis(Log):
+    """
+    Structural Record of a GST Analysis Execution.
+    This captures the Context (Trigger), Metadata, and factual Result.
+    """
+
+    trigger: Trigger | None = None
+    look: int = Field(..., description="Results")
+    statistic: float
+    info_frac: float
+    decision: DecisionStatus | str
+    efficacy_boundary: float | None = None
+    futility_boundary: float | None = None
+
+
+class Decision(Log):
+    """
+    Formalized Decision Event.
+    """
+
+    status: DecisionStatus | str
+    message: str
+
+
 class DecisionStatus(StrEnum):
     """
     Status of an ongoing or completed Group Sequential Test.
@@ -45,30 +69,6 @@ class Trigger(BaseModel):
     """
 
     kind: str
-
-
-class Analysis(Log):
-    """
-    Structural Record of a GST Analysis Execution.
-    This captures the Context (Trigger), Metadata, and factual Result.
-    """
-
-    trigger: Trigger | None = None
-    look: int = Field(..., description="Results")
-    statistic: float
-    info_frac: float
-    decision: DecisionStatus | str
-    efficacy_boundary: float | None = None
-    futility_boundary: float | None = None
-
-
-class Decision(Log):
-    """
-    Formalized Decision Event.
-    """
-
-    status: DecisionStatus | str
-    message: str
 
 
 class ManualTrigger(Trigger):

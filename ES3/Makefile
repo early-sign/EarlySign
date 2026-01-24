@@ -7,12 +7,14 @@ OUTPUT_DIR ?= ../earlysign/schema/ES3
 SENTINEL ?= $(OUTPUT_DIR)/__init__.py
 TSP_SOURCE ?= schema/es3_v1.tsp
 
+TSP_SOURCES := $(shell find schema -name '*.tsp')
+
 install:
 	npm install
 
 compile: $(SENTINEL)
 
-$(SENTINEL): $(TSP_SOURCE)
+$(SENTINEL): $(TSP_SOURCES) Makefile
 	@echo "Compiling ES3 Standard..."
 	# 1. Compile TypeSpec to OpenAPI 3
 	npx tsp compile $(TSP_SOURCE) --emit @typespec/openapi3 --output-dir out-openapi3
@@ -25,9 +27,9 @@ $(SENTINEL): $(TSP_SOURCE)
 		--output-model-type pydantic_v2.BaseModel \
 		--base-class pydantic.BaseModel \
 		--use-schema-description \
-		--treat-dot-as-module \
 		--target-python-version $(TARGET_PYTHON_VERSION) \
 		--reuse-model \
+		--keep-model-order \
 		--use-type-alias \
 		--use-double-quotes \
 		--openapi-scopes schemas \
@@ -40,8 +42,15 @@ $(SENTINEL): $(TSP_SOURCE)
 
 check-sync:
 	@echo "Checking if ES3 SDK is in sync with TypeSpec source..."
-	@if [ $(TSP_SOURCE) -nt $(SENTINEL) ]; then \
-		echo "Error: ES3 SDK is out of sync with $(TSP_SOURCE). Please run 'make compile-ES3'."; \
+	@needs_update=0; \
+	for file in $(TSP_SOURCES); do \
+		if [ "$$file" -nt $(SENTINEL) ]; then \
+			echo "Error: ES3 SDK is out of sync with $$file. Please run 'make compile-ES3'."; \
+			needs_update=1; \
+			break; \
+		fi; \
+	done; \
+	if [ $$needs_update -eq 1 ]; then \
 		exit 1; \
 	else \
 		echo "ES3 SDK is in sync."; \

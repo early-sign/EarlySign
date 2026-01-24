@@ -31,15 +31,6 @@ class MethodSpec(BaseModel):
     kind: str
 
 
-class TaskSpec(BaseModel):
-    """
-    Base class for Problem Definition.
-    Concrete protocols should extend this (e.g., GST.TaskSpec).
-    """
-
-    kind: str
-
-
 class Protocol(BaseModel):
     """
     The Root Protocol Container.
@@ -50,3 +41,12 @@ class Protocol(BaseModel):
     name: str
     task: TaskSpec
     method: MethodSpec
+
+
+class TaskSpec(BaseModel):
+    """
+    Base class for Problem Definition.
+    Concrete protocols should extend this (e.g., GST.TaskSpec).
+    """
+
+    kind: str

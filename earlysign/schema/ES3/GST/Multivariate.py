@@ -16,6 +16,12 @@ from ..Base import (
 from . import HypothesisSpec, TaskSpec as TaskSpec_1
 
 
+class MethodSpec(MethodSpec_1):
+    kind: Literal["group_sequential_multivariate"] = "group_sequential_multivariate"
+    multiplicity_adjustment: MultiplicityAdjustment
+    correlation_matrix: list[list[float]] | None = None
+
+
 class MultiplicityAdjustment(StrEnum):
     NONE = "none"
     BONFERRONI = "bonferroni"
@@ -24,10 +30,9 @@ class MultiplicityAdjustment(StrEnum):
     GATEKEEPING = "gatekeeping"
 
 
-class MethodSpec(MethodSpec_1):
-    kind: Literal["group_sequential_multivariate"] = "group_sequential_multivariate"
-    multiplicity_adjustment: MultiplicityAdjustment
-    correlation_matrix: list[list[float]] | None = None
+class Protocol(Protocol_1):
+    task: TaskSpec
+    method: MethodSpec
 
 
 class TaskSpec(TaskSpec_2):
@@ -50,8 +55,3 @@ class TaskSpec(TaskSpec_2):
     )
     alpha: float | None = Field(None, description="Global FWER")
     beta: float | None = Field(None, description="Global Power")
-
-
-class Protocol(Protocol_1):
-    task: TaskSpec
-    method: MethodSpec
