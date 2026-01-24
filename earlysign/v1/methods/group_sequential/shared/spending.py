@@ -26,7 +26,7 @@ class SpendingFunction(Protocol):
     ) -> NDArray[Any]: ...
 
 
-class OBFSpending(SpendingFunction):
+class OBrienFlemingSpending(SpendingFunction):
     """Lan–DeMets O'Brien–Fleming style spending (1-sided).
 
     For two-sided tests, provide budget=alpha/2.
@@ -49,9 +49,7 @@ class OBFSpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "obrien_fleming"
+    name = "obrien_fleming"
 
 
 class PocockSpending(SpendingFunction):
@@ -70,12 +68,10 @@ class PocockSpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "pocock"
+    name = "pocock"
 
 
-class HSDSpending(SpendingFunction):
+class HwangShihDeCaniSpending(SpendingFunction):
     """Hwang–Shih–DeCani family."""
 
     def __init__(self, budget: float, gamma: float = -4.0) -> None:
@@ -96,9 +92,7 @@ class HSDSpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "hsd"
+    name = "hwang_shih_decani"
 
 
 class PowerFamilySpending(SpendingFunction):
@@ -120,16 +114,18 @@ class PowerFamilySpending(SpendingFunction):
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
         return np.asarray(norm.ppf(1.0 - a), dtype=float)
 
-    @property
-    def name(self) -> str:
-        return "power_family"
+    name = "power_family"
 
+
+_SPENDING_CLASSES = [
+    OBrienFlemingSpending,
+    PocockSpending,
+    HwangShihDeCaniSpending,
+    PowerFamilySpending,
+]
 
 _SPENDING_REGISTRY: Dict[str, Type[SpendingFunction]] = {
-    "obrien_fleming": OBFSpending,
-    "pocock": PocockSpending,
-    "hsd": HSDSpending,
-    "power_family": PowerFamilySpending,
+    cls.name: cls for cls in _SPENDING_CLASSES
 }
 
 

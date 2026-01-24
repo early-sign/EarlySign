@@ -160,10 +160,8 @@ namespace GST {
   enum SpendingFunctionType {
     ObrienFleming: "obrien_fleming",
     Pocock: "pocock",
-    KimDemets: "kim_demets",
-    LanDemets: "lan_demets",
     PowerFamily: "power_family",
-    HwangShihDecani: "hwang_shih_decani",
+    HwangShihDeCani: "hwang_shih_decani",
   }
 
   model SpendingFunction {

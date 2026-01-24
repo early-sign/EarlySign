@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
+from typing_extensions import TypeAliasType
 
 from ..Base import (
     MethodSpec as MethodSpec_1,
@@ -174,7 +175,9 @@ class OneArmEstimatedVariance(BaseModel):
     kind: Literal["estimated"] = "estimated"
 
 
-type OneArmContinuousVariance = KnownVariance | OneArmEstimatedVariance
+OneArmContinuousVariance = TypeAliasType(
+    "OneArmContinuousVariance", KnownVariance | OneArmEstimatedVariance
+)
 
 
 class PocockStrategy(BoundaryFunctionStrategyBase):
@@ -219,10 +222,13 @@ class SampleSizeTimer(InformationTimerBase):
     max_sample_size: int
 
 
-type InformationTimer = Annotated[
-    SampleSizeTimer | FisherInformationTimer | EventCountTimer,
-    Field(..., description='Discriminated Union for Timer (The "Clock").'),
-]
+InformationTimer = TypeAliasType(
+    "InformationTimer",
+    Annotated[
+        SampleSizeTimer | FisherInformationTimer | EventCountTimer,
+        Field(..., description='Discriminated Union for Timer (The "Clock").'),
+    ],
+)
 
 
 class ScheduleBase(BaseModel):
@@ -239,10 +245,13 @@ class FixedSchedule(ScheduleBase):
     analyses: list[float]
 
 
-type ScheduleSpec = Annotated[
-    FixedSchedule | EquidistantSchedule,
-    Field(..., description='Discriminated Union for Schedule (The "Checkpoints").'),
-]
+ScheduleSpec = TypeAliasType(
+    "ScheduleSpec",
+    Annotated[
+        FixedSchedule | EquidistantSchedule,
+        Field(..., description='Discriminated Union for Schedule (The "Checkpoints").'),
+    ],
+)
 
 
 class Sided(StrEnum):
@@ -305,8 +314,6 @@ class SpendingFunctionType(StrEnum):
 
     OBRIEN_FLEMING = "obrien_fleming"
     POCOCK = "pocock"
-    KIM_DEMETS = "kim_demets"
-    LAN_DEMETS = "lan_demets"
     POWER_FAMILY = "power_family"
     HWANG_SHIH_DECANI = "hwang_shih_decani"
 
@@ -448,7 +455,9 @@ class TwoArmEstimatedVariance(BaseModel):
     )
 
 
-type TwoArmContinuousVariance = KnownVariance | TwoArmEstimatedVariance
+TwoArmContinuousVariance = TypeAliasType(
+    "TwoArmContinuousVariance", KnownVariance | TwoArmEstimatedVariance
+)
 
 
 class Unit(StrEnum):
@@ -504,13 +513,18 @@ class WhiteheadStrategy(BoundaryFunctionStrategyBase):
     beta: float
 
 
-type DecisionStrategy = Annotated[
-    AlphaSpendingStrategy
-    | BetaSpendingStrategy
-    | AlphaBetaSpendingStrategy
-    | WhiteheadStrategy
-    | OBrienFlemingStrategy
-    | PocockStrategy
-    | WangTsiatisStrategy,
-    Field(..., description='Discriminated Union for Decision Strategies (The "Rule").'),
-]
+DecisionStrategy = TypeAliasType(
+    "DecisionStrategy",
+    Annotated[
+        AlphaSpendingStrategy
+        | BetaSpendingStrategy
+        | AlphaBetaSpendingStrategy
+        | WhiteheadStrategy
+        | OBrienFlemingStrategy
+        | PocockStrategy
+        | WangTsiatisStrategy,
+        Field(
+            ..., description='Discriminated Union for Decision Strategies (The "Rule").'
+        ),
+    ],
+)
