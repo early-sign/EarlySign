@@ -1,4 +1,4 @@
-.PHONY: install lint type test check format docs-build docs-serve lint-type-test
+.PHONY: install lint type test check format docs-build docs-serve lint-type-test compile-ES3
 
 install:
 	poetry install --with dev,ci
