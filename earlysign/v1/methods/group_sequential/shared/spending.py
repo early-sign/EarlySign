@@ -5,7 +5,7 @@ information fractions in group-sequential designs.
 """
 
 import math
-from typing import Any, Dict, Protocol, Type
+from typing import Any, ClassVar, Dict, List, Protocol, Type
 
 import numpy as np
 from numpy.typing import NDArray
@@ -15,8 +15,7 @@ from scipy.stats import norm
 class SpendingFunction(Protocol):
     """Protocol describing a spending function implementation."""
 
-    @property
-    def name(self) -> str: ...
+    name: ClassVar[str]
 
     budget: float
 
@@ -117,7 +116,7 @@ class PowerFamilySpending(SpendingFunction):
     name = "power_family"
 
 
-_SPENDING_CLASSES = [
+_SPENDING_CLASSES: List[Type[SpendingFunction]] = [
     OBrienFlemingSpending,
     PocockSpending,
     HwangShihDeCaniSpending,

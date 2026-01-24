@@ -236,7 +236,7 @@ class BoundaryCalculator:
                 raise ValueError(f"Unknown spending family: {family}") from exc
 
             kwargs: Dict[str, Any] = {"alpha": float(spec["alpha"])}
-            if spending_cls is spending_mod.OBFSpending:
+            if spending_cls is spending_mod.OBrienFlemingSpending:
                 kwargs["sided"] = int(spec["tails"])
             kwargs.update(params)
             s = spending_cls(**kwargs)
@@ -307,7 +307,7 @@ class BoundaryCalculator:
                 raise ValueError(f"Unknown futility spending family: {family}") from exc
 
             kwargs: Dict[str, Any] = {"alpha": beta}
-            if spending_cls is spending_mod.OBFSpending:
+            if spending_cls is spending_mod.OBrienFlemingSpending:
                 kwargs["sided"] = 1
             kwargs.update(params)
             s_beta: spending_mod.SpendingFunction = spending_cls(**kwargs)
