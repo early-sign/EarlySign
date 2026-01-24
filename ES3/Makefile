@@ -1,7 +1,8 @@
 .PHONY: compile install clean check-sync
 
 POETRY ?= poetry
-TARGET_PYTHON_VERSION ?= 3.12
+# Support 3.11 to cover minor typing discrepancies between 3.12 and 3.11
+TARGET_PYTHON_VERSION ?= 3.11
 DATAMODEL_CODEGEN ?= $(POETRY) run datamodel-codegen
 OUTPUT_DIR ?= ../earlysign/schema/ES3
 SENTINEL ?= $(OUTPUT_DIR)/__init__.py
