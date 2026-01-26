@@ -23,6 +23,10 @@ class Scoreboard(Entity[ScoreboardSchema]):
 
     data_type = ScoreboardSchema
 
+    @property
+    def initial_value(self) -> ScoreboardSchema:
+        return ScoreboardSchema(arms={})
+
     def compute(
         self,
         snapshot: Optional[Snapshot[ScoreboardSchema]],
@@ -30,7 +34,8 @@ class Scoreboard(Entity[ScoreboardSchema]):
         full_table: ibis.Expr,
     ) -> ProjectionResult[ScoreboardSchema]:
         # 1. Start with previous state
-        current_arms = snapshot.data.arms.copy() if snapshot else {}
+        current_state = snapshot.data if snapshot else self.initial_value
+        current_arms = current_state.arms.copy()
 
         # 2. Process Delta: Data Ingestion
         # Look for both 'Observation' and 'ArmData'

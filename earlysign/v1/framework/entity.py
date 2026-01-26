@@ -47,8 +47,8 @@ from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.framework.session import Session
 from earlysign.v1.framework.trace import Traced
 
-T = TypeVar("T", bound=BaseModel)
-S = TypeVar("S", bound=BaseModel)
+T = TypeVar("T")
+S = TypeVar("S")
 Index = TypeVar("Index")
 
 
@@ -98,6 +98,15 @@ class Entity(Projector[T], ABC):
             identity: Unique identifier for this entity instance.
         """
         self.identity = identity
+
+    @property
+    @abstractmethod
+    def initial_value(self) -> T:
+        """
+        Return the initial (identity) state for the entity.
+        This state is used when no snapshots or events exist.
+        """
+        pass
 
     @abstractmethod
     def compute(
@@ -246,7 +255,7 @@ class LatestStateProjector(Projector[Optional[S]], Generic[Index, S]):
         return ProjectionResult(data=latest_pr.data, trace=latest_pr.trace)
 
 
-class SequentialEntity(Entity[S], Generic[Index, S], ABC):
+class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
     """
     Entity whose state is indexed by a sequential coordinate (look, sample, etc.).
 
@@ -370,7 +379,10 @@ class SequentialEntity(Entity[S], Generic[Index, S], ABC):
                         else data_raw
                     )
                     trajectory.append(
-                        (cast(Index, i), ProjectionResult(data=data_inst, trace=[]))
+                        (
+                            cast(Index, i),
+                            ProjectionResult(data=cast(S, data_inst), trace=[]),
+                        )
                     )
             return trajectory
 

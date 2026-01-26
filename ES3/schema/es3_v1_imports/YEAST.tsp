@@ -34,7 +34,7 @@ namespace Log {
   }
 
   model Boundary extends Base.Log {
-    value: float64;
+    value?: float64;
   }
 
   /**

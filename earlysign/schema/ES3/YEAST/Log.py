@@ -11,7 +11,7 @@ from ..Base import Log
 
 
 class Boundary(Log):
-    value: float
+    value: float | None = None
 
 
 class DecisionStatus(StrEnum):

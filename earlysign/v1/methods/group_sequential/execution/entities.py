@@ -29,9 +29,13 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     """
 
     state_type: Type[LookResult] = LookResult
-    data_type: Type[List[Tuple[int, LookResult]]] = list  # type: ignore
+    data_type: Type[List[Tuple[int, LookResult]]] = list
     index_field: str = "look"
     snapshot_strategy = SequentialEntity.SnapshotStrategy.COLLECTIVE
+
+    @property
+    def initial_value(self) -> List[Tuple[int, LookResult]]:
+        return []
 
     def project_trajectory(
         self, table: ibis.Expr
@@ -68,7 +72,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
 
         return trajectory
 
-    def compute(  # type: ignore
+    def compute(
         self,
         snapshot: Optional[Any],
         delta_expr: ibis.Expr,

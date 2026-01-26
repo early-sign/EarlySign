@@ -1,3 +1,4 @@
+import warnings
 from typing import Optional
 
 import ibis
@@ -25,6 +26,14 @@ class Boundary(Entity[BoundarySchema]):
     """
 
     data_type = BoundarySchema
+
+    @property
+    def initial_value(self) -> BoundarySchema:
+        warnings.warn(
+            "YEAST boundary value has not been properly set. Returning an ineffective boundary.",
+            UserWarning,
+        )
+        return BoundarySchema(value=None)
 
     @classmethod
     def calculate(cls, protocol: Protocol) -> float:
@@ -101,4 +110,4 @@ class Boundary(Entity[BoundarySchema]):
             )
 
         # No snapshot and no update -> Default state (should ideally not happen if properly initialized)
-        return ProjectionResult(data=BoundarySchema(value=0.0), trace=[])
+        return ProjectionResult(data=self.initial_value, trace=[])

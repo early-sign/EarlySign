@@ -66,7 +66,9 @@ class BinomialYEASTEngine:
 
         # Use the passed boundary value
         boundary_val = boundary.value
-        is_crossed = trajectory > boundary_val
+        is_crossed = False
+        if boundary_val is not None:
+            is_crossed = trajectory > boundary_val
 
         status = DecisionStatus.CONTINUE_
         if is_crossed:
@@ -128,7 +130,9 @@ class ContinuousYEASTEngine:
         trajectory = (summary_t.mean * summary_t.n) - (summary_c.mean * summary_c.n)
 
         boundary_val = boundary.value
-        is_crossed = trajectory > boundary_val
+        is_crossed = False
+        if boundary_val is not None:
+            is_crossed = trajectory > boundary_val
 
         status = DecisionStatus.CONTINUE_
         if is_crossed:
