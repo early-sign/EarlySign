@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from typing_extensions import TypeAliasType
 
 from ..Base import (
@@ -14,6 +14,10 @@ from ..Base import (
     Protocol as Protocol_1,
     TaskSpec as TaskSpec_1,
 )
+
+
+class AVIMetadata(BaseModel):
+    version: str = Field(..., description="Metadata version")
 
 
 class BaseAVIMethodSpec(MethodSpec_1):

@@ -63,3 +63,8 @@ namespace Log {
     status: DecisionStatus | string;
   }
 }
+
+model AVIMetadata {
+  /** Metadata version */
+  version: string;
+}

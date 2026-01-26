@@ -63,6 +63,10 @@ class EfficacyRequirement(BaseModel):
     """
 
     alpha: float
+    binding: bool | None = Field(
+        True,
+        description="Binding default (usually True for efficacy).\nIf True, stopping for efficacy implies earlier looks were not stopped for futility (if binding futility) or simply that the trial stops.",
+    )
 
 
 class FutilityRequirement(BaseModel):
@@ -282,8 +286,14 @@ class AlphaBetaSpendingStrategy(SpendingFunctionStrategyBase):
     beta_spending_fn: SpendingFunction
     alpha_budget: float
     beta_budget: float
-    alpha_binding: bool | None = True
-    beta_binding: bool | None = False
+    alpha_binding: bool | None = Field(
+        True,
+        description="Is the Alpha (Efficacy) boundary binding?\nIf True, crossing this boundary considers the trial stopped, providing slack for Beta calculations (fewer cases pass to the later stages for futility stopping, which reduces the false rejection cases, hence the boundary is less required to care the false rejection rate).",
+    )
+    beta_binding: bool | None = Field(
+        False,
+        description="Is the Beta (Futility) boundary binding?\nIf True, crossing this boundary considers the trial stopped, providing slack for Alpha calculations (fewer cases pass to the later stages for efficacy stopping, which reduces the false rejection cases, hence the boundary is less required to care the false rejection rate).",
+    )
 
 
 class AlphaSpendingStrategy(SpendingFunctionStrategyBase):

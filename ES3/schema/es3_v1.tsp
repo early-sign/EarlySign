@@ -173,10 +173,14 @@ namespace GST {
 
   /**
    * Efficacy requirement for group sequential design.
-   * Specifies the Type I error rate (alpha) to control.
+   * Specifies the Type I error rate (alpha) to control and binding behavior.
    */
   model EfficacyRequirement {
     alpha: float64;
+    /**
+     * Binding (defaults to true: usually true for efficacy).
+     */
+    binding?: boolean = true;
   }
 
   /**
@@ -186,7 +190,7 @@ namespace GST {
   model FutilityRequirement {
     /** Target Power (1 - Beta) */
     power: float64;
-    /** Non-binding default (regulatory best practice) */
+    /** Non-binding (defaults to false: regulatory best practice) */
     binding?: boolean = false;
   }
 
@@ -250,7 +254,15 @@ namespace GST {
     beta_spending_fn: SpendingFunction;
     alpha_budget: float64;
     beta_budget: float64;
+    /**
+     * Is the Alpha (Efficacy) boundary binding?
+     * If True, crossing this boundary considers the trial stopped, providing slack for Beta calculations (fewer cases pass to the later stages for futility stopping, which reduces the false rejection cases, hence the boundary is less required to care the false rejection rate).
+     */
     alpha_binding?: boolean = true;
+    /**
+     * Is the Beta (Futility) boundary binding?
+     * If True, crossing this boundary considers the trial stopped, providing slack for Alpha calculations (fewer cases pass to the later stages for efficacy stopping, which reduces the false rejection cases, hence the boundary is less required to care the false rejection rate).
+     */
     beta_binding?: boolean = false;
   }
 

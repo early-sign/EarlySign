@@ -26,7 +26,7 @@ EXAMPLES:
     >>> # K=3, 100k simulations
     >>> from earlysign.v1.methods.group_sequential.plan.schedule_optimization import optimize_schedule
     >>> from earlysign.v1.methods.group_sequential.shared.spending import PowerFamilySpending
-    >>> spending = PowerFamilySpending(alpha=0.025, rho=3.0)
+    >>> spending = PowerFamilySpending(budget=0.025, rho=3.0)
     >>> res = optimize_schedule(k_looks=3, efficacy_spending=spending, drift=3.0,
     ...                         method="simulation", n_sims=100000, seed=42)
     >>> print(f"Opt Schedule: {res.schedule}, ASN: {res.asn:.4f}")  # doctest: +SKIP

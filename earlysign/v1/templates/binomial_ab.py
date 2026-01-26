@@ -142,6 +142,7 @@ class BinomialABTemplate:
         task: BinomialABTaskSpec,
         looks: int,
         spending_function: str = "obrien_fleming",
+        spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
     ) -> BinomialABProtocol:
         """
@@ -161,7 +162,11 @@ class BinomialABTemplate:
         # Delegate logic to Designer
         method_spec = designer.method_from_task_spec(
             task=task,
-            params={"looks": looks, "spending_function": spending_function},
+            params={
+                "looks": looks,
+                "spending_function": spending_function,
+                "spending_params": spending_params,
+            },
         )
 
         return BinomialABProtocol(

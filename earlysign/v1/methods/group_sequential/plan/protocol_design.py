@@ -168,6 +168,8 @@ class ProtocolDesigner:
 
         delta = abs(p_t - p_c)
 
+        spending_params = params.get("spending_params", {})
+
         # Determine stopping policy based on presence of futility
         if futility:
             power = futility.power
@@ -177,17 +179,27 @@ class ProtocolDesigner:
                 | GST.BetaSpendingStrategy
                 | GST.AlphaBetaSpendingStrategy
             ) = GST.AlphaBetaSpendingStrategy(
-                alpha_spending_fn=GST.SpendingFunction(family=shape_type),
-                beta_spending_fn=GST.SpendingFunction(family=shape_type),
+                alpha_spending_fn=GST.SpendingFunction(
+                    family=shape_type, params=spending_params
+                ),
+                beta_spending_fn=GST.SpendingFunction(
+                    family=shape_type, params=spending_params
+                ),
                 alpha_budget=alpha,
                 beta_budget=beta,
-                alpha_binding=True,
-                beta_binding=False,
+                alpha_binding=(
+                    efficacy.binding if efficacy.binding is not None else True
+                ),
+                beta_binding=(
+                    futility.binding if futility.binding is not None else False
+                ),
                 statistical_model=GST.CanonicalGaussianModel(),
             )
         else:
             stopping_policy = GST.AlphaSpendingStrategy(
-                spending_fn=GST.SpendingFunction(family=shape_type),
+                spending_fn=GST.SpendingFunction(
+                    family=shape_type, params=spending_params
+                ),
                 budget=alpha,
                 sided=GST.Sided.ONE,
                 statistical_model=GST.CanonicalGaussianModel(),

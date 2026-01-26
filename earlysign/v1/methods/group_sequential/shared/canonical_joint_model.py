@@ -32,8 +32,8 @@ class Config:
         stopping_policy: The stopping policy to use.
         efficacy_spending: Spending function for efficacy (legacy).
         futility_spending: Spending function for futility (legacy).
-        efficacy_binding: If True, futility affects efficacy calculation.
-        futility_binding: If True, efficacy affects futility calculation.
+        efficacy_binding: Is Efficacy boundary binding? (Affects futility calculation).
+        futility_binding: Is Futility boundary binding? (Affects efficacy calculation).
         tails: 1 or 2 (symmetric).
         n_sims: Number of simulations for boundary solving.
         rng_seed: Seed for random number generator.
@@ -239,8 +239,8 @@ class CanonicalJointModel:
             efficacy_targets: Cumulative efficacy probabilities at each look (under H0).
             futility_targets: Cumulative futility probabilities at each look (under H1).
             drift: Drift for futility boundary solving.
-            efficacy_binding: If True, futility affects efficacy calculation.
-            futility_binding: If True, efficacy affects futility calculation.
+            efficacy_binding: Is Efficacy boundary binding? (Affects futility calculation).
+            futility_binding: Is Futility boundary binding? (Affects efficacy calculation).
             tails: 1 or 2.
 
         Returns:
@@ -325,7 +325,7 @@ class CanonicalJointModel:
                 just_fut_h1 = (~stopped_h1) & (z_sims_h1[:, i] < b[i])
                 futility_h1 |= just_fut_h1
                 stopped_h1 |= just_fut_h1
-                if efficacy_binding:
+                if futility_binding:
                     just_fut_h0 = (~stopped_h0) & (z_sims_h0[:, i] < b[i])
                     stopped_h0 |= just_fut_h0
 
