@@ -57,13 +57,11 @@ def test_binomial_gavi_template_e2e() -> None:
     # Total control: 50 + 200 = 250 (p=0.5)
     # Total treatment: 52 + 298 = 350 (p=0.7)
     # Diff = 0.2
-    assert (
-        report2["sample_n"] == 1000
-    )  # Total for both arms? No, engine returns n_c + n_t = 1000.
+    assert report2["sample_n"] == 1000  # Engine returns n_c + n_t = 1000.
     assert abs(report2["trajectory"] - 0.2) < 1e-9
 
     # GAVI boundary should be crossed with such large difference and n=500.
-    # CI width at n=500 with sigma2=0.25 roughly?
+    # CI width at n=500
     # V = 2 * 0.25 / 500 = 0.001.
     # sqrt(V) = 0.0316
     # Boundary multiplier > 2 but unlikely > 6 (0.2/0.0316)

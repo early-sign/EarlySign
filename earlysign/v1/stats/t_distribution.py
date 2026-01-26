@@ -56,11 +56,11 @@ class CanonicalTProcess:
         # increments of (X_Ai - X_Bi) ~ N(delta * 1, 2)
         # We assume sigma=1 for canonical simulation.
 
-        # Delta contribution to sum: sum(inc) = drift * sqrt(m_K / 2) * (m_k / m_K) ?
+        # Delta contribution to sum: sum(inc) = drift * sqrt(m_K / 2) * (m_k / m_K)
         # J&T definition: drift theta' = mu_delta * sqrt(I_max).
         # For 2-sample, I = m / (2*sigma^2).
 
-        # Simplified: B_k ~ N(drift * m_k / m_K * sqrt(I_max), 2*m_k) ? No.
+        # Simplified: B_k ~ N(drift * m_k / m_K * sqrt(I_max), 2*m_k)
         # Let's use the error increments directly.
         # eps_sum_inc ~ N(0, 2 * m_inc)
         # Total sum at look k = cumsum(eps_sum_inc) + delta * m_k

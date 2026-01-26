@@ -1,9 +1,12 @@
 ![Status](https://img.shields.io/badge/status-work%20in%20progress-yellow)
-![Release](https://img.shields.io/badge/v1.0%20release-end%20of%202025-blue)
+![Release](https://img.shields.io/badge/v1.0%20release-early%202026-blue)
 
 [![PyPI version](https://img.shields.io/pypi/v/earlysign.svg)](https://pypi.org/project/earlysign/)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/earlysign)
 [![Documentation](https://img.shields.io/badge/docs-early--sign-blue?label=documentation)](https://early-sign.github.io/EarlySign/)
+
+> [!CAUTION]
+> This project is in early development (pre-v1.0). Expect frequent breaking changes and API instability without prior notice.
 
 <!-- [![TestPyPI version](https://img.shields.io/pypi/v/earlysign?label=test-pypi&pypiBaseUrl=https://test.pypi.org&color=lightgray)](https://test.pypi.org/project/earlysign/) -->
 
@@ -14,11 +17,6 @@
 Early signs, faster decisions.
 </picture></center>
 
-> [!CAUTION]
-> This project is in early development (pre-v1.0). Expect frequent breaking changes and API instability without prior notice.
-
-
----
 
 ## What is this?
 

@@ -101,6 +101,4 @@ class Boundary(Entity[BoundarySchema]):
             )
 
         # No snapshot and no update -> Default state (should ideally not happen if properly initialized)
-        return ProjectionResult(
-            data=BoundarySchema(value=0.0), trace=[]  # Safe default or error?
-        )
+        return ProjectionResult(data=BoundarySchema(value=0.0), trace=[])
