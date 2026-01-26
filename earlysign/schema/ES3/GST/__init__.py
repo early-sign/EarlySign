@@ -59,13 +59,12 @@ class ContinuousEffectSize(EffectSizeSpec):
 class EfficacyRequirement(BaseModel):
     """
     Efficacy requirement for group sequential design.
-    Specifies the Type I error rate (alpha) to control.
+    Specifies the Type I error rate (alpha) to control and binding behavior.
     """
 
     alpha: float
     binding: bool | None = Field(
-        True,
-        description="Binding default (usually True for efficacy).\nIf True, stopping for efficacy implies earlier looks were not stopped for futility (if binding futility) or simply that the trial stops.",
+        True, description="Binding (defaults to true: usually true for efficacy)."
     )
 
 
@@ -77,7 +76,7 @@ class FutilityRequirement(BaseModel):
 
     power: float = Field(..., description="Target Power (1 - Beta)")
     binding: bool | None = Field(
-        False, description="Non-binding default (regulatory best practice)"
+        False, description="Non-binding (defaults to false: regulatory best practice)"
     )
 
 
