@@ -1,5 +1,6 @@
 import "@typespec/openapi3";
 import "./es3_v1_imports/YEAST.tsp";
+import "./es3_v1_imports/AVI.tsp";
 
 @service(#{ title: "EarlySign Standard Schema (ES3)" })
 namespace ES3;
@@ -622,25 +623,7 @@ namespace GST {
   }
 }
 
-/** Anytime-Valid Inference (AVI) Models */
-namespace AVI {
-  model TaskSpec extends Base.TaskSpec {
-    kind: "anytime_valid" = "anytime_valid";
-    null_p: float64;
-    alt_p?: float64;
-    alpha: float64;
-  }
 
-  model MethodSpec extends Base.MethodSpec {
-    kind: "e_process" = "e_process";
-    growth_rate?: float64;
-  }
-
-  model Protocol extends Base.Protocol {
-    task: TaskSpec;
-    method: MethodSpec;
-  }
-}
 
 namespace GST.Multivariate {
   /**

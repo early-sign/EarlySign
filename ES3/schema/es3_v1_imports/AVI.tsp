@@ -1,0 +1,65 @@
+namespace ES3.AVI;
+
+model BaseAVIMethodSpec extends Base.MethodSpec {
+}
+
+model GAVIMethodSpec extends BaseAVIMethodSpec {
+  kind: "GAVI" = "GAVI";
+  /** Significance level. */
+  alpha: float64;
+  /** Estimated variance (sigma squared). */
+  variance: float64;
+  /** One-sided or two-sided test. */
+  sides: "one" | "two";
+  /** Maximum sample size, used for rho calculation. */
+  max_n: int32;
+}
+
+model MSPRTMethodSpec extends BaseAVIMethodSpec {
+  kind: "mSPRT" = "mSPRT";
+  /** Significance level. */
+  alpha: float64;
+  /** Estimated variance (sigma squared). */
+  variance: float64;
+  /** One-sided or two-sided test. */
+  sides: "one" | "two";
+  /** Minimum Detectable Effect (absolute difference), used for phi calculation. */
+  mde: float64;
+}
+
+union MethodSpec {
+  GAVIMethodSpec,
+  MSPRTMethodSpec,
+}
+
+model TaskSpec extends Base.TaskSpec {
+  kind: "AVI" = "AVI";
+  arms: string[];
+  response_type: "binary" | "continuous";
+}
+
+model Protocol extends Base.Protocol {
+  task: TaskSpec;
+  method: MethodSpec;
+}
+
+namespace Log {
+  enum DecisionStatus {
+    Continue: "continue",
+    StopEfficacy: "stop_efficacy",
+    StopPlanEndReached: "stop_plan_end_reached",
+  }
+
+  model LookResult extends Base.Log {
+    /** The total sample size (cumulative) at this look. */
+    sample_n: int32;
+    /** The calculated trajectory statistic. */
+    trajectory: float64;
+    /** The current boundary value. */
+    boundary: float64;
+    /** Whether the trajectory crossed the boundary. */
+    is_crossed: boolean;
+    /** The decision status after this look. */
+    status: DecisionStatus | string;
+  }
+}
