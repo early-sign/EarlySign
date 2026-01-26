@@ -14,6 +14,10 @@
 Early signs, faster decisions.
 </picture></center>
 
+> [!CAUTION]
+> This project is in early development (pre-v1.0). Expect frequent breaking changes and API instability without prior notice.
+
+
 ---
 
 ## What is this?
