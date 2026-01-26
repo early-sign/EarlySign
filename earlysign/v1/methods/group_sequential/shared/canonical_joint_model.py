@@ -353,24 +353,39 @@ class CanonicalJointModel:
         for i in range(k):
             # Solve efficacy bound a[i]
             if a is not None and efficacy_targets is not None:
+                temp_b = (
+                    b.copy()
+                    if (b is not None and futility_binding)
+                    else np.asarray([-10.0] * k)
+                )
+
+                # Calculate base probability (excluding efficacy stop at current step i)
+                temp_a_base = a.copy()
+                temp_a_base[i] = 10.0  # Approx +inf
+                prob_base = gp_h0.compute_crossing_probability(
+                    t=info_times[: i + 1],
+                    upper=temp_a_base[: i + 1],
+                    lower=temp_b[: i + 1] if tails == 1 else -temp_a_base[: i + 1],
+                    method="numerical_integration",
+                )
+
+                # Target probability for this step's efficacy is the marginal increase
+                margin = efficacy_targets[i] - (
+                    efficacy_targets[i - 1] if i > 0 else 0.0
+                )
+                target_prob = prob_base + margin
 
                 def obj_a(val: float) -> float:
                     temp_a = a.copy()
                     temp_a[i] = val
-                    temp_b = (
-                        b.copy()
-                        if (b is not None and efficacy_binding)
-                        else np.asarray([-10.0] * k)
-                    )
-                    # P(stopped) = 1 - P(not stopped)
-                    # Use gp_h0 directly
+                    # temp_b defined above
                     prob_cross = gp_h0.compute_crossing_probability(
                         t=info_times[: i + 1],
                         upper=temp_a[: i + 1],
                         lower=temp_b[: i + 1] if tails == 1 else -temp_a[: i + 1],
                         method="numerical_integration",
                     )
-                    return float(prob_cross - efficacy_targets[i])
+                    return float(prob_cross - target_prob)
 
                 low, high = 0.0, 20.0
                 if obj_a(low) * obj_a(high) > 0:
@@ -383,22 +398,39 @@ class CanonicalJointModel:
 
             # Solve futility bound b[i]
             if b is not None and futility_targets is not None:
+                temp_a = (
+                    a.copy()
+                    if (a is not None and efficacy_binding)
+                    else np.asarray([10.0] * k)
+                )
+
+                # Calculate base probability (excluding futility stop at current step i)
+                # We use -10.0 as approximate -inf for numerical stability in existing routines
+                temp_b_base = b.copy()
+                temp_b_base[i] = -10.0
+                prob_base = gp_h1.compute_crossing_probability(
+                    t=info_times[: i + 1],
+                    upper=temp_a[: i + 1],
+                    lower=temp_b_base[: i + 1],
+                    method="numerical_integration",
+                )
+
+                # Target probability for this step's futility is the marginal increase
+                margin = futility_targets[i] - (
+                    futility_targets[i - 1] if i > 0 else 0.0
+                )
+                target_prob = prob_base + margin
 
                 def obj_b(val: float) -> float:
                     temp_b = b.copy()
                     temp_b[i] = val
-                    temp_a = (
-                        a.copy()
-                        if (a is not None and futility_binding)
-                        else np.asarray([10.0] * k)
-                    )
                     prob_cross = gp_h1.compute_crossing_probability(
                         t=info_times[: i + 1],
                         upper=temp_a[: i + 1],
                         lower=temp_b[: i + 1],
                         method="numerical_integration",
                     )
-                    return float(prob_cross - futility_targets[i])
+                    return float(prob_cross - target_prob)
 
                 low, high = -10.0, 10.0
                 if obj_b(low) * obj_b(high) > 0:

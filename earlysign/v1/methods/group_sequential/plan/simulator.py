@@ -1,11 +1,16 @@
 """Simulator for calculating operating characteristics of Group Sequential Tests."""
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, Literal, Optional, Protocol, Tuple, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
 
+from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
+    CanonicalJointModel,
+    Config,
+)
+from earlysign.v1.methods.group_sequential.shared.spending import SpendingFunction
 from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 
 
@@ -143,3 +148,177 @@ class OperatingCharacteristicSimulator:
             stop_probs_futility=np.zeros(1),
             drift=drift,
         )
+
+
+@dataclass
+class OptimizationConfig:
+    """Configuration for optimization simulations."""
+
+    n_global_samples: int = 100
+    n_top_seeds: int = 5
+    method: Literal["simulation", "numerical_integration"] = "simulation"
+    n_sims: int = 50000
+    rng_seed: Optional[int] = None
+    tolerance: float = 1e-4
+
+    def __post_init__(self) -> None:
+        if self.method == "numerical_integration" and self.n_sims > 0:
+            pass
+
+
+class SequentialASNEstimator:
+    """Estimates ASN for a given schedule using CanonicalJointModel."""
+
+    def __init__(
+        self,
+        k_looks: int,
+        alpha: float,
+        efficacy_spending: Optional[SpendingFunction],
+        futility_spending: Optional[SpendingFunction],
+        drift: float,
+        prior: Optional[Any] = None,
+        tails: int = 1,
+        config: OptimizationConfig = OptimizationConfig(),
+    ) -> None:
+        self.k_looks = k_looks
+        self.alpha = alpha
+        self.efficacy_spending = efficacy_spending
+        self.futility_spending = futility_spending
+        self.drift = drift
+        self.prior = prior
+        self.tails = tails
+        self.config = config
+        self._rng_seed = config.rng_seed or np.random.randint(0, 10000)
+
+    def calculate(self, x_increments: NDArray[np.float64]) -> float:
+        """Calculate ASN (or E[ASN]) for a given increment vector."""
+        t = np.cumsum(x_increments)
+        t = np.clip(t, 1e-6, 1.0)
+        t[-1] = 1.0
+
+        model_config = Config(
+            info_times=t,
+            alpha=self.alpha,
+            efficacy_spending=self.efficacy_spending,
+            futility_spending=self.futility_spending,
+            tails=self.tails,
+            n_sims=self.config.n_sims,
+            rng_seed=self._rng_seed,
+        )
+        model = CanonicalJointModel(model_config)
+
+        try:
+            a, b = model.solve_boundaries(drift=0.0, method=self.config.method)
+        except Exception:
+            return 1e6
+
+        if self.prior is None:
+            return self._compute_point_asn(model, t, a, b, self.drift)
+        else:
+            return self._compute_point_asn(model, t, a, b, self.drift)
+
+    def _compute_point_asn(
+        self,
+        model: CanonicalJointModel,
+        t: NDArray[np.float64],
+        upper: Optional[NDArray[np.float64]],
+        lower: Optional[NDArray[np.float64]],
+        drift: float,
+    ) -> float:
+        """Compute ASN at a specific drift."""
+        if self.config.method == "simulation":
+            from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
+
+            gp_eval = CanonicalGaussianProcess(
+                drift=drift, rng=np.random.default_rng(self._rng_seed)
+            )
+            samples = gp_eval.sample(t, self.config.n_sims)
+            stopped, stop_looks = gp_eval.apply_stopping_rule(samples, upper, lower)
+            stop_times = t[stop_looks - 1]
+            return float(np.mean(stop_times))
+        else:
+            current_t = 0.0
+            asn = 0.0
+            for i in range(len(t)):
+                dt = t[i] - current_t
+                if i == 0:
+                    prob_survive = 1.0
+                else:
+                    prob_stopped = model.compute_crossing_probability(
+                        info_times=t[:i],
+                        upper=upper[:i] if upper is not None else None,
+                        lower=lower[:i] if lower is not None else None,
+                        drift=drift,
+                        method="numerical_integration",
+                    )
+                    prob_survive = 1.0 - prob_stopped
+                asn += dt * prob_survive
+                current_t = t[i]
+            return asn
+
+    def evaluate(self, x_increments: NDArray[np.float64]) -> Tuple[float, float]:
+        """Calculate both ASN and Power for a given schedule.
+
+        Returns:
+            Tuple of (asn, power).
+        """
+        t = np.cumsum(x_increments)
+        t = np.clip(t, 1e-6, 1.0)
+        t[-1] = 1.0
+
+        model_config = Config(
+            info_times=t,
+            alpha=self.alpha,
+            efficacy_spending=self.efficacy_spending,
+            futility_spending=self.futility_spending,
+            tails=self.tails,
+            n_sims=self.config.n_sims,
+            rng_seed=self._rng_seed,
+        )
+        model = CanonicalJointModel(model_config)
+
+        try:
+            a, b = model.solve_boundaries(drift=0.0, method=self.config.method)
+        except Exception:
+            return 1e6, 0.0
+
+        if a is None:
+            return 1e6, 0.0
+
+        # Calculate ASN
+        if self.prior is None:
+            asn = self._compute_point_asn(model, t, a, b, self.drift)
+        else:
+            asn = self._compute_point_asn(model, t, a, b, self.drift)
+
+        # Calculate Power
+        # Power = P(Reject H0) under H1 (drift=self.drift)
+        # We use simulation for Power calculation as a robust fallback even for numerical_integration optimization
+        # because the generic numerical integration for "Rejection excluding binding futility" is complex to handle generically here.
+
+        gp_eval = CanonicalGaussianProcess(
+            drift=self.drift, rng=np.random.default_rng(self._rng_seed)
+        )
+        samples = gp_eval.sample(t, self.config.n_sims)
+
+        # Efficacy Rejection
+        stopped_eff = np.zeros(self.config.n_sims, dtype=bool)
+        stopped_any = np.zeros(self.config.n_sims, dtype=bool)
+
+        for i in range(len(t)):
+            # Upper crossing
+            crossing_u = (samples[:, i] > a[i]) & ~stopped_any
+            if self.tails == 2:
+                crossing_l = (samples[:, i] < -a[i]) & ~stopped_any
+                stopped_eff |= crossing_u | crossing_l
+                stopped_any |= crossing_u | crossing_l
+            else:
+                stopped_eff |= crossing_u
+                stopped_any |= crossing_u
+                if b is not None:
+                    crossing_fut = (samples[:, i] < b[i]) & ~stopped_any
+                    stopped_any |= crossing_fut
+
+        power = float(np.mean(stopped_eff))
+
+        return asn, power
