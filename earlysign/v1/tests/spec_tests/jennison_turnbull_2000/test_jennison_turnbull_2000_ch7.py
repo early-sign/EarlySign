@@ -156,6 +156,26 @@ def given_bhat_info_denom(denom: str, ch7_params: Dict[str, Any]) -> None:
     ch7_params["bhat_info_denom"] = float(denom)
 
 
+@given("the design uses binding efficacy boundaries")
+def given_binding_efficacy(ch7_params: Dict[str, Any]) -> None:
+    ch7_params["efficacy_binding"] = True
+
+
+@given("the design uses binding futility boundaries")
+def given_binding_futility(ch7_params: Dict[str, Any]) -> None:
+    ch7_params["futility_binding"] = True
+
+
+@given("the design uses non-binding efficacy boundaries")
+def given_non_binding_efficacy(ch7_params: Dict[str, Any]) -> None:
+    ch7_params["efficacy_binding"] = False
+
+
+@given("the design uses non-binding futility boundaries")
+def given_non_binding_futility(ch7_params: Dict[str, Any]) -> None:
+    ch7_params["futility_binding"] = False
+
+
 # --- WHEN: Compute ---
 
 
@@ -919,7 +939,8 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
             n_sims=n_sims_iter,
             tails=1,
             rng_seed=seed,
-            efficacy_binding=True,
+            efficacy_binding=ch7_params.get("efficacy_binding", True),
+            futility_binding=ch7_params.get("futility_binding", False),
         )
         model = CanonicalJointModel(config=config)
         a, b = model.solve_boundaries(drift=current_drift, method="simulation")
@@ -942,7 +963,8 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
         n_sims=n_sims_final,
         tails=1,
         rng_seed=seed,
-        efficacy_binding=True,
+        efficacy_binding=ch7_params.get("efficacy_binding", True),
+        futility_binding=ch7_params.get("futility_binding", False),
     )
     model = CanonicalJointModel(config=config_final)
     a, b = model.solve_boundaries(drift=current_drift, method="simulation")

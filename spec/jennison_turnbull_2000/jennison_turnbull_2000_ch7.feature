@@ -547,6 +547,8 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     Given a one-sided maximum information design with alpha 0.05
     And target power 0.8 at effect delta
     And a maximum of <K> equally-spaced looks with rho-family spending <rho> for both type-I and type-II errors
+    And the design uses binding efficacy boundaries
+    And the design uses binding futility boundaries
     When I evaluate the one-sided expected sample size relative to fixed design
     Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
     And the expected sample size at theta = 0 should be <ASN_0> percent with 15.0 precision
@@ -580,6 +582,8 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     Given a one-sided maximum information design with alpha 0.05
     And target power 0.9 at effect delta
     And a maximum of <K> equally-spaced looks with rho-family spending <rho> for both type-I and type-II errors
+    And the design uses binding efficacy boundaries
+    And the design uses binding futility boundaries
     When I evaluate the one-sided expected sample size relative to fixed design
     Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
     And the expected sample size at theta = 0 should be <ASN_0> percent with 15.0 precision
@@ -612,6 +616,8 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     Given a one-sided maximum information design with alpha 0.05
     And target power 0.95 at effect delta
     And a maximum of <K> equally-spaced looks with rho-family spending <rho> for both type-I and type-II errors
+    And the design uses binding efficacy boundaries
+    And the design uses binding futility boundaries
     When I evaluate the one-sided expected sample size relative to fixed design
     Then the maximum sample size relative to fixed design (R_OS) should be <R_OS_pct> percent with 10.0 precision
     And the expected sample size at theta = 0 should be <ASN_0> percent with 15.0 precision
