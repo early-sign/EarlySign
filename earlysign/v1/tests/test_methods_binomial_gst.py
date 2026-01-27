@@ -28,8 +28,8 @@ def test_binomial_json_protocol():
         ],
         "response_type": "binary",
         "hypotheses": {
-          "h_null": "Difference <= 0",
-          "h_alt": "Difference > 0.05",
+          "h_null_description": "Difference <= 0",
+          "h_alt_description": "Difference > 0.05",
           "test_logic": {
             "kind": "superiority"
           },

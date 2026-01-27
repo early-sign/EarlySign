@@ -21,7 +21,7 @@ Canonical Joint Model from ES3 protocol specifications.
 ...         efficacy=GST.EfficacyRequirement(alpha=0.025),
 ...         futility=GST.FutilityRequirement(power=0.9),
 ...         hypotheses=GST.HypothesisSpec(
-...             h_null="H0", h_alt="H1",
+...             h_null_description="H0", h_alt_description="H1",
 ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
 ...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.1, "T": 0.15})
 ...         )
@@ -93,7 +93,7 @@ True
 ...         response_type=GST.ResponseType.BINARY,
 ...         efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...         hypotheses=GST.HypothesisSpec(
-...             h_null="H0", h_alt="H1",
+...             h_null_description="H0", h_alt_description="H1",
 ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
 ...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.1, "T": 0.15})
 ...         )
@@ -129,7 +129,7 @@ True
 ...         response_type=GST.ResponseType.BINARY,
 ...         futility=GST.FutilityRequirement(power=0.8),
 ...         hypotheses=GST.HypothesisSpec(
-...             h_null="H0", h_alt="H1",
+...             h_null_description="H0", h_alt_description="H1",
 ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
 ...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.1, "T": 0.15})
 ...         )

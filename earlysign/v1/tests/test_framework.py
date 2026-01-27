@@ -158,7 +158,7 @@ The library provides off-the-shelf entities for common trial components.
 ...         response_type=GST.ResponseType.BINARY,
 ...         efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...         hypotheses=GST.HypothesisSpec(
-...             h_null="p_t <= p_c", h_alt="p_t > p_c",
+...             h_null_description="p_t <= p_c", h_alt_description="p_t > p_c",
 ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
 ...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.2, "T": 0.3})
 ...         )
@@ -199,7 +199,7 @@ Templates provide a high-level API for running standard trial designs.
 ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...     futility=GST.FutilityRequirement(power=0.8),
 ...     hypotheses=GST.HypothesisSpec(
-...         h_null="p_t <= p_c", h_alt="p_t > p_c",
+...         h_null_description="p_t <= p_c", h_alt_description="p_t > p_c",
 ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
 ...         target_effect=GST.BinaryEffectSize(proportions={"C": 0.2, "T": 0.3})
 ...     )

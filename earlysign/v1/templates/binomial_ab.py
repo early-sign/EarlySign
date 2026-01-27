@@ -34,8 +34,8 @@ Next, we define the experimental task. Here we are testing for a 10% relative li
     ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
     ...     futility=GST.FutilityRequirement(power=0.8, binding=True),
     ...     hypotheses=GST.HypothesisSpec(
-    ...         h_null="Difference <= 0",
-    ...         h_alt="Difference > 0.02",
+    ...         h_null_description="Difference <= 0",
+    ...         h_alt_description="Difference > 0.02",
     ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
     ...         target_effect=GST.BinaryEffectSize(
     ...             proportions={"control": 0.20, "treatment": 0.22}

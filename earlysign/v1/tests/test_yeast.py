@@ -55,8 +55,8 @@ def test_binomial_yeast_template_e2e() -> None:
         arms=["control", "treatment"],
         response_type="binary",
         hypotheses={
-            "h_null": "diff <= 0",
-            "h_alt": "diff > 0",
+            "h_null_description": "diff <= 0",
+            "h_alt_description": "diff > 0",
             "test_logic": {"kind": "superiority"},
             "target_effect": {
                 "type": "binary",
@@ -179,8 +179,8 @@ def test_default_increment_std() -> None:
         arms=["control", "treatment"],
         response_type="binary",
         hypotheses={
-            "h_null": "diff <= 0",
-            "h_alt": "diff > 0",
+            "h_null_description": "diff <= 0",
+            "h_alt_description": "diff > 0",
             "test_logic": {"kind": "superiority", "superiority_margin": 0.0},
             "target_effect": {
                 "type": "binary",

@@ -99,8 +99,8 @@ class EquivalenceHypothesis(HypothesisParameters):
 
 
 class HypothesisSpec(BaseModel):
-    h_null: str
-    h_alt: str
+    h_null_description: str
+    h_alt_description: str
     test_logic: HypothesisParameters
     target_effect: EffectSizeSpec
 

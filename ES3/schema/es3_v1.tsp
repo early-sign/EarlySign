@@ -316,8 +316,8 @@ namespace GST {
   model EquivalenceHypothesis extends HypothesisParameters { kind: "equivalence"; lower_margin: float64; upper_margin: float64; }
 
   model HypothesisSpec {
-    h_null: string;
-    h_alt: string;
+    h_null_description: string;
+    h_alt_description: string;
     test_logic: HypothesisParameters;
     target_effect: EffectSizeSpec;
   }

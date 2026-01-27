@@ -28,8 +28,8 @@ Covers the flow:
 ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...     futility=GST.FutilityRequirement(power=0.8),
 ...     hypotheses=GST.HypothesisSpec(
-...         h_null="Diff <= 0",
-...         h_alt="Diff > 0.01",
+...         h_null_description="Diff <= 0",
+...         h_alt_description="Diff > 0.01",
 ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.01),
 ...         target_effect=GST.BinaryEffectSize(
 ...             proportions={"C": 0.1, "T": 0.11}

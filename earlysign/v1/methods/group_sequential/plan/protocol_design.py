@@ -96,8 +96,8 @@ class ProtocolDesigner:
                 arms=["control", "treatment"],
                 response_type=GST.ResponseType.BINARY,
                 hypotheses=GST.HypothesisSpec(
-                    h_null="Difference <= 0",
-                    h_alt=f"Difference > {delta}",
+                    h_null_description="Difference <= 0",
+                    h_alt_description=f"Difference > {delta}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.BinaryEffectSize(
                         proportions={
