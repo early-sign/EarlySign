@@ -6,8 +6,8 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from scipy import stats
 
-from earlysign.v1.methods.group_sequential.plan.simulator import (
-    OperatingCharacteristicSimulator,
+from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
+    AsymptoticSimulator,
 )
 from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
@@ -29,14 +29,6 @@ def design_params() -> Dict[str, Any]:
         "tails": 2,
         "alpha": 0.05,
     }
-
-
-@pytest.fixture
-def simulator(design_params: Dict[str, Any]) -> OperatingCharacteristicSimulator:
-    return OperatingCharacteristicSimulator(
-        n_sims=design_params.get("n_sims", 5000),
-        rng_seed=design_params.get("rng_seed", 42),
-    )
 
 
 # =============================================================================
@@ -376,19 +368,22 @@ def when_table32_eval(
     i_actual_fractions = pi * (ks / k) ** r
     t_actual = i_actual_fractions / i_actual_fractions[-1]
 
-    sim = OperatingCharacteristicSimulator(n_sims=n_sims, rng_seed=42)
-    oc_h0 = sim.simulate_statistical(
-        info_times=t_actual, upper=boundaries_plan, lower=-boundaries_plan, drift=0.0
-    )
-    drift_actual = drift_planned * np.sqrt(pi)
-    oc_h1 = sim.simulate_statistical(
-        info_times=t_actual,
-        upper=boundaries_plan,
-        lower=-boundaries_plan,
-        drift=drift_actual,
+    sim = AsymptoticSimulator(
+        model=CanonicalJointModel(
+            config=Config(
+                info_times=t_actual, alpha=alpha, tails=2, rng_seed=42, n_sims=n_sims
+            )
+        ),
+        upper_boundaries=boundaries_plan,
+        lower_boundaries=-boundaries_plan,
+        seed=42,
     )
 
-    return {"alpha_actual": oc_h0.alpha, "power_actual": oc_h1.power}
+    oc_h0 = sim.evaluate_point(drift=0.0)
+    drift_actual = drift_planned * np.sqrt(pi)
+    oc_h1 = sim.evaluate_point(drift=drift_actual)
+
+    return {"alpha_actual": oc_h0.power, "power_actual": oc_h1.power}
 
 
 @when(
@@ -398,48 +393,81 @@ def when_table32_eval(
 def when_actual_n(
     n_actual: str,
     design_params: Dict[str, Any],
-    simulator: OperatingCharacteristicSimulator,
 ) -> Dict[str, Any]:
     actual_n = np.array([float(x.strip()) for x in n_actual.split(",")])
     res = when_compute_design(design_params)
     t_actual = actual_n / actual_n[-1]
-    oc_h0 = simulator.simulate_statistical(
-        t_actual, res["boundaries"], lower=-res["boundaries"], drift=0.0
+
+    # Instantiate Simulator locally
+    # Note: Boundaries might theoretically change if alpha changes, but here we check performance of fixed boundaries.
+    sim = AsymptoticSimulator(
+        model=CanonicalJointModel(
+            config=Config(
+                info_times=t_actual,
+                alpha=0.05,
+                tails=2,
+                rng_seed=design_params.get("rng_seed", 42),
+                n_sims=5000,
+            )
+        ),
+        upper_boundaries=res["boundaries"],
+        lower_boundaries=-res["boundaries"],
+        seed=design_params.get("rng_seed", 42),
     )
+
+    n_sims = design_params.get("n_sims", 5000)
+    sim.n_sims = n_sims
+    oc_h0 = sim.evaluate_point(drift=0.0)
+
     drift_h1 = 1.0 * np.sqrt(actual_n[-1] / 8.0)
-    oc_h1 = simulator.simulate_statistical(
-        t_actual, res["boundaries"], lower=-res["boundaries"], drift=drift_h1
-    )
-    return {"alpha_actual": oc_h0.alpha, "power_actual": oc_h1.power}
+    oc_h1 = sim.evaluate_point(drift=drift_h1)
+
+    return {"alpha_actual": oc_h0.power, "power_actual": oc_h1.power}
 
 
 @when("I evaluate the group sequential t-test performance", target_fixture="results")
-def when_eval_ttest(
-    design_params: Dict[str, Any], simulator: OperatingCharacteristicSimulator
-) -> Dict[str, Any]:
+def when_eval_ttest(design_params: Dict[str, Any]) -> Dict[str, Any]:
     res = when_compute_design(design_params)
     nu_K = design_params.get("nu_K", 38.0)
     k = len(res["info_times"])
     dofs = (np.arange(1, k + 1) / k) * nu_K
     m_counts = (dofs + 2) / 2.0
 
-    proc = CanonicalTProcess(rng=simulator._rng)
-    z_h0, t_h0 = proc.sample(
-        m_counts.astype(float), n_sims=design_params.get("n_sims", 20000), drift=0.0
-    )
-    oc_h0 = simulator.simulate_statistical(
-        res["info_times"], res["boundaries"], lower=None, samples=t_h0, drift=0.0
-    )
-    drift_h1 = stats.norm.ppf(0.975) + stats.norm.ppf(0.8)
-    z_h1, t_h1 = proc.sample(
-        m_counts.astype(float),
+    sim = AsymptoticSimulator(
+        model=CanonicalTProcess(
+            rng=np.random.default_rng(design_params.get("rng_seed", 42))
+        ),
         n_sims=design_params.get("n_sims", 20000),
+        seed=design_params.get("rng_seed", 42),
+    )
+
+    # We pass design params (boundaries, m_counts) to evaluate_point
+    design_params_kwargs = {
+        "m_counts": m_counts,
+    }
+
+    # H0
+    oc_h0 = sim.evaluate_point(
+        drift=0.0,
+        info_times=res["info_times"],
+        upper_boundaries=res["boundaries"],
+        lower_boundaries=-res["boundaries"],
+        **design_params_kwargs,
+    )
+    alpha_actual = oc_h0.power
+
+    # H1
+    drift_h1 = stats.norm.ppf(0.975) + stats.norm.ppf(0.8)
+    oc_h1 = sim.evaluate_point(
         drift=drift_h1,
+        info_times=res["info_times"],
+        upper_boundaries=res["boundaries"],
+        lower_boundaries=-res["boundaries"],
+        **design_params_kwargs,
     )
-    oc_h1 = simulator.simulate_statistical(
-        res["info_times"], res["boundaries"], lower=None, samples=t_h1, drift=drift_h1
-    )
-    return {"alpha_actual": oc_h0.alpha, "power_actual": oc_h1.power}
+    power_actual = oc_h1.power
+
+    return {"alpha_actual": alpha_actual, "power_actual": power_actual}
 
 
 @when(

@@ -5,7 +5,7 @@ with specialized support for the canonical joint distribution used in
 group sequential tests.
 """
 
-from typing import Any, Callable, Optional, Sequence, cast
+from typing import Any, Callable, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -314,3 +314,147 @@ class CanonicalGaussianProcess(GaussianProcess):
 
         stopped, _ = self.apply_stopping_rule(samples, upper=u_arr, lower=l_arr)
         return float(np.mean(stopped))
+
+    def compute_stopping_probabilities(
+        self,
+        t: Sequence[float] | NDArray[Any],
+        upper: Optional[Sequence[float] | NDArray[Any]] = None,
+        lower: Optional[Sequence[float] | NDArray[Any]] = None,
+        method: str = "simulation",
+        n_sims: int = 20000,
+        seed: Optional[int] = None,
+    ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Compute the probability of stopping at each look for efficacy and futility.
+
+        Args:
+            t: Information times.
+            upper: Upper boundary vector (efficacy).
+            lower: Lower boundary vector (futility).
+            method: "simulation" or "numerical_integration".
+            n_sims: Number of simulations (if method="simulation").
+            seed: Random seed.
+
+        Returns:
+            Tuple of (prob_stop_upper, prob_stop_lower), each of length k.
+        """
+        t_arr = np.asarray(t)
+        k = len(t_arr)
+        u_arr = np.asarray(upper) if upper is not None else np.full(k, np.inf)
+        l_arr = np.asarray(lower) if lower is not None else np.full(k, -np.inf)
+
+        if method == "simulation":
+            return self._compute_stopping_probs_simulation(
+                t_arr, u_arr, l_arr, n_sims, seed
+            )
+        elif method == "numerical_integration":
+            return self._compute_stopping_probs_numerical(t_arr, u_arr, l_arr)
+        else:
+            raise ValueError(f"Method '{method}' is not implemented.")
+
+    def _compute_stopping_probs_simulation(
+        self,
+        t_arr: NDArray[Any],
+        u_arr: NDArray[Any],
+        l_arr: NDArray[Any],
+        n_sims: int,
+        seed: Optional[int],
+    ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+        gen = np.random.default_rng(seed) if seed is not None else self._rng
+        samples = self.sample(t_arr, n_sims, rng=gen)
+        k = len(t_arr)
+
+        stopped = np.zeros(n_sims, dtype=bool)
+        prob_upper = np.zeros(k, dtype=float)
+        prob_lower = np.zeros(k, dtype=float)
+
+        for i in range(k):
+            # Check upper crossing among those not yet stopped
+            cross_u = (samples[:, i] > u_arr[i]) & ~stopped
+            prob_upper[i] = np.mean(cross_u)
+            stopped |= cross_u
+
+            # Check lower crossing among those not yet stopped (and didn't just cross upper)
+            cross_l = (samples[:, i] < l_arr[i]) & ~stopped
+            prob_lower[i] = np.mean(cross_l)
+            stopped |= cross_l
+
+        return prob_upper, prob_lower
+
+    def _compute_stopping_probs_numerical(
+        self,
+        t_arr: NDArray[Any],
+        u_arr: NDArray[Any],
+        l_arr: NDArray[Any],
+    ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """
+        Compute stopping probabilities using recursive numerical integration.
+        This method uses multivariate normal integration to compute the probability
+        of stopping at each look, distinguishing between efficacy and futility boundaries.
+        """
+        k = len(t_arr)
+        prob_upper = np.zeros(k, dtype=float)
+        prob_lower = np.zeros(k, dtype=float)
+
+        # Covariance matrix for max dimension K
+        full_cov = np.zeros((k, k))
+        for i in range(k):
+            for j in range(k):
+                if t_arr[i] > 0 and t_arr[j] > 0:
+                    full_cov[i, j] = np.sqrt(
+                        min(t_arr[i], t_arr[j]) / max(t_arr[i], t_arr[j])
+                    )
+                elif i == j:
+                    full_cov[i, j] = 1.0
+
+        mean_full = self.drift * np.sqrt(t_arr)
+
+        for i in range(k):
+            # 1. P(Stop Upper at i)
+            # Integration limits:
+            # 0..i-1: [l_j, u_j] (Survive)
+            # i: [u_i, inf] (Cross Upper)
+
+            # Dimension is i+1
+            dim = i + 1
+            current_mean = mean_full[:dim]
+            current_cov = full_cov[:dim, :dim]
+
+            lower_limits_u = np.concatenate([l_arr[:i], [u_arr[i]]])
+            upper_limits_u = np.concatenate([u_arr[:i], [np.inf]])
+
+            # If any limit is invalid (l > u), prob is 0
+            if np.any(lower_limits_u >= upper_limits_u):
+                prob_upper[i] = 0.0
+            else:
+                p = multivariate_normal.cdf(
+                    upper_limits_u,
+                    mean=current_mean,
+                    cov=current_cov,
+                    lower_limit=lower_limits_u,
+                    allow_singular=True,
+                    abseps=1e-5,
+                )
+                prob_upper[i] = p
+
+            # 2. P(Stop Lower at i)
+            # Integration limits:
+            # 0..i-1: [l_j, u_j] (Survive)
+            # i: [-inf, l_i] (Cross Lower)
+
+            lower_limits_l = np.concatenate([l_arr[:i], [-np.inf]])
+            upper_limits_l = np.concatenate([u_arr[:i], [l_arr[i]]])
+
+            if np.any(lower_limits_l >= upper_limits_l):
+                prob_lower[i] = 0.0
+            else:
+                p = multivariate_normal.cdf(
+                    upper_limits_l,
+                    mean=current_mean,
+                    cov=current_cov,
+                    lower_limit=lower_limits_l,
+                    allow_singular=True,
+                    abseps=1e-5,
+                )
+                prob_lower[i] = p
+
+        return prob_upper, prob_lower

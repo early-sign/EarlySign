@@ -8,11 +8,16 @@ from earlysign.schema.ES3.GST import (
 from earlysign.v1.methods.group_sequential.plan.gs_design_converter import (
     convert_gs_design_to_protocol,
 )
-from earlysign.v1.methods.group_sequential.plan.plots import (
-    calculate_stopping_probabilities,
+from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
+    AsymptoticSimulator,
+)
+from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
+    CanonicalJointModel,
+    Config,
 )
 
 
+# Test Cases
 def test_convert_gs_design_simple():
     """Test converting a simple gsDesign-like dictionary."""
     gs_data = {
@@ -73,19 +78,24 @@ def test_calculate_stopping_probabilities_sum_to_one():
     lower = np.array([-3.0, -3.0, -3.0, -2.5, -2.0])
 
     # Under H0 (drift=0)
-    res_h0 = calculate_stopping_probabilities(
-        info_times, upper, lower, drift=0.0, method="simulation", n_sims=5000
+    sim = AsymptoticSimulator(
+        model=CanonicalJointModel(
+            Config(info_times=info_times, alpha=0.05, tails=2, rng_seed=42, n_sims=5000)
+        ),
+        upper_boundaries=upper,
+        lower_boundaries=lower,
+        seed=42,
+        n_sims=5000,
     )
-    probs_h0 = res_h0["probs"]
+    res_h0 = sim.evaluate_point(drift=0.0)
+    probs_h0 = res_h0.prob_stop_total
 
     assert len(probs_h0) == k
     assert np.isclose(np.sum(probs_h0), 1.0)
 
     # Under H1 (drift=3.0)
-    res_h1 = calculate_stopping_probabilities(
-        info_times, upper, lower, drift=3.0, method="simulation", n_sims=5000
-    )
-    probs_h1 = res_h1["probs"]
+    res_h1 = sim.evaluate_point(drift=3.0)
+    probs_h1 = res_h1.prob_stop_total
     assert np.isclose(np.sum(probs_h1), 1.0)
 
 
@@ -96,10 +106,17 @@ def test_calculate_stopping_prob_values():
     upper = np.array([0.1, 0.1])  # Very tight, should stop almost immediately
     lower = np.array([-0.1, -0.1])
 
-    res = calculate_stopping_probabilities(
-        info_times, upper, lower, drift=0.0, method="simulation", n_sims=2000
+    sim = AsymptoticSimulator(
+        model=CanonicalJointModel(
+            Config(info_times=info_times, alpha=0.05, tails=2, rng_seed=42, n_sims=2000)
+        ),
+        upper_boundaries=upper,
+        lower_boundaries=lower,
+        seed=42,
+        n_sims=2000,
     )
-    probs = res["probs"]
+    res = sim.evaluate_point(drift=0.0)
+    probs = res.prob_stop_total
 
     # Most should stop at look 1
     assert probs[0] > 0.8

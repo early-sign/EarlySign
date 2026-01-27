@@ -55,7 +55,7 @@ def test_optimization_beats_uniform() -> None:
     # Calculate Uniform ASN
     # Re-use logic from estimator
     # Let's just use the optimizer's estimator class for fair comparison
-    from earlysign.v1.methods.group_sequential.plan.simulator import (
+    from earlysign.v1.methods.group_sequential.plan.schedule_optimization import (
         OptimizationConfig,
         SequentialASNEstimator,
     )

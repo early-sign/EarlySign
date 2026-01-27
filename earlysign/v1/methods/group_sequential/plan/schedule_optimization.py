@@ -14,9 +14,7 @@ ALGORITHM DETAILS:
       (seeds) for the local optimizer, avoiding local minima.
     - Local Search: Uses Nelder-Mead (simplex method) on the top seeds to refine
       the schedule.
-    - Statistical Engine: Uses `CanonicalJointModel` for precise boundary solving
-      and ASN calculation. Supports both numerical integration (exact) and
-      simulation (fast, consistent) via Common Random Numbers.
+    - Statistical Engine: Uses `CanonicalJointModel` for precise boundary solving.
 
 EXAMPLES:
     Optimization results for O'Brien-Fleming type spending (Power Family rho=3).
@@ -48,17 +46,153 @@ EXAMPLES:
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import minimize
 
-from earlysign.v1.methods.group_sequential.plan.simulator import (
-    OptimizationConfig,
-    SequentialASNEstimator,
+from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
+    AsymptoticSimulator,
+    NumericalCalculator,
+    OperatingCharacteristicsEvaluator,
+)
+from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
+    CanonicalJointModel,
+    Config,
 )
 from earlysign.v1.methods.group_sequential.shared.spending import SpendingFunction
+
+
+@dataclass
+class OptimizationConfig:
+    """Configuration for optimization simulations."""
+
+    n_global_samples: int = 100
+    n_top_seeds: int = 5
+    method: Literal["simulation", "numerical_integration"] = "simulation"
+    n_sims: int = 50000
+    rng_seed: Optional[int] = None
+    tolerance: float = 1e-4
+
+    def __post_init__(self) -> None:
+        pass
+
+
+class SequentialASNEstimator:
+    """Estimates ASN for a given schedule using CanonicalJointModel."""
+
+    def __init__(
+        self,
+        k_looks: int,
+        alpha: float,
+        efficacy_spending: Optional[SpendingFunction],
+        futility_spending: Optional[SpendingFunction],
+        drift: float,
+        prior: Optional[Any] = None,
+        tails: int = 1,
+        config: OptimizationConfig = OptimizationConfig(),
+    ) -> None:
+        self.k_looks = k_looks
+        self.alpha = alpha
+        self.efficacy_spending = efficacy_spending
+        self.futility_spending = futility_spending
+        self.drift = drift
+        self.prior = prior
+        self.tails = tails
+        self.config = config
+        self._rng_seed = config.rng_seed or np.random.randint(0, 10000)
+
+    def _get_simulator(self) -> OperatingCharacteristicsEvaluator:
+        from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
+
+        if self.config.method == "simulation":
+            # AsymptoticSimulator: Takes Model (Physics)
+            return AsymptoticSimulator(
+                model=CanonicalGaussianProcess(),
+                n_sims=self.config.n_sims,
+                seed=self._rng_seed,
+            )
+        else:
+            return NumericalCalculator()
+
+    def calculate(self, x_increments: NDArray[np.float64]) -> float:
+        """Calculate ASN (or E[ASN]) for a given increment vector."""
+        # 1. Reconstruct Time Schedule
+        t = np.cumsum(x_increments)
+        t = np.clip(t, 1e-6, 1.0)
+        t[-1] = 1.0
+
+        # 2. Solve Boundaries
+        model_config = Config(
+            info_times=t,
+            alpha=self.alpha,
+            efficacy_spending=self.efficacy_spending,
+            futility_spending=self.futility_spending,
+            tails=self.tails,
+            n_sims=self.config.n_sims,
+            rng_seed=self._rng_seed,
+        )
+        model = CanonicalJointModel(model_config)
+
+        try:
+            a, b = model.solve_boundaries(drift=0.0, method=self.config.method)
+        except Exception:
+            return 1e6
+
+        if a is None:
+            return 1e6
+
+        # 3. Calculate ASN using Unified Evaluator
+        simulator = self._get_simulator()
+
+        # Pass design parameters to evaluate_point
+        res = simulator.evaluate_point(
+            self.drift,
+            info_times=t,
+            upper_boundaries=a,
+            lower_boundaries=b,
+        )
+        return float(res.asn)
+
+    def evaluate(self, x_increments: NDArray[np.float64]) -> Tuple[float, float]:
+        """Calculate both ASN and Power for a given schedule.
+
+        Returns:
+            Tuple of (asn, power).
+        """
+        t = np.cumsum(x_increments)
+        t = np.clip(t, 1e-6, 1.0)
+        t[-1] = 1.0
+
+        model_config = Config(
+            info_times=t,
+            alpha=self.alpha,
+            efficacy_spending=self.efficacy_spending,
+            futility_spending=self.futility_spending,
+            tails=self.tails,
+            n_sims=self.config.n_sims,
+            rng_seed=self._rng_seed,
+        )
+        model = CanonicalJointModel(model_config)
+
+        try:
+            a, b = model.solve_boundaries(drift=0.0, method=self.config.method)
+        except Exception:
+            return 1e6, 0.0
+
+        if a is None:
+            return 1e6, 0.0
+
+        simulator = self._get_simulator()
+        res = simulator.evaluate_point(
+            self.drift,
+            info_times=t,
+            upper_boundaries=a,
+            lower_boundaries=b,
+        )
+
+        return float(res.asn), float(res.power)
 
 
 class HypersphericalGSDOptimizer:

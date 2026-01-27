@@ -6,8 +6,8 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from scipy import stats
 from scipy.stats import norm
 
-from earlysign.v1.methods.group_sequential.plan.simulator import (
-    OperatingCharacteristicSimulator,
+from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
+    AsymptoticSimulator,
 )
 from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
@@ -561,7 +561,6 @@ def when_compute_ros(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     )
     t = np.linspace(1 / k, 1.0, k)
     i_fixed = (norm.ppf(1 - alpha) + norm.ppf(power)) ** 2
-    from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 
     gpt0 = CanonicalGaussianProcess(
         drift=0.0, rng=np.random.default_rng(ch7_params["rng_seed"])
@@ -652,8 +651,6 @@ def when_eval_ros_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     a, b = model.solve_boundaries(drift=drift_h1, method="simulation")
     res_asn = {"R_OS": r_os * 100}
     for m in [0.0, 0.5, 1.0]:
-        from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
-
         gpt = CanonicalGaussianProcess(
             drift=m * drift_h1, rng=np.random.default_rng(42)
         )
@@ -876,23 +873,28 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     r_ld = (drift_h1 / (z_alpha + z_beta)) ** 2
 
     # Simulate expected information fraction at various drift points
-    sim = OperatingCharacteristicSimulator(n_sims=n_sims, rng_seed=seed)
+    # Simulate expected information fraction at various drift points
 
-    # CRN: use fixed H0 samples shifted by drift
-    gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=np.random.default_rng(seed))
-    samples_h0 = gp_h0.sample(info_times, n_sims)
+    # Instantiate Simulator (Fixed seed ensures CRN/Correction across calls)
+    sim = AsymptoticSimulator(
+        model=CanonicalJointModel(
+            config=Config(
+                info_times=info_times,
+                alpha=alpha,
+                tails=2,
+                rng_seed=seed,
+                efficacy_spending=spending,
+                n_sims=n_sims,
+            )
+        ),
+        upper_boundaries=a,
+        lower_boundaries=-a,
+        seed=seed,
+    )
 
     def get_asn_percent(drift_val: float) -> float:
-        # manual shift to match solve_drift logic
-        samples_drift = samples_h0 + drift_val * np.sqrt(info_times)
-        oc = sim.simulate_statistical(
-            info_times=info_times,
-            upper=a,
-            lower=-a,
-            drift=drift_val,
-            n_max=1.0,
-            samples=samples_drift,
-        )
+        # compute_stat handles the simulation
+        oc = sim.evaluate_point(drift=drift_val)
         return 100.0 * r_ld * oc.asn
 
     return {
@@ -979,20 +981,16 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     r_os = (drift_h1**2) / i_fixed
 
     # OC simulation
-    sim = OperatingCharacteristicSimulator(n_sims=n_sims_final, rng_seed=seed)
-    gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=np.random.default_rng(seed))
-    samples_h0 = gp_h0.sample(info_times, n_sims_final)
+    # OC simulation
+    sim = AsymptoticSimulator(
+        model=CanonicalJointModel(config=config_final),
+        upper_boundaries=a,
+        lower_boundaries=b,
+        seed=seed,
+    )
 
     def get_asn_percent(drift_val: float) -> float:
-        samples_drift = samples_h0 + drift_val * np.sqrt(info_times)
-        oc = sim.simulate_statistical(
-            info_times=info_times,
-            upper=a,
-            lower=b,
-            drift=drift_val,
-            n_max=1.0,
-            samples=samples_drift,
-        )
+        oc = sim.evaluate_point(drift=drift_val)
         return 100.0 * r_os * oc.asn
 
     return {

@@ -88,3 +88,51 @@ class CanonicalTProcess:
         t_stats = z_stats / np.sqrt(s2_ratio)
 
         return z_stats, t_stats
+
+    def compute_stopping_probabilities(
+        self,
+        m_counts: NDArray[np.int64],
+        upper: NDArray[np.float64],
+        lower: NDArray[np.float64],
+        n_sims: int = 20000,
+        drift: float = 0.0,
+        seed: Optional[int] = None,
+    ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Compute stopping probabilities for efficacy and futility.
+
+        Args:
+            m_counts: Cumulative sample sizes.
+            upper: Upper boundaries (efficacy).
+            lower: Lower boundaries (futility).
+            n_sims: Number of simulations.
+            drift: Standardized drift.
+            seed: RNG seed.
+
+        Returns:
+            Tuple of (prob_stop_efficacy, prob_stop_futility).
+        """
+        # Use localized RNG sequence if seed provided
+        gen = np.random.default_rng(seed) if seed is not None else self._rng
+
+        # CanonicalTProcess uses self._rng in sample, so we instantiate a new one with the specific seed.
+        proc = CanonicalTProcess(rng=gen)
+
+        _, t_samples = proc.sample(m_counts, n_sims=n_sims, drift=drift)
+
+        k = t_samples.shape[1]
+        stopped = np.zeros(n_sims, dtype=bool)
+        prob_eff = np.zeros(k, dtype=float)
+        prob_fut = np.zeros(k, dtype=float)
+
+        for i in range(k):
+            # Check upper crossing
+            cross_u = (t_samples[:, i] > upper[i]) & ~stopped
+            prob_eff[i] = np.mean(cross_u)
+            stopped |= cross_u
+
+            # Check lower crossing
+            cross_l = (t_samples[:, i] < lower[i]) & ~stopped
+            prob_fut[i] = np.mean(cross_l)
+            stopped |= cross_l
+
+        return prob_eff, prob_fut
