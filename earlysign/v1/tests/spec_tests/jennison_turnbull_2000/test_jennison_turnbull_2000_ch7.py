@@ -855,7 +855,7 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     model = CanonicalJointModel(config=config)
-    a, _ = model.solve_boundaries(method="simulation")
+    a, b = model.solve_boundaries(method="simulation")
     if a is None:
         raise ValueError("Failed to solve boundaries")
 
@@ -877,24 +877,19 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
 
     # Instantiate Simulator (Fixed seed ensures CRN/Correction across calls)
     sim = AsymptoticSimulator(
-        model=CanonicalJointModel(
-            config=Config(
-                info_times=info_times,
-                alpha=alpha,
-                tails=2,
-                rng_seed=seed,
-                efficacy_spending=spending,
-                n_sims=n_sims,
-            )
-        ),
-        upper_boundaries=a,
-        lower_boundaries=-a,
+        model=CanonicalGaussianProcess(),
+        n_sims=n_sims,
         seed=seed,
     )
 
     def get_asn_percent(drift_val: float) -> float:
         # compute_stat handles the simulation
-        oc = sim.evaluate_point(drift=drift_val)
+        oc = sim.evaluate_point(
+            drift=drift_val,
+            info_times=info_times,
+            upper_boundaries=a,
+            lower_boundaries=b if b is not None else -a,
+        )
         return 100.0 * r_ld * oc.asn
 
     return {
@@ -983,14 +978,18 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     # OC simulation
     # OC simulation
     sim = AsymptoticSimulator(
-        model=CanonicalJointModel(config=config_final),
-        upper_boundaries=a,
-        lower_boundaries=b,
-        seed=seed,
+        model=CanonicalGaussianProcess(),
+        n_sims=ch7_params["n_sims"],
+        seed=42,
     )
 
     def get_asn_percent(drift_val: float) -> float:
-        oc = sim.evaluate_point(drift=drift_val)
+        oc = sim.evaluate_point(
+            drift=drift_val,
+            info_times=info_times,
+            upper_boundaries=a,
+            lower_boundaries=b,
+        )
         return 100.0 * r_os * oc.asn
 
     return {

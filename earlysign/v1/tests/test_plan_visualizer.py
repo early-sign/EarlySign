@@ -11,10 +11,7 @@ from earlysign.v1.methods.group_sequential.plan.gs_design_converter import (
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
     AsymptoticSimulator,
 )
-from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
-    CanonicalJointModel,
-    Config,
-)
+from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 
 
 # Test Cases
@@ -79,22 +76,28 @@ def test_calculate_stopping_probabilities_sum_to_one():
 
     # Under H0 (drift=0)
     sim = AsymptoticSimulator(
-        model=CanonicalJointModel(
-            Config(info_times=info_times, alpha=0.05, tails=2, rng_seed=42, n_sims=5000)
-        ),
+        model=CanonicalGaussianProcess(),
+        n_sims=5000,
+        seed=42,
+    )
+    res_h0 = sim.evaluate_point(
+        drift=0.0,
+        info_times=info_times,
         upper_boundaries=upper,
         lower_boundaries=lower,
-        seed=42,
-        n_sims=5000,
     )
-    res_h0 = sim.evaluate_point(drift=0.0)
     probs_h0 = res_h0.prob_stop_total
 
     assert len(probs_h0) == k
     assert np.isclose(np.sum(probs_h0), 1.0)
 
     # Under H1 (drift=3.0)
-    res_h1 = sim.evaluate_point(drift=3.0)
+    res_h1 = sim.evaluate_point(
+        drift=3.0,
+        info_times=info_times,
+        upper_boundaries=upper,
+        lower_boundaries=lower,
+    )
     probs_h1 = res_h1.prob_stop_total
     assert np.isclose(np.sum(probs_h1), 1.0)
 
@@ -107,15 +110,16 @@ def test_calculate_stopping_prob_values():
     lower = np.array([-0.1, -0.1])
 
     sim = AsymptoticSimulator(
-        model=CanonicalJointModel(
-            Config(info_times=info_times, alpha=0.05, tails=2, rng_seed=42, n_sims=2000)
-        ),
+        model=CanonicalGaussianProcess(),
+        n_sims=2000,
+        seed=42,
+    )
+    res = sim.evaluate_point(
+        drift=0.0,
+        info_times=info_times,
         upper_boundaries=upper,
         lower_boundaries=lower,
-        seed=42,
-        n_sims=2000,
     )
-    res = sim.evaluate_point(drift=0.0)
     probs = res.prob_stop_total
 
     # Most should stop at look 1

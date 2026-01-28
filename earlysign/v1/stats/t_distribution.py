@@ -1,6 +1,6 @@
 """Statistics and simulation helpers for T-distributions in group sequential tests."""
 
-from typing import Optional, Tuple, cast
+from typing import Any, Optional, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -97,6 +97,7 @@ class CanonicalTProcess:
         n_sims: int = 20000,
         drift: float = 0.0,
         seed: Optional[int] = None,
+        t: Optional[Any] = None,  # For protocol compatibility
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """Compute stopping probabilities for efficacy and futility.
 

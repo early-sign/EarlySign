@@ -3,7 +3,7 @@
 This module provides the domain-specific adapter for evaluating Binomial A/B tests.
 """
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional, cast
 
 import numpy as np
 
@@ -87,7 +87,9 @@ class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # Solve boundaries for the DESIGN (using default integration for solving)
         self.upper, self.lower = self.model.solve_boundaries(drift=target_drift)
-        self.info_times = self.model.info_times
+        self.upper = cast(np.ndarray, self.upper)
+        self.lower = cast(np.ndarray, self.lower)
+        self.info_times = cast(np.ndarray, self.model.info_times)
 
         # 4. Instantiate Inner Evaluator (Delegation)
         if method == "simulation":
@@ -99,13 +101,26 @@ class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         else:
             self.evaluator = NumericalCalculator()
 
-    def evaluate_point(self, drift: float) -> EvaluationResult:
+    def evaluate_point(
+        self,
+        drift: float,
+        info_times: Optional[np.ndarray] = None,
+        upper_boundaries: Optional[np.ndarray] = None,
+        lower_boundaries: Optional[np.ndarray] = None,
+        **kwargs: Any,
+    ) -> EvaluationResult:
         # Compatibility wrapper
+        # Use internal values if not provided
+        it = info_times if info_times is not None else self.info_times
+        ub = upper_boundaries if upper_boundaries is not None else self.upper
+        lb = lower_boundaries if lower_boundaries is not None else self.lower
+
         return self.evaluator.evaluate_point(
             drift,
-            info_times=self.info_times,
-            upper_boundaries=self.upper,
-            lower_boundaries=self.lower,
+            info_times=it,
+            upper_boundaries=cast(np.ndarray, ub),
+            lower_boundaries=cast(np.ndarray, lb),
+            **kwargs,
         )
 
     def evaluate_lift_curve(
@@ -160,8 +175,8 @@ class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         curve = self.evaluator.evaluate_curve(
             drifts,
             info_times=self.info_times,
-            upper_boundaries=self.upper,
-            lower_boundaries=self.lower,
+            upper_boundaries=cast(np.ndarray, self.upper),
+            lower_boundaries=cast(np.ndarray, self.lower),
         )
 
         # Inject Domain Context

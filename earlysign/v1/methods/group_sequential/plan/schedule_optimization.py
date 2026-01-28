@@ -46,7 +46,7 @@ EXAMPLES:
 """
 
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -150,8 +150,8 @@ class SequentialASNEstimator:
         res = simulator.evaluate_point(
             self.drift,
             info_times=t,
-            upper_boundaries=a,
-            lower_boundaries=b,
+            upper_boundaries=cast(NDArray[np.float64], a),
+            lower_boundaries=cast(NDArray[np.float64], b),
         )
         return float(res.asn)
 
@@ -188,8 +188,8 @@ class SequentialASNEstimator:
         res = simulator.evaluate_point(
             self.drift,
             info_times=t,
-            upper_boundaries=a,
-            lower_boundaries=b,
+            upper_boundaries=cast(NDArray[np.float64], a),
+            lower_boundaries=cast(NDArray[np.float64], b),
         )
 
         return float(res.asn), float(res.power)

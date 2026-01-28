@@ -13,6 +13,7 @@ from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
 )
+from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 from earlysign.v1.stats.t_distribution import CanonicalTProcess, TDistributionResolver
 from earlysign.v1.tests.util import corresponding_scenario_path
 
@@ -369,19 +370,24 @@ def when_table32_eval(
     t_actual = i_actual_fractions / i_actual_fractions[-1]
 
     sim = AsymptoticSimulator(
-        model=CanonicalJointModel(
-            config=Config(
-                info_times=t_actual, alpha=alpha, tails=2, rng_seed=42, n_sims=n_sims
-            )
-        ),
-        upper_boundaries=boundaries_plan,
-        lower_boundaries=-boundaries_plan,
+        model=CanonicalGaussianProcess(),  # Use proper process directly
+        n_sims=n_sims,
         seed=42,
     )
 
-    oc_h0 = sim.evaluate_point(drift=0.0)
+    oc_h0 = sim.evaluate_point(
+        drift=0.0,
+        info_times=t_actual,
+        upper_boundaries=boundaries_plan,
+        lower_boundaries=-boundaries_plan,
+    )
     drift_actual = drift_planned * np.sqrt(pi)
-    oc_h1 = sim.evaluate_point(drift=drift_actual)
+    oc_h1 = sim.evaluate_point(
+        drift=drift_actual,
+        info_times=t_actual,
+        upper_boundaries=boundaries_plan,
+        lower_boundaries=-boundaries_plan,
+    )
 
     return {"alpha_actual": oc_h0.power, "power_actual": oc_h1.power}
 
@@ -401,26 +407,25 @@ def when_actual_n(
     # Instantiate Simulator locally
     # Note: Boundaries might theoretically change if alpha changes, but here we check performance of fixed boundaries.
     sim = AsymptoticSimulator(
-        model=CanonicalJointModel(
-            config=Config(
-                info_times=t_actual,
-                alpha=0.05,
-                tails=2,
-                rng_seed=design_params.get("rng_seed", 42),
-                n_sims=5000,
-            )
-        ),
-        upper_boundaries=res["boundaries"],
-        lower_boundaries=-res["boundaries"],
+        model=CanonicalGaussianProcess(),
+        n_sims=design_params.get("n_sims", 5000),
         seed=design_params.get("rng_seed", 42),
     )
 
-    n_sims = design_params.get("n_sims", 5000)
-    sim.n_sims = n_sims
-    oc_h0 = sim.evaluate_point(drift=0.0)
+    oc_h0 = sim.evaluate_point(
+        drift=0.0,
+        info_times=t_actual,
+        upper_boundaries=res["boundaries"],
+        lower_boundaries=-res["boundaries"],
+    )
 
     drift_h1 = 1.0 * np.sqrt(actual_n[-1] / 8.0)
-    oc_h1 = sim.evaluate_point(drift=drift_h1)
+    oc_h1 = sim.evaluate_point(
+        drift=drift_h1,
+        info_times=t_actual,
+        upper_boundaries=res["boundaries"],
+        lower_boundaries=-res["boundaries"],
+    )
 
     return {"alpha_actual": oc_h0.power, "power_actual": oc_h1.power}
 

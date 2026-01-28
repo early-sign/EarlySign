@@ -190,7 +190,11 @@ class CanonicalGaussianProcess(GaussianProcess):
         )
 
     def sample(
-        self, t: NDArray[Any], n_sims: int, rng: Optional[np.random.Generator] = None
+        self,
+        t: NDArray[Any],
+        n_sims: int,
+        rng: Optional[np.random.Generator] = None,
+        drift: Optional[float] = None,
     ) -> NDArray[Any]:
         """Sample multiple paths using Brownian motion increments."""
         gen = rng or self._rng
@@ -198,8 +202,11 @@ class CanonicalGaussianProcess(GaussianProcess):
         k = len(t_arr)
         dt = np.diff(np.insert(t_arr, 0, 0))
 
-        # B(t) has drift self.drift and unit variance per unit time
-        db = gen.normal(self.drift * dt, np.sqrt(dt), (n_sims, k))
+        # Use provided drift or instance drift
+        d = drift if drift is not None else self.drift
+
+        # B(t) has drift d and unit variance per unit time
+        db = gen.normal(d * dt, np.sqrt(dt), (n_sims, k))
         b = np.cumsum(db, axis=1)
 
         # Z(t) = B(t) / sqrt(t)
@@ -323,6 +330,7 @@ class CanonicalGaussianProcess(GaussianProcess):
         method: str = "simulation",
         n_sims: int = 20000,
         seed: Optional[int] = None,
+        drift: Optional[float] = None,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """Compute the probability of stopping at each look for efficacy and futility.
 
@@ -333,6 +341,7 @@ class CanonicalGaussianProcess(GaussianProcess):
             method: "simulation" or "numerical_integration".
             n_sims: Number of simulations (if method="simulation").
             seed: Random seed.
+            drift: Optional drift override.
 
         Returns:
             Tuple of (prob_stop_upper, prob_stop_lower), each of length k.
@@ -344,10 +353,12 @@ class CanonicalGaussianProcess(GaussianProcess):
 
         if method == "simulation":
             return self._compute_stopping_probs_simulation(
-                t_arr, u_arr, l_arr, n_sims, seed
+                t_arr, u_arr, l_arr, n_sims, seed, drift=drift
             )
         elif method == "numerical_integration":
-            return self._compute_stopping_probs_numerical(t_arr, u_arr, l_arr)
+            return self._compute_stopping_probs_numerical(
+                t_arr, u_arr, l_arr, drift=drift
+            )
         else:
             raise ValueError(f"Method '{method}' is not implemented.")
 
@@ -358,9 +369,10 @@ class CanonicalGaussianProcess(GaussianProcess):
         l_arr: NDArray[Any],
         n_sims: int,
         seed: Optional[int],
+        drift: Optional[float] = None,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         gen = np.random.default_rng(seed) if seed is not None else self._rng
-        samples = self.sample(t_arr, n_sims, rng=gen)
+        samples = self.sample(t_arr, n_sims, rng=gen, drift=drift)
         k = len(t_arr)
 
         stopped = np.zeros(n_sims, dtype=bool)
@@ -385,6 +397,7 @@ class CanonicalGaussianProcess(GaussianProcess):
         t_arr: NDArray[Any],
         u_arr: NDArray[Any],
         l_arr: NDArray[Any],
+        drift: Optional[float] = None,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """
         Compute stopping probabilities using recursive numerical integration.
@@ -406,7 +419,8 @@ class CanonicalGaussianProcess(GaussianProcess):
                 elif i == j:
                     full_cov[i, j] = 1.0
 
-        mean_full = self.drift * np.sqrt(t_arr)
+        d = drift if drift is not None else self.drift
+        mean_full = d * np.sqrt(t_arr)
 
         for i in range(k):
             # 1. P(Stop Upper at i)
