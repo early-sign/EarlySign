@@ -453,14 +453,32 @@ class CanonicalJointModel:
         method: Literal[
             "simulation", "numerical_integration"
         ] = "numerical_integration",
+        efficacy_spending: Optional[SpendingFunction] = None,
+        futility_spending: Optional[SpendingFunction] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """Solve for boundaries based on config stopping policy."""
-        if self.config.stopping_policy:
+        """Solve for boundaries based on config stopping policy or provided spending.
+
+        Args:
+            drift: Drift parameter (optional).
+            method: Computation method.
+            efficacy_spending: Optional override for efficacy spending function.
+            futility_spending: Optional override for futility spending function.
+        """
+        if (
+            self.config.stopping_policy
+            and efficacy_spending is None
+            and futility_spending is None
+        ):
             a, b = self.config.stopping_policy.solve(self)
             if a is not None or b is not None:
                 return a, b
 
-        return self._solve_from_spending(drift, method=method)
+        return self._solve_from_spending(
+            drift,
+            method=method,
+            efficacy_spending=efficacy_spending,
+            futility_spending=futility_spending,
+        )
 
     def _solve_from_spending(
         self,
@@ -468,15 +486,18 @@ class CanonicalJointModel:
         method: Literal[
             "simulation", "numerical_integration"
         ] = "numerical_integration",
+        efficacy_spending: Optional[SpendingFunction] = None,
+        futility_spending: Optional[SpendingFunction] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """Solve using spending functions from config or policy."""
-        eff_sched = self.config.efficacy_spending
-        fut_sched = self.config.futility_spending
+        """Solve using spending functions from config, policy, or arguments."""
+        eff_sched = efficacy_spending or self.config.efficacy_spending
+        fut_sched = futility_spending or self.config.futility_spending
 
         if (
             eff_sched is None
             and self.config.stopping_policy
             and isinstance(self.config.stopping_policy, SpendingFunctionStoppingPolicy)
+            and efficacy_spending is None
         ):
             eff_sched = self.config.stopping_policy.efficacy_spending
 
@@ -484,6 +505,7 @@ class CanonicalJointModel:
             fut_sched is None
             and self.config.stopping_policy
             and isinstance(self.config.stopping_policy, SpendingFunctionStoppingPolicy)
+            and futility_spending is None
         ):
             fut_sched = self.config.stopping_policy.futility_spending
 

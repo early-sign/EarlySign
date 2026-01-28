@@ -1,4 +1,4 @@
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -6,6 +6,10 @@ import earlysign.schema.ES3.GST as GST
 from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
+)
+from earlysign.v1.methods.group_sequential.shared.spending import (
+    SpendingFunction,
+    SpendingFunctionFactory,
 )
 
 
@@ -46,7 +50,7 @@ class ProtocolDesigner:
         delta: float,
         k: int,
         p_control: float,
-        shape_type: Literal["obrien_fleming", "pocock"] = "obrien_fleming",
+        spending_fn: Optional[SpendingFunction] = None,
         side: int = 1,
         rho: float = 3.0,
     ) -> GST.Protocol:
@@ -63,23 +67,36 @@ class ProtocolDesigner:
             raise ValueError(
                 "ProtocolDesigner must be initialized with a CanonicalJointModel for planning."
             )
-        model = self._model
 
-        c_val = model.solve_boundary_constant(
-            info_times.tolist(), alpha, shape_type=shape_type
+        # Create a new model instance for this specific design planning
+        # to ensure info_times match the requested k.
+        base_seed = self._model.config.rng_seed
+        plan_config = Config(
+            info_times=info_times,
+            rng_seed=base_seed,
         )
+        model = CanonicalJointModel(plan_config)
 
-        if shape_type == "pocock":
-            c_shape = np.ones(k)
-        elif shape_type == "obrien_fleming":
-            c_shape = 1.0 / np.sqrt(info_times)
-        else:
-            raise ValueError(f"Unsupported shape: {shape_type}")
+        # Use provided spending function for bound solving
+        # Fallback to OBF for safety if None
+        if spending_fn is None:
+            # Default to OBF if not provided
+            factory = SpendingFunctionFactory(budget=alpha)
+            spending_fn = factory.build_from_spec(
+                GST.SpendingFunction(family="obrien_fleming")
+            )
 
-        boundaries = (c_val * c_shape).tolist()
+        boundaries, _ = model.solve_boundaries(
+            efficacy_spending=spending_fn,
+        )
+        if boundaries is None:
+            raise ValueError("Failed to solve boundaries.")
+        boundaries_list = boundaries.tolist()
 
         # 2. Solve for standardized drift delta = theta * sqrt(I_max)
-        drift = model.solve_drift(info_times.tolist(), boundaries, target_power=power)
+        drift = model.solve_drift(
+            info_times.tolist(), boundaries_list, target_power=power
+        )
 
         # 3. Calculate I_max = (drift / theta) ** 2
         i_max = (drift / theta) ** 2
@@ -116,7 +133,7 @@ class ProtocolDesigner:
                         variance_estimation=GST.VarianceEstimation.POOLED
                     ),
                     strategy=GST.AlphaSpendingStrategy(
-                        spending_fn=GST.SpendingFunction(family=shape_type),
+                        spending_fn=GST.SpendingFunction(family=spending_fn.name),
                         budget=alpha,
                         sided=GST.Sided.ONE,
                         statistical_model=GST.CanonicalGaussianModel(),
@@ -170,6 +187,11 @@ class ProtocolDesigner:
 
         spending_params = params.get("spending_params", {})
 
+        # Instantiate spending function
+        factory = SpendingFunctionFactory(budget=alpha)
+        spending_spec = GST.SpendingFunction(family=shape_type, params=spending_params)
+        spending_fn = factory.build_from_spec(spending_spec)
+
         # Determine stopping policy based on presence of futility
         if futility:
             power = futility.power
@@ -213,7 +235,7 @@ class ProtocolDesigner:
             delta=delta,
             k=k,
             p_control=p_c,
-            shape_type=shape_type,
+            spending_fn=spending_fn,
         )
 
         return GST.MethodSpec(

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, cast
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,9 @@ from earlysign.v1.methods.group_sequential.plan.protocol_design import (
 from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
+)
+from earlysign.v1.methods.group_sequential.shared.spending import (
+    SpendingFunctionFactory,
 )
 
 
@@ -215,7 +218,13 @@ class DesignVisualizer:
         # Note: ProtocolDesigner needs model initialized
         # The visualizer has one self._designer
 
-        shape_literal = cast(Literal["obrien_fleming", "pocock"], spending_function)
+        # shape_literal = cast(Literal["obrien_fleming", "pocock"], spending_function)
+
+        factory = SpendingFunctionFactory(budget=alpha)
+        # Assuming defaults/empty params for visualization UI usage
+        spending_obj = factory.build_from_spec(
+            GST.SpendingFunction(family=spending_function)
+        )
 
         protocol_obj = self._designer.plan_binomial_ab(
             alpha=alpha,
@@ -223,7 +232,7 @@ class DesignVisualizer:
             delta=delta,
             k=looks,
             p_control=control_rate,
-            shape_type=shape_literal,
+            spending_fn=spending_obj,
         )
 
         # Visualize

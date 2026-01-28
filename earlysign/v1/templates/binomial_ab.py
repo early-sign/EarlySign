@@ -54,7 +54,7 @@ The designer calculates the required sample size and decision boundaries.
     ... )
 
     >>> print(f"Designed Max Sample Size: {int(protocol.method.stopping_policy.timer.max_sample_size)}")
-    Designed Max Sample Size: 12805
+    Designed Max Sample Size: 10163
 
 With the protocol designed, we initialize the template and persist it to the ledger.
 
