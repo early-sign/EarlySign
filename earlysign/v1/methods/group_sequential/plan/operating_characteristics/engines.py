@@ -186,7 +186,7 @@ class MonteCarloSimulator(OperatingCharacteristicsEvaluator):
 class NumericalCalculator(OperatingCharacteristicsEvaluator):
     """Evaluator using Numerical Integration."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def evaluate_point(

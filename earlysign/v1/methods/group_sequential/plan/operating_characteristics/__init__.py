@@ -17,14 +17,13 @@ from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engine
     NumericalCalculator,
     OperatingCharacteristicsEvaluator,
     SimulationCurve,
-    TTestSimulator,
+    SimulationCurve,
 )
 
 __all__ = [
     "BinomialABOperatingCharacteristicsEvaluator",
     "EvaluationResult",
     "AsymptoticSimulator",
-    "TTestSimulator",
     "NumericalCalculator",
     "OperatingCharacteristicsEvaluator",
     "SimulationCurve",
