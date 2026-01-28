@@ -80,10 +80,8 @@ import ibis.expr.schema as sch
 from ibis.expr.types import Table as TableExpr
 
 from earlysign import __version__
-from earlysign.core.util.sanitize_for_json import sanitize_for_json
 from earlysign.core.util.ibis_bigquery import bq_parse_json
-
-
+from earlysign.core.util.sanitize_for_json import sanitize_for_json
 
 
 @dataclass(frozen=True)

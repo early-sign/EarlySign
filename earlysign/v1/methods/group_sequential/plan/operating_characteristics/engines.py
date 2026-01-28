@@ -58,7 +58,7 @@ class StatisticalProcess(ABC):
         n_sims: int,
         drift: float = 0.0,
         seed: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """Compute stopping probabilities for efficacy and futility."""
         pass
@@ -77,7 +77,7 @@ class OperatingCharacteristicsEvaluator(ABC):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
-        **kwargs,
+        **kwargs: Any,
     ) -> EvaluationResult:
         """Evaluate OC at a single drift point."""
         pass
@@ -88,7 +88,7 @@ class OperatingCharacteristicsEvaluator(ABC):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
-        **kwargs,
+        **kwargs: Any,
     ) -> SimulationCurve:
         """Evaluate OC over a range of drifts."""
         results = [
@@ -131,7 +131,7 @@ class AsymptoticSimulator(OperatingCharacteristicsEvaluator):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
-        **kwargs,
+        **kwargs: Any,
     ) -> EvaluationResult:
         # Prepare kwargs for the process (e.g. m_counts for TProcess)
         # We pass 't=info_times' explicitly for Gaussian Process.
@@ -195,7 +195,7 @@ class NumericalCalculator(OperatingCharacteristicsEvaluator):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
-        **kwargs,
+        **kwargs: Any,
     ) -> EvaluationResult:
         # Instantiates generic Gaussian Process for integration
         gp = CanonicalGaussianProcess(drift=drift)

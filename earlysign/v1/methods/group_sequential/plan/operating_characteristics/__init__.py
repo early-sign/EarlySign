@@ -17,7 +17,6 @@ from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engine
     NumericalCalculator,
     OperatingCharacteristicsEvaluator,
     SimulationCurve,
-    SimulationCurve,
 )
 
 __all__ = [
