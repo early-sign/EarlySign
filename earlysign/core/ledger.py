@@ -81,6 +81,9 @@ from ibis.expr.types import Table as TableExpr
 
 from earlysign import __version__
 from earlysign.core.util.sanitize_for_json import sanitize_for_json
+from earlysign.core.util.ibis_bigquery import bq_parse_json
+
+
 
 
 @dataclass(frozen=True)
@@ -105,13 +108,10 @@ class Ledger:
     def use_default_table(self, name: str = "events") -> "Ledger":
         return Ledger(self.connector, name, dict(self.labels))
 
-    def ensure(self) -> None:
-        """Ensure the ledger table (with standard schema) exists."""
-        if self.connector is None:
-            raise RuntimeError("Ledger connector not set")
-        if self.table_name in self.connector.list_tables():
-            return
-        schema = sch.schema(
+    @property
+    def _schema(self) -> sch.Schema:
+        """Standard schema for the ledger table."""
+        return sch.schema(
             dict(
                 uuid=dt.string,
                 ts=dt.timestamp(
@@ -125,7 +125,14 @@ class Ledger:
                 labels=dt.json,
             )
         )
-        self.connector.create_table(self.table_name, schema=schema)
+
+    def ensure(self) -> None:
+        """Ensure the ledger table (with standard schema) exists."""
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
+        if self.table_name in self.connector.list_tables():
+            return
+        self.connector.create_table(self.table_name, schema=self._schema)
 
     # --------- binding / scoping ----------
     def bind(self, **labels: Any) -> "Ledger":
@@ -160,6 +167,14 @@ class Ledger:
         True
         >>> trimmed_ledger = geo_ledger.unbind(r"^site_.*")
         >>> "site_eu" in trimmed_ledger.labels or "site_us" in trimmed_ledger.labels
+        False
+        >>> set(trimmed_ledger.labels.keys()) == {"experiment_id", "env"}
+        True
+
+        # Regex unbind with compiled pattern
+        >>> p = re.compile(r"^exp.*")
+        >>> no_exp_ledger = trimmed_ledger.unbind(p)
+        >>> "experiment_id" in no_exp_ledger.labels
         False
         """
         if not patterns:
@@ -214,6 +229,8 @@ class Ledger:
         combined_labels: Dict[str, Any] = dict(self.labels)
         if labels:
             combined_labels.update(labels)
+
+        # Construct row
         row = {
             "uuid": uuidlib.uuid4().hex,
             "ts": datetime.now(timezone.utc),
@@ -221,10 +238,45 @@ class Ledger:
             "payload_type": payload_type,
             "identity": labels.get("identity") if labels else None,
             "trace": json.dumps(trace) if trace else None,
-            "payload": sanitize_for_json(dict(payload)),
-            "labels": sanitize_for_json(combined_labels) or None,
+            # Serialize JSON fields for transport (Arrow/Parquet friendly)
+            "payload": json.dumps(sanitize_for_json(dict(payload))),
+            "labels": (
+                json.dumps(sanitize_for_json(combined_labels))
+                if combined_labels
+                else None
+            ),
         }
-        self.connector.insert(self.table_name, [row])
+
+        # 1. Use a transport schema with STRING for json fields
+        insert_schema = sch.schema(
+            dict(
+                uuid=dt.string,
+                ts=dt.timestamp(timezone="UTC"),
+                pkg_version=dt.string,
+                payload_type=dt.string,
+                identity=dt.string,
+                trace=dt.string,
+                payload=dt.string,
+                labels=dt.string,
+            )
+        )
+        mem_table = ibis.memtable([row], schema=insert_schema)
+
+        # 2. Transform strings to JSON native type using backend-specific logic
+        if self.connector.name == "bigquery":
+            # BigQuery requires PARSE_JSON() to convert string to json
+            to_insert = mem_table.mutate(
+                payload=bq_parse_json(mem_table.payload),
+                labels=bq_parse_json(mem_table.labels),
+            )
+        else:
+            # DuckDB and others support standard cast
+            to_insert = mem_table.mutate(
+                payload=mem_table.payload.cast("json"),
+                labels=mem_table.labels.cast("json"),
+            )
+
+        self.connector.insert(self.table_name, to_insert)
 
     # --------- scientific horizon support ----------
     @property
