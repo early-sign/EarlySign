@@ -13,10 +13,10 @@ Table contract
 --------------
 Base table has columns:
   - uuid: string (auto-generated)
-  - timestamp: timestamp (UTC) (auto-generated)
   - type: string
   - payload: json
   - attributes: json
+  - timestamp: timestamp (UTC) (auto-generated)
   - metadata: json (contains trace)
 
 Doctests
