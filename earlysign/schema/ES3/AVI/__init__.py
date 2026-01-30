@@ -27,7 +27,9 @@ class BaseAVIMethodSpec(MethodSpec_1):
 class GAVIMethodSpec(BaseAVIMethodSpec):
     kind: Literal["GAVI"] = "GAVI"
     alpha: float = Field(..., description="Significance level.")
-    variance: float = Field(..., description="Estimated variance (sigma squared).")
+    variance: float | None = Field(
+        None, description="Estimated variance (sigma squared). If None, estimated."
+    )
     sides: Sides = Field(..., description="One-sided or two-sided test.")
     max_n: int = Field(
         ..., description="Maximum sample size, used for rho calculation."
@@ -37,7 +39,9 @@ class GAVIMethodSpec(BaseAVIMethodSpec):
 class MSPRTMethodSpec(BaseAVIMethodSpec):
     kind: Literal["mSPRT"] = "mSPRT"
     alpha: float = Field(..., description="Significance level.")
-    variance: float = Field(..., description="Estimated variance (sigma squared).")
+    variance: float | None = Field(
+        None, description="Estimated variance (sigma squared). If None, estimated."
+    )
     sides: Sides = Field(..., description="One-sided or two-sided test.")
     mde: float = Field(
         ...,

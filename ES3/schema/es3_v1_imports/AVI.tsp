@@ -7,8 +7,11 @@ model GAVIMethodSpec extends BaseAVIMethodSpec {
   kind: "GAVI" = "GAVI";
   /** Significance level. */
   alpha: float64;
-  /** Estimated variance (sigma squared). */
-  variance: float64;
+  /**
+   * Estimated variance (sigma squared).
+   * If null, the variance is estimated from the data (Maharaj et al., 2023).
+   */
+  variance: float64 | null;
   /** One-sided or two-sided test. */
   sides: "one" | "two";
   /** Maximum sample size, used for rho calculation. */
@@ -19,8 +22,11 @@ model MSPRTMethodSpec extends BaseAVIMethodSpec {
   kind: "mSPRT" = "mSPRT";
   /** Significance level. */
   alpha: float64;
-  /** Estimated variance (sigma squared). */
-  variance: float64;
+  /**
+   * Estimated variance (sigma squared).
+   * If null, the variance is estimated from the data (Maharaj et al., 2023).
+   */
+  variance: float64 | null;
   /** One-sided or two-sided test. */
   sides: "one" | "two";
   /** Minimum Detectable Effect (absolute difference), used for phi calculation. */

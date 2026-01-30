@@ -67,21 +67,37 @@ class mSPRTEngine:
         n_total = n_c + n_t
 
         if isinstance(metrics, BinomialScoreboard):
-            val_c = s_c.metrics.p_hat  # type: ignore[union-attr]
-            val_t = s_t.metrics.p_hat  # type: ignore[union-attr]
+            val_c = metrics.arms[control_key].metrics.p_hat
+            val_t = metrics.arms[treatment_key].metrics.p_hat
         else:
-            val_c = s_c.metrics.mean  # type: ignore[union-attr]
-            val_t = s_t.metrics.mean  # type: ignore[union-attr]
+            val_c = metrics.arms[control_key].metrics.mean
+            val_t = metrics.arms[treatment_key].metrics.mean
 
         estimate = val_t - val_c
 
         alpha = self._get_alpha_adjusted()
-        sigma2 = self.method.variance
         effect_size = self.method.mde
 
         # V = 2 * sigma2 / (n_group) = 4 * sigma2 / n_total
         # This matches the variance of difference in means for two groups of size n_group.
         rho_param = 0.5
+
+        # Variance estimation
+        sigma2 = self.method.variance
+        if sigma2 is None:
+            # Estimate variance from data (Maharaj et al., 2023)
+            # Use pooled variance estimate as effective variance for the difference
+            if isinstance(metrics, BinomialScoreboard):
+                # Binomial approximation: Var(X) ~ p(1-p)
+                var_c = val_c * (1 - val_c)
+                var_t = val_t * (1 - val_t)
+            else:
+                # Continuous sample variance
+                var_c = metrics.arms[control_key].metrics.variance
+                var_t = metrics.arms[treatment_key].metrics.variance
+
+            sigma2_effective = (var_c + var_t) / 2.0
+            sigma2 = sigma2_effective
 
         V = 2 * sigma2 / n_group
 
