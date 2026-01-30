@@ -5,6 +5,11 @@
 ADR-005: Four-Layer Architecture with Framework DSL
 ===================================================
 
+.. warning::
+    **Historical Document**: This ADR describes the architectural vision as of 2025-09-19.
+    While the "Four-Layer" concept remains relevant, the physical directory structure has evolved.
+    Specifically, logical components described under ``earlysign.stats`` are now located primarily in ``earlysign.v1.methods``.
+
 **Title**: Four-layer architecture with framework layer for implementation consistency
 
 **Status**: `Proposed` | **`Accepted`** | `Deprecated` | `Superseded`

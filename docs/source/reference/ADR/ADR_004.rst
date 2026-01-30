@@ -5,6 +5,10 @@
 ADR-004: ibis-framework as the foundation of ledger implementation
 ================================================================
 
+.. note::
+    **Terminology Update**: The implementation class is named ``Ledger`` (in ``earlysign.core``), not ``LedgerDF``.
+    The design decision to use Ibis and JSON columns remains the foundation of the system.
+
 **Status**: **`Accepted`** | `Proposed` | `Deprecated` | `Superseded`
 
 📋 Context

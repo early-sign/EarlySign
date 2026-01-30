@@ -5,6 +5,10 @@
 ADR-003: Event-Sourcing Pattern
 =====================================================
 
+.. note::
+    **Terminology Update**: The core Event Sourcing concepts described here are active, but specific class names and implementation details have evolved in ``v1``.
+    For example, ``HandleRegistry`` is not part of the current API (see ``earlysign.v1.framework`` for current patterns).
+
 **Status**: `Proposed` | **`Accepted`** | `Deprecated` | `Superseded`
 
 📋 Context

@@ -1,6 +1,11 @@
 ADR 006 — ibis-native DSL experiments and performance tradeoffs
 ===============================================================
 
+.. warning::
+    **Historical Document**: This ADR describes historical experiments and a proposed DSL (v21) that differs from the final v1 implementation.
+    The current ``Ledger`` implementation does not support ``transaction()`` or ``session()`` directly on the ledger object; instead, use the ``earlysign.v1.framework.Session`` context manager.
+    Refer to ``docs/source/explanation/concepts.md`` for the authoritative design documentation.
+
 Summary
 -------
 
