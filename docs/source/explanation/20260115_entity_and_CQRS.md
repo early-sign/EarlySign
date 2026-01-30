@@ -128,16 +128,22 @@ Sequential Entities provide two canonical projections:
 1. **Latest State Projection**: The head of the snapshot, providing the current value and statistical status.
 2. **Trajectory Projection**: The history of the process, retrieved via collection (Projective Mode) or direct reading (Cumulative Mode).
 
-```json
-# Example of a Sequential Snapshot structure
-{
-    "entity_id": "uuid",
-    "index": 12,
-    "strategy": "collective", 
-    "data": {
-        "current_value": 2.45,
-        "sufficient_stats": { "sum_x": 120.5, "n": 100 },
-        "history": [1.1, 1.5, ..., 2.45] # Empty if PROJECTIVE
-    }
-}
-```
+## 8. Design Principle: State Derivation over Result Caching
+A common anti-pattern in event sourcing is to have a Command (Write side) return its computed result to be used directly by the Query (Read side). This breaks the **Unidirectional Data Flow** and creates a dependency on transient execution state rather than the durable event log.
+
+### 8.1 Read Model Purity
+All Query operations (e.g., `report_progress()`) MUST derive their state by reading from the ledger using Projectors. 
+- **Tier 1 (Raw Events)**: Ingested batches, observations.
+- **Tier 2 (Derived Facts)**: Computed statistics, interim test results, decision records.
+- **Tier 3 (Entities/Aggregates)**: Projections that group related Tier 1/2 facts (e.g., `InterimAnalyses`).
+
+### 8.2 Performance and Tier Separation
+When a Command (e.g., `update()`) is executed, it computes a Tier 2 fact (e.g., `BinomialTestResult`) and commits it. Subsequents Reads for reporting should NOT re-compute these expensive values. Instead, they should utilize a **Sequential Entity** projection that finds the latest pre-computed Tier 2 fact.
+
+This ensures:
+1. **Consistency**: The report always reflects what was actually committed to the ledger.
+2. **Performance**: Heavy statistical computations (like boundary calculations) happen once during the Write phase. The Read phase becomes a fast look-up of the projected state.
+3. **Traceability**: The reported state carries the scientific lineage of the projected events.
+
+> [!IMPORTANT]
+> A "Performance Bottleneck" in Read operations usually indicates a violation of this principle (e.g., a Projector trying to re-run an Engine instead of reading its previous output).

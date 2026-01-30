@@ -16,8 +16,6 @@ Base table has columns:
   - timestamp: timestamp (UTC) (auto-generated)
   - type: string
   - payload: json
-  - type: string
-  - payload: json
   - attributes: json
   - metadata: json (contains trace)
 
