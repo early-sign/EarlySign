@@ -61,19 +61,27 @@ class QueryMixin:
 
     def latest(self: _LedgerRW, explode: bool = True) -> TableExpr:
         t = self.t
-        t = t.order_by(t.ts.desc()).limit(1)
+        t = t.order_by(t.timestamp.desc()).limit(1)
         if not explode:
             return t
         else:
             return explode_json_with_pydantic(t, self.schema_pydantic_model)
 
     def latest_before(
-        self: _LedgerRW, ts: Any, *, include_ts: bool = True, explode: bool = True
+        self: _LedgerRW,
+        timestamp: Any,
+        *,
+        include_ts: bool = True,
+        explode: bool = True,
     ) -> TableExpr:
         """Return the latest record before (or at) the given timestamp."""
         t = self.t
-        t = t.filter(t.ts <= ts) if include_ts else t.filter(t.ts < ts)
-        t = t.order_by(t.ts.desc()).limit(1)
+        t = (
+            t.filter(t.timestamp <= timestamp)
+            if include_ts
+            else t.filter(t.timestamp < timestamp)
+        )
+        t = t.order_by(t.timestamp.desc()).limit(1)
         if not explode:
             return t
         else:
@@ -83,16 +91,20 @@ class QueryMixin:
         self: _LedgerRW, ascending: bool = True, explode: bool = True
     ) -> TableExpr:
         t = self.t
-        keys = (t.ts.asc(), t.uuid.asc()) if ascending else (t.ts.desc(), t.uuid.desc())
+        keys = (
+            (t.timestamp.asc(), t.uuid.asc())
+            if ascending
+            else (t.timestamp.desc(), t.uuid.desc())
+        )
         t = t.order_by(*keys)
         if not explode:
             return t
         else:
             return explode_json_with_pydantic(t, self.schema_pydantic_model)
 
-    def since(self: _LedgerRW, ts: Any, explode: bool = True) -> TableExpr:
+    def since(self: _LedgerRW, timestamp: Any, explode: bool = True) -> TableExpr:
         t = self.t
-        t = t.filter(t.ts >= ts)
+        t = t.filter(t.timestamp >= timestamp)
         if not explode:
             return t
         else:
@@ -107,8 +119,12 @@ class QueryMixin:
         explode: bool = True,
     ) -> TableExpr:
         t = self.t
-        expr = t.filter(t.ts >= start)
-        t = expr.filter(t.ts <= end) if include_end else expr.filter(t.ts < end)
+        expr = t.filter(t.timestamp >= start)
+        t = (
+            expr.filter(t.timestamp <= end)
+            if include_end
+            else expr.filter(t.timestamp < end)
+        )
         if not explode:
             return t
         else:
@@ -154,25 +170,12 @@ class LedgerRecord:
 
     @classmethod
     def payload_type_name(cls) -> str:
-        """
-        Auto-generated payload type from module path and class name.
-
-        Returns dot-separated module path and class name.
-        Example: earlysign.v0.stats_old.common.anytime_valid.records.EProcessRecord
-                 -> stats.common.anytime_valid.records.EProcessRecord
-        """
-        module = cls.__module__
-        cls_name = cls.__name__
-
-        # Remove 'earlysign.' prefix if present
-        path = module.removeprefix("earlysign.")
-
-        # Return dot-separated path and class name
-        return f"{path}.{cls_name}"
+        # Return only class name for consistency with Ledger v2 inference
+        return cls.__name__
 
     @property
     def payload_type(self) -> str:
-        return self.__class__.payload_type_name()
+        return self.schema_pydantic_model.__name__
 
     @classmethod
     @lru_cache(maxsize=None)
@@ -192,9 +195,9 @@ class LedgerRecord:
             raise RuntimeError("Record is not attached. Call .attach(ledger).")
         t = self.ledger.t
         t = t.filter(
-            cast(Any, t.payload_type == self.payload_type)
+            cast(Any, t.type == self.payload_type)
         )  # Cast to satisfy mypy type check
-        t = t.filter(t.labels["record_name"].str == str(self.name))
+        t = t.filter(t.attributes["record_name"].str == str(self.name))
         return t
 
     # --- overloads -----------------------------------------------------------
@@ -244,18 +247,20 @@ class LedgerRecord:
                 payload = kwargs
 
         payload_with_defaults = self._validate_payload(payload)
+        # Note: In Ledger v2, we pass the data dict directly, and type is derived.
+        # However, for LedgerRecord, we want to maintain the specific payload_type.
+        # The Ledger.insert method derives type from data.__class__.__name__ or uses "Record".
+        # We'll pass it as 'data' and the Ledger will use "Record" as type,
+        # but we rely on the payload_type filter in .t
         self.ledger.insert(
-            payload_type=self.payload_type,
-            payload=payload_with_defaults,
-            labels={**labels, "record_name": self.name},
+            data=payload_with_defaults,
+            attributes={**labels, "record_name": self.name},
         )
 
-    def _validate_payload(self, payload: Mapping[str, Any]) -> Dict[str, Any]:
-        """Validate payload against schema and return a plain dict."""
+    def _validate_payload(self, payload: Mapping[str, Any]) -> pydantic.BaseModel:
+        """Validate payload against schema and return a Pydantic model instance."""
         model = self.schema_pydantic_model
-        parsed = model.model_validate(dict(payload))
-        dumped: Dict[str, Any] = parsed.model_dump()
-        return dumped
+        return model.model_validate(dict(payload))
 
     @overload
     def latest_payload(
@@ -290,15 +295,15 @@ class LedgerRecord:
         if self.ledger is None:
             raise RuntimeError("Record is not attached. Call .attach(ledger).")
         tbl = self.t
-        tbl = tbl.order_by(tbl.ts.desc(), tbl.uuid.desc()).limit(1)
-        df = tbl.select(tbl.ts, tbl.payload).execute()
+        tbl = tbl.order_by(tbl.timestamp.desc(), tbl.uuid.desc()).limit(1)
+        df = tbl.select(tbl.timestamp, tbl.payload).execute()
         if df.empty:
             if default is not None:
                 return dict(default)
             raise LookupError(f"No rows found for record_name={self.name}")
         row = df.iloc[0]
         raw_payload = row["payload"]
-        ts_value = row["ts"]
+        ts_value = row["timestamp"]
         if raw_payload is None:
             data = {}
         else:
@@ -338,11 +343,11 @@ class SnapshotLedgerRecord(LedgerRecord, QueryMixin):
     def latest_snapshot_ts(self) -> Any | None:
         """Return the timestamp of the latest snapshot row, if any."""
 
-        tbl = self.t.order_by(self.t.ts.desc(), self.t.uuid.desc()).limit(1)
-        df = tbl.select(tbl.ts).execute()
+        tbl = self.t.order_by(self.t.timestamp.desc(), self.t.uuid.desc()).limit(1)
+        df = tbl.select(self.t.timestamp).execute()
         if df.empty:
             return None
-        return df.iloc[0]["ts"]
+        return df.iloc[0]["timestamp"]
 
     def diff_since_last_snapshot(
         self,
@@ -371,5 +376,5 @@ class SnapshotLedgerRecord(LedgerRecord, QueryMixin):
         if last_ts is None:
             return t
         if include_equal_ts:
-            return t.filter(t.ts >= last_ts)
-        return t.filter(t.ts > last_ts)
+            return t.filter(t.timestamp >= last_ts)
+        return t.filter(t.timestamp > last_ts)

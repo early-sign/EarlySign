@@ -81,10 +81,10 @@ True
 # Create a simple projector that extracts uuids as trace
 >>> class FactProjector(Projector[Fact]):
 ...     def project(self, table: ibis.Expr) -> ProjectionResult[Fact]:
-...         facts = table.filter(table.payload_type == "Fact").execute()
+...         facts = table.filter(table.type == "Fact").execute()
 ...         total = facts["payload"].apply(lambda x: x["val"]).sum() if len(facts) > 0 else 0
-...         uuids = facts["uuid"].tolist() if len(facts) > 0 else []
-...         return ProjectionResult(data=Fact(val=total), trace=[TraceId(u) for u in uuids])
+...         ids = facts["uuid"].tolist() if len(facts) > 0 else []
+...         return ProjectionResult(data=Fact(val=total), trace=[TraceId(u) for u in ids])
 
 # Setup fresh ledger and ingest data
 >>> con = ibis.duckdb.connect(":memory:")
@@ -98,7 +98,7 @@ True
 # Trace comes from Read, not from Commit return values
 >>> with Session(ledger) as sess:
 ...     traced_facts = sess.Read(FactProjector())
-...     len(traced_facts.trace) == 2  # Two facts, two uuids
+...     len(traced_facts.trace) == 2  # Two facts, two ids
 True
 
 >>> traced_facts.data.val  # Sum of 10 + 20
@@ -120,10 +120,14 @@ True
 ...     sess.Commit(Result(total=30))  # Uses implicit trace
 
 # Verify the Result was committed with trace from the Read
->>> df = ledger.t.execute()
->>> result_row = df[df["payload_type"] == "Result"].iloc[0]
->>> stored_trace = json.loads(result_row["trace"])
->>> len(stored_trace) == 2  # Should have trace from the two Facts
+>>> # Use Ibis to inspect the JSON metadata column
+>>> t = ledger.t
+>>> # Extract trace field from metadata JSON directly using Ibis expression
+>>> # Note: We must select from the *same* relation we filter on
+>>> q = t.filter(t.type == "Result").order_by(t.timestamp.desc()).limit(1)
+>>> res = q.select(trace=q.metadata["trace"]).execute()
+>>> # Backend returns it as a list
+>>> len(res.iloc[0]["trace"]) == 2
 True
 
 --- Test: Explicit trace overrides implicit ---
@@ -132,11 +136,12 @@ True
 ...     _ = sess.Read(FactProjector())  # Populates session.trace with 2 items
 ...     sess.Commit(Result(total=99), trace=[])  # Explicit empty trace
 
->>> df2 = ledger.t.execute()
->>> result_rows = df2[df2["payload_type"] == "Result"]
->>> last_result = result_rows.iloc[-1]
->>> last_trace = json.loads(last_result["trace"]) if last_result["trace"] else []
->>> len(last_trace) == 0  # Empty because we explicitly passed empty trace
+>>> t = ledger.t
+>>> q = t.filter(t.type == "Result").order_by(t.timestamp.desc()).limit(1)
+>>> res = q.select(trace=q.metadata["trace"]).execute()
+>>> trace_val = res.iloc[0]["trace"]
+>>> # Trace should be empty list (or null depending on insertion, but here [] was passed)
+>>> len(trace_val or []) == 0
 True
 
 --- Test: Multiple Reads accumulate trace ---

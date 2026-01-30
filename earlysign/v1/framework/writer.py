@@ -43,9 +43,10 @@ class Writer:
     @staticmethod
     def Commit(
         session: "Session",
-        record: BaseModel,
+        record: Any,
+        identity: Optional[str] = None,
         trace: Optional[List[TraceId]] = None,
-        labels: Optional[Dict[str, Any]] = None,
+        attributes: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Records a Pydantic model into the Ledger with its scientific trace.
@@ -55,23 +56,24 @@ class Writer:
         """
         target_trace = trace if trace is not None else session.trace
 
-        combined_labels = {
-            "horizon": str(session.horizon_id),
+        combined_attributes: Dict[str, Any] = {
+            "horizon": str(session.horizon_ts),
         }
-        if labels:
-            combined_labels.update(labels)
+        if identity:
+            combined_attributes["entity_identity"] = identity
+        if attributes:
+            combined_attributes.update(attributes)
 
         session.ledger.insert(
-            payload_type=record.__class__.__name__,
-            payload=record.model_dump(),
-            labels=combined_labels,
-            trace=[str(t) for t in target_trace],
+            data=record,
+            attributes=combined_attributes,
+            metadata={"trace": [str(t) for t in target_trace]},
         )
 
     @staticmethod
     def CallAndCommit(
         session: "Session",
-        result_type: Type[B],
+        result_type: Type[Any],
         func: Callable[..., Any],
         *args: Any,
         **kwargs: Any,
@@ -105,8 +107,7 @@ class Writer:
             record = result_data
 
         session.ledger.insert(
-            payload_type=result_type.__name__,
-            payload=record.model_dump(),
-            labels={"is_result": True},
-            trace=[str(t) for t in target_trace],
+            data=record,
+            attributes={"is_result": True},
+            metadata={"trace": [str(t) for t in target_trace]},
         )

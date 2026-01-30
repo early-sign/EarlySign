@@ -24,6 +24,13 @@ typically connect to a persistent database.
     >>> conn = ibis.connect("duckdb://:memory:")
     >>> ledger = Ledger(conn, "events")
     >>> ledger.ensure()
+    >>> # Every record has a unique id and timestamp (timestamp)
+    >>> ledger.insert({"some": "data"})
+    >>> df = ledger.t.filter(ledger.t.type == "dict").execute()
+    >>> 'uuid' in df.columns and 'timestamp' in df.columns
+    True
+    >>> len(df.iloc[0]['uuid']) == 32  # hex uuid
+    True
     >>> ledger = ledger.bind(experiment_id="example_001")
 
 Next, we define the experimental task. Here we are testing for a 10% relative lift

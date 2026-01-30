@@ -36,11 +36,10 @@ to capture domain events or manual decisions without using the full framework.
 
 >>> # Record a manual decision to continue despite crossing a non-binding boundary
 >>> ledger.insert(
-...     payload_type="ManualDecision",
-...     payload=MyDecision(
+...     data=MyDecision(
 ...         action="CONTINUE",
 ...         reason="Non-binding futility boundary crossed, but clinical relevance remains."
-...     ).model_dump()
+...     )
 ... )
 
 ## ibis-framework
@@ -48,33 +47,29 @@ Since the Ledger is backed by Ibis, you can perform powerful queries using
 standard Ibis expressions.
 
 >>> table = ledger.t
->>> table.filter(table.payload_type == "ManualDecision").payload["action"].execute().tolist()
+>>> table.filter(table.type == "MyDecision").payload["action"].execute().tolist()
 ['CONTINUE']
 
 >>> # ledger.show() provides a quick summary view of the ledger
 >>> ledger.show()
-     payload_name identity trace                                            payload labels
-0  ManualDecision     None  None  {'action': 'CONTINUE', 'reason': 'Non-binding ...   None
+         type identity trace                                            payload attributes
+0  MyDecision     None  None  {'action': 'CONTINUE', 'reason': 'Non-binding ...         {}
 
 ## Ledger Binding
-Ledgers can be "bound" to labels, creating scoped views. Reads and writes
-automatically apply the bound labels. Use `unbind()` to remove labels.
+Ledgers can be "bound" to attributes, creating scoped views. Reads and writes
+automatically apply the bound attributes. Use `unbind()` to remove attributes.
 
 >>> exp_ledger = ledger.bind(experiment_id="EXP001")
->>> exp_ledger.insert("Note", {"text": "experiment-specific"})
->>> exp_ledger.labels
-{'experiment_id': 'EXP001'}
-
->>> # Every record has a unique uuid and timestamp (ts)
->>> df = exp_ledger.t.filter(exp_ledger.t.payload_type == "Note").execute()
->>> 'uuid' in df.columns and 'ts' in df.columns
+>>> # Every record has a unique id and timestamp (timestamp)
+>>> df = ledger.t.execute()
+>>> 'uuid' in df.columns and 'timestamp' in df.columns
 True
 >>> len(df.iloc[0]['uuid']) == 32  # hex uuid
 True
 
 >>> # Records inserted with one binding don't appear in a differently-bound ledger
 >>> other_ledger = ledger.bind(experiment_id="OTHER")
->>> len(other_ledger.t.filter(other_ledger.t.payload_type == "Note").execute())
+>>> len(other_ledger.t.filter(other_ledger.t.type == "Record").execute())
 0
 
 # Framework features
@@ -94,7 +89,7 @@ from the event stream.
 >>> class DecisionProjector:
 ...     def project(self, table):
 ...         # Reify the table to get a concrete result with trace
-...         match = table.filter(table.payload_type == "MyDecision").order_by(ibis.desc("ts")).limit(1).execute()
+...         match = table.filter(table.type == "MyDecision").order_by(ibis.desc("timestamp")).limit(1).execute()
 ...         if match.empty: return ProjectionResult(data=None, trace=[])
 ...         return ProjectionResult(data=match.iloc[0]["payload"]["action"], trace=[TraceId(str(match.iloc[0]["uuid"]))])
 
@@ -107,13 +102,12 @@ from the event stream.
 A Session defines a "Scientific Horizon"—a point-in-time snapshot of the ledger.
 Analysis within a session is protected from concurrent writes.
 
->>> # 1. Define Horizon and start session
 >>> with Session(ledger) as sess:
 ...     # 2. Write something within the session
 ...     sess.Commit(MyDecision(action="A", reason="within"))
 ...
 ...     # 3. Write something outside (directly to ledger) AFTER session started
-...     ledger.insert("MyDecision", MyDecision(action="B", reason="outside").model_dump())
+...     ledger.insert(data=MyDecision(action="B", reason="outside"))
 ...
 ...     # 4. Projection within session only sees records up to the horizon
 ...     res = sess.Read(DecisionProjector())

@@ -21,7 +21,7 @@ on these primitives rather than rolling bespoke Gaussian maths.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional, Protocol, Sequence, Tuple, Union, cast
+from typing import Callable, Optional, Protocol, Self, Sequence, Tuple, Union, cast
 
 import numpy as np
 from scipy.stats import norm
@@ -89,7 +89,7 @@ class ProcessHistory:
     values: np.ndarray
 
     @classmethod
-    def from_pairs(cls, pairs: "ProcessHistoryLike") -> "ProcessHistory":
+    def from_pairs(cls, pairs: "ProcessHistoryLike") -> Self:
         if isinstance(pairs, cls):
             return pairs
         times: list[float] = []
@@ -105,7 +105,7 @@ class ProcessHistory:
         return cls(times=arr_times[order], values=arr_values[order])
 
     @classmethod
-    def empty(cls) -> "ProcessHistory":
+    def empty(cls) -> Self:
         return cls(times=np.empty(0, dtype=float), values=np.empty(0, dtype=float))
 
 

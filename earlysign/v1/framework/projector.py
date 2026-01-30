@@ -50,10 +50,10 @@ class ProtocolProjector(Projector[P]):
     def project(self, table: ibis.Expr) -> ProjectionResult[P]:
         # Payload type is the class name
         type_name = self.protocol_type.__name__
-        matched = table.filter(table.payload_type == type_name)
+        matched = table.filter(table.type == type_name)
 
         # Get the latest one recorded in history
-        latest = matched.order_by(ibis.desc("ts")).limit(1).execute()
+        latest = matched.order_by(ibis.desc("timestamp")).limit(1).execute()
 
         if latest.empty:
             raise RuntimeError(f"No protocol of type {type_name} found in ledger")
@@ -77,7 +77,7 @@ class ProtocolProjector(Projector[P]):
             ) from e
 
         # Extract the uuid as the trace (Scientific Lineage)
-        row_uuid = row.get("uuid")
-        trace = [TraceId(str(row_uuid))] if row_uuid else []
+        row_id = row.get("uuid")
+        trace = [TraceId(str(row_id))] if row_id else []
 
         return ProjectionResult(data=data, trace=trace)

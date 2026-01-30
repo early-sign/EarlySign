@@ -40,13 +40,13 @@ class Scoreboard(Entity[ScoreboardSchema]):
         # 2. Process Delta: Data Ingestion
         # Look for both 'Observation' and 'ArmData' (and legacy BinomialData)
         batch_table = delta_expr.filter(
-            (delta_expr.payload_type == "ArmData")
-            | (delta_expr.payload_type == "BinomialData")
-            | (delta_expr.payload_type == "Observation")
+            (delta_expr.type == "ArmData")
+            | (delta_expr.type == "BinomialData")
+            | (delta_expr.type == "Observation")
         )
 
-        is_arm_data = (batch_table.payload_type == "ArmData") | (
-            batch_table.payload_type == "BinomialData"
+        is_arm_data = (batch_table.type == "ArmData") | (
+            batch_table.type == "BinomialData"
         )
         # Simple iteration for prototype:
         batch_df = batch_table.select(

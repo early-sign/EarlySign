@@ -1,7 +1,7 @@
 """Group sequential design records and payload models."""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Type, cast
+from typing import Any, Dict, List, Mapping, Optional, Self, Sequence, Type, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -39,7 +39,7 @@ class EfficacySpec(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
-    def _validate_configuration(self) -> "EfficacySpec":
+    def _validate_configuration(self) -> Self:
         """Enforce cross-field rules and backfill defaults for spending setups."""
 
         updates: Dict[str, Any] = {}
@@ -85,7 +85,7 @@ class FutilitySpec(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
-    def _validate_configuration(self) -> "FutilitySpec":
+    def _validate_configuration(self) -> Self:
         """Enforce cross-field rules and required params for futility modes."""
 
         updates: Dict[str, Any] = {}
@@ -131,7 +131,7 @@ class HypothesisSpec(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     @model_validator(mode="after")
-    def _validate_tail(self) -> "HypothesisSpec":
+    def _validate_tail(self) -> Self:
         updates: Dict[str, Any] = {}
         if self.structure in (
             HypothesisStructure.ONE_SIDED_UPPER,
@@ -261,18 +261,11 @@ class GroupSequentialDesignRecord(LedgerRecord, QueryMixin):
 
     schema: dict[str, object] = {}
 
-    def _validate_payload(self, payload: Mapping[str, Any]) -> Dict[str, Any]:
+    def _validate_payload(self, payload: Mapping[str, Any]) -> BaseModel:
         """
-        Validate against the design model and drop empty structures.
-
-        Using the Pydantic model here ensures cross-field validation and keeps
-        the payload compatible with JSON columns across connectors.
+        Validate against the design model.
         """
-
-        parsed = self.schema_pydantic_model.model_validate(dict(payload))
-        if hasattr(parsed, "to_payload"):
-            return parsed.to_payload()
-        return parsed.model_dump(mode="json", exclude_none=True)
+        return self.schema_pydantic_model.model_validate(dict(payload))
 
     @property
     def schema_pydantic_model(self) -> Type[DesignPayloadModel]:

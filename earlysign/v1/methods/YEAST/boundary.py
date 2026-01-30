@@ -71,11 +71,11 @@ class Boundary(Entity[BoundarySchema]):
         Logic: Use the latest 'Boundary' payload if available, else retain snapshot.
         """
         # Filter for Boundary updates
-        boundary_updates = delta_expr.filter(delta_expr.payload_type == "Boundary")
+        boundary_updates = delta_expr.filter(delta_expr.type == "Boundary")
 
         # Get latest update
         latest_df = (
-            boundary_updates.order_by(boundary_updates.ts.desc())
+            boundary_updates.order_by(ibis.desc("timestamp"))
             .limit(1)
             .select("uuid", "payload")
             .execute()
@@ -84,7 +84,7 @@ class Boundary(Entity[BoundarySchema]):
         if not latest_df.empty:
             # Found a new boundary update
             row = latest_df.iloc[0]
-            uuid = str(row["uuid"])
+            record_uuid = str(row["uuid"])
             payload = row["payload"]
 
             # If payload is string (some backends), parse it.
@@ -97,7 +97,7 @@ class Boundary(Entity[BoundarySchema]):
             new_data = BoundarySchema.model_validate(payload)
 
             # Trace lineage
-            trace = [TraceId(uuid)]
+            trace = [TraceId(record_uuid)]
             if snapshot and snapshot.uuid:
                 trace.insert(0, TraceId(str(snapshot.uuid)))
 

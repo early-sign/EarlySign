@@ -43,6 +43,7 @@ from typing import (
 import ibis
 from pydantic import BaseModel
 
+from earlysign.v1.framework.base_entity import BaseEntity
 from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.framework.session import Session
 from earlysign.v1.framework.trace import Traced
@@ -60,13 +61,13 @@ class Snapshot(BaseModel, Generic[T]):
     They can always be recomputed from the underlying events.
     """
 
-    identity: str
+    entity_identity: str
     data: T
-    ts: Any  # Ledger's Last Timestamp
-    uuid: Optional[str] = None  # Record uuid for trace reference
+    timestamp: Any  # Ledger's Last Timestamp
+    uuid: Optional[str] = None  # Record record_id for trace reference
 
 
-class Entity(Projector[T], ABC):
+class Entity(BaseEntity[T], ABC):
     """
     Base class for identifiable aggregates with snapshot caching.
 
@@ -89,15 +90,6 @@ class Entity(Projector[T], ABC):
     """
 
     data_type: Type[T]
-
-    def __init__(self, identity: str):
-        """
-        Initialize an Entity with a consistent identity.
-
-        Args:
-            identity: Unique identifier for this entity instance.
-        """
-        self.identity = identity
 
     @property
     @abstractmethod
@@ -149,7 +141,7 @@ class Entity(Projector[T], ABC):
 
         # 2. Filter for delta (new events since snapshot)
         if snapshot:
-            delta_expr = table.filter(table.ts > snapshot.ts)
+            delta_expr = table.filter(table.timestamp > snapshot.timestamp)
         else:
             delta_expr = table
 
@@ -161,12 +153,16 @@ class Entity(Projector[T], ABC):
         Efficiently find the latest snapshot for this identity.
         """
         # We search specifically for snapshots of this identity
-        # The identity column is now top-level in the ledger
-        snaps = table.filter(table.payload_type == "Snapshot")
-        matched = snaps.filter(snaps.identity == self.identity)
+        # Snapshots have the same payload_schema as the entity's data_type
+        # but are identified by entity_identity label.
+        schema_name = self.data_type.__name__
+        matched = table.filter(
+            (table.type == schema_name)
+            & (table.attributes["entity_identity"].str == self.identity)
+        )
 
         # Get the latest one
-        latest = matched.order_by(ibis.desc("ts")).limit(1).execute()
+        latest = matched.order_by(ibis.desc("timestamp")).limit(1).execute()
 
         if not latest.empty:
             row = latest.iloc[0]
@@ -178,11 +174,12 @@ class Entity(Projector[T], ABC):
                 return dict(val) if val is not None else {}
 
             payload = _ensure_dict(row.get("payload"))
-            data_raw = payload.get("data")
+            # For snapshots, the payload IS the data (since payload_schema matches state)
+            data_raw = payload
 
-            if data_raw is None:
+            if not data_raw:
                 raise KeyError(
-                    f"Snapshot for {self.identity} is missing 'data' in payload."
+                    f"Snapshot for {self.identity} is missing data in payload."
                 )
 
             # Hydrate the data into the expected Pydantic model T
@@ -198,9 +195,9 @@ class Entity(Projector[T], ABC):
                 ) from e
 
             return Snapshot(
-                identity=self.identity,
+                entity_identity=self.identity,
                 data=data_inst,
-                ts=row["ts"],
+                timestamp=row["timestamp"],
                 uuid=row.get("uuid"),
             )
         return None
@@ -214,7 +211,6 @@ class Entity(Projector[T], ABC):
             result: The traced result to save as a snapshot
         """
         # Optimization: Skip saving if there is no new information beyond the latest snapshot.
-        # We detect this by checking if the result's trace only consists of the last snapshot's UUID.
         if (
             hasattr(self, "_last_snapshot_uuid")
             and self._last_snapshot_uuid is not None
@@ -223,14 +219,8 @@ class Entity(Projector[T], ABC):
             if trace_uuids == [str(self._last_snapshot_uuid)]:
                 return
 
-        # Create a Snapshot record
-        # Note: We include the session.horizon_id as the 'ts' anchor
-        snap_record = Snapshot(
-            identity=self.identity, data=result.data, ts=session.horizon_id
-        )
-
-        # We use a custom Commit that ensures identity is set in labels
-        session.Commit(snap_record, labels={"identity": self.identity})
+        # Snapshot is just the data model, committed with identity
+        session.Commit(result.data, identity=self.identity)
 
 
 class LatestStateProjector(Projector[Optional[S]], Generic[Index, S]):
@@ -362,16 +352,20 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
 
         elif self.snapshot_strategy == self.SnapshotStrategy.POINTWISE:
             # Collect all snapshots for this identity and reconstruct trajectory
-            snaps = table.filter(table.payload_type == "Snapshot")
-            matched = snaps.filter(snaps.identity == self.identity)
-            ordered = matched.order_by(ibis.asc("ts")).execute()
+            # Snapshots have the same payload_schema as the entity's data_type
+            schema_name = self.data_type.__name__
+            matched = table.filter(
+                (table.type == schema_name)
+                & (table.attributes["entity_identity"].str == self.identity)
+            )
+            ordered = matched.order_by(ibis.asc("timestamp")).execute()
 
             trajectory: List[Tuple[Index, ProjectionResult[S]]] = []
             for i, row in ordered.iterrows():
                 payload = row.get("payload", {})
                 if isinstance(payload, str):
                     payload = json.loads(payload)
-                data_raw = payload.get("data")
+                data_raw = payload
                 if data_raw:
                     data_inst = (
                         self.data_type(**data_raw)

@@ -44,7 +44,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
         Collect trajectory by finding all LookResult records in the ledger.
         """
         # Look for LookResult records in table
-        test_results = table.filter(table.payload_type == "LookResult")
+        test_results = table.filter(table.type == "LookResult")
         results_df = test_results.execute()
 
         trajectory: List[Tuple[int, ProjectionResult[LookResult]]] = []

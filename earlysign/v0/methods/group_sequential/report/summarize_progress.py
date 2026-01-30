@@ -61,19 +61,19 @@ def interim_summary_exprs(
     w = WaldZStatisticRecord(name=wald_id).attach(ledger)
     d = GroupSequentialDecisionSignalRecord(name=decision_id).attach(ledger)
 
-    info = i.t.select(ts=i.t.ts, t=i.t.payload["t"].cast("float64"))
-    wwin = ibis.window(order_by="ts")
-    info = info.mutate(next_ts=lambda t: t["ts"].lead().over(wwin))
+    info = i.t.select(timestamp=i.t.timestamp, t=i.t.payload["t"].cast("float64"))
+    wwin = ibis.window(order_by="timestamp")
+    info = info.mutate(next_timestamp=lambda t: t["timestamp"].lead().over(wwin))
 
     bounds = b.t.select(
-        ts=b.t.ts,
+        timestamp=b.t.timestamp,
         upper=b.t.payload["upper"].cast("float64"),
         lower=b.t.payload["lower"].cast("float64"),
     )
-    wald = w.t.select(ts=w.t.ts, wz=w.t.payload["wald_z"].cast("float64"))
+    wald = w.t.select(timestamp=w.t.timestamp, wz=w.t.payload["wald_z"].cast("float64"))
 
     decision = d.t.select(
-        ts=d.t.ts,
+        timestamp=d.t.timestamp,
         signal=d.t.payload["signal"].cast("string"),
     )
 
@@ -81,34 +81,53 @@ def interim_summary_exprs(
         bounds.cross_join(info)
         .filter(
             [
-                (info.ts <= bounds.ts)
-                & (info.next_ts.isnull() | (bounds.ts < info.next_ts))
+                (info.timestamp <= bounds.timestamp)
+                & (
+                    info.next_timestamp.isnull()
+                    | (bounds.timestamp < info.next_timestamp)
+                )
             ]
         )
-        .select(t=info.t, ts=bounds.ts, upper=bounds.upper, lower=bounds.lower)
+        .select(
+            t=info.t,
+            timestamp=bounds.timestamp,
+            upper=bounds.upper,
+            lower=bounds.lower,
+        )
     )
 
     wi = (
         wald.cross_join(info)
         .filter(
-            [(info.ts <= wald.ts) & (info.next_ts.isnull() | (wald.ts < info.next_ts))]
+            [
+                (info.timestamp <= wald.timestamp)
+                & (
+                    info.next_timestamp.isnull()
+                    | (wald.timestamp < info.next_timestamp)
+                )
+            ]
         )
-        .select(t=info.t, ts=wald.ts, wz=wald.wz)
+        .select(t=info.t, timestamp=wald.timestamp, wz=wald.wz)
     )
 
-    stop_ts = decision.filter(
+    stop_timestamp = decision.filter(
         decision.signal.notnull() & (decision.signal != "continue")
-    ).agg(ts=decision.ts.max())
+    ).agg(timestamp=decision.timestamp.max())
 
     upper_series = bi.select(t=bi.t, y=bi.upper, series=ibis.literal("upper"))
     lower_series = bi.select(t=bi.t, y=bi.lower, series=ibis.literal("lower"))
     wald_series = wi.select(t=wi.t, y=wi.wz, series=ibis.literal("wald"))
-    stop_series = wi.join(stop_ts, predicates=[wi.ts == stop_ts.ts]).select(
-        t=wi.t, y=wi.wz, series=ibis.literal("stop")
-    )
+    stop_series = wi.join(
+        stop_timestamp, predicates=[wi.timestamp == stop_timestamp.timestamp]
+    ).select(t=wi.t, y=wi.wz, series=ibis.literal("stop"))
 
     tidy = upper_series.union(lower_series).union(wald_series).union(stop_series)
-    return {"bounds_t": bi, "wald_t": wi, "stop_ts": stop_ts, "tidy": tidy}
+    return {
+        "bounds_t": bi,
+        "wald_t": wi,
+        "stop_timestamp": stop_timestamp,
+        "tidy": tidy,
+    }
 
 
 def interim_summary_plot(

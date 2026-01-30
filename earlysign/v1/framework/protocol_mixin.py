@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -21,7 +21,7 @@ class AutoNameMixin(BaseModel):
         return data
 
     @model_validator(mode="after")
-    def default_name_post(self) -> "AutoNameMixin":
+    def default_name_post(self) -> Self:
         # Handle object init missing explicit name (if default was used)
         if not self.name:
             self.name = f"{self.__class__.__module__}.{self.__class__.__name__}"

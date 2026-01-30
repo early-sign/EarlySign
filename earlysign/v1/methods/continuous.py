@@ -40,11 +40,10 @@ class Scoreboard(Entity[ScoreboardSchema]):
         # 2. Process Delta: Data Ingestion
         # Look for both 'Observation' and 'ArmData'
         batch_table = delta_expr.filter(
-            (delta_expr.payload_type == "ArmData")
-            | (delta_expr.payload_type == "Observation")
+            (delta_expr.type == "ArmData") | (delta_expr.type == "Observation")
         )
 
-        is_arm_data = batch_table.payload_type == "ArmData"
+        is_arm_data = batch_table.type == "ArmData"
 
         # Simple iteration for prototype:
         # We need sum_x2 for Observation too

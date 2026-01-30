@@ -16,7 +16,7 @@ def reconstruct_z_history(table: ibis.Expr) -> Tuple[List[int], List[float]]:
     """
     Generic helper to reconstruct Z-statistic history from LookResult records in the ledger.
     """
-    results_df = table.filter(table.payload_type == "LookResult").execute()
+    results_df = table.filter(table.type == "LookResult").execute()
 
     if results_df.empty:
         return [], []

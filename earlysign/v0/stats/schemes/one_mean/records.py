@@ -12,7 +12,6 @@ class OneMeanSummaryRecord(LedgerRecord, QueryMixin):
         "sd": (float | None, None),
         "look": (int | None, None),
     }
-    payload_type: str = "OneMean/Summary"
 
 
 class ZMeanKnownVarRecord(LedgerRecord, QueryMixin):
@@ -22,7 +21,6 @@ class ZMeanKnownVarRecord(LedgerRecord, QueryMixin):
         "z": (float | None, None),
         "look": (int | None, None),
     }
-    payload_type: str = "OneMean/ZKnownVar"
 
 
 class EProcessRecord(LedgerRecord, QueryMixin):

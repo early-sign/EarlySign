@@ -14,7 +14,7 @@ Doctests
 >>> q = df.select(
 ...     df.uuid,
 ...     x = df.payload["x"],          # JSON scalar (string) extraction
-...     kind = df.labels["kind"],     # JSON scalar from labels
+...     kind = df.attributes["kind"],     # JSON scalar from attributes
 ... )
 >>> out = q.execute()
 >>> list(out.columns)
@@ -22,10 +22,10 @@ Doctests
 
 # Insert a couple of JSON events and read back via JSON accessors
 >>> rows = [
-...     dict(payload_type="", payload={"x":"A"}, labels={"kind":"k1"}),
-...     dict(payload_type="", payload={"x":"B"}, labels={"kind":"k2"}),
+...     dict(type="", payload={"x":"A"}, attributes={"kind":"k1"}),
+...     dict(type="", payload={"x":"B"}, attributes={"kind":"k2"}),
 ... ]
->>> for row in rows: _ = ledger.insert(**row)
+>>> for row in rows: _ = ledger.insert(data=row["payload"], attributes=row["attributes"])
 >>> got = df.select(df.payload["x"].name("x")).execute().to_dict("records")
 >>> sorted(v["x"] for v in got)
 ['A', 'B']
@@ -34,20 +34,18 @@ Doctests
 >>> from ibis.expr.types import Table as TableExpr
 >>> isinstance(df.select("uuid"), TableExpr)
 True
->>> isinstance(df.filter(df.payload_type == "json"), TableExpr)
+>>> isinstance(df.filter(df.type == "json"), TableExpr)
 True
 >>> isinstance(df.limit(1), TableExpr)
 True
 >>> df  # the underlying ibis table
 DatabaseTable: events
-  uuid         string
-  ts           timestamp('UTC', 6)
-  pkg_version  string
-  payload_type string
-  identity     string
-  trace        string
-  payload      json
-  labels       json
+  uuid      string
+  type      string
+  payload   json
+  attributes    json
+  timestamp timestamp('UTC', 6)
+  metadata  json
 
 # Doctests for Ledger
 
@@ -61,9 +59,9 @@ DatabaseTable: events
 >>> L.ensure()
 
 # -- Insert multiple json events --
->>> _ = [L.insert(**row) for row in [
-...   dict(payload_type="", payload={"nA": 100, "mA": 38, "nB": 120, "mB": 51}, labels={"kind":"observation","batch":1}),
-...   dict(payload_type="", payload={"nA":  80, "mA": 22, "nB":  90, "mB": 30}, labels={"kind":"observation","batch":2}),
+>>> _ = [L.insert(data=row["payload"], attributes=row["attributes"]) for row in [
+...   dict(payload={"nA": 100, "mA": 38, "nB": 120, "mB": 51}, attributes={"kind":"observation","batch":1}),
+...   dict(payload={"nA":  80, "mA": 22, "nB":  90, "mB": 30}, attributes={"kind":"observation","batch":2}),
 ... ]]
 
 # Read using JSON accessors
@@ -83,13 +81,13 @@ True
 
 # Insert more data and verify JSON access works
 >>> _ = L.insert(
-...   payload_type="TwoPropObsBatch",
-...   payload={"nA":150,"mA":60,"nB":140,"mB":48},
-...   labels={"kind":"observation","batch":3}
+...   data={"nA":150,"mA":60,"nB":140,"mB":48},
+...   attributes={"kind":"observation","batch":3}
 ... )
 >>> q2 = (
-...   L.t
-...     .filter(L.t.payload_type == "TwoPropObsBatch")
+...     L.t.filter(L.t.type == "dict")
+...     .order_by(L.t.timestamp.desc())
+...     .limit(1)
 ...     .select(n_treat=L.t.payload["nA"].cast("int64"))
 ... )
 >>> rows = q2.execute().to_dict("records")
@@ -98,7 +96,7 @@ True
 
 # Simple verification that basic operations work
 >>> len_before = len(L.t.execute())
->>> _ = L.insert(payload_type="", payload={"test": True}, labels={"kind": "test"})
+>>> _ = L.insert(data={"test": True}, attributes={"kind": "test"})
 >>> len_after = len(L.t.execute())
 >>> len_after > len_before
 True

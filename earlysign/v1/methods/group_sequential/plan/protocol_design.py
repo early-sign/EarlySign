@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Self
 
 import numpy as np
 
@@ -23,7 +23,7 @@ class ProtocolDesigner:
         self._model = model
 
     @classmethod
-    def from_dict(cls, config: Dict[str, Any]) -> "ProtocolDesigner":
+    def from_dict(cls, config: Dict[str, Any]) -> Self:
         """
         Creates a ProtocolDesigner instance from a configuration dictionary.
         Supported keys:

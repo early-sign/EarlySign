@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Self, Type, TypeVar
 
 from pydantic import BaseModel
 
@@ -22,10 +22,12 @@ class Session:
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
-        self.horizon_id = ledger.latest_ts  # Define the Scientific Horizon
+        self.horizon_ts: Optional[Any] = None  # Captured lazily
         self._session_trace: List[TraceId] = []
 
-    def __enter__(self) -> "Session":
+    def __enter__(self) -> Self:
+        # Capture Scientific Horizon at session start
+        self.horizon_ts = self.ledger.latest_ts
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -41,15 +43,19 @@ class Session:
         """
         Returns a lazy table expression filtered by the Scientific Horizon.
         """
-        # Filter ledger by the horizon timestamp captured at __init__
-        return self.ledger.t.filter(self.ledger.t.ts <= self.horizon_id)
+        if self.horizon_ts is None:
+            return self.ledger.t
+        return self.ledger.t.filter(self.ledger.t.timestamp <= self.horizon_ts)
 
     def Read(self, projector: Projector[T]) -> Traced[T]:
         """
         Hydrates data using a Projector and accumulates its lineage.
         """
-        # Get data filtered by the Scientific Horizon
-        filtered_data = self.ledger.t.filter(self.ledger.t.ts <= self.horizon_id)
+        filtered_data = self.ledger.t
+        if self.horizon_ts is not None:
+            filtered_data = filtered_data.filter(
+                self.ledger.t.timestamp <= self.horizon_ts
+            )
 
         # Execute projection
         result = projector.project(filtered_data)
@@ -62,9 +68,10 @@ class Session:
 
     def Commit(
         self,
-        record: BaseModel,
+        record: Any,
+        identity: Optional[str] = None,
         trace: Optional[List[TraceId]] = None,
-        labels: Optional[Dict[str, Any]] = None,
+        attributes: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Records a model into the Ledger with implicit context.
@@ -73,15 +80,21 @@ class Session:
         implicit trace if no explicit trace is provided.
         """
         target_trace = trace if trace is not None else self.trace
-        combined_labels = {"horizon": str(self.horizon_id)}
-        if labels:
-            combined_labels.update(labels)
+        combined_attributes = {"horizon": str(self.horizon_ts)}
+        if attributes:
+            combined_attributes.update(attributes)
 
-        Writer.Commit(self, record, trace=target_trace, labels=combined_labels)
+        Writer.Commit(
+            self,
+            record,
+            identity=identity,
+            trace=target_trace,
+            attributes=combined_attributes,
+        )
 
     def CallAndCommit(
         self,
-        result_type: Type[B],
+        result_type: Type[Any],
         func: Callable[..., Any],
         *args: Any,
         **kwargs: Any,

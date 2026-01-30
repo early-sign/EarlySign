@@ -50,7 +50,7 @@ class ProgressProjector(Projector[ProgressReport]):
     def project(self, table: ibis.Expr) -> ProjectionResult[ProgressReport]:
         # 1. Read the latest LookResult
         # We look for the most recent 'LookResult' payload
-        results_df = table.filter(table.payload_type == "LookResult").execute()
+        results_df = table.filter(table.type == "LookResult").execute()
 
         if results_df.empty:
             # Fallback or empty report
@@ -103,7 +103,7 @@ class FinalProjector(Projector[FinalReport]):
 
     def project(self, table: ibis.Expr) -> ProjectionResult[FinalReport]:
         # 1. Read the latest LookResult
-        results_df = table.filter(table.payload_type == "LookResult").execute()
+        results_df = table.filter(table.type == "LookResult").execute()
 
         if results_df.empty:
             raise RuntimeError("No LookResult found in ledger for final report.")
