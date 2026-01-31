@@ -11,6 +11,15 @@ from pydantic import BaseModel, Field
 from ..Base import Log
 
 
+class AdaptationLog(Log):
+    look: int
+    conditional_power: float
+    promising_zone_status: PromisingZoneStatus | str
+    promising_zone_recommendation: str
+    original_sample_size: int
+    recommended_sample_size: int | None = None
+
+
 class Analysis(Log):
     """
     Structural Record of a GST Analysis Execution.
@@ -61,6 +70,13 @@ class LookResult(BaseModel):
     futility_boundary: float | None = None
     is_futility_crossed: bool
     status: DecisionStatus | str
+
+
+class PromisingZoneStatus(StrEnum):
+    FUTILITY = "futility"
+    EFFICACY = "efficacy"
+    PROMISING = "promising"
+    CONTINUE_ = "continue"
 
 
 class Trigger(BaseModel):

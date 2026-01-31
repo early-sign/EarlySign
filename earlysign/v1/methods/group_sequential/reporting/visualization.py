@@ -43,10 +43,12 @@ def plot_gst_summary(
     history_n: List[int],
     history_z: List[float],
     title: str = "GST Monitoring",
+    adaptation_logs: List[Any] | None = None,
     **kwargs: Any,
 ) -> matplotlib.figure.Figure:
     """
     Generates a generic summary plot for Group Sequential Test results.
+    Supports optional overlay of Adaptive Design events.
     """
     from earlysign.v1.methods.group_sequential.execution.binomial import (
         BinomialGSTEngine,
@@ -104,6 +106,38 @@ def plot_gst_summary(
 
     if history_n:
         ax.scatter(history_n, history_z, color="blue", zorder=5)
+
+    # 3. Adaptation Overlay
+    if adaptation_logs:
+        for log in adaptation_logs:
+            # Assuming history_n has length >= look.
+            if log.look <= len(history_n):
+                n_val = history_n[log.look - 1]
+                z_val = history_z[log.look - 1]
+
+                if (
+                    hasattr(log, "promising_zone_status")
+                    and log.promising_zone_status == "promising"
+                ):
+                    ax.annotate(
+                        f"Promising Zone\nCP={log.conditional_power:.2f}",
+                        xy=(n_val, z_val),
+                        xytext=(n_val, z_val + 0.5),
+                        arrowprops=dict(facecolor="orange", shrink=0.05),
+                        fontsize=9,
+                        color="orange",
+                    )
+                if (
+                    hasattr(log, "recommended_sample_size")
+                    and log.recommended_sample_size
+                ):
+                    if log.recommended_sample_size != log.original_sample_size:
+                        ax.axvline(
+                            x=log.recommended_sample_size,
+                            color="green",
+                            linestyle=":",
+                            label="New N_max",
+                        )
 
     # Styling
     ax.set_xlabel("Sample Size (N)")

@@ -513,6 +513,22 @@ namespace Log {
 
     status: DecisionStatus | string;
   }
+
+  enum PromisingZoneStatus {
+    Futility: "futility",
+    Efficacy: "efficacy",
+    Promising: "promising",
+    Continue: "continue",
+  }
+
+  model AdaptationLog extends Base.Log {
+    look: int32;
+    conditional_power: float64;
+    promising_zone_status: PromisingZoneStatus | string;
+    promising_zone_recommendation: string;
+    original_sample_size: int32;
+    recommended_sample_size?: int32;
+  }
 }
 
 model AdaptationSpec {
