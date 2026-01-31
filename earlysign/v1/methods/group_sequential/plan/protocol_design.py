@@ -249,3 +249,208 @@ class ProtocolDesigner:
                 schedule=generic_proto.method.stopping_policy.schedule,
             ),
         )
+
+    def plan_continuous_ab(
+        self,
+        alpha: float,
+        power: float,
+        delta: float,
+        sigma: float,
+        k: int,
+        spending_fn: Optional[SpendingFunction] = None,
+    ) -> GST.Protocol:
+        """
+        Plans a Continuous (Two Means) A/B design.
+
+        Parameters
+        ----------
+        alpha : float
+            Significance level (one-sided).
+        power : float
+            Target power (1 - beta).
+        delta : float
+            Difference in means (mu_treatment - mu_control).
+        sigma : float
+            Assumed common standard deviation.
+        k : int
+            Number of looks.
+        spending_fn : Optional[SpendingFunction]
+            Spending function configuration.
+
+        Returns
+        -------
+        GST.Protocol
+            Populated protocol with TwoArmContinuousZ statistic.
+        """
+        # Standardized effect size
+        # theta = delta / (2 * sigma) for equal allocation n1=n2=N/2
+        theta = delta / (2 * sigma)
+
+        info_times = np.linspace(1 / k, 1.0, k)
+
+        if self._model is None:
+            self._model = CanonicalJointModel(Config(info_times=np.array([1.0])))
+
+        # Use temporary model for planning
+        base_seed = self._model.config.rng_seed
+        model = CanonicalJointModel(Config(info_times=info_times, rng_seed=base_seed))
+
+        # Resolve spending function
+        if spending_fn is None:
+            factory = SpendingFunctionFactory(budget=alpha)
+            spending_fn = factory.build_from_spec(
+                GST.SpendingFunction(family="obrien_fleming")
+            )
+
+        boundaries, _ = model.solve_boundaries(efficacy_spending=spending_fn)
+        if boundaries is None:
+            raise ValueError("Failed to solve boundaries.")
+        boundaries_list = boundaries.tolist()
+
+        # Solve for drift
+        drift = model.solve_drift(
+            info_times.tolist(), boundaries_list, target_power=power
+        )
+
+        # Calculate I_max (Total Sample Size N)
+        # drift = theta * sqrt(I_max) => I_max = (drift / theta) ** 2
+        i_max = (drift / theta) ** 2
+        n_max = int(np.ceil(i_max))
+
+        return GST.Protocol(
+            name="Continuous AB Protocol",
+            task=GST.TaskSpec(
+                kind="group_sequential",
+                arms=["control", "treatment"],
+                response_type=GST.ResponseType.CONTINUOUS,
+                hypotheses=GST.HypothesisSpec(
+                    h_null_description="Difference <= 0",
+                    h_alt_description=f"Difference > {delta}",
+                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=GST.ContinuousEffectSize(
+                        means={"control": 0.0, "treatment": delta},
+                        standard_deviation=sigma,
+                    ),
+                ),
+                efficacy=GST.EfficacyRequirement(alpha=alpha),
+                futility=GST.FutilityRequirement(power=power),
+            ),
+            method=GST.MethodSpec(
+                kind="group_sequential",
+                stopping_policy=GST.StoppingPolicySpec(
+                    statistic=GST.TwoArmContinuousZ(
+                        information_unit="fisher_information",
+                        variance=GST.TwoArmEstimatedVariance(
+                            kind="estimated", method=GST.MethodModel.POOLED
+                        ),
+                    ),
+                    strategy=GST.AlphaSpendingStrategy(
+                        spending_fn=GST.SpendingFunction(family=spending_fn.name),
+                        budget=alpha,
+                        sided=GST.Sided.ONE,
+                        statistical_model=GST.CanonicalGaussianModel(),
+                    ),
+                    timer=GST.SampleSizeTimer(
+                        unit=GST.Unit.INDIVIDUALS,
+                        max_sample_size=n_max,
+                    ),
+                    schedule=GST.FixedSchedule(
+                        analyses=info_times.tolist(),
+                    ),
+                ),
+            ),
+        )
+
+    def plan_survival_ab(
+        self,
+        alpha: float,
+        power: float,
+        hazard_ratio: float,
+        k: int,
+        spending_fn: Optional[SpendingFunction] = None,
+    ) -> GST.Protocol:
+        """
+        Plans a Survival (Time-to-Event) A/B design using Log-Rank Test.
+
+        Parameters
+        ----------
+        hazard_ratio : float
+            Target Hazard Ratio (lambda_treatment / lambda_control).
+            Assumption: < 1 indicates benefit.
+            Converted to standardized effect: theta = |log(HR)| / 2.
+
+        Returns
+        -------
+        GST.Protocol
+            Populated protocol with EventCountTimer.
+        """
+        log_hr = np.log(hazard_ratio)
+        theta = abs(log_hr) / 2.0
+
+        info_times = np.linspace(1 / k, 1.0, k)
+
+        if self._model is None:
+            self._model = CanonicalJointModel(Config(info_times=np.array([1.0])))
+
+        base_seed = self._model.config.rng_seed
+        model = CanonicalJointModel(Config(info_times=info_times, rng_seed=base_seed))
+
+        if spending_fn is None:
+            factory = SpendingFunctionFactory(budget=alpha)
+            spending_fn = factory.build_from_spec(
+                GST.SpendingFunction(family="obrien_fleming")
+            )
+
+        boundaries, _ = model.solve_boundaries(efficacy_spending=spending_fn)
+        if boundaries is None:
+            raise ValueError("Failed to solve boundaries.")
+        boundaries_list = boundaries.tolist()
+
+        drift = model.solve_drift(
+            info_times.tolist(), boundaries_list, target_power=power
+        )
+
+        # I_max (Total Events)
+        # drift = theta * sqrt(Events)
+        events_max = int(np.ceil((drift / theta) ** 2))
+
+        return GST.Protocol(
+            name="Survival AB Protocol",
+            task=GST.TaskSpec(
+                kind="group_sequential",
+                arms=["control", "treatment"],
+                response_type=GST.ResponseType.TIME_TO_EVENT,
+                hypotheses=GST.HypothesisSpec(
+                    h_null_description="HR >= 1",
+                    h_alt_description=f"HR < {hazard_ratio}",
+                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=GST.SurvivalEffectSize(
+                        hazard_ratios={"control": 1.0, "treatment": hazard_ratio}
+                    ),
+                ),
+                efficacy=GST.EfficacyRequirement(alpha=alpha),
+                futility=GST.FutilityRequirement(power=power),
+            ),
+            method=GST.MethodSpec(
+                kind="group_sequential",
+                stopping_policy=GST.StoppingPolicySpec(
+                    statistic=GST.TwoArmContinuousZ(
+                        kind="two_arm_continuous_z",
+                        information_unit="fisher_information",
+                        variance=GST.KnownVariance(value=1.0),
+                    ),
+                    strategy=GST.AlphaSpendingStrategy(
+                        spending_fn=GST.SpendingFunction(family=spending_fn.name),
+                        budget=alpha,
+                        sided=GST.Sided.ONE,
+                        statistical_model=GST.CanonicalGaussianModel(),
+                    ),
+                    timer=GST.EventCountTimer(
+                        max_events=events_max,
+                    ),
+                    schedule=GST.FixedSchedule(
+                        analyses=info_times.tolist(),
+                    ),
+                ),
+            ),
+        )

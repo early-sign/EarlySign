@@ -2,6 +2,7 @@ import "@typespec/openapi3";
 import "./es3_v1_imports/YEAST.tsp";
 import "./es3_v1_imports/AVI.tsp";
 import "./es3_v1_imports/GST.tsp";
+import "./es3_v1_imports/SequentialQuantile.tsp";
 
 @service(#{ title: "EarlySign Standard Schema (ES3)" })
 namespace ES3;

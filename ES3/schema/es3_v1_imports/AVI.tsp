@@ -11,7 +11,7 @@ model GAVIMethodSpec extends BaseAVIMethodSpec {
    * Estimated variance (sigma squared).
    * If null, the variance is estimated from the data (Maharaj et al., 2023).
    */
-  variance: float64 | null;
+  variance?: float64;
   /** One-sided or two-sided test. */
   sides: "one" | "two";
   /** Maximum sample size, used for rho calculation. */
@@ -26,16 +26,27 @@ model MSPRTMethodSpec extends BaseAVIMethodSpec {
    * Estimated variance (sigma squared).
    * If null, the variance is estimated from the data (Maharaj et al., 2023).
    */
-  variance: float64 | null;
+  variance?: float64;
   /** One-sided or two-sided test. */
   sides: "one" | "two";
   /** Minimum Detectable Effect (absolute difference), used for phi calculation. */
   mde: float64;
 }
 
+model SequentialQuantileMethodSpec extends BaseAVIMethodSpec {
+  kind: "SequentialQuantile" = "SequentialQuantile";
+  /** Target quantile (e.g., 0.5 for median). */
+  quantile: float64;
+  /** Significance level. */
+  alpha: float64;
+  /** Optional maximum sample size for the horizon. */
+  max_n?: int32;
+}
+
 union MethodSpec {
   GAVIMethodSpec,
   MSPRTMethodSpec,
+  SequentialQuantileMethodSpec,
 }
 
 model TaskSpec extends Base.TaskSpec {
@@ -66,6 +77,14 @@ namespace Log {
     /** Whether the trajectory crossed the boundary. */
     is_crossed: boolean;
     /** The decision status after this look. */
+    status: DecisionStatus | string;
+  }
+
+  model SequentialQuantileLookResult extends Base.Log {
+    sample_n: int32;
+    estimated_quantile: float64;
+    interval_lower: float64;
+    interval_upper: float64;
     status: DecisionStatus | string;
   }
 }

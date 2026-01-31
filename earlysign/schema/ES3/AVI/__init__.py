@@ -28,7 +28,8 @@ class GAVIMethodSpec(BaseAVIMethodSpec):
     kind: Literal["GAVI"] = "GAVI"
     alpha: float = Field(..., description="Significance level.")
     variance: float | None = Field(
-        None, description="Estimated variance (sigma squared). If None, estimated."
+        None,
+        description="Estimated variance (sigma squared).\nIf null, the variance is estimated from the data (Maharaj et al., 2023).",
     )
     sides: Sides = Field(..., description="One-sided or two-sided test.")
     max_n: int = Field(
@@ -40,16 +41,14 @@ class MSPRTMethodSpec(BaseAVIMethodSpec):
     kind: Literal["mSPRT"] = "mSPRT"
     alpha: float = Field(..., description="Significance level.")
     variance: float | None = Field(
-        None, description="Estimated variance (sigma squared). If None, estimated."
+        None,
+        description="Estimated variance (sigma squared).\nIf null, the variance is estimated from the data (Maharaj et al., 2023).",
     )
     sides: Sides = Field(..., description="One-sided or two-sided test.")
     mde: float = Field(
         ...,
         description="Minimum Detectable Effect (absolute difference), used for phi calculation.",
     )
-
-
-MethodSpec = TypeAliasType("MethodSpec", GAVIMethodSpec | MSPRTMethodSpec)
 
 
 class Protocol(Protocol_1):
@@ -60,6 +59,20 @@ class Protocol(Protocol_1):
 class ResponseType(StrEnum):
     BINARY = "binary"
     CONTINUOUS = "continuous"
+
+
+class SequentialQuantileMethodSpec(BaseAVIMethodSpec):
+    kind: Literal["SequentialQuantile"] = "SequentialQuantile"
+    quantile: float = Field(..., description="Target quantile (e.g., 0.5 for median).")
+    alpha: float = Field(..., description="Significance level.")
+    max_n: int | None = Field(
+        None, description="Optional maximum sample size for the horizon."
+    )
+
+
+MethodSpec = TypeAliasType(
+    "MethodSpec", GAVIMethodSpec | MSPRTMethodSpec | SequentialQuantileMethodSpec
+)
 
 
 class Sides(StrEnum):

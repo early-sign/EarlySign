@@ -28,3 +28,11 @@ class LookResult(Log):
     status: DecisionStatus | str = Field(
         ..., description="The decision status after this look."
     )
+
+
+class SequentialQuantileLookResult(Log):
+    sample_n: int
+    estimated_quantile: float
+    interval_lower: float
+    interval_upper: float
+    status: DecisionStatus | str

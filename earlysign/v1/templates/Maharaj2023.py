@@ -1,7 +1,5 @@
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel
-
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import (
     GAVIMethodSpec,
@@ -10,8 +8,6 @@ from earlysign.schema.ES3.AVI import (
     TaskSpec,
 )
 from earlysign.schema.ES3.AVI.Log import LookResult
-from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
-from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.AVI import GAVIEngine, mSPRTEngine
@@ -37,6 +33,8 @@ class Maharaj2023Template:
         >>> import ibis
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
+        >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+        >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 
         # Setup ledger
         >>> conn = ibis.connect("duckdb://:memory:")
@@ -126,7 +124,9 @@ class Maharaj2023Template:
             sides=sides,
             max_n=max_n,
         )
-        task = TaskSpec(kind="AVI", arms=arms, response_type="binary") # Defaulting to binary for now, adjustable via overload if needed
+        task = TaskSpec(
+            kind="AVI", arms=arms, response_type="binary"
+        )  # Defaulting to binary for now, adjustable via overload if needed
         return Protocol(name="Maharaj2023 GAVI", task=task, method=method)
 
     @classmethod
@@ -163,7 +163,7 @@ class Maharaj2023Template:
 
         with Session(self.ledger) as sess:
             protocol = sess.Read(ProtocolProjector(Protocol)).data
-            
+
             # Determine response type to pick correct scoreboard
             # This logic mimics the standard AVI template but is simplified here
             response_type = getattr(protocol.task, "response_type", "binary")
