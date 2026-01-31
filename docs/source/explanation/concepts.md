@@ -272,30 +272,24 @@ EarlySign's event store is **backend-agnostic**, supporting various storage impl
 
 **Event Record Schema:**
 
+The Ledger stores events in a flattened schema, with domain-specific metadata packed into JSON columns.
+
 | Field | Type | Purpose | Example |
 |-------|------|---------|---------|
-| `uuid` | String | Unique event identifier | `550e8400-e29b-41d4-a716-446655440000` |
-| `time_index` | String | Logical ordering | `t001`, `t002`, `t003` |
-| `ts` | Timestamp | Physical time | `2025-09-07T10:00:00Z` |
-| `namespace` | String | Event domain | `obs`, `stats`, `criteria`, `signals` |
-| `kind` | String | Event type | `registered`, `updated`, `emitted` |
-| `entity` | String | Experiment ID | `exp#42`, `study_001` |
-| `snapshot_id` | String | State snapshot | `design-v1`, `snap-001` |
-| `tag` | String | Semantic label | `stat:waldz`, `crit:gst`, `obs:batch` |
-| `payload_type` | String | Data schema | `WaldZ`, `GSTBoundary`, `TwoPropObs` |
-| `payload` | JSON | Event data | `{"z": 2.10, "se": 0.45, "nA": 10, "nB": 10}` |
+| `uuid` | String | Unique event identifier (auto-generated) | `550e8400-e29b-41d4-a716-446655440000` |
+| `type` | String | Data schema identifier (Pydantic model name) | `GSTTwoPropDesign`, `LookResult` |
+| `payload` | JSON | Event data serialized as JSON | `{"z": 2.10, "status": "STOP_EFFICACY"}` |
+| `attributes` | JSON | Logical indexing tags (Entity ID, Namespace, Scope) | `{"entity_identity": "exp#42", "namespace": "stats"}` |
+| `timestamp` | Timestamp | Physical time (UTC) | `2025-09-07T10:00:00Z` |
+| `metadata` | JSON | System metadata (Trace lineage, Package version) | `{"trace": ["parent-uuid-1"], "pkg_version": "0.1.0"}` |
 
 **Sample Event Log:**
 
-| uuid | time_index | ts | namespace | kind | entity | snapshot_id | tag | payload_type | payload |
-|------|------------|----|-----------|----|--------|-------------|-----|-------------|---------|
-| 550e8400-e29b-41d4-a716-446655440000  | t001       | 2025-09-07T10:00:00Z      | design    | registered  | exp#42 | design-v1   | design        | GSTTwoPropDesign      | {"design_id":"exp#42-design","version":1,"alpha":0.025,"spending":"obrien","sides":"two"}   |
-| 550e8400-e29b-41d4-a716-446655440001  | t002       | 2025-09-07T10:05:00Z      | obs       | observation | exp#42 | snap-001    | obs           | TwoSampleBinomialObs  | {"nA":10,"nB":10,"mA":8,"mB":1}                                                              |
-| 550e8400-e29b-41d4-a716-446655440002  | t003       | 2025-09-07T10:06:00Z      | stats     | updated     | exp#42 | snap-001    | stat:waldz    | WaldZ                 | {"z":2.10,"se":0.45,"nA":10,"nB":10,"mA":8,"mB":1}                                          |
-| 550e8400-e29b-41d4-a716-446655440003  | t004       | 2025-09-07T10:06:01Z      | criteria  | updated     | exp#42 | crit-001    | crit:gst      | GSTBoundary           | {"upper":1.96,"lower":-1.96,"info_time":0.35,"design_ref":{"design_id":"exp#42-design","version":1}} |
-| 550e8400-e29b-41d4-a716-446655440004  | t005       | 2025-09-07T10:06:02Z      | signals   | emitted     | exp#42 | sig-001     | gst:decision  | Signal                | {"topic":"gst:decision","body":{"action":"stop","z":2.10}}                                  |
-| 550e8400-e29b-41d4-a716-446655440005  | t006       | 2025-09-07T10:07:00Z      | lifecycle | lifecycle   | exp#42 | run-001     | runtime       | LifecycleStart        | {"runtime":"GroupSequentialRuntime","status":"start"}                                       |
-| 550e8400-e29b-41d4-a716-446655440006  | t007       | 2025-09-07T10:08:00Z      | lifecycle | lifecycle   | exp#42 | run-001     | runtime       | LifecycleStop         | {"runtime":"GroupSequentialRuntime","status":"ok"}                                          |
+| uuid | type | payload | attributes | timestamp |
+|------|------|---------|------------|-----------|
+| ...00 | `GSTTwoPropDesign` | `{"alpha":0.025,"method":"..."}` | `{"entity_identity":"exp#42", "namespace":"design"}` | 2025-09-07T10:00:00Z |
+| ...01 | `BinomialObs` | `{"nA":10,"nB":10,"yA":8,"yB":1}` | `{"entity_identity":"exp#42", "namespace":"obs"}` | 2025-09-07T10:05:00Z |
+| ...02 | `LookResult` | `{"z_stat":2.1,"status":"STOP"}` | `{"entity_identity":"exp#42", "namespace":"stats"}` | 2025-09-07T10:06:00Z |
 
 ---
 
@@ -305,27 +299,37 @@ EarlySign's event store is **backend-agnostic**, supporting various storage impl
 
 | Aspect        | Spec                                                                 |
 |---------------|----------------------------------------------------------------------|
-| Purpose       | Store all facts (Observation / Statistic / Criteria / Signal / Design / Notes / Lifecycle) as append-only records |
-| Write API     | `append(...)`, `emit_signal(...)`, `lifecycle_start(...)`, `lifecycle_stop(...)` |
-| Read API      | `reader().iter(...)`, `reader().latest(...)`, `reader().count(...)` (with typed decoding via `as_=`) |
-| Record Schema | Metadata header + `payload_type` + `payload(JSON)`                   |
-| Tag           | `tag: Optional[str]` used for fusion, query, or separation of streams |
-| Guarantees    | Append-only, total order, reproducibility, random UUID per record    |
-| Notes         | Payloads should be minimal but sufficient for recomputation          |
+| Purpose       | Store all facts as append-only records with trace lineage.           |
+| Write API     | `ledger.insert(data, attributes=..., metadata=...)`                  |
+| Read API      | `ledger.t` (Ibis Table Expression) for filtering and projection.     |
+| Record Schema | `uuid`, `type`, `payload`, `attributes`, `timestamp`, `metadata`     |
+| Scoping       | `ledger.bind(**attrs)` / `ledger.unbind(*keys)` manage attribute context. |
+| Lineage       | `metadata["trace"]` stores list of parent UUIDs used to derive event.|
 
 ---
 
-### 3.2 Atomic Components
+### 3.2 Framework Primitives
 
-Atomic classes directly **read/write** the ledger. They are first-class citizens invoked by runtimes.
+The core framework provides three primitives for interacting with the Ledger, implementing the Event Sourcing pattern:
 
-| Layer       | Protocol | Method | Inputs | Reads (Ledger) | Writes (Ledger) | Example Tag | Example Payload |
-|-------------|----------|--------|--------|----------------|-----------------|-------------|-----------------|
-| **Design**  | Register design | `register(ledger)` | design params (α, spending, sides, …) | latest design (idempotent check) | `("design","registered")` | `design:{id,ver}` | `{"alpha":0.025,"spending":"obrien"}` |
-| **Observation** | Register data | `step(ledger, data)` | domain-specific obs (arm,y / counts) | – | `("observation","registered")` | `obs` | `{"nA":10,"nB":10,"mA":8,"mB":1}` |
-| **Statistic** | Update statistic | `step(ledger, data)` | – | latest design, obs | `("statistic","updated")` | `stat:waldz` | `{"z":2.1,"se":0.45}` |
-| **Criteria** | Update boundary/rule | `step(ledger, data)` | – | design, info_time, stat | `("criteria","updated")` | `crit:gst` | `{"upper":1.96,"lower":-1.96}` |
-| **Signal**  | Emit signal | `step(ledger, data)` | – | stat, criteria | `("signal","emitted")` | `gst:decision` | `{"action":"stop","reason":{...}}` |
+| Primitive | Role | Description |
+|-----------|------|-------------|
+| **Projector** | Read | Defines how to reconstruct a specific view or state from the raw event log. Used via `Session.Read(projector)`. |
+| **Logic** | Process | Pure domain logic (Functions/Entities) that transforms inputs (Traced Data) into results. |
+| **Writer** | Write | Records new events to the Ledger. Used via `Session.Commit(record)`. "Fire and forget". |
+
+**Session**: The `Session` manages the "Scientific Horizon" (snapshot of time) and implicit trace accumulation, ensuring that every committed event is causally linked to the events read during the transaction.
+
+### 3.3 Atomic Components (Conceptual)
+
+While the implementation uses Projectors and Writers, conceptually the system operates via these logical roles:
+
+| Role | Protocol | Inputs (Read) | Output (Write) | Example Payload |
+|------|----------|---------------|----------------|-----------------|
+| **Design** | `register` | User Config | Design Spec | `GSTTwoPropDesign` |
+| **Observation** | `step` | User Data | Observation Event | `BinomialObs` |
+| **Statistic** | `compute` | Design + Obs | Statistic Event | `LookResult` (z-stat) |
+| **Criteria** | `check` | Design + Stat | Decision Status | `LookResult` (status) |
 
 ---
 
