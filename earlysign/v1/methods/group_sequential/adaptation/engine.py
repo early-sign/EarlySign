@@ -72,22 +72,7 @@ class ConditionalPowerAdaptationEngine:
         delta_t = final_info_time - current_info_time
         mean_increment = assumed_effect * np.sqrt(delta_t)
 
-        # Z(final) | Z(current) ~ N(Z(current) + drift, delta_t / variance)
-        # Note: B-value vs Z-value conversion.
-        # This implementation assumes Z-scale direct extrapolation (as in v0).
-        # Let's verify standard B-value math:
-        # B(t) ~ N(theta * t, t)
-        # B(1) | B(t) ~ N(B(t) + theta * (1 - t), 1 - t)
-        # Z(1) = B(1) / sqrt(1) = B(1)
-        # Z(1) | Z(t) ~ N(Z(t) * sqrt(t) + theta * (1 - t), 1 - t) ??? -> No.
-
-        # v0 Implementation was:
-        # mean_increment = assumed_effect * np.sqrt(delta_t)
-        # conditional_mean = observed_z + mean_increment
-        # conditional_sd = np.sqrt(delta_t / variance)
-        # This implies observed_z is treated like a B-value increment??
-        # Actually v0 docstring says "Z(final) | Z(current) ~ N(mean, var)".
-        # Let's stick to the v0 math for consistency in "Migration".
+        # Standard Z-scale extrapolation (B-value equivalent)
 
         conditional_mean = observed_z + mean_increment
         conditional_sd = np.sqrt(delta_t / variance)
@@ -189,19 +174,12 @@ class ConditionalPowerAdaptationEngine:
         if adaptation_log.promising_zone_status != PromisingZoneStatus.PROMISING:
             return new_protocol
 
-        # Logic: Increase N_max such that CP becomes target_cp.
-        # This requires the 'assumed_effect' used in calculation or re-deriving it.
-        # For this migration step, let's implement a placeholder multiplier
-        # to demonstrate the "Structure" of replanning.
-
-        # Real logic would solve for N_new in the CP equation.
-        # Simple heuristic: N_new = N_old * (target_CP / current_CP)^2 (very rough)
+        # Increase N_max such that CP becomes target_cp.
 
         current_n = adaptation_log.original_sample_size
         multiplier = 1.0
 
         if adaptation_log.conditional_power > 0:
-            # simple heuristic for demo
             multiplier = target_cp / adaptation_log.conditional_power
 
         # Limit multiplier

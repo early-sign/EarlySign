@@ -194,24 +194,13 @@ class PromisingZoneABTemplate:
 
         # 2. Analysis & Adaptation
         with Session(self.ledger) as sess:
-            # Read LATEST protocol (may have been updated)
-            # Note: ProtocolProjector picks up the latest record of type PromisingZoneABProtocol
-            # If we subclassed, we need to be careful. The projector filters by type.
-            # If we simply commit a new GST.Protocol, it might not leverage the custom class?
-            # Ideally, we commit PromisingZoneABProtocol instances.
             protocol = sess.Read(ProtocolProjector(PromisingZoneABProtocol)).data
             metrics = sess.Read(Scoreboard(identity="metrics")).data
 
             # 3. Standard GSD Engine
             engine = BinomialGSTEngine(protocol)
 
-            # Helper logic to capture result before committing?
-            # CallAndCommit hides the return value inside the Session internals until committed?
-            # Accessing 'engine.run()' result inside Session requires careful handling if we want to branch logic *here*.
-            # Actually, Session.CallAndCommit returns the produced records or we can just call the function directly?
-            # Session.CallAndCommit is for tracing.
-
-            # For Adaptation, we need the LookResult *now*.
+            # For Adaptation, we need the LookResult now
             look_result = engine.run(metrics)
 
             # Commit the LookResult
@@ -299,9 +288,6 @@ class PromisingZoneABTemplate:
             trajectory = sess.Read(InterimAnalyses(identity="interim_analyses")).data
 
             # Read Adaptation Logs
-            # We need a Projector for Logs? Or just raw filter?
-            # Since AdaptationLog is a Log, we can filter ledger directly or generic Projector?
-            # Let's do raw filter for now as we don't have AdaptationProjector yet.
             logs_df = self.ledger.t.filter(
                 self.ledger.t.type == "AdaptationLog"
             ).execute()
