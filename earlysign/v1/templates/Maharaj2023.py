@@ -25,8 +25,10 @@ class Maharaj2023Template(TemplateBase[Protocol]):
     where the variance is estimated from the data stream rather than being pre-specified.
 
     Reference:
-        Maharaj, A., Sinha, R., Arbour, D., Waudby-Smith, I., Liu, S. Z., Sinha, M., Addanki, R., Ramdas, A., Garg, M., & Swaminathan, V. (2023).
-        Anytime-valid confidence sequences in an enterprise A/B testing platform. 396–400.
+        Akash Maharaj, Ritwik Sinha, David Arbour, Ian Waudby-Smith, Simon Z. Liu, Moumita Sinha, Raghavendra Addanki, Aaditya Ramdas, Manas Garg, and Viswanathan Swaminathan. 2023.
+        Anytime-Valid Confidence Sequences in an Enterprise A/B Testing Platform.
+        In Companion Proceedings of the ACM Web Conference 2023 (WWW '23 Companion).
+        Association for Computing Machinery, New York, NY, USA, 396–400.
         https://doi.org/10.1145/3543873.3584635
 
     Doctests:
