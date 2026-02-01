@@ -5,6 +5,7 @@ Engine for Adaptive Group Sequential Design / Sample Size Re-estimation.
 import numpy as np
 from scipy import stats
 
+import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.GST import Protocol
 from earlysign.schema.ES3.GST.Log import (
     AdaptationLog,
@@ -149,6 +150,10 @@ class ConditionalPowerAdaptationEngine:
         return AdaptationLog(
             look=result.look or 1,
             conditional_power=cp,
+            z_stat=result.z_stat,
+            info_frac=result.info_frac,
+            assumed_effect=assumed_effect,
+            final_efficacy_bound=final_efficacy_bound,
             promising_zone_status=status,
             promising_zone_recommendation=rec,
             original_sample_size=getattr(
@@ -165,7 +170,7 @@ class ConditionalPowerAdaptationEngine:
     ) -> Protocol:
         """
         Returns a NEW Protocol with updated max_sample_size to achieve target CP.
-        This uses the Cui-Hung-Wang method (implied) or simple CP inversion.
+        This uses the Cui-Hung-Wang method for Sample Size Re-estimation.
         """
         # Deep copy protocol to avoid mutation
         new_protocol = protocol.model_copy(deep=True)
@@ -174,21 +179,83 @@ class ConditionalPowerAdaptationEngine:
         if adaptation_log.promising_zone_status != PromisingZoneStatus.PROMISING:
             return new_protocol
 
-        # Increase N_max such that CP becomes target_cp.
+        # Extract parameters for inversion
+        z_t = adaptation_log.z_stat
+        t = adaptation_log.info_frac
+        theta = adaptation_log.assumed_effect
+        c = adaptation_log.final_efficacy_bound
+        n_old = adaptation_log.original_sample_size
 
-        current_n = adaptation_log.original_sample_size
-        multiplier = 1.0
+        if (
+            z_t is None
+            or t is None
+            or theta is None
+            or c is None
+            or n_old is None
+            or t >= 1.0
+            or theta <= 0
+        ):
+            return new_protocol
 
-        if adaptation_log.conditional_power > 0:
-            multiplier = target_cp / adaptation_log.conditional_power
+        # Type narrowing: After the `if` check, these are guaranteed to be non-None.
+        # However, mypy might still complain about `Optional[float]` being used as `float`.
+        # Explicitly cast or reassign to ensure type checkers are happy.
+        z_t_val: float = z_t
+        t_val: float = t
+        theta_val: float = theta
+        c_val: float = c
+        n_old_val: int = n_old
 
-        # Limit multiplier
-        multiplier = min(multiplier, 2.0)  # Cap at 2x
-        multiplier = max(multiplier, 1.0)
+        # Cui-Hung-Wang / CP Inversion Logic:
+        # We want P(sqrt(t)Z_t + sqrt(1-t)Z_rem\' >= c) = target_cp
+        # Z_rem\' ~ N(theta * sqrt(r(1-t)), 1)
+        # Solve for r (inflation factor for remaining sample size)
 
-        new_n = int(current_n * multiplier)
+        # Z_needed from remaining data (independent of r) to reach c
+        z_needed_rem = (c_val - np.sqrt(t_val) * z_t_val) / np.sqrt(1 - t_val)
+
+        # z_target = stats.norm.ppf(target_cp)
+        # Equation: theta * sqrt(r) * sqrt(1-t) = z_needed_rem + z_target
+        z_target = stats.norm.ppf(target_cp)
+        numerator = z_needed_rem + z_target
+
+        if numerator <= 0:
+            # Already reaching target cp or boundary impossible
+            return new_protocol
+
+        # sqrt(r) = numerator / (theta * np.sqrt(1 - t))
+        r = (numerator / (theta_val * np.sqrt(1 - t_val))) ** 2
+
+        # New max sample size
+        # N_new = N_look + r * N_rem = t * n_old + r * (1-t) * n_old
+        new_n_float = (t_val + r * (1 - t_val)) * n_old_val
+        new_n = int(np.ceil(new_n_float))
+
+        # Constraints (Regulatory/Practical)
+        # Often SSR is capped (e.g., at 2x or 4x the original n_max).
+        # We respect the inflation_cap from the protocol spec if provided.
+        inflation_cap = 4.0  # Default if not specified
+        if (
+            protocol.method.adaptation
+            and hasattr(protocol.method.adaptation, "inflation_cap")
+            and protocol.method.adaptation.inflation_cap is not None
+        ):
+            inflation_cap = protocol.method.adaptation.inflation_cap
+        elif protocol.method.adaptation and hasattr(
+            protocol.method.adaptation, "inflation_cap"
+        ):
+            # If explicitly None in spec, we disable the cap by setting it to infinity
+            inflation_cap = float("inf")
+
+        new_n = min(new_n, int(np.ceil(inflation_cap * n_old_val)))
+        new_n = max(new_n, n_old_val)
 
         if hasattr(new_protocol.method.stopping_policy.timer, "max_sample_size"):
             new_protocol.method.stopping_policy.timer.max_sample_size = new_n
+
+        # Attach snapshot for Type I error preservation (Weighted Z-Ratio)
+        new_protocol.method.adaptation_snapshot = GST.AdaptationSnapshot(
+            z_t=z_t_val, info_frac=t_val, original_max_sample_size=n_old_val
+        )
 
         return new_protocol

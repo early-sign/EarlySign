@@ -6,9 +6,9 @@ from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import Protocol, SequentialQuantileMethodSpec, TaskSpec
 from earlysign.schema.ES3.AVI.Log import SequentialQuantileLookResult
 from earlysign.schema.ES3.SequentialQuantile import ArmMetrics, ArmStatus, Scoreboard
+from earlysign.v1.framework.entity import SimpleSequentialEntity
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.simple_sequential_entity import SimpleSequentialEntity
 from earlysign.v1.methods.AVI.engines.sequential_quantile import (
     SequentialQuantileEngine,
 )
