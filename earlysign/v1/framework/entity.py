@@ -98,7 +98,7 @@ class Entity(BaseEntity[T], ABC):
         Return the initial (identity) state for the entity.
         This state is used when no snapshots or events exist.
         """
-        pass
+        ...
 
     @abstractmethod
     def compute(
@@ -109,16 +109,8 @@ class Entity(BaseEntity[T], ABC):
     ) -> ProjectionResult[T]:
         """
         Implemented by subclasses to perform the actual folding.
-
-        Args:
-            snapshot: The latest cached snapshot (or None if first computation)
-            delta_expr: Events since the snapshot
-            full_table: The complete event table
-
-        Returns:
-            ProjectionResult containing the computed state and its trace
         """
-        pass
+        ...
 
     def project(self, table: ibis.Expr) -> ProjectionResult[T]:
         """

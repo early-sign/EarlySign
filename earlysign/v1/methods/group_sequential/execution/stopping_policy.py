@@ -1,13 +1,6 @@
-"""
-Group-sequential stopping policy (EarlySign v1).
-
-This module defines the execution-layer StoppingPolicy and its factory,
-which translate abstract ES3 policy specifications into concrete
-spending strategies and boundary properties.
-"""
-
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol, Tuple
+from typing import Any, Optional, Protocol, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -36,18 +29,32 @@ class BoundarySolver(Protocol):
 
 
 @dataclass(frozen=True, kw_only=True)
-class StoppingPolicy:
+class StoppingPolicy(ABC):
     """Abstract base class for execution-layer Stopping Logic."""
 
     sided: str = "two"
     alpha_binding: bool = True
     beta_binding: bool = False
 
+    @abstractmethod
     def solve(
         self, model: BoundarySolver
     ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
         """Solve for boundaries given the model context."""
-        raise NotImplementedError("Subclasses must implement solve()")
+        ...
+
+    @abstractmethod
+    def get_boundary(
+        self,
+        model: Any,
+        look_index: int,
+        info_time: float,
+        rule_type: str = "efficacy",
+    ) -> Optional[float]:
+        """
+        Compute boundary at a specific look and information time.
+        """
+        ...
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -60,7 +67,7 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
     def solve(
         self, model: BoundarySolver
     ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
-        # Returns None to signal fallback to the Model's default (Spending) solver
+        # Implementation in Model/Engine for spending functions
         return None, None
 
 
