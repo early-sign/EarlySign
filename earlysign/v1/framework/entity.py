@@ -287,16 +287,79 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
     ) -> S:
         """
         Compute the state at a specific index in the trajectory.
-
-        Args:
-            index: The sequential index (e.g., look number)
-            prev_state: The state at the previous index (or None for index 0)
-            delta_expr: Events relevant to this step
-
-        Returns:
-            The state at this index
         """
-        pass
+        ...
+
+    def compute(
+        self,
+        snapshot: Optional[Snapshot[List[Tuple[Index, S]]]],
+        delta_expr: ibis.Expr,
+        full_table: ibis.Expr,
+    ) -> ProjectionResult[List[Tuple[Index, S]]]:
+        """
+        Incremental fold for sequential trajectories.
+
+        If a snapshot exists, it resumes from the latest index.
+        Otherwise, it builds the trajectory from scratch (index 0).
+        """
+        trajectory: List[Tuple[Index, S]] = []
+        if snapshot:
+            trajectory = list(snapshot.data)
+
+        # 1. Identify all sequential indices present in the full_table
+        try:
+            # Identify unique indices using the overridable expression
+            idx_expr = self.get_index_expr(full_table)
+            indices_expr = (
+                full_table.filter(idx_expr.notnull())
+                .select(idx=idx_expr)
+                .distinct()
+                .order_by("idx")
+            )
+
+            all_indices = [
+                cast(Index, row.idx) for row in indices_expr.execute().itertuples()
+            ]
+
+            # Post-processing: If the backend returned quoted strings (common in JSON), normalize to string
+            if all_indices and isinstance(all_indices[0], str):
+                all_indices = [
+                    cast(Index, str(idx)) for idx in all_indices if idx
+                ]
+                try:
+                    # Try to sort numerically if they look like numbers
+                    all_indices.sort(key=lambda x: float(x))
+                except (ValueError, TypeError):
+                    all_indices.sort()
+
+        except Exception:
+            # Fallback for entities that don't use this specific attribute-based indexing
+            # Subclasses can override compute() if they have a custom index discovery.
+            raw_trajectory = self.project_trajectory(full_table)
+            data = [(idx, pr.data) for idx, pr in raw_trajectory]
+            trace = [t for _, pr in raw_trajectory for t in pr.trace]
+            return ProjectionResult(data=data, trace=trace)
+
+        # 2. Fold: Compute state for each missing or new index
+        current_indices = {idx for idx, _ in trajectory}
+        prev_state: Optional[S] = trajectory[-1][1] if trajectory else None
+
+        for idx in all_indices:
+            if idx not in current_indices:
+                # Filter delta_expr specifically for this index
+                # We use the expression for stable comparison
+                idx_expr = self.get_index_expr(full_table)
+                step_delta = full_table.filter(
+                    (idx_expr == str(idx)) | (idx_expr == f'"{idx}"')
+                )
+                state = self.compute_step(idx, prev_state, step_delta)
+                trajectory.append((idx, state))
+                prev_state = state
+            else:
+                # Update prev_state for the next iteration
+                prev_state = next(s for i, s in trajectory if i == idx)
+
+        return ProjectionResult(data=trajectory, trace=[])
 
     @property
     def latest(self) -> LatestStateProjector[Index, S]:

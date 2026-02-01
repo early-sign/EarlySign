@@ -1,6 +1,6 @@
 """Statistics and simulation helpers for T-distributions in group sequential tests."""
 
-from typing import Any, Optional, Tuple, cast
+from typing import Optional, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -30,44 +30,44 @@ class CanonicalTProcess:
 
     def sample(
         self,
-        m_counts: NDArray[np.int64],
+        t: NDArray[np.float64],
         n_sims: int = 20000,
         drift: float = 0.0,
+        m_counts: Optional[NDArray[np.int64]] = None,
         p: int = 2,
+        rng: Optional[np.random.Generator] = None,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """Samples the joint sequence of (Z_k, T_k) statistics.
 
         Arguments:
-            m_counts: Cumulative sample size per treatment group at each look.
+            t: Information times (0 to 1).
             n_sims: Number of simulations.
             drift: Drift parameter for the Z-process.
+            m_counts: Optional raw cumulative sample size (if provided, t is derived).
             p: Parameters estimated (e.g., p=2 for 2-sample comparison).
+            rng: Optional RNG override.
 
         Returns:
             z_stats: (n_sims, k) array of standardized statistics.
             t_stats: (n_sims, k) array of T-statistics.
         """
-        k = len(m_counts)
+        gen = rng or self._rng
+        k = len(t)
+
+        # If m_counts not provided, derive from t vs max_n
+        # However, T-distribution dofs depend on actual N, so m_counts is preferred.
+        if m_counts is None:
+            # Fallback assuming t = m / max_m (unit info)
+            # This is an approximation if the actual max_m is unknown.
+            # Usually for T-dist we need actual n.
+            raise ValueError(
+                "m_counts (raw sample sizes) is required for CanonicalTProcess as dofs depends on n."
+            )
+
         m_inc = np.diff(m_counts, prepend=0)
-
-        # 1. Simulate the Z-process (canonical Gaussian process)
-        # Z_k = (B_A(m_k) - B_B(m_k)) / sqrt(2*m_k)
-        # Actually we can just simulate the increments of sum-of-normals
-        # increments of (X_Ai - X_Bi) ~ N(delta * 1, 2)
-        # We assume sigma=1 for canonical simulation.
-
-        # Delta contribution to sum: sum(inc) = drift * sqrt(m_K / 2) * (m_k / m_K)
-        # J&T definition: drift theta' = mu_delta * sqrt(I_max).
-        # For 2-sample, I = m / (2*sigma^2).
-
-        # Simplified: B_k ~ N(drift * m_k / m_K * sqrt(I_max), 2*m_k)
-        # Let's use the error increments directly.
-        # eps_sum_inc ~ N(0, 2 * m_inc)
-        # Total sum at look k = cumsum(eps_sum_inc) + delta * m_k
-
         delta = drift / np.sqrt(m_counts[-1] / 2.0)  # drift = delta * sqrt(I_max)
 
-        raw_diff_inc = self._rng.normal(0, np.sqrt(2 * m_inc), size=(n_sims, k))
+        raw_diff_inc = gen.normal(0, np.sqrt(2 * m_inc), size=(n_sims, k))
         cum_diff = np.cumsum(raw_diff_inc, axis=1) + delta * m_counts
 
         z_stats = cum_diff / np.sqrt(2 * m_counts)
@@ -77,11 +77,8 @@ class CanonicalTProcess:
         dofs = p * m_counts - p  # e.g. 2*m - 2
         dof_inc = np.diff(dofs, prepend=0)
 
-        # We need to handle the case where the first dof is very small.
-        # But for simulation, chisquare(nu) requires nu > 0.
-        # If dofs[0] is 1, it's fine.
         q_stats = np.cumsum(
-            self._rng.chisquare(np.maximum(dof_inc, 1e-9), size=(n_sims, k)), axis=1
+            gen.chisquare(np.maximum(dof_inc, 1e-9), size=(n_sims, k)), axis=1
         )
         s2_ratio = q_stats / dofs
 
@@ -91,23 +88,24 @@ class CanonicalTProcess:
 
     def compute_stopping_probabilities(
         self,
-        m_counts: NDArray[np.int64],
-        upper: NDArray[np.float64],
-        lower: NDArray[np.float64],
+        t: NDArray[np.float64],
+        upper: Optional[NDArray[np.float64]] = None,
+        lower: Optional[NDArray[np.float64]] = None,
         n_sims: int = 20000,
         drift: float = 0.0,
         seed: Optional[int] = None,
-        t: Optional[Any] = None,  # For protocol compatibility
+        m_counts: Optional[NDArray[np.int64]] = None,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """Compute stopping probabilities for efficacy and futility.
 
         Args:
-            m_counts: Cumulative sample sizes.
+            t: Information times.
             upper: Upper boundaries (efficacy).
             lower: Lower boundaries (futility).
             n_sims: Number of simulations.
             drift: Standardized drift.
-            seed: RNG seed.
+            seed: RNG seed for reproducibility.
+            m_counts: Raw sample sizes (required for T-distribution).
 
         Returns:
             Tuple of (prob_stop_efficacy, prob_stop_futility).
@@ -115,10 +113,13 @@ class CanonicalTProcess:
         # Use localized RNG sequence if seed provided
         gen = np.random.default_rng(seed) if seed is not None else self._rng
 
+        u_arr = upper if upper is not None else np.full(len(t), np.inf)
+        l_arr = lower if lower is not None else np.full(len(t), -np.inf)
+
         # CanonicalTProcess uses self._rng in sample, so we instantiate a new one with the specific seed.
         proc = CanonicalTProcess(rng=gen)
 
-        _, t_samples = proc.sample(m_counts, n_sims=n_sims, drift=drift)
+        _, t_samples = proc.sample(t, n_sims=n_sims, drift=drift, m_counts=m_counts)
 
         k = t_samples.shape[1]
         stopped = np.zeros(n_sims, dtype=bool)
@@ -127,12 +128,12 @@ class CanonicalTProcess:
 
         for i in range(k):
             # Check upper crossing
-            cross_u = (t_samples[:, i] > upper[i]) & ~stopped
+            cross_u = (t_samples[:, i] > u_arr[i]) & ~stopped
             prob_eff[i] = np.mean(cross_u)
             stopped |= cross_u
 
             # Check lower crossing
-            cross_l = (t_samples[:, i] < lower[i]) & ~stopped
+            cross_l = (t_samples[:, i] < l_arr[i]) & ~stopped
             prob_fut[i] = np.mean(cross_l)
             stopped |= cross_l
 

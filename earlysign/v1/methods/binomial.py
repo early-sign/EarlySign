@@ -51,14 +51,14 @@ class Scoreboard(Entity[ScoreboardSchema]):
         # Simple iteration for prototype:
         batch_df = batch_table.select(
             "uuid",
-            arm=batch_table.payload["arm"].cast("string").re_replace('^"|"$', ""),
+            "payload",
             n=is_arm_data.ifelse(batch_table.payload["n"], 1).cast("int"),
             success=batch_table.payload["success"].cast("int"),
         ).execute()
 
         # 3. Aggregate deltas into current_arms
         for _, row in batch_df.iterrows():
-            arm_name = row["arm"]
+            arm_name = row["payload"]["arm"]
             if arm_name not in current_arms:
                 current_arms[arm_name] = ArmStatus(
                     metrics=ArmMetrics(n=0, successes=0, p_hat=0.0),

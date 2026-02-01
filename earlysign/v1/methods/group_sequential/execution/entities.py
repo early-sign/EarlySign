@@ -26,6 +26,38 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     - z_stat: the test statistic
     - efficacy_boundary / futility_boundary: decision thresholds
     - status: continue, stop_efficacy, stop_futility, etc.
+
+    Examples
+    --------
+    >>> from earlysign.core.ledger import Ledger
+    >>> from earlysign.v1.framework.session import Session
+    >>> from earlysign.v1.methods.group_sequential.execution.entities import LookResult
+    >>> import ibis, duckdb
+    >>> con = ibis.duckdb.connect(":memory:")
+    >>> ledger = Ledger(con, "events"); ledger.ensure()
+    >>> analyses = InterimAnalyses("my-trial")
+    >>> # Verify initial state
+    >>> with Session(ledger) as sess:
+    ...     trajectory = sess.Read(analyses)
+    >>> trajectory.data
+    []
+    >>> # Simulate a look result
+    >>> res = LookResult(look=1, sample_n=50, info_frac=0.5, z_stat=1.5,
+    ...                  efficacy_boundary=2.5, futility_boundary=0.0,
+    ...                  is_efficacy_crossed=False, is_futility_crossed=False,
+    ...                  status="continue")
+    >>> with Session(ledger) as sess:
+    ...     sess.Commit(res, identity="my-trial")
+    >>> # Read trajectory back
+    >>> with Session(ledger) as sess:
+    ...     trajectory = sess.Read(analyses)
+    >>> len(trajectory.data)
+    1
+    >>> look_number, state = trajectory.data[0]
+    >>> look_number
+    1
+    >>> state.z_stat
+    1.5
     """
 
     state_type: Type[LookResult] = LookResult

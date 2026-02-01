@@ -5,10 +5,14 @@ from pydantic import BaseModel
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
 from earlysign.v1.framework.session import Session
-from earlysign.v1.methods.anytime_valid.protocol import EProcessProtocol
-from earlysign.v1.methods.anytime_valid.report import (
-    MonitoringFinalProjector,
-    MonitoringProgressProjector,
+from earlysign.v1.methods.AVI import BinomialEValueEngine
+from earlysign.v1.methods.AVI.engines.binomial_e_value import (
+    EProcessProtocol,
+    compute_binomial_e_value,
+)
+from earlysign.v1.methods.AVI.reporting import (
+    BinomialEValueFinalProjector,
+    BinomialEValueProgressProjector,
 )
 from earlysign.v1.templates.base import TemplateBase
 
@@ -36,6 +40,33 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
+    def update(self, batch: list[Any]) -> None:
+        """
+        Run update cycle with E-value check.
+        """
+        from earlysign.v1.framework.projector import ProtocolProjector
+        from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
+
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.Commit(item, trace=[])
+
+        with Session(self.ledger) as sess:
+            # 1. Read Protocol
+            protocol = sess.Read(ProtocolProjector(EProcessProtocol)).data
+
+            # 2. Read Metrics
+            metrics = sess.Read(BinomialScoreboard(identity="metrics"))
+
+            # 3. Run Engine
+            engine = BinomialEValueEngine(protocol)
+
+            # 4. Commit LookResult
+            # Note: We can use sess.CallAndCommit or just sess.Commit(engine.run(metrics.data))
+            look_result = engine.run(metrics.data)
+            sess.Commit(look_result)
+
     def report_progress(self) -> Dict[str, Any]:
         """
         Performs an e-check and returns the current progress report.
@@ -43,7 +74,7 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         """
         with Session(self.ledger) as sess:
             # 1. Read Report (Projector handles protocol and summary reconstruction internally)
-            traced_report = sess.Read(MonitoringProgressProjector())
+            traced_report = sess.Read(BinomialEValueProgressProjector())
             report = traced_report.data
 
             return report.model_dump(mode="json")
@@ -51,7 +82,9 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
-            return sess.Read(MonitoringFinalProjector()).data.model_dump(mode="json")
+            return sess.Read(BinomialEValueFinalProjector()).data.model_dump(
+                mode="json"
+            )
 
     def run_backtest(self, batches: Any) -> Dict[str, Any]:
         """
@@ -84,9 +117,6 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         import matplotlib.pyplot as plt
 
         from earlysign.v1.framework.projector import ProtocolProjector
-        from earlysign.v1.methods.anytime_valid.e_process import (
-            compute_binomial_e_value,
-        )
 
         # 1. Get Final Result & Protocol
         final_res = self.report_result()

@@ -229,6 +229,10 @@ class SampleSizeReestimationSpec(AdaptationSpec):
     method: Method
     target_power: float
     n_range: list[Any]
+    inflation_cap: float | None = Field(
+        4.0,
+        description="Maximum allowed inflation of the sample size (e.g., 4.0 for 4x). If null, no cap is applied.",
+    )
 
 
 class SampleSizeTimer(InformationTimerBase):

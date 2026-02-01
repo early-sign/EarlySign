@@ -68,27 +68,21 @@ class BinomialGSTEngine:
         Public helper to project a boundary for a given look and information time.
         Useful for design and visualization.
         """
-        # Note: This implementation assumes look_index aligns with the model's schedule.
-        # If info_time deviates significantly from the schedule, this might be inaccurate
-        # for spending designs that depend on exact info time.
-        # However, for the Engine execution, we typically look up by index.
+        # Note:
+        # - Index-based designs (OBF, Pocock, etc.): Anchored to look_index.
+        #   Assumes equidistant looks as per standard software defaults.
+        # - Time-based designs (Spending, Whitehead): Follow actual info_time.
+        #   Maintains statistical integrity if analysis timing varies.
 
         if look_index < 0:
             return None
 
-        if rule_type == "efficacy":
-            if self.efficacy_boundaries is not None and look_index < len(
-                self.efficacy_boundaries
-            ):
-                return float(self.efficacy_boundaries[look_index])
-
-        elif rule_type == "futility":
-            if self.futility_boundaries is not None and look_index < len(
-                self.futility_boundaries
-            ):
-                return float(self.futility_boundaries[look_index])
-
-        return None
+        return self.stopping_policy.get_boundary(
+            model=self,
+            look_index=look_index,
+            info_time=info_time,
+            rule_type=rule_type,
+        )
 
     def run(self, metrics: Scoreboard, **kwargs: Any) -> LookResult:
         """
@@ -137,6 +131,25 @@ class BinomialGSTEngine:
             se = np.sqrt(p_pool * (1 - p_pool) * (1 / n_c + 1 / n_t))
             if se > 0:
                 z_stat = (summary_t.p_hat - summary_c.p_hat) / se
+
+        # 1.1 Support Weighted Z-Ratio (Cui-Hung-Wang) if adaptation occurred
+        snapshot = self.protocol.method.adaptation_snapshot
+        if (
+            snapshot
+            and cumulative_n > snapshot.info_frac * snapshot.original_max_sample_size
+        ):
+            t = snapshot.info_frac
+            n_look_t = t * snapshot.original_max_sample_size
+            z_t = snapshot.z_t
+
+            if cumulative_n > n_look_t:
+                # Z_rem = (Z_total * sqrt(n_total) - Z_t * sqrt(n_t)) / sqrt(n_total - n_t)
+                # Weighted Z = sqrt(t)*Z_t + sqrt(1-t)*Z_rem
+                z_rem = (
+                    z_stat * np.sqrt(cumulative_n) - z_t * np.sqrt(n_look_t)
+                ) / np.sqrt(cumulative_n - n_look_t)
+                z_weighted = np.sqrt(t) * z_t + np.sqrt(1 - t) * z_rem
+                z_stat = z_weighted
 
         # 2. Determine Look
         look_idx = -1

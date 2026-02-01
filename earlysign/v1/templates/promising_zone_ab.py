@@ -66,11 +66,11 @@ from earlysign.schema.ES3.GST.Log import (
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.binomial import Scoreboard
-from earlysign.v1.methods.group_sequential.adaptation.engine import (
-    ConditionalPowerAdaptationEngine,
-)
 from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 from earlysign.v1.methods.group_sequential.execution.entities import InterimAnalyses
+from earlysign.v1.methods.group_sequential.execution.sample_size_reestimation import (
+    ConditionalPowerAdaptationEngine,
+)
 from earlysign.v1.methods.group_sequential.plan.protocol_design import ProtocolDesigner
 from earlysign.v1.methods.group_sequential.reporting.projectors import (
     FinalProjector,
@@ -211,8 +211,10 @@ class PromisingZoneABTemplate(TemplateBase[PromisingZoneABProtocol]):
                 assumed_effect = self._get_assumed_effect(protocol)
 
                 # Conditional Power (CP) is the probability of the trial being
-                # successful at the FINAL look. Thus, we must compare against
-                # the boundary of the final look specifically.
+                # successful at the FINAL look. Since Group Sequential boundaries
+                # (like O'Brien-Fleming) are more stringent at early looks, using
+                # the current boundary would underestimate CP. We must compare
+                # the predicted final result against the final boundary.
                 final_look_idx = len(engine._points) - 1
                 final_efficacy_bound = engine.get_boundary_at_look(
                     final_look_idx, 1.0, "efficacy"
@@ -254,26 +256,40 @@ class PromisingZoneABTemplate(TemplateBase[PromisingZoneABProtocol]):
                         sess.Commit(new_proto_wrapper)
 
     def _get_assumed_effect(self, protocol: PromisingZoneABProtocol) -> float:
-        """Derives standardized drift (delta) from protocol assumptions."""
+        """
+        Derives standardized drift (theta) from protocol assumptions.
+        This represents the effect size assumed for the remaining data.
+        """
         task = protocol.task
-        if not isinstance(task.hypotheses.target_effect, GST.BinaryEffectSize):
-            return 0.5  # Fallback
+        effect = task.hypotheses.target_effect
 
-        props = task.hypotheses.target_effect.proportions
-        # Assuming treatment and control keys exist or taking first two
+        if not hasattr(effect, "proportions") and hasattr(effect, "model_dump"):
+            # Fallback to dictionary if the object is missing fields due to base-class validation
+            effect_data = effect.model_dump()
+        else:
+            effect_data = effect
+
+        props = getattr(effect_data, "proportions", {}) or {}
+        if not props and isinstance(effect_data, dict):
+            props = effect_data.get("proportions", {})
+
         p_vals = list(props.values())
         if len(p_vals) < 2:
-            return 0.5
-        p_c = props.get("control", p_vals[0])
-        p_t = props.get("treatment", p_vals[1])
+            return 0.5  # Standard fallback
+
+        # We assume control/treatment or take the first two values
+        p_c = float(props.get("control", props.get("C", p_vals[0])))
+        p_t = float(props.get("treatment", props.get("T", p_vals[1])))
 
         delta = abs(p_t - p_c)
+        # Using control variance for standardization
         sigma2 = p_c * (1.0 - p_c)
         n_max = protocol.method.stopping_policy.timer.max_sample_size
 
-        # drift = delta * sqrt(n_max / (4 * sigma2))
         if sigma2 <= 0:
             return 0.5
+
+        # drift (theta) = delta * sqrt(original_n_max / (4 * sigma2))
         return float(delta * np.sqrt(n_max / (4.0 * sigma2)))
 
     def report_progress(self) -> Dict[str, Any]:

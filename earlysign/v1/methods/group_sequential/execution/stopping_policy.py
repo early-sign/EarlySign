@@ -70,12 +70,98 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
         # Implementation in Model/Engine for spending functions
         return None, None
 
+    def get_boundary(
+        self,
+        model: Any,
+        look_index: int,
+        info_time: float,
+        rule_type: str = "efficacy",
+    ) -> Optional[float]:
+        """
+        Time-based (Spending) Strategy: follow realized info_time via numerical search.
+        If info_time deviates from the planned t, we re-solve stage-by-stage.
+        """
+        engine = model
+        planned_t = engine._points[look_index]
+
+        # If very close to planned, use pre-calculated for speed
+        if abs(info_time - planned_t) < 1e-5:
+            if rule_type == "efficacy":
+                if engine.efficacy_boundaries is not None and look_index < len(
+                    engine.efficacy_boundaries
+                ):
+                    return float(engine.efficacy_boundaries[look_index])
+            else:
+                if engine.futility_boundaries is not None and look_index < len(
+                    engine.futility_boundaries
+                ):
+                    return float(engine.futility_boundaries[look_index])
+
+        # Otherwise, re-solve using history and spending function
+        sf = (
+            self.efficacy_spending
+            if rule_type == "efficacy"
+            else self.futility_spending
+        )
+        if sf is None:
+            return None
+
+        target = float(sf.cumulative(np.asarray([info_time]))[0])
+        history_t = engine._points[:look_index]
+        eff_hist = (
+            engine.efficacy_boundaries[:look_index]
+            if engine.efficacy_boundaries is not None
+            else None
+        )
+        fut_hist = (
+            engine.futility_boundaries[:look_index]
+            if engine.futility_boundaries is not None
+            else None
+        )
+
+        return cast(
+            Optional[float],
+            engine.canonical_model.solve_next_boundary(
+                previous_times=history_t,
+                current_t=info_time,
+                target_cumulative_prob=target,
+                previous_efficacy=eff_hist,
+                previous_futility=fut_hist,
+                rule_type=rule_type,
+                drift=1.0,  # Standard drift used for futility solving (usually solved at init)
+            ),
+        )
+
 
 @dataclass(frozen=True, kw_only=True)
 class BoundaryFunctionStoppingPolicy(StoppingPolicy):
-    """Base class for Shape-based boundary policies."""
+    """
+    Index-based boundary policies.
+    These designs assume equidistant looks and are defined by the look index number.
+    """
 
-    pass
+    def get_boundary(
+        self,
+        model: Any,
+        look_index: int,
+        info_time: float,
+        rule_type: str = "efficacy",
+    ) -> Optional[float]:
+        """
+        Index-based lookup: anchors to the pre-calculated boundary for the current look_index.
+        """
+        engine = model
+        if rule_type == "efficacy":
+            if engine.efficacy_boundaries is not None and look_index < len(
+                engine.efficacy_boundaries
+            ):
+                return float(engine.efficacy_boundaries[look_index])
+        elif rule_type == "futility":
+            if engine.futility_boundaries is not None and look_index < len(
+                engine.futility_boundaries
+            ):
+                return float(engine.futility_boundaries[look_index])
+        return None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -83,21 +169,22 @@ class OBrienFlemingStoppingPolicy(BoundaryFunctionStoppingPolicy):
     """O'Brien-Fleming shape-based stopping policy."""
 
     alpha: float
+    _c: Optional[float] = None  # Internal cache for the solved constant
 
     def solve(
         self, model: BoundarySolver
     ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
         t = model.info_times
-        # Defined shape: 1/sqrt(t)
         with np.errstate(divide="ignore"):
             shape = 1.0 / np.sqrt(t)
-        shape[t <= 0] = 1e6  # Handle t=0
-
-        # Policy delegates solving "c" to the model
+        shape[t <= 0] = 1e6
         c = model.find_critical_value(shape, self.alpha)
-
+        # Store c for internal reference
+        object.__setattr__(self, "_c", c)
         a = c * shape
         return a, None
+
+    # Inherits get_boundary (index-based lookup) from BoundaryFunctionStoppingPolicy
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -105,18 +192,19 @@ class PocockStoppingPolicy(BoundaryFunctionStoppingPolicy):
     """Pocock shape-based stopping policy."""
 
     alpha: float
+    _c: Optional[float] = None
 
     def solve(
         self, model: BoundarySolver
     ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
         t = model.info_times
-        # Defined shape: 1.0 (constant)
         shape = np.ones_like(t)
-
         c = model.find_critical_value(shape, self.alpha)
-
+        object.__setattr__(self, "_c", c)
         a = c * shape
         return a, None
+
+    # Inherits get_boundary (index-based lookup) from BoundaryFunctionStoppingPolicy
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -137,53 +225,43 @@ class WhiteheadStoppingPolicy(BoundaryFunctionStoppingPolicy):
     def solve(
         self, model: "BoundarySolver"
     ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
-        from scipy.stats import norm
-
         t = model.info_times
+        a, b = self._calculate(t)
+        return a, b
 
-        # Whitehead's analytical formulas (Jennison & Turnbull, Chapter 4)
-        # For one-sided triangular test:
-        # a = (z_alpha + z_beta) / 2  (intersection point at V=0)
-        # slope derived from alpha/beta requirements
+    def _calculate(
+        self, t: NDArray[np.float64]
+    ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+        from scipy.stats import norm
 
         z_alpha = norm.ppf(1 - self.alpha)
         z_beta = norm.ppf(1 - self.beta)
-
-        # Whitehead approximation parameters
-        # The boundaries are linear in sqrt(information)
-        # Upper: a(t) = a0 + slope_upper * sqrt(t)
-        # Lower: b(t) = -a0 + slope_lower * sqrt(t)
-        # where a0 and slopes are derived from error requirements
-
-        # Simplified Whitehead formulas (one-sided):
-        # For equal monitoring, the triangular boundaries are approximately:
         a0 = (z_alpha + z_beta) / 2
-
-        # Upper boundary (efficacy): starts high, decreases
-        # a(t) = a0 / sqrt(t) + drift_effect
-        # Lower boundary (futility): starts low, increases
-
-        # For the canonical form (Z-statistic scale):
-        # Upper: a(V) = a0 * (1 + 3*V) / sqrt(V)  approximately
-        # Lower: b(V) = a0 * (-1 + 3*V) / sqrt(V) approximately
-
-        # But more precisely, using Whitehead (1997) form:
-        # Upper: Z = a0 + c_upper * V
-        # Lower: Z = -a0 + c_lower * V
-        # where V is information fraction and c values depend on error rates
-
-        # Using the classic triangular test formulation:
-        # a(V) = a0 * (1 / sqrt(V) + 3 * sqrt(V)) for efficacy
-        # b(V) = a0 * (-1 / sqrt(V) + 3 * sqrt(V)) for futility
-
         sqrt_t = np.sqrt(np.maximum(t, 1e-10))
         inv_sqrt_t = 1.0 / sqrt_t
-
-        # Triangular boundaries (Whitehead-Stratton form)
         a = a0 * (inv_sqrt_t + 3 * sqrt_t)
         b = a0 * (-inv_sqrt_t + 3 * sqrt_t)
-
         return a, b
+
+    def get_boundary(
+        self,
+        model: Any,
+        look_index: int,
+        info_time: float,
+        rule_type: str = "efficacy",
+    ) -> Optional[float]:
+        """
+        Time-based (Analytical) Strategy: follow realized info_time.
+        Whitehead Triangular boundaries are analytical and follow realized info_time
+        even without a spending search.
+        """
+        t_arr = np.asarray([info_time], dtype=float)
+        a_arr, b_arr = self._calculate(t_arr)
+        if rule_type == "efficacy":
+            return float(a_arr[0])
+        elif rule_type == "futility":
+            return float(b_arr[0])
+        return None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -192,6 +270,7 @@ class WangTsiatisStoppingPolicy(BoundaryFunctionStoppingPolicy):
 
     alpha: float
     delta: float
+    _c: Optional[float] = None
 
     def solve(
         self, model: BoundarySolver
@@ -205,9 +284,12 @@ class WangTsiatisStoppingPolicy(BoundaryFunctionStoppingPolicy):
             shape[t <= 0] = 1e6
 
         c = model.find_critical_value(shape, self.alpha)
+        object.__setattr__(self, "_c", c)
 
         a = c * shape
         return a, None
+
+    # Inherits get_boundary (index-based lookup) from BoundaryFunctionStoppingPolicy
 
 
 class StoppingPolicyFactory:

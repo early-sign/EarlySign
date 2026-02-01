@@ -60,56 +60,48 @@ class mSPRTEngine:
                 status=DecisionStatus.CONTINUE_,
             )
 
-        # Assuming equal sample sizes (or close to equal) for this logic.
-        # We use the average sample size per group for calculation.
-
-        n_group = (n_c + n_t) / 2.0
         n_total = n_c + n_t
 
         if isinstance(metrics, BinomialScoreboard):
             val_c = metrics.arms[control_key].metrics.p_hat
             val_t = metrics.arms[treatment_key].metrics.p_hat
+            # Variance estimation: p(1-p)
+            var_c = val_c * (1 - val_c)
+            var_t = val_t * (1 - val_t)
         else:
             val_c = metrics.arms[control_key].metrics.mean
             val_t = metrics.arms[treatment_key].metrics.mean
+            # Continuous sample variance
+            var_c = metrics.arms[control_key].metrics.variance or 1.0  # Fallback
+            var_t = metrics.arms[treatment_key].metrics.variance or 1.0
 
         estimate = val_t - val_c
-
         alpha = self._get_alpha_adjusted()
-        effect_size = self.method.mde
 
-        # V = 2 * sigma2 / (n_group) = 4 * sigma2 / n_total
-        # This matches the variance of difference in means for two groups of size n_group.
-        rho_param = 0.5
+        # Information-based calculation (Always-Valid CS)
+        # Robustly handles unequal n_c and n_t.
+        # Var(diff) = var_c/n_c + var_t/n_t
+        var_diff = (
+            (var_c / n_c) + (var_t / n_t) if (n_c > 0 and n_t > 0) else float("inf")
+        )
+        if var_diff == 0:  # Degenerate case with no variance
+            var_diff = 1e-10
 
-        # Variance estimation
-        sigma2 = self.method.variance
-        if sigma2 is None:
-            # Estimate variance from data (Maharaj et al., 2023)
-            # Use pooled variance estimate as effective variance for the difference
-            if isinstance(metrics, BinomialScoreboard):
-                # Binomial approximation: Var(X) ~ p(1-p)
-                var_c = val_c * (1 - val_c)
-                var_t = val_t * (1 - val_t)
-            else:
-                # Continuous sample variance
-                var_c = metrics.arms[control_key].metrics.variance
-                var_t = metrics.arms[treatment_key].metrics.variance
+        info = 1.0 / var_diff
 
-            sigma2_effective = (var_c + var_t) / 2.0
-            sigma2 = sigma2_effective
+        # tau: Prior mixing standard deviation.
+        # We use the Target Effect Size (MDE) as a proxy for the optimal tau.
+        tau = self.method.mde
+        if tau <= 0:
+            tau = 0.05  # Sensible fallback for mSPRT
 
-        V = 2 * sigma2 / n_group
-
-        # phi: Parameter ~ 1/relative_effect_size^2
-        # We use the Target Effect Size (MDE) to calculate phi.
-
-        phi = sigma2 / (effect_size**2 * rho_param * (1 - rho_param))
+        phi = 1.0 / (tau**2)  # Prior precision (information)
 
         # Calculate Confidence Interval (Boundary)
-
-        term_log = np.log((phi + n_total) / (phi * alpha**2))
-        ci = np.sqrt(V) * np.sqrt(term_log * (phi + n_total) / n_total)
+        # CS Boundary derived from mixture Likelihood Ratio (Robbins 1970, Johari 2019)
+        # B = sqrt( 2 * V_diff * (1 + phi/I) * log( sqrt((I+phi)/phi) / alpha ) )
+        ratio = (info + phi) / phi
+        ci = np.sqrt(2 * var_diff * (1 + phi / info) * np.log(np.sqrt(ratio) / alpha))
 
         is_crossed = False
         if self.method.sides == "two":
@@ -122,8 +114,6 @@ class mSPRTEngine:
         status = DecisionStatus.CONTINUE_
         if is_crossed:
             status = DecisionStatus.STOP_EFFICACY
-
-        # Stop plan end reached check (if needed)
 
         return LookResult(
             sample_n=n_total,

@@ -34,7 +34,11 @@ def test_binomial_json_protocol():
             "kind": "superiority"
           },
           "target_effect": {
-            "type": "binary"
+            "type": "binary",
+            "proportions": {
+              "C": 0.09,
+              "T": 0.14
+            }
           }
         },
         "efficacy": {
