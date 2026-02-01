@@ -14,6 +14,7 @@ from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.v1.methods.YEAST.boundary import Boundary
 from earlysign.v1.methods.YEAST.engine import BinomialYEASTEngine, ContinuousYEASTEngine
 from earlysign.v1.methods.YEAST.reporting import FinalProjector, ProgressProjector
+from earlysign.v1.templates.base import TemplateBase
 
 
 class BinomialYeastTaskSpec(BaseModel):
@@ -38,23 +39,24 @@ class ContinuousYeastTaskSpec(BaseModel):
     hypotheses: Dict[str, Any]
 
 
-class BinomialYeastTemplate:
+class BinomialYeastTemplate(TemplateBase[Protocol]):
     """
     Template for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
     Standardized to use Session, Engine, and Projectors.
     """
+
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
     def set_protocol(self, protocol: Protocol) -> None:
         """
-        Persists the trial protocol to the ledger.
+        Persists the trial protocol to the ledger and calculates initial boundary.
         """
-        protocol = Protocol.model_validate(protocol)
+        super().set_protocol(protocol)
         with Session(self.ledger) as sess:
-            sess.Commit(protocol)
-
+            protocol = sess.Read(ProtocolProjector(Protocol)).data
             # Persist the initial boundary
             boundary_val = Boundary.calculate(protocol)
             sess.Commit(BoundarySchema(value=boundary_val))
@@ -131,22 +133,23 @@ class BinomialYeastTemplate:
             return sess.Read(FinalProjector()).data.model_dump(mode="json")
 
 
-class ContinuousYeastTemplate:
+class ContinuousYeastTemplate(TemplateBase[Protocol]):
     """
     Template for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
     """
+
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
     def set_protocol(self, protocol: Protocol) -> None:
         """
-        Persists the trial protocol to the ledger.
+        Persists the trial protocol to the ledger and calculates initial boundary.
         """
-        protocol = Protocol.model_validate(protocol)
+        super().set_protocol(protocol)
         with Session(self.ledger) as sess:
-            sess.Commit(protocol)
-
+            protocol = sess.Read(ProtocolProjector(Protocol)).data
             # Persist the initial boundary
             boundary_val = Boundary.calculate(protocol)
             sess.Commit(BoundarySchema(value=boundary_val))

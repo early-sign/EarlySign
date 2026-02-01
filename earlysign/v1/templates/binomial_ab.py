@@ -121,6 +121,7 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
+from earlysign.v1.templates.base import TemplateBase
 
 
 class BinomialABTaskSpec(GST.TaskSpec):
@@ -138,10 +139,15 @@ class BinomialABProtocol(GST.Protocol, AutoNameMixin):
     name: str = Field(default="")
 
 
-class BinomialABTemplate:
+class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
     """
     Standard orchestration for a Binomial A/B test using Group Sequential Design.
     """
+
+    _protocol_class = BinomialABProtocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
 
     @classmethod
     def design(
@@ -180,18 +186,6 @@ class BinomialABTemplate:
             task=task,
             method=method_spec,
         )
-
-    def __init__(self, ledger: Ledger):
-        self.ledger = ledger
-
-    def set_protocol(self, protocol: BinomialABProtocol) -> None:
-        """
-        Persists the trial protocol to the ledger.
-        """
-        # Validate against schema
-        protocol = BinomialABProtocol.model_validate(protocol)
-        with Session(self.ledger) as sess:
-            sess.Commit(protocol)
 
     def update(self, batch: List[BaseModel]) -> None:
         """

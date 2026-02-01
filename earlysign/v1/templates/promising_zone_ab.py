@@ -36,10 +36,10 @@ Usage
 >>> template.set_protocol(protocol)
 
 # 4. Simulate an interim look that lands in 'Promising Zone'
-# (Note: Z=1.0 at info_frac=0.5 is promising for this design)
+# (Note: Z=0.64 at n=250/arm is promising for this design)
 >>> batch = [
 ...     ArmData(arm="control", n=250, success=125),
-...     ArmData(arm="treatment", n=250, success=147)
+...     ArmData(arm="treatment", n=250, success=132)
 ... ]
 >>> template.update(batch)
 
@@ -48,7 +48,7 @@ Usage
 >>> progress["status"] == DecisionStatus.CONTINUE_
 True
 >>> progress["max_sample_size"]  # Increased from the original design
-1025
+1876
 """
 
 from typing import Any, Dict, List, Optional
@@ -79,6 +79,7 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
+from earlysign.v1.templates.base import TemplateBase
 
 
 class PromisingZoneABProtocol(GST.Protocol):
@@ -91,7 +92,7 @@ class PromisingZoneABProtocol(GST.Protocol):
 PromisingZoneABProtocol.model_rebuild()
 
 
-class PromisingZoneABTemplate:
+class PromisingZoneABTemplate(TemplateBase[PromisingZoneABProtocol]):
     """
     Orchestrator for Promising Zone Adaptive Designs (Cui-Hung-Wang).
 
@@ -100,6 +101,11 @@ class PromisingZoneABTemplate:
     2. If not stopped: Check Promising Zone.
     3. If Promising: Re-calculate Sample Size and UPDATE Protocol.
     """
+
+    _protocol_class = PromisingZoneABProtocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
 
     @classmethod
     def design_binomial(
@@ -170,15 +176,6 @@ class PromisingZoneABTemplate:
             method=method_spec,
         )
 
-    def __init__(self, ledger: Ledger):
-        self.ledger = ledger
-
-    def set_protocol(self, protocol: PromisingZoneABProtocol) -> None:
-        """Sets the initial protocol."""
-        protocol = PromisingZoneABProtocol.model_validate(protocol)
-        with Session(self.ledger) as sess:
-            sess.Commit(protocol)
-
     def update(self, batch: List[BaseModel]) -> None:
         """
         Run update cycle with Adaptation check.
@@ -213,9 +210,20 @@ class PromisingZoneABTemplate:
                 # Derive assumed effect from Protocol
                 assumed_effect = self._get_assumed_effect(protocol)
 
+                # Conditional Power (CP) is the probability of the trial being
+                # successful at the FINAL look. Thus, we must compare against
+                # the boundary of the final look specifically.
+                final_look_idx = len(engine._points) - 1
+                final_efficacy_bound = engine.get_boundary_at_look(
+                    final_look_idx, 1.0, "efficacy"
+                )
+
                 # Check Promising Zone
                 adaptation_log = ConditionalPowerAdaptationEngine.assess_promising_zone(
-                    look_result, protocol, assumed_effect=assumed_effect
+                    look_result,
+                    protocol,
+                    assumed_effect=assumed_effect,
+                    final_efficacy_bound=final_efficacy_bound,
                 )
 
                 sess.Commit(adaptation_log)

@@ -10,6 +10,7 @@ from earlysign.v1.methods.anytime_valid.report import (
     MonitoringFinalProjector,
     MonitoringProgressProjector,
 )
+from earlysign.v1.templates.base import TemplateBase
 
 # --- ES3 Protocol Manifest ---
 
@@ -25,20 +26,15 @@ class DecisionRecord(BaseModel):
     e_value: float
 
 
-class BinomialMonitoringTemplate:
+class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
     """
-    Safe testing / Continuous monitoring template using e-processes.
+    Template for real-time monitoring of a Binomial A/B test using e-processes.
     """
+
+    _protocol_class = EProcessProtocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
-
-    def set_protocol(self, protocol: EProcessProtocol) -> None:
-        """
-        Persists the monitoring protocol to the ledger.
-        """
-        with Session(self.ledger) as sess:
-            sess.Commit(protocol)
 
     def report_progress(self) -> Dict[str, Any]:
         """

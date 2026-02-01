@@ -12,6 +12,7 @@ from earlysign.v1.framework.simple_sequential_entity import SimpleSequentialEnti
 from earlysign.v1.methods.AVI.engines.sequential_quantile import (
     SequentialQuantileEngine,
 )
+from earlysign.v1.templates.base import TemplateBase
 
 
 class SequentialQuantileMetrics(SimpleSequentialEntity[int, ArmMetrics]):
@@ -60,7 +61,7 @@ class SequentialQuantileScoreboard:
         return ProjectionResult(data=Scoreboard(arms=arms), trace=all_trace)
 
 
-class SequentialQuantileTemplate:
+class SequentialQuantileTemplate(TemplateBase[Protocol]):
     """
     Template for Howard & Ramdas (2022) Sequential Quantile A/B Testing.
 
@@ -80,14 +81,10 @@ class SequentialQuantileTemplate:
     True
     """
 
+    _protocol_class = Protocol
+
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
-
-    def set_protocol(self, protocol: Protocol) -> None:
-        """Persists the trial protocol to the ledger."""
-        protocol = Protocol.model_validate(protocol)
-        with Session(self.ledger) as sess:
-            sess.Commit(protocol)
 
     @classmethod
     def design(

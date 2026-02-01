@@ -14,9 +14,10 @@ from earlysign.v1.methods.AVI import GAVIEngine, mSPRTEngine
 from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
+from earlysign.v1.templates.base import TemplateBase
 
 
-class Maharaj2023Template:
+class Maharaj2023Template(TemplateBase[Protocol]):
     """
     Template for Anytime-Valid Inference (AVI) following Maharaj et al. (2023).
 
@@ -94,16 +95,12 @@ class Maharaj2023Template:
         >>> report2["is_rejected"] = (report2["status"] == 'stop_efficacy')
         >>> report2["is_rejected"]
         True
-
     """
+
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
-
-    def set_protocol(self, protocol: Protocol) -> None:
-        protocol = Protocol.model_validate(protocol)
-        with Session(self.ledger) as sess:
-            sess.Commit(protocol)
 
     @classmethod
     def design_gavi(

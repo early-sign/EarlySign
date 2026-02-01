@@ -20,6 +20,17 @@ class AdaptationSpec(BaseModel):
     type: str
 
 
+class AdaptationSnapshot(BaseModel):
+    """
+    Captures the interim result at the point of adaptation.
+    Required for Type I error preservation (Weighted Z-Ratio).
+    """
+
+    z_t: float
+    info_frac: float
+    original_max_sample_size: int
+
+
 class DecisionStrategyBase(BaseModel):
     """
     Abstract Base for Decision Strategy.
@@ -102,7 +113,10 @@ class HypothesisSpec(BaseModel):
     h_null_description: str
     h_alt_description: str
     test_logic: HypothesisParameters
-    target_effect: EffectSizeSpec
+    target_effect: Annotated[
+        BinaryEffectSize | ContinuousEffectSize | SurvivalEffectSize,
+        Field(..., discriminator="type"),
+    ]
 
 
 class InformationTimerBase(BaseModel):
@@ -153,6 +167,7 @@ class MethodSpec(MethodSpec_1):
         ..., description="Stopping Policy (discriminated union)"
     )
     adaptation: AdaptationSpec | None = None
+    adaptation_snapshot: AdaptationSnapshot | None = None
 
 
 class NonInferiorityHypothesis(HypothesisParameters):
