@@ -12,6 +12,10 @@ from earlysign.schema.ES3.GST.Log import (
     LookResult,
     PromisingZoneStatus,
 )
+from earlysign.v1.methods.group_sequential.shared.design_utils import (
+    get_final_efficacy_boundary,
+    get_standardized_drift,
+)
 
 
 class ConditionalPowerAdaptationEngine:
@@ -88,34 +92,60 @@ class ConditionalPowerAdaptationEngine:
         cls,
         result: LookResult,
         protocol: Protocol,
-        assumed_effect: float,
-        final_efficacy_bound: float = 1.96,  # Should come from Design/Engine
         cp_threshold_min: float = 0.5,
         cp_threshold_max: float = 0.9,
     ) -> AdaptationLog:
         """
         Assess if the trial is in the 'Promising Zone' and recommend action.
 
-        Examples
-        --------
-        >>> from earlysign.schema.ES3.GST import Protocol
-        >>> # Mock objects
+        >>> from earlysign.schema.ES3.GST import (
+        ...     Protocol, MethodSpec, StoppingPolicySpec, OBrienFlemingStrategy,
+        ...     TaskSpec, HypothesisSpec, BinaryEffectSize, EquidistantSchedule,
+        ...     TwoArmBinomialZ, SampleSizeTimer, EqualityHypothesis,
+        ...     CanonicalGaussianModel
+        ... )
+        >>> from earlysign.v1.methods.group_sequential.execution.sample_size_reestimation import ConditionalPowerAdaptationEngine
+        >>> from earlysign.schema.ES3.GST.Log import LookResult
+        >>> # Mock results
         >>> res = LookResult(
-        ...     look=1, sample_n=50, info_frac=0.5, z_stat=1.5,
+        ...     look=1, sample_n=50, info_frac=0.5, z_stat=2.0,
         ...     is_efficacy_crossed=False, is_futility_crossed=False,
         ...     status="continue"
         ... )
-        >>> # Basic protocol mocking for doctest
-        >>> from unittest.mock import MagicMock
-        >>> p_mock = MagicMock()
-        >>> p_mock.method.stopping_policy.timer.max_sample_size = 100
+        >>> p = Protocol(
+        ...     name="Binomial SSR Protocol",
+        ...     task=TaskSpec(
+        ...         arms=["control", "treatment"],
+        ...         response_type="binary",
+        ...         hypotheses=HypothesisSpec(
+        ...             h_null_description="H0",
+        ...             h_alt_description="H1",
+        ...             test_logic=EqualityHypothesis(),
+        ...             target_effect=BinaryEffectSize(proportions={"control": 0.3, "treatment": 0.5})
+        ...         )
+        ...     ),
+        ...     method=MethodSpec(
+        ...         stopping_policy=StoppingPolicySpec(
+        ...             statistic=TwoArmBinomialZ(variance_estimation="pooled"),
+        ...             strategy=OBrienFlemingStrategy(
+        ...                 alpha=0.05, sided="two",
+        ...                 statistical_model=CanonicalGaussianModel()
+        ...             ),
+        ...             timer=SampleSizeTimer(unit="individuals", max_sample_size=100),
+        ...             schedule=EquidistantSchedule(n_looks=2)
+        ...         )
+        ...     )
+        ... )
         >>> # Logic test
         >>> log = ConditionalPowerAdaptationEngine.assess_promising_zone(
-        ...     res, p_mock, assumed_effect=1.0, final_efficacy_bound=1.96
+        ...     res, p
         ... )
         >>> log.promising_zone_status
         <PromisingZoneStatus.PROMISING: 'promising'>
         """
+        # Internalize stats derivation
+        theta = get_standardized_drift(protocol)
+        final_efficacy_bound = get_final_efficacy_boundary(protocol)
         # 1. Stop Check
         if result.is_efficacy_crossed:
             return AdaptationLog(
@@ -133,7 +163,7 @@ class ConditionalPowerAdaptationEngine:
             current_info_time=result.info_frac,
             final_info_time=1.0,
             final_efficacy_bound=final_efficacy_bound,
-            assumed_effect=assumed_effect,
+            assumed_effect=theta,
         )
 
         # 3. Categorize
@@ -150,10 +180,6 @@ class ConditionalPowerAdaptationEngine:
         return AdaptationLog(
             look=result.look or 1,
             conditional_power=cp,
-            z_stat=result.z_stat,
-            info_frac=result.info_frac,
-            assumed_effect=assumed_effect,
-            final_efficacy_bound=final_efficacy_bound,
             promising_zone_status=status,
             promising_zone_recommendation=rec,
             original_sample_size=getattr(
@@ -166,6 +192,7 @@ class ConditionalPowerAdaptationEngine:
         cls,
         protocol: Protocol,
         adaptation_log: AdaptationLog,
+        look_result: LookResult,
         target_cp: float = 0.9,
     ) -> Protocol:
         """
@@ -179,22 +206,14 @@ class ConditionalPowerAdaptationEngine:
         if adaptation_log.promising_zone_status != PromisingZoneStatus.PROMISING:
             return new_protocol
 
-        # Extract parameters for inversion
-        z_t = adaptation_log.z_stat
-        t = adaptation_log.info_frac
-        theta = adaptation_log.assumed_effect
-        c = adaptation_log.final_efficacy_bound
+        # Extract parameters for inversion from explicit arguments
+        z_t = look_result.z_stat
+        t = look_result.info_frac
+        theta = get_standardized_drift(protocol)
+        c = get_final_efficacy_boundary(protocol)
         n_old = adaptation_log.original_sample_size
 
-        if (
-            z_t is None
-            or t is None
-            or theta is None
-            or c is None
-            or n_old is None
-            or t >= 1.0
-            or theta <= 0
-        ):
+        if t >= 1.0 or theta <= 0:
             return new_protocol
 
         # Type narrowing: After the `if` check, these are guaranteed to be non-None.
