@@ -227,7 +227,7 @@ class BoundaryCalculator:
             family = efficacy.get("family", "obrien_fleming")
             params = dict(efficacy.get("params") or {})
             key = str(family).lower()
-            if key == "hsd" and "gamma" not in params:
+            if key == "hwang_shih_decani" and "gamma" not in params:
                 params["gamma"] = float(efficacy.get("gamma", -4.0))
 
             try:
@@ -298,7 +298,7 @@ class BoundaryCalculator:
             beta = float(params.get("beta", futility.get("beta", 0.10)))
 
             key = str(family).lower()
-            if key == "hsd" and "gamma" not in params:
+            if key == "hwang_shih_decani" and "gamma" not in params:
                 params["gamma"] = float(futility.get("gamma", -4.0))
 
             try:

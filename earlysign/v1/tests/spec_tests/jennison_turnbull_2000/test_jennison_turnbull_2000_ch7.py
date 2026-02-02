@@ -607,8 +607,8 @@ def when_compute_ros(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     try:
         r_os = brentq(f, 0.4, 4.0, xtol=1e-2)
     except Exception:
-        v04, v40 = f(0.4), f(4.0)
-        r_os = 0.4 if abs(v04) < abs(v40) else 4.0
+        f_low, f_high = f(0.4), f(4.0)
+        r_os = 0.4 if abs(f_low) < abs(f_high) else 4.0
     return {
         "R_OS": r_os,
         "i_fixed": i_fixed,
@@ -817,7 +817,7 @@ def then_check_final_power(results: Dict[str, Any], val: str, atol: str) -> None
 
 
 # ==============================================================================
-# Step definitions for Table 7.2 and Table 7.3 (ported from v0)
+# Step definitions for Table 7.2 and Table 7.3
 # ==============================================================================
 
 
