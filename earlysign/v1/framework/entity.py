@@ -278,6 +278,14 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
 
     snapshot_strategy: SnapshotStrategy = SnapshotStrategy.COLLECTIVE
 
+    def get_index_expr(self, table: ibis.Expr) -> ibis.Expr:
+        """
+        Return an Ibis expression for extracting the sequential index.
+
+        Default implementation extracts from attributes['look'] as a string.
+        """
+        return table.attributes[self.index_field].cast("string")
+
     @abstractmethod
     def compute_step(
         self,
@@ -321,14 +329,11 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
                 cast(Index, row.idx) for row in indices_expr.execute().itertuples()
             ]
 
-            # Post-processing: If the backend returned quoted strings (common in JSON), normalize to string
-            if all_indices and isinstance(all_indices[0], str):
-                all_indices = [
-                    cast(Index, str(idx)) for idx in all_indices if idx
-                ]
+            # Post-processing: Ensure indices are sorted correctly
+            if all_indices:
                 try:
-                    # Try to sort numerically if they look like numbers
-                    all_indices.sort(key=lambda x: float(x))
+                    # Try to sort numerically if they are numbers
+                    all_indices.sort(key=lambda x: float(cast(Any, x)))
                 except (ValueError, TypeError):
                     all_indices.sort()
 
@@ -347,11 +352,9 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         for idx in all_indices:
             if idx not in current_indices:
                 # Filter delta_expr specifically for this index
-                # We use the expression for stable comparison
+                # We use the raw value for comparison
                 idx_expr = self.get_index_expr(full_table)
-                step_delta = full_table.filter(
-                    (idx_expr == str(idx)) | (idx_expr == f'"{idx}"')
-                )
+                step_delta = full_table.filter(idx_expr == idx)
                 state = self.compute_step(idx, prev_state, step_delta)
                 trajectory.append((idx, state))
                 prev_state = state
@@ -548,8 +551,6 @@ class SimpleSequentialEntity(SequentialEntity[Index, S]):
         for i, row in ordered.iterrows():
             payload = row.get("payload", {})
             if isinstance(payload, str):
-                import json
-
                 payload = json.loads(payload)
 
             # Reconstruct the model instance
