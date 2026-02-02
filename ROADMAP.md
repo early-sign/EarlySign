@@ -1,24 +1,24 @@
 # Development Roadmap
 
 ## Version 1
-- [ ] Ledger system
+- [x] Ledger system
   - [x] Ledger
-  - [ ] BigQuery validation
+  - [x] BigQuery validation
   - [ ] Unit tests + explanatory notebooks
 - [x] EarlySign Standard Schema manifest (ES3)
   - [x] Code generator
   - [x] Base Schema
-- [ ] EarlySign development framework (CQRS-style)
-  - [ ] Writers
-  - [ ] Projectors
-  - [ ] Trace management
-  - [ ] Templates
-    - [ ] General backtest support
+- [x] EarlySign development framework (CQRS-style)
+  - [x] Writers
+  - [x] Projectors
+  - [x] Trace management
+  - [x] Templates
+    - [x] General backtest support
 
-- [ ] GST
-  - [ ] ES3 Schema
-  - [ ] Protocol Designer
-  - [ ] AB-test template
+- [x] GST
+  - [x] ES3 Schema
+  - [x] Protocol Designer
+  - [x] AB-test template
   - [ ] Behavior Test: Designer
   - [ ] Behavior Test: Execution
   - [ ] Examples with OCE bench (backtest + online usages)
@@ -42,10 +42,10 @@
   - [ ] AB-test template
   - [ ] Examples with OCE bench (backtest + online usages)
 
-- [ ] AVI
-  - [ ] ES3 Schema
-  - [ ] 1-sample Monitoring template
-  - [ ] 2-sample Regression Monitoring template
+- [x] AVI
+  - [x] ES3 Schema
+  - [x] 1-sample Monitoring template
+  - [x] 2-sample Regression Monitoring template
   - [ ] Examples with OCE bench (backtest + online usages)
 
 - [ ] CUSUM
