@@ -331,6 +331,106 @@ class CanonicalJointModel:
 
         return a, b
 
+    def solve_next_boundary(
+        self,
+        previous_times: Sequence[float],
+        current_t: float,
+        target_cumulative_prob: float,
+        previous_efficacy: Optional[Sequence[float]] = None,
+        previous_futility: Optional[Sequence[float]] = None,
+        rule_type: str = "efficacy",
+        drift: float = 0.0,
+    ) -> float:
+        """
+        Solve for the next boundary point given history and a cumulative probability target.
+        This enables true information-driven spending at arbitrary information times.
+        """
+        times = np.concatenate([np.asarray(previous_times), [current_t]])
+        k = len(times)
+        tails = self.config.tails
+
+        gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=self._rng)
+        gp_h1 = CanonicalGaussianProcess(drift=drift, rng=self._rng)
+
+        # Prepare boundary masks
+        eff = (
+            np.asarray(list(previous_efficacy) + [10.0])
+            if previous_efficacy is not None
+            else None
+        )
+        fut = (
+            np.asarray(list(previous_futility) + [-10.0])
+            if previous_futility is not None
+            else None
+        )
+
+        if rule_type == "efficacy":
+            if eff is None:
+                eff = np.full(k, 10.0)
+
+            # Efficacy binding logic (usually true)
+            # We want P(Cross eff or Cross fut_binding) = target_cumulative_prob
+            binding_fut = (
+                fut
+                if (fut is not None and self.config.futility_binding)
+                else np.full(k, -10.0)
+            )
+
+            def obj_a(val: float) -> float:
+                temp_eff = eff.copy()
+                temp_eff[-1] = val
+                prob = gp_h0.compute_crossing_probability(
+                    t=times,
+                    upper=temp_eff,
+                    lower=binding_fut if tails == 1 else -temp_eff,
+                    method="numerical_integration",
+                )
+                return float(prob - target_cumulative_prob)
+
+            # Robust check to avoid BrentQ failure on extremely small alpha spent or large B
+            f_0 = obj_a(0.0)
+            f_20 = obj_a(20.0)
+            if f_0 * f_20 > 0:
+                # If both are same sign, the root is likely outside [0, 20]
+                # Since f_0 (at val=0) is usually 0.5 - target (> 0),
+                # if f_20 is also positive, the boundary is > 20.
+                return 20.0 if f_0 > 0 else 0.0
+
+            res = root_scalar(obj_a, bracket=[0.0, 20.0], method="brentq", xtol=1e-6)
+            return float(res.root)
+
+        elif rule_type == "futility":
+            if fut is None:
+                fut = np.full(k, -10.0)
+
+            binding_eff = (
+                eff
+                if (eff is not None and self.config.efficacy_binding)
+                else np.full(k, 10.0)
+            )
+
+            def obj_b(val: float) -> float:
+                temp_fut = fut.copy()
+                temp_fut[-1] = val
+                prob = gp_h1.compute_crossing_probability(
+                    t=times,
+                    upper=binding_eff,
+                    lower=temp_fut,
+                    method="numerical_integration",
+                )
+                return float(prob - target_cumulative_prob)
+
+            # Robust check for futility
+            f_low = obj_b(-10.0)
+            f_high = obj_b(10.0)
+            if f_low * f_high > 0:
+                return -10.0 if f_high < 0 else 10.0
+
+            res = root_scalar(obj_b, bracket=[-10.0, 10.0], method="brentq", xtol=1e-6)
+            return float(res.root)
+
+        return 0.0
+
     def _solve_numerical(
         self,
         info_times: NDArray[np.float64],
@@ -479,6 +579,12 @@ class CanonicalJointModel:
             efficacy_spending=efficacy_spending,
             futility_spending=futility_spending,
         )
+
+    def solve_boundaries_from_policy(
+        self, policy: StoppingPolicy
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """Solve for boundaries using a specific StoppingPolicy."""
+        return policy.solve(self)
 
     def _solve_from_spending(
         self,

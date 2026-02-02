@@ -36,10 +36,10 @@ Usage
 >>> template.set_protocol(protocol)
 
 # 4. Simulate an interim look that lands in 'Promising Zone'
-# (Note: Z=0.64 at n=250/arm is promising for this design)
+# (Note: Z approx 1.96 at n=250/arm is promising but not yet significant at interim)
 >>> batch = [
 ...     ArmData(arm="control", n=250, success=125),
-...     ArmData(arm="treatment", n=250, success=132)
+...     ArmData(arm="treatment", n=250, success=147)
 ... ]
 >>> template.update(batch)
 
@@ -48,12 +48,11 @@ Usage
 >>> progress["status"] == DecisionStatus.CONTINUE_
 True
 >>> progress["max_sample_size"]  # Increased from the original design
-1876
+3192
 """
 
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 from pydantic import BaseModel
 
 import earlysign.schema.ES3.GST as GST
@@ -206,26 +205,9 @@ class PromisingZoneABTemplate(TemplateBase[PromisingZoneABProtocol]):
             # 4. Adaptation Logic (only if continuing and not final)
             status = str(look_result.status)
             if status == DecisionStatus.CONTINUE_:
-
-                # Derive assumed effect from Protocol
-                assumed_effect = self._get_assumed_effect(protocol)
-
-                # Conditional Power (CP) is the probability of the trial being
-                # successful at the FINAL look. Since Group Sequential boundaries
-                # (like O'Brien-Fleming) are more stringent at early looks, using
-                # the current boundary would underestimate CP. We must compare
-                # the predicted final result against the final boundary.
-                final_look_idx = len(engine._points) - 1
-                final_efficacy_bound = engine.get_boundary_at_look(
-                    final_look_idx, 1.0, "efficacy"
-                )
-
-                # Check Promising Zone
+                # 4. Adaptation Logic: Promising Zone Assessment
                 adaptation_log = ConditionalPowerAdaptationEngine.assess_promising_zone(
-                    look_result,
-                    protocol,
-                    assumed_effect=assumed_effect,
-                    final_efficacy_bound=final_efficacy_bound,
+                    look_result, protocol
                 )
 
                 sess.Commit(adaptation_log)
@@ -236,7 +218,9 @@ class PromisingZoneABTemplate(TemplateBase[PromisingZoneABProtocol]):
                 ):
                     # REPLAN
                     new_protocol = ConditionalPowerAdaptationEngine.replan_sample_size(
-                        protocol, adaptation_log
+                        protocol,
+                        adaptation_log,
+                        look_result=look_result,
                     )
 
                     # Check if actually changed
@@ -254,43 +238,6 @@ class PromisingZoneABTemplate(TemplateBase[PromisingZoneABProtocol]):
                             new_protocol.model_dump()
                         )
                         sess.Commit(new_proto_wrapper)
-
-    def _get_assumed_effect(self, protocol: PromisingZoneABProtocol) -> float:
-        """
-        Derives standardized drift (theta) from protocol assumptions.
-        This represents the effect size assumed for the remaining data.
-        """
-        task = protocol.task
-        effect = task.hypotheses.target_effect
-
-        if not hasattr(effect, "proportions") and hasattr(effect, "model_dump"):
-            # Fallback to dictionary if the object is missing fields due to base-class validation
-            effect_data = effect.model_dump()
-        else:
-            effect_data = effect
-
-        props = getattr(effect_data, "proportions", {}) or {}
-        if not props and isinstance(effect_data, dict):
-            props = effect_data.get("proportions", {})
-
-        p_vals = list(props.values())
-        if len(p_vals) < 2:
-            return 0.5  # Standard fallback
-
-        # We assume control/treatment or take the first two values
-        p_c = float(props.get("control", props.get("C", p_vals[0])))
-        p_t = float(props.get("treatment", props.get("T", p_vals[1])))
-
-        delta = abs(p_t - p_c)
-        # Using control variance for standardization
-        sigma2 = p_c * (1.0 - p_c)
-        n_max = protocol.method.stopping_policy.timer.max_sample_size
-
-        if sigma2 <= 0:
-            return 0.5
-
-        # drift (theta) = delta * sqrt(original_n_max / (4 * sigma2))
-        return float(delta * np.sqrt(n_max / (4.0 * sigma2)))
 
     def report_progress(self) -> Dict[str, Any]:
         with Session(self.ledger) as sess:
