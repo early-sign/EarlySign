@@ -285,9 +285,9 @@ class Ledger:
         client = getattr(self.connector, "client", None)
         dataset_id = getattr(self.connector, "dataset_id", None)
         project_id = getattr(self.connector, "project_id", None)
-        
+
         if not client:
-             raise RuntimeError("BigQuery connector missing client.")
+            raise RuntimeError("BigQuery connector missing client.")
 
         table_id = f"{project_id}.{dataset_id}.{self.table_name}"
 
@@ -296,16 +296,19 @@ class Ledger:
         # Timestamp must be ISO string
         if isinstance(api_row["timestamp"], datetime):
             api_row["timestamp"] = api_row["timestamp"].isoformat()
-        
+
         # Note: row["payload"], row["attributes"], row["metadata"] are already JSON strings
         # matching what the BQ SDK expects for JSON columns.
-        
+
         errors = client.insert_rows_json(table_id, [api_row])
         if errors:
             raise RuntimeError(f"BigQuery insert failed: {errors}")
 
     def _insert_ibis(self, row: Dict[str, Any]) -> None:
         """Standard Ibis insert via memtable."""
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
+
         # Define schema for the local memtable (all strings for local stability)
         insert_schema = sch.schema(
             dict(
@@ -318,12 +321,9 @@ class Ledger:
             )
         )
         mem_table = ibis.memtable([row], schema=insert_schema)
-        
+
         to_insert = mem_table.select(
-            *[
-                mem_table[name].cast(self._schema[name])
-                for name in self._schema.names
-            ]
+            *[mem_table[name].cast(self._schema[name]) for name in self._schema.names]
         )
         self.connector.insert(self.table_name, to_insert)
 

@@ -253,21 +253,23 @@ class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Ind
         data = [(idx, pr.data) for idx, pr in trajectory_prs]
         trace = [t for _, pr in trajectory_prs for t in pr.trace]
         return ProjectionResult(data=data, trace=trace)
-        
-    def project_detailed(self, table: ibis.Expr) -> List[Tuple[Index, ProjectionResult[S]]]:
+
+    def project_detailed(
+        self, table: ibis.Expr
+    ) -> List[Tuple[Index, ProjectionResult[S]]]:
         """
         Detailed projection preserving per-item traces.
         """
         # For Pointwise, we query the table for the entity's data_type (or state_type implicitly)
-        
+
         # Priority: state_type if available (e.g. SimpleSequentialEntity), else data_type
         # SimpleSequentialEntity has data_type=list, so we must use state_type.
         target_cls = getattr(self.entity, "state_type", None) or self.entity.data_type
         schema_name = target_cls.__name__
-        
+
         # Pointwise usually works with specific state records.
         # We rely on the entity identity filtering.
-        
+
         attributes = table.attributes
         matched = table.filter(
             # Schema type filter
@@ -275,7 +277,7 @@ class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Ind
             # Identity filter
             & (attributes["entity_identity"].str == self.entity.identity)
         ).order_by("timestamp")
-        
+
         # If the entity has a specific state_type defined (preferred for Pointwise), use it.
         # Otherwise fall back to data_type or dict.
         state_cls = getattr(self.entity, "state_type", None)
@@ -285,27 +287,36 @@ class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Ind
             payload = row.get("payload", {})
             if isinstance(payload, str):
                 import json
+
                 payload = json.loads(payload)
-            
+
             data_raw = payload
             data_inst = data_raw
-            
+
             # Simplified Hydration: Only strict if explicit state_type is provided.
-            if state_cls and isinstance(data_raw, dict) and hasattr(state_cls, "model_validate"):
-                 try:
-                     data_inst = state_cls(**data_raw)
-                 except Exception:
-                     # Allow fallback or re-raise? 
-                     # For robustness in reading, fallback or error.
-                     # Given user feedback "is this really needed?", simple is better.
-                     pass
+            if (
+                state_cls
+                and isinstance(data_raw, dict)
+                and hasattr(state_cls, "model_validate")
+            ):
+                try:
+                    data_inst = state_cls(**data_raw)
+                except Exception:
+                    # Allow fallback or re-raise?
+                    # For robustness in reading, fallback or error.
+                    # Given user feedback "is this really needed?", simple is better.
+                    pass
 
             if data_inst is not None:
                 # We assume the user guarantees S compatibility if they use Pointwise
-                trajectory.append((
-                    cast(Index, i),
-                    ProjectionResult(data=cast(S, data_inst), trace=[TraceId(str(row["uuid"]))])
-                ))
+                trajectory.append(
+                    (
+                        cast(Index, i),
+                        ProjectionResult(
+                            data=cast(S, data_inst), trace=[TraceId(str(row["uuid"]))]
+                        ),
+                    )
+                )
         return trajectory
 
 
@@ -372,7 +383,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         """
         if self.snapshot_strategy == self.SnapshotStrategy.POINTWISE:
             return PointwiseTrajectoryProjector(self).project(full_table)
-        
+
         # Default: COLLECTIVE
         return self._compute_collective(snapshot, full_table)
 
@@ -387,15 +398,13 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
             trajectory = list(snapshot.data)
         elif snapshot:
             # Fallback for single item snapshot
-            trajectory = [(cast(Index, 0), snapshot.data)]
+            trajectory = [(cast(Index, 0), cast(S, snapshot.data))]
 
         # 1. Discover indices
         try:
             idx_expr = self.get_index_expr(full_table)
             indices_expr = (
-                full_table.filter(idx_expr.notnull())
-                .select(idx=idx_expr)
-                .distinct()
+                full_table.filter(idx_expr.notnull()).select(idx=idx_expr).distinct()
             )
             all_indices = [
                 cast(Index, row.idx) for row in indices_expr.execute().itertuples()
@@ -440,18 +449,18 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
             # Reuse compute logic to get up-to-date trajectory
             snapshot = self._find_latest_snapshot(table)
             self._last_snapshot_uuid = snapshot.uuid if snapshot else None
-             
+
             # Cast safety for the snapshot type which is generic T in BaseEntity
-            snap_typed = cast(Optional[Snapshot[List[Tuple[Index, S]]]], snapshot)
-            
+            snap_typed = snapshot
+
             # Since compute() relies on fold, we must pass the table as delta/full
             result = self.compute(snap_typed, table, table)
-            
+
             return [
                 (idx, ProjectionResult(data=state, trace=result.trace))
                 for idx, state in result.data
             ]
-        
+
         # POINTWISE
         return PointwiseTrajectoryProjector(self).project_detailed(table)
 
