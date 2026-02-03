@@ -237,6 +237,78 @@ class LatestStateProjector(Projector[Optional[S]], Generic[Index, S]):
         return ProjectionResult(data=latest_pr.data, trace=latest_pr.trace)
 
 
+class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Index, S]):
+    """
+    Projector that reconstructs a full trajectory from individual state snapshots.
+    """
+
+    def __init__(self, entity: "SequentialEntity[Index, S]"):
+        self.entity = entity
+
+    def project(self, table: ibis.Expr) -> ProjectionResult[List[Tuple[Index, S]]]:
+        """
+        Reconstruct the full trajectory by collecting all individual state snapshots.
+        """
+        trajectory_prs = self.project_detailed(table)
+        data = [(idx, pr.data) for idx, pr in trajectory_prs]
+        trace = [t for _, pr in trajectory_prs for t in pr.trace]
+        return ProjectionResult(data=data, trace=trace)
+        
+    def project_detailed(self, table: ibis.Expr) -> List[Tuple[Index, ProjectionResult[S]]]:
+        """
+        Detailed projection preserving per-item traces.
+        """
+        # For Pointwise, we query the table for the entity's data_type (or state_type implicitly)
+        
+        # Priority: state_type if available (e.g. SimpleSequentialEntity), else data_type
+        # SimpleSequentialEntity has data_type=list, so we must use state_type.
+        target_cls = getattr(self.entity, "state_type", None) or self.entity.data_type
+        schema_name = target_cls.__name__
+        
+        # Pointwise usually works with specific state records.
+        # We rely on the entity identity filtering.
+        
+        attributes = table.attributes
+        matched = table.filter(
+            # Schema type filter
+            (table.type == schema_name)
+            # Identity filter
+            & (attributes["entity_identity"].str == self.entity.identity)
+        ).order_by("timestamp")
+        
+        # If the entity has a specific state_type defined (preferred for Pointwise), use it.
+        # Otherwise fall back to data_type or dict.
+        state_cls = getattr(self.entity, "state_type", None)
+
+        trajectory: List[Tuple[Index, ProjectionResult[S]]] = []
+        for i, row in matched.execute().iterrows():
+            payload = row.get("payload", {})
+            if isinstance(payload, str):
+                import json
+                payload = json.loads(payload)
+            
+            data_raw = payload
+            data_inst = data_raw
+            
+            # Simplified Hydration: Only strict if explicit state_type is provided.
+            if state_cls and isinstance(data_raw, dict) and hasattr(state_cls, "model_validate"):
+                 try:
+                     data_inst = state_cls(**data_raw)
+                 except Exception:
+                     # Allow fallback or re-raise? 
+                     # For robustness in reading, fallback or error.
+                     # Given user feedback "is this really needed?", simple is better.
+                     pass
+
+            if data_inst is not None:
+                # We assume the user guarantees S compatibility if they use Pointwise
+                trajectory.append((
+                    cast(Index, i),
+                    ProjectionResult(data=cast(S, data_inst), trace=[TraceId(str(row["uuid"]))])
+                ))
+        return trajectory
+
+
 class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
     """
     Entity whose state is indexed by a sequential coordinate (look, sample, etc.).
@@ -253,19 +325,10 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         index_field: The name of the column that contains the sequential index
                      (e.g., "look", "sample", "stage")
         snapshot_strategy: How to persist the trajectory (COLLECTIVE or POINTWISE)
-
-    Example:
-        class ZStatisticTrajectory(SequentialEntity[int, ZStatState]):
-            data_type = ZStatState
-            index_field = "look"
-            snapshot_strategy = SequentialEntity.SnapshotStrategy.COLLECTIVE
-
-            def compute_step(self, index, prev_state, delta_expr):
-                # Compute state at this index
-                ...
     """
 
     index_field: str = "look"
+    state_type: Optional[Type[S]] = None
 
     class SnapshotStrategy(Enum):
         """Strategy for persisting sequential entity trajectories."""
@@ -282,7 +345,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         """
         Return an Ibis expression for extracting the sequential index.
 
-        Default implementation extracts from attributes['look'] as a string.
+        Default implementation extracts from attributes[self.index_field] as a string.
         """
         return table.attributes[self.index_field].cast("string")
 
@@ -306,60 +369,56 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
     ) -> ProjectionResult[List[Tuple[Index, S]]]:
         """
         Incremental fold for sequential trajectories.
-
-        If a snapshot exists, it resumes from the latest index.
-        Otherwise, it builds the trajectory from scratch (index 0).
         """
-        trajectory: List[Tuple[Index, S]] = []
-        if snapshot:
-            trajectory = list(snapshot.data)
+        if self.snapshot_strategy == self.SnapshotStrategy.POINTWISE:
+            return PointwiseTrajectoryProjector(self).project(full_table)
+        
+        # Default: COLLECTIVE
+        return self._compute_collective(snapshot, full_table)
 
-        # 1. Identify all sequential indices present in the full_table
+    def _compute_collective(
+        self,
+        snapshot: Optional[Snapshot[List[Tuple[Index, S]]]],
+        full_table: ibis.Expr,
+    ) -> ProjectionResult[List[Tuple[Index, S]]]:
+        """Perform the incremental fold for the collective trajectory."""
+        trajectory: List[Tuple[Index, S]] = []
+        if snapshot and isinstance(snapshot.data, list):
+            trajectory = list(snapshot.data)
+        elif snapshot:
+            # Fallback for single item snapshot
+            trajectory = [(cast(Index, 0), snapshot.data)]
+
+        # 1. Discover indices
         try:
-            # Identify unique indices using the overridable expression
             idx_expr = self.get_index_expr(full_table)
             indices_expr = (
                 full_table.filter(idx_expr.notnull())
                 .select(idx=idx_expr)
                 .distinct()
-                .order_by("idx")
             )
-
             all_indices = [
                 cast(Index, row.idx) for row in indices_expr.execute().itertuples()
             ]
-
-            # Post-processing: Ensure indices are sorted correctly
-            if all_indices:
-                try:
-                    # Try to sort numerically if they are numbers
-                    all_indices.sort(key=lambda x: float(cast(Any, x)))
-                except (ValueError, TypeError):
-                    all_indices.sort()
-
+            try:
+                all_indices.sort(key=lambda x: float(cast(Any, x)))
+            except (ValueError, TypeError):
+                all_indices.sort()
         except Exception:
-            # Fallback for entities that don't use this specific attribute-based indexing
-            # Subclasses can override compute() if they have a custom index discovery.
-            raw_trajectory = self.project_trajectory(full_table)
-            data = [(idx, pr.data) for idx, pr in raw_trajectory]
-            trace = [t for _, pr in raw_trajectory for t in pr.trace]
-            return ProjectionResult(data=data, trace=trace)
+            # If default index discovery fails, we can't fold.
+            all_indices = []
 
-        # 2. Fold: Compute state for each missing or new index
+        # 2. Fold
         current_indices = {idx for idx, _ in trajectory}
         prev_state: Optional[S] = trajectory[-1][1] if trajectory else None
 
         for idx in all_indices:
             if idx not in current_indices:
-                # Filter delta_expr specifically for this index
-                # We use the raw value for comparison
-                idx_expr = self.get_index_expr(full_table)
-                step_delta = full_table.filter(idx_expr == idx)
+                step_delta = full_table.filter(self.get_index_expr(full_table) == idx)
                 state = self.compute_step(idx, prev_state, step_delta)
                 trajectory.append((idx, state))
                 prev_state = state
             else:
-                # Update prev_state for the next iteration
                 prev_state = next(s for i, s in trajectory if i == idx)
 
         return ProjectionResult(data=trajectory, trace=[])
@@ -368,10 +427,6 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
     def latest(self) -> LatestStateProjector[Index, S]:
         """
         Returns a Projector that yields only the latest (most recent) state.
-
-        Usage:
-            with Session(ledger) as sess:
-                latest_state = sess.Read(analyses.latest)
         """
         return LatestStateProjector(self)
 
@@ -380,69 +435,25 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
     ) -> List[Tuple[Index, ProjectionResult[S]]]:
         """
         Project the full trajectory of states.
-
-        Returns a list of (index, state) pairs representing the complete
-        history of this sequential entity.
-
-        Args:
-            table: The Ibis expression representing the event table
-
-        Returns:
-            List of (index, ProjectionResult) tuples in order
         """
         if self.snapshot_strategy == self.SnapshotStrategy.COLLECTIVE:
-            # In COLLECTIVE mode, the latest snapshot contains the full history
+            # Reuse compute logic to get up-to-date trajectory
             snapshot = self._find_latest_snapshot(table)
-            if snapshot is None:
-                return []
-
-            # Check if snapshot.data is a list of (index, state) or just the latest state
-            # For COLLECTIVE, usually we want the full trajectory stored in the data field.
-            # Subclasses should handle hydration if it's a list.
-            if isinstance(snapshot.data, list):
-                return [
-                    (idx, ProjectionResult(data=item, trace=[]))
-                    for idx, item in snapshot.data
-                ]
-
-            # Default: single element trajectory
-            return [(cast(Index, 0), ProjectionResult(data=snapshot.data, trace=[]))]
-
-        elif self.snapshot_strategy == self.SnapshotStrategy.POINTWISE:
-            # Collect all snapshots for this identity and reconstruct trajectory
-            # Snapshots have the same payload_schema as the entity's data_type
-            schema_name = self.data_type.__name__
-            matched = table.filter(
-                (table.type == schema_name)
-                & (table.attributes["entity_identity"].str == self.identity)
-            )
-            ordered = matched.order_by(ibis.asc("timestamp")).execute()
-
-            trajectory: List[Tuple[Index, ProjectionResult[S]]] = []
-            for i, row in ordered.iterrows():
-                payload = row.get("payload", {})
-                if isinstance(payload, str):
-                    payload = json.loads(payload)
-                data_raw = payload
-                if data_raw:
-                    data_inst = (
-                        self.data_type(**data_raw)
-                        if isinstance(data_raw, dict)
-                        else data_raw
-                    )
-                    trajectory.append(
-                        (
-                            cast(Index, i),
-                            ProjectionResult(data=cast(S, data_inst), trace=[]),
-                        )
-                    )
-            return trajectory
-
-        else:
-            raise ValueError(
-                f"Unknown snapshot strategy: {self.snapshot_strategy}. "
-                f"Expected COLLECTIVE or POINTWISE."
-            )
+            self._last_snapshot_uuid = snapshot.uuid if snapshot else None
+             
+            # Cast safety for the snapshot type which is generic T in BaseEntity
+            snap_typed = cast(Optional[Snapshot[List[Tuple[Index, S]]]], snapshot)
+            
+            # Since compute() relies on fold, we must pass the table as delta/full
+            result = self.compute(snap_typed, table, table)
+            
+            return [
+                (idx, ProjectionResult(data=state, trace=result.trace))
+                for idx, state in result.data
+            ]
+        
+        # POINTWISE
+        return PointwiseTrajectoryProjector(self).project_detailed(table)
 
 
 class SimpleEntity(BaseEntity[Optional[T]]):
@@ -512,61 +523,6 @@ class SimpleSequentialEntity(SequentialEntity[Index, S]):
     @property
     def initial_value(self) -> List[Tuple[Index, S]]:
         return []
-
-    def compute(
-        self,
-        snapshot: Optional[Any],
-        delta_expr: ibis.Expr,
-        full_table: ibis.Expr,
-    ) -> ProjectionResult[List[Tuple[Index, S]]]:
-        """
-        Reconstruct the full trajectory by collecting all records of data_type.
-        """
-        trajectory = self.project_trajectory(full_table)
-        data = [(idx, pr.data) for idx, pr in trajectory]
-        # Trace is the collection of all uuids in the trajectory
-        trace = []
-        for _, pr in trajectory:
-            trace.extend(pr.trace)
-
-        return ProjectionResult(data=data, trace=trace)
-
-    def project_trajectory(
-        self, table: ibis.Expr
-    ) -> List[Tuple[Index, ProjectionResult[S]]]:
-        """
-        Collect trajectory by finding all records of state_type matching the identity.
-        """
-        schema_name = self.state_type.__name__
-
-        # We filter the table for the correct type and identity.
-        # We use re_replace to handle potential quotes in the identity label if stored as JSON string.
-        matched = table.filter(
-            (table.type == schema_name)
-            & (table.attributes["entity_identity"].str == self.identity)
-        )
-        ordered = matched.order_by(ibis.asc("timestamp")).execute()
-
-        trajectory: List[Tuple[Index, ProjectionResult[S]]] = []
-        for i, row in ordered.iterrows():
-            payload = row.get("payload", {})
-            if isinstance(payload, str):
-                payload = json.loads(payload)
-
-            # Reconstruct the model instance
-            data_inst = (
-                self.state_type(**payload) if isinstance(payload, dict) else payload
-            )
-            trace = [TraceId(str(row["uuid"]))]
-
-            trajectory.append(
-                (
-                    cast(Index, i),
-                    ProjectionResult(data=data_inst, trace=trace),
-                )
-            )
-
-        return trajectory
 
     def compute_step(
         self,
