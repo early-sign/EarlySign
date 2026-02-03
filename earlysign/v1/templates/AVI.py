@@ -37,6 +37,70 @@ class ContinuousAVITaskSpec(BaseModel):
 class BinomialAVITemplate(TemplateBase[Protocol]):
     """
     Template for AVI on Binomial data.
+
+    Examples:
+        >>> import ibis
+        >>> from earlysign.core.ledger import Ledger
+        >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
+        >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+
+        >>> conn = ibis.connect("duckdb://:memory:")
+        >>> ledger = Ledger(conn, "events")
+        >>> ledger.ensure()
+        >>> ledger = ledger.bind(experiment_id="doctest_avi_binom")
+
+        >>> # 1. Design GAVI
+        >>> template = BinomialAVITemplate(ledger)
+        >>> protocol = BinomialAVITemplate.design_gavi(
+        ...     arms=["control", "treatment"],
+        ...     alpha=0.05,
+        ...     variance=0.25,
+        ...     sides="two",
+        ...     max_n=1000,
+        ... )
+        >>> template.set_protocol(protocol)
+
+        >>> # 2. Update with small difference
+        >>> batch1 = [
+        ...     BinomialArmData(n=100, success=50, arm="control"),
+        ...     BinomialArmData(n=100, success=52, arm="treatment"),
+        ... ]
+        >>> template.update(batch1)
+        >>> report1 = template.report_progress()
+        >>> report1["status"]
+        'continue'
+
+        >>> # 3. Update with large difference crossing boundary
+        >>> batch2 = [
+        ...     BinomialArmData(n=400, success=200, arm="control"),
+        ...     BinomialArmData(n=400, success=298, arm="treatment"),
+        ... ]
+        >>> template.update(batch2)
+        >>> report2 = template.report_progress()
+        >>> report2["status"]
+        'stop_efficacy'
+
+        >>> # 4. Design mSPRT
+        >>> ledger_msprt = ledger.bind(experiment_id="doctest_msprt_binom")
+        >>> template_msprt = BinomialAVITemplate(ledger_msprt)
+        >>> protocol_msprt = BinomialAVITemplate.design_m_sprt(
+        ...     arms=["control", "treatment"],
+        ...     alpha=0.05,
+        ...     variance=0.25,
+        ...     sides="two",
+        ...     mde=0.1,
+        ... )
+        >>> template_msprt.set_protocol(protocol_msprt)
+
+        >>> # 5. Update with large difference
+        >>> batch_msprt = [
+        ...     BinomialArmData(n=500, success=250, arm="control"),
+        ...     BinomialArmData(n=500, success=325, arm="treatment"),
+        ... ]
+        >>> template_msprt.update(batch_msprt)
+        >>> report_msprt = template_msprt.report_progress()
+        >>> report_msprt["status"]
+        'stop_efficacy'
     """
 
     _protocol_class = Protocol

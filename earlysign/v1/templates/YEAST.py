@@ -43,6 +43,65 @@ class BinomialYeastTemplate(TemplateBase[Protocol]):
     """
     Template for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
     Standardized to use Session, Engine, and Projectors.
+
+    Examples:
+        >>> import ibis
+        >>> from earlysign.core.ledger import Ledger
+        >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+        >>> from earlysign.schema.ES3.YEAST.Log import DecisionStatus
+
+        >>> conn = ibis.connect("duckdb://:memory:")
+        >>> ledger = Ledger(conn, "events")
+        >>> ledger.ensure()
+        >>> ledger = ledger.bind(experiment_id="doctest_yeast_binomial")
+
+        >>> # 1. Design Protocol
+        >>> task = BinomialYeastTaskSpec(
+        ...     arms=["control", "treatment"],
+        ...     response_type="binary",
+        ...     hypotheses={
+        ...         "h_null_description": "diff <= 0",
+        ...         "h_alt_description": "diff > 0",
+        ...         "test_logic": {"kind": "superiority"},
+        ...         "target_effect": {
+        ...             "type": "binary",
+        ...             "proportions": {"control": 0.5, "treatment": 0.6},
+        ...         },
+        ...     },
+        ... )
+        >>> template = BinomialYeastTemplate(ledger)
+        >>> protocol = BinomialYeastTemplate.design(
+        ...     task=task,
+        ...     significance_level=0.05,
+        ...     expected_num_observations=200,
+        ...     estimated_variance=1.0,
+        ... )
+        >>> template.set_protocol(protocol)
+
+        >>> # 2. Update with data (Batch 1: Below boundary)
+        >>> batch1 = [
+        ...     BinomialArmData(n=50, success=20, arm="control"),
+        ...     BinomialArmData(n=50, success=30, arm="treatment"),
+        ... ]
+        >>> template.update(batch1)
+        >>> report1 = template.report_progress()
+        >>> report1["status"]
+        'continue'
+        >>> report1["trajectory"]
+        10.0
+
+        >>> # 3. Update with more data (Batch 2: Crossing boundary)
+        >>> batch2 = [
+        ...     BinomialArmData(n=50, success=20, arm="control"),
+        ...     BinomialArmData(n=50, success=45, arm="treatment"),
+        ... ]
+        >>> template.update(batch2)
+        >>> report2 = template.report_progress()
+        >>> report2["status"]
+        'stop_efficacy'
+        >>> result = template.report_result()
+        >>> result["is_rejected"]
+        True
     """
 
     _protocol_class = Protocol
@@ -136,6 +195,55 @@ class BinomialYeastTemplate(TemplateBase[Protocol]):
 class ContinuousYeastTemplate(TemplateBase[Protocol]):
     """
     Template for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
+
+    Examples:
+        >>> import ibis
+        >>> from earlysign.core.ledger import Ledger
+        >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+        >>> from earlysign.schema.ES3.YEAST.Log import DecisionStatus
+
+        >>> conn = ibis.connect("duckdb://:memory:")
+        >>> ledger = Ledger(conn, "events")
+        >>> ledger.ensure()
+        >>> ledger = ledger.bind(experiment_id="doctest_yeast_continuous")
+
+        >>> task = ContinuousYeastTaskSpec(
+        ...     arms=["control", "treatment"],
+        ...     response_type="continuous",
+        ...     hypotheses={},
+        ... )
+        >>> template = ContinuousYeastTemplate(ledger)
+        >>> protocol = ContinuousYeastTemplate.design(
+        ...     task=task,
+        ...     significance_level=0.05,
+        ...     expected_num_observations=100,
+        ...     estimated_variance=1.0,
+        ... )
+        >>> template.set_protocol(protocol)
+
+        >>> # Batch 1: Below boundary
+        >>> batch1 = [
+        ...     ContinuousArmData(n=10, sum_x=10.0, sum_x2=20.0, arm="control"),
+        ...     ContinuousArmData(n=10, sum_x=25.0, sum_x2=70.0, arm="treatment"),
+        ... ]
+        >>> template.update(batch1)
+        >>> report1 = template.report_progress()
+        >>> report1["status"]
+        'continue'
+        >>> report1["trajectory"]
+        15.0
+
+        >>> # Batch 2: Above boundary
+        >>> batch2 = [
+        ...     ContinuousArmData(n=10, sum_x=10.0, sum_x2=20.0, arm="control"),
+        ...     ContinuousArmData(n=10, sum_x=20.0, sum_x2=50.0, arm="treatment"),
+        ... ]
+        >>> template.update(batch2)
+        >>> report2 = template.report_progress()
+        >>> report2["status"]
+        'stop_efficacy'
+        >>> report2["trajectory"]
+        25.0
     """
 
     _protocol_class = Protocol

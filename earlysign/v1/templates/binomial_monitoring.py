@@ -33,6 +33,41 @@ class DecisionRecord(BaseModel):
 class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
     """
     Template for real-time monitoring of a Binomial A/B test using e-processes.
+
+    Examples:
+        >>> import ibis
+        >>> from earlysign.core.ledger import Ledger
+        >>> from earlysign.schema.ES3.Binomial import ArmData
+        >>> from earlysign.v1.methods.AVI.engines.binomial_e_value import EProcessProtocol
+
+        >>> conn = ibis.connect("duckdb://:memory:")
+        >>> ledger = Ledger(conn, "events")
+        >>> ledger.ensure()
+        >>> ledger = ledger.bind(experiment_id="doctest_binom_mon")
+
+        >>> # 1. Design: H0: p=0.5, H1: p=0.7, Alpha=0.05
+        >>> protocol = EProcessProtocol(null_p=0.5, alt_p=0.7, alpha=0.05)
+        >>> template = BinomialMonitoringTemplate(ledger)
+        >>> template.set_protocol(protocol)
+
+        >>> # 2. Update with H0-like data
+        >>> batch1 = ArmData(n=100, success=50, arm="control")
+        >>> template.update([batch1])
+        >>> report1 = template.report_progress()
+        >>> report1["status"]
+        'continue'
+        >>> report1["arms"]["control"]["successes"]
+        50
+
+        >>> # 3. Update with H1-like data to cross threshold
+        >>> batch2 = ArmData(n=900, success=650, arm="control")
+        >>> template.update([batch2])
+        >>> report2 = template.report_progress()
+        >>> report2["status"]
+        'stop_efficacy'
+        >>> final_report = template.report_result()
+        >>> final_report["is_rejected"]
+        True
     """
 
     _protocol_class = EProcessProtocol

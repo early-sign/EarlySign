@@ -98,6 +98,14 @@ Finally, we generate the final report to see the study outcome.
 
 In practice, each iteration may run in a different process.
 To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
+
+    >>> # Test: Protocol Deserialization from JSON
+    >>> protocol_json = '{"name": "earlysign.v1.templates.binomial_ab.BinomialABProtocol", "ES3_version": "v1.0.0", "task": {"kind": "group_sequential", "arms": ["C", "T"], "response_type": "binary", "hypotheses": {"h_null_description": "Diff <= 0", "h_alt_description": "Diff > 0.05", "test_logic": {"kind": "superiority"}, "target_effect": {"type": "binary", "proportions": {"C": 0.09, "T": 0.14}}}, "efficacy": {"alpha": 0.025}, "futility": {"power": 0.8, "binding": false}}, "method": {"kind": "group_sequential", "stopping_policy": {"statistic": {"kind": "two_arm_binomial_z"}, "strategy": {"kind": "alpha_beta_spending", "statistical_model": {"kind": "canonical_gaussian"}, "alpha_spending_fn": {"family": "obrien_fleming", "params": null}, "beta_spending_fn": {"family": "obrien_fleming", "params": null}, "alpha_budget": 0.025, "beta_budget": 0.2, "alpha_binding": true, "beta_binding": false}, "timer": {"kind": "sample_size", "unit": "individuals", "max_sample_size": 1255}, "schedule": {"kind": "fixed", "analyses": [0.5, 1.0]}}, "adaptation": null}}'
+    >>> protocol_from_json = BinomialABProtocol.model_validate_json(protocol_json)
+    >>> protocol_from_json.task.arms
+    ['C', 'T']
+    >>> protocol_from_json.method.stopping_policy.statistic.kind
+    'two_arm_binomial_z'
 """
 
 from typing import Any, Dict, List, Optional

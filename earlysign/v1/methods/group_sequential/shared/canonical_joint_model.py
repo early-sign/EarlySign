@@ -2,6 +2,66 @@
 
 Provides generic computation APIs for boundary solving and probability
 calculations based on the canonical joint distribution of Z-statistics.
+
+Examples:
+    >>> import numpy as np
+    >>> import earlysign.schema.ES3.GST as GST
+    >>> from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import CanonicalJointModel, Config
+    >>> from earlysign.v1.methods.group_sequential.shared.spending import OBrienFlemingSpending
+
+    >>> # --- Test: Model from Spec Basic ---
+    >>> info_times = [0.5, 1.0]
+    >>> spec = GST.Protocol(
+    ...     name="Test Protocol",
+    ...     task=GST.TaskSpec(
+    ...         kind="group_sequential",
+    ...         arms=["C", "T"],
+    ...         response_type=GST.ResponseType.BINARY,
+    ...         efficacy=GST.EfficacyRequirement(alpha=0.025),
+    ...         futility=GST.FutilityRequirement(power=0.9),
+    ...         hypotheses=GST.HypothesisSpec(
+    ...             h_null_description="H0", h_alt_description="H1",
+    ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+    ...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.1, "T": 0.15})
+    ...         )
+    ...     ),
+    ...     method=GST.MethodSpec(
+    ...         kind="group_sequential",
+    ...         stopping_policy=GST.StoppingPolicySpec(
+    ...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
+    ...             strategy=GST.AlphaSpendingStrategy(
+    ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
+    ...                 budget=0.025,
+    ...                 sided=GST.Sided.ONE,
+    ...                 statistical_model=GST.CanonicalGaussianModel(),
+    ...             ),
+    ...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+    ...             schedule=GST.FixedSchedule(analyses=info_times)
+    ...         ),
+    ...     )
+    ... )
+    >>> model = CanonicalJointModel.from_spec(spec, n_sims=5000)
+    >>> model.config.alpha
+    0.025
+    >>> np.allclose(model.config.info_times, [0.5, 1.0])
+    True
+
+    >>> # --- Test: Dual Boundary Solving (Binding) ---
+    >>> info_times_arr = np.array([0.5, 1.0])
+    >>> config = Config(
+    ...     info_times=info_times_arr, alpha=0.025, power=0.9,
+    ...     efficacy_spending=OBrienFlemingSpending(budget=0.025),
+    ...     futility_spending=OBrienFlemingSpending(budget=0.1),
+    ...     efficacy_binding=True, n_sims=5000, rng_seed=42, tails=1
+    ... )
+    >>> model = CanonicalJointModel(config)
+    >>> a, b = model.solve_boundaries(drift=3.24)
+    >>> len(a) == 2 and len(b) == 2
+    True
+    >>> bool(a[0] > a[1])  # OBF characteristic
+    True
+    >>> bool(b[0] < b[1])  # Futility characteristic
+    True
 """
 
 from dataclasses import dataclass
