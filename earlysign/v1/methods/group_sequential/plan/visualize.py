@@ -1,6 +1,7 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, cast
 
 import numpy as np
+import pandas as pd
 
 # lazy import for plotting:
 # import matplotlib.pyplot as plt
@@ -373,3 +374,124 @@ def overlay_fixed_design_reference(
     )
     ax.axhline(sample_size, color=color, linestyle="--", alpha=0.6, zorder=1)
     ax.legend(loc="best")
+
+
+def generate_operating_characteristics_table(results: SimulationCurve) -> pd.DataFrame:
+    """
+    Generates a summary DataFrame from a SimulationCurve.
+    """
+    rows = []
+    for i, r in enumerate(results.results):
+        x_val = results.x_values[i]
+        ess = r.expected_sample_size if r.expected_sample_size is not None else r.asn
+        rows.append(
+            {
+                "Effect Size": x_val,
+                "Power / Rejection Prob": f"{r.power:.2%}",
+                "ASN (Average Sample Number)": f"{ess:.1f}",
+                "Max Sample Size": results.n_max or 0,
+                "Pct of Max": (
+                    f"{ess/results.n_max:.1%}"
+                    if results.n_max and results.n_max > 0
+                    else "N/A"
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def visualize_protocol_design(
+    protocol: GST.Protocol,
+    effect_sizes: Optional[List[float]] = None,
+    plot: bool = True,
+    method: Literal["simulation", "numerical_integration"] = "simulation",
+) -> Dict[str, Any]:
+    """
+    Visualizes a given protocol design (Table and Plot).
+
+    Args:
+        protocol: The GST Protocol to visualize.
+        effect_sizes: Specific effect sizes (relative lift %) to evaluate.
+        plot: Whether to generate a plot.
+        method: Evaluation method.
+
+    Returns:
+        Dictionary with 'summary' (DataFrame) and 'figure' (matplotlib Figure or None).
+    """
+    evaluator = BinomialABOperatingCharacteristicsEvaluator(
+        protocol, method=method, n_sims=5000
+    )
+
+    # 1. Generate Summary Table (at specific points)
+    if effect_sizes is None:
+        # Default points: Null, 0.5*Target, Target, 1.25*Target
+        target = evaluator.target_delta
+        if evaluator.p_control > 0:
+            target_pct = (target / evaluator.p_control) * 100
+        else:
+            target_pct = 0.0
+        effect_sizes = [0.0, 0.5 * target_pct, target_pct, 1.25 * target_pct]
+
+    # Map effect sizes to relative lift (fraction) for evaluator
+    lifts = np.array(effect_sizes) / 100.0
+
+    # Evaluate at these points
+    drifts = (lifts * np.sqrt(evaluator.i_max)).tolist()
+    point_results = evaluator.evaluator.evaluate_curve(
+        drifts,
+        info_times=evaluator.info_times,
+        upper_boundaries=cast(np.ndarray, evaluator.upper),
+        lower_boundaries=cast(np.ndarray, evaluator.lower),
+    )
+
+    # Inject context for table generation
+    point_results.x_values = np.array(effect_sizes)  # Use pct for table
+    point_results.n_max = evaluator.n_max
+    for res in point_results.results:
+        if res.expected_sample_size is None:
+            res.expected_sample_size = res.asn * evaluator.n_max
+
+    df = generate_operating_characteristics_table(point_results)
+
+    # 2. Generate Plot
+    fig = None
+    if plot:
+        fig = plot_design_characteristics(protocol)
+
+    return {"summary": df, "figure": fig}
+
+
+def visualize_design_from_params(
+    alpha: float = 0.05,
+    power: float = 0.8,
+    delta: float = 0.1,
+    control_rate: float = 0.1,
+    looks: int = 4,
+    spending_function: str = "obrien_fleming",
+    plot: bool = True,
+) -> Dict[str, Any]:
+    """
+    Plans and visualizes a Binomial design from parameters.
+    """
+    from earlysign.v1.methods.group_sequential.plan.protocol_design import (
+        ProtocolDesigner,
+    )
+    from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
+        CanonicalJointModel,
+        Config,
+    )
+
+    designer = ProtocolDesigner(
+        model=CanonicalJointModel(Config(info_times=np.array([1.0])))
+    )
+
+    protocol_obj = designer.plan_binomial_ab(
+        alpha=alpha,
+        power=power,
+        delta=delta,
+        k=looks,
+        p_control=control_rate,
+        # spending_fn=..., # plan_binomial_ab handles default if None
+    )
+
+    return visualize_protocol_design(protocol_obj, plot=plot)
