@@ -36,9 +36,9 @@ All content here follows the repository convention: code and comments
 are in English and the module is designed to be small and explicit.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from math import sqrt
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Mapping, Optional, Tuple, Union
 
 import numpy as np
 from scipy.stats import norm, t as t_dist
@@ -51,26 +51,31 @@ from . import spending as spending_mod
 
 
 @dataclass(frozen=True)
-class EfficacySpec:
+class EfficacyConfig:
     """Specification of the efficacy (upper) boundary policy.
 
     Attributes:
         style: e.g. 'alpha_spending' | 'significance_level'.
         family: e.g. 'obrien_fleming' | 'pocock' | 'hwang_shih_decani'.
-        gamma: Optional gamma parameter for HSD family.
+        params: Optional dictionary for family-specific parameters (e.g. gamma).
         alpha_levels: per-look alpha levels for 'significance_level' style.
     """
 
+    style: str  # 'alpha_spending' | 'significance_level'
+    family: Optional[str] = None
+    params: Mapping[str, Any] = field(default_factory=dict)
+    alpha_levels: Optional[Mapping[int, float]] = None
+
 
 @dataclass(frozen=True)
-class FutilitySpec:
+class FutilityConfig:
     """Specification of the futility (lower) boundary policy."""
 
     mode: str  # 'none' | 'symmetric' | 'fixed_threshold' | 'beta_spending'
     # scalar z or per-look mapping
     z: Optional[Union[float, Mapping[int, float]]] = None
     family: Optional[str] = None
-    gamma: Optional[float] = None
+    params: Mapping[str, Any] = field(default_factory=dict)
     beta: Optional[float] = None  # target beta (1-power) when using beta_spending
 
 
@@ -90,8 +95,10 @@ class BoundaryCalculatorSpec:
     alpha: float
     tails: int
     scale: str = "z"
-    efficacy: EfficacySpec = EfficacySpec(style="alpha_spending")
-    futility: FutilitySpec = FutilitySpec(mode="none")
+    efficacy: EfficacyConfig = field(
+        default_factory=lambda: EfficacyConfig(style="alpha_spending")
+    )
+    futility: FutilityConfig = field(default_factory=lambda: FutilityConfig(mode="none"))
     # optional: name of preferred stochastic process primitive (eg 'bm')
     process: Optional[str] = None
 
@@ -234,8 +241,6 @@ class BoundaryCalculator:
             family = efficacy.get("family", "obrien_fleming")
             params = dict(efficacy.get("params") or {})
             key = str(family).lower()
-            if key == "hwang_shih_decani" and "gamma" not in params:
-                params["gamma"] = float(efficacy.get("gamma", -4.0))
 
             try:
                 spending_cls = spending_mod.get_spending_class(key)
