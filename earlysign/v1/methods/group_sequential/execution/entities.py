@@ -38,7 +38,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     >>> analyses = InterimAnalyses("my-trial")
     >>> # Verify initial state
     >>> with Session(ledger) as sess:
-    ...     trajectory = sess.Read(analyses)
+    ...     trajectory = sess.read(analyses)
     >>> trajectory.data
     []
     >>> # Simulate a look result
@@ -47,10 +47,10 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     ...                  is_efficacy_crossed=False, is_futility_crossed=False,
     ...                  status="continue")
     >>> with Session(ledger) as sess:
-    ...     sess.Commit(res, identity="my-trial")
+    ...     sess.commit(res, identity="my-trial")
     >>> # Read trajectory back
     >>> with Session(ledger) as sess:
-    ...     trajectory = sess.Read(analyses)
+    ...     trajectory = sess.read(analyses)
     >>> len(trajectory.data)
     1
     >>> look_number, state = trajectory.data[0]

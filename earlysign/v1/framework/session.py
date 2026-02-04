@@ -53,7 +53,7 @@ class Session:
             return self.ledger.t
         return self.ledger.t.filter(self.ledger.t.timestamp <= self.horizon_ts)
 
-    def Read(self, projector: Projector[T]) -> Traced[T]:
+    def read(self, projector: Projector[T]) -> Traced[T]:
         """Hydrate data using a Projector and accumulate its lineage.
 
         Args:
@@ -77,7 +77,7 @@ class Session:
 
         return result
 
-    def Commit(
+    def commit(
         self,
         record: Any,
         identity: Optional[str] = None,
@@ -100,7 +100,7 @@ class Session:
         if attributes:
             combined_attributes.update(attributes)
 
-        Writer.Commit(
+        Writer.commit(
             self,
             record,
             identity=identity,
@@ -108,7 +108,7 @@ class Session:
             attributes=combined_attributes,
         )
 
-    def CallAndCommit(
+    def call_and_commit(
         self,
         result_type: Type[Any],
         func: Callable[..., Any],
@@ -129,7 +129,7 @@ class Session:
             arg_traces = extract_traces(*args, **kwargs)
             target_trace = arg_traces if arg_traces is not None else self.trace
 
-        Writer.CallAndCommit(
+        Writer.call_and_commit(
             self,
             result_type,
             func,

@@ -74,11 +74,11 @@ True
 
 # Framework features
 ## Write Model
-The Framework provides `Session.Commit` to record events with scientific lineage.
-`sess.Commit` records a model, while `sess.CallAndCommit` records the result of a function.
+The Framework provides `Session.commit` to record events with scientific lineage.
+`sess.commit` records a model, while `sess.call_and_commit` records the result of a function.
 
 >>> with Session(ledger) as sess:
-...    sess.Commit(MyDecision(action="STOP", reason="Safety concern"))
+...    sess.commit(MyDecision(action="STOP", reason="Safety concern"))
 
 ## Projector
 Projectors are "State-as-a-Fold" operators. They reconstruct high-level facts
@@ -94,7 +94,7 @@ from the event stream.
 ...         return ProjectionResult(data=match.iloc[0]["payload"]["action"], trace=[TraceId(str(match.iloc[0]["uuid"]))])
 
 >>> with Session(ledger) as sess:
-...     latest_action = sess.Read(DecisionProjector())
+...     latest_action = sess.read(DecisionProjector())
 >>> latest_action.data
 'STOP'
 
@@ -104,13 +104,13 @@ Analysis within a session is protected from concurrent writes.
 
 >>> with Session(ledger) as sess:
 ...     # 2. Write something within the session
-...     sess.Commit(MyDecision(action="A", reason="within"))
+...     sess.commit(MyDecision(action="A", reason="within"))
 ...
 ...     # 3. Write something outside (directly to ledger) AFTER session started
 ...     ledger.insert(data=MyDecision(action="B", reason="outside"))
 ...
 ...     # 4. Projection within session only sees records up to the horizon
-...     res = sess.Read(DecisionProjector())
+...     res = sess.read(DecisionProjector())
 >>> res.data  # Should be 'STOP' (the one before 'A' and 'B')
 'STOP'
 
@@ -119,7 +119,7 @@ Scientific Lineage (Trace) is automatically accumulated as you Read data in a Se
 
 >>> with Session(ledger) as sess:
 ...     # Reading records their causal IDs in the session trace
-...     _ = sess.Read(DecisionProjector())
+...     _ = sess.read(DecisionProjector())
 ...     len(sess.trace) > 0
 True
 
@@ -129,10 +129,10 @@ Entities are special aggregates with identity. `Entity` supports differential fo
 >>> fact = Scoreboard(identity="metrics")
 >>> # Pre-populate data in a separate session so it's visible in the next horizon
 >>> with Session(ledger) as sess:
-...     sess.Commit(ArmData(n=10, success=2, arm="A"))
+...     sess.commit(ArmData(n=10, success=2, arm="A"))
 
 >>> with Session(ledger) as sess:
-...     state = sess.Read(fact)
+...     state = sess.read(fact)
 >>> state.data.arms["A"].metrics.n
 10
 

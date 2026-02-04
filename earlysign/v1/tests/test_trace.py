@@ -11,7 +11,7 @@ the ledger via Read, which provides Traced[T] with proper lineage.
 These tests verify:
 1. Basic Traced container behavior
 2. Trace flows through Read operations (Projectors)
-3. Implicit trace from session.Read is used when trace is not explicitly passed
+3. Implicit trace from session.read is used when trace is not explicitly passed
 
 --- Setup ---
 >>> import json
@@ -92,12 +92,12 @@ True
 >>> ledger.ensure()
 
 >>> with Session(ledger) as sess:
-...     sess.Commit(Fact(val=10), trace=[])
-...     sess.Commit(Fact(val=20), trace=[])
+...     sess.commit(Fact(val=10), trace=[])
+...     sess.commit(Fact(val=20), trace=[])
 
 # Trace comes from Read, not from Commit return values
 >>> with Session(ledger) as sess:
-...     traced_facts = sess.Read(FactProjector())
+...     traced_facts = sess.read(FactProjector())
 ...     len(traced_facts.trace) == 2  # Two facts, two ids
 True
 
@@ -108,16 +108,16 @@ True
 
 # Session trace is populated by Read operations
 >>> with Session(ledger) as sess:
-...     traced = sess.Read(FactProjector())
+...     traced = sess.read(FactProjector())
 ...     len(sess.trace) == 2
 True
 
 --- Test: Implicit trace used when not specified in Commit ---
 
-# When Session.Commit is called without explicit trace, session.trace is used
+# When Session.commit is called without explicit trace, session.trace is used
 >>> with Session(ledger) as sess:
-...     _ = sess.Read(FactProjector())  # Populates session.trace
-...     sess.Commit(Result(total=30))  # Uses implicit trace
+...     _ = sess.read(FactProjector())  # Populates session.trace
+...     sess.commit(Result(total=30))  # Uses implicit trace
 
 # Verify the Result was committed with trace from the Read
 >>> # Use Ibis to inspect the JSON metadata column
@@ -133,8 +133,8 @@ True
 --- Test: Explicit trace overrides implicit ---
 
 >>> with Session(ledger) as sess:
-...     _ = sess.Read(FactProjector())  # Populates session.trace with 2 items
-...     sess.Commit(Result(total=99), trace=[])  # Explicit empty trace
+...     _ = sess.read(FactProjector())  # Populates session.trace with 2 items
+...     sess.commit(Result(total=99), trace=[])  # Explicit empty trace
 
 >>> t = ledger.t
 >>> q = t.filter(t.type == "Result").order_by(t.timestamp.desc()).limit(1)
@@ -147,8 +147,8 @@ True
 --- Test: Multiple Reads accumulate trace ---
 
 >>> with Session(ledger) as sess:
-...     _ = sess.Read(FactProjector())
-...     _ = sess.Read(FactProjector())
+...     _ = sess.read(FactProjector())
+...     _ = sess.read(FactProjector())
 ...     len(sess.trace) == 4  # 2 facts x 2 reads = 4 traces
 True
 """

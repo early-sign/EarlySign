@@ -114,7 +114,7 @@ class Entity(BaseEntity[T], ABC):
         >>> # 3. First Session: Read and Snapshot
         >>> with Session(ledger) as sess:
         ...     counter = CounterEntity(identity="my_counter")
-        ...     result = sess.Read(counter)
+        ...     result = sess.read(counter)
         ...     print(f"Count: {result.data.count}")
         ...     print(f"Trace Length: {len(result.trace)}")
         ...     counter.save(sess, result)
@@ -131,7 +131,7 @@ class Entity(BaseEntity[T], ABC):
         >>> ledger.insert(Increment(value=10))
         >>> with Session(ledger) as sess2:
         ...     counter2 = CounterEntity(identity="my_counter")
-        ...     result2 = sess2.Read(counter2)
+        ...     result2 = sess2.read(counter2)
         ...     print(f"Count: {result2.data.count}")
         ...     # Trace should be [SnapshotID, NewIncrementID]
         ...     print(f"Trace Length: {len(result2.trace)}")
@@ -262,4 +262,4 @@ class Entity(BaseEntity[T], ABC):
                 return
 
         # Snapshot is just the data model, committed with identity
-        session.Commit(result.data, identity=self.identity)
+        session.commit(result.data, identity=self.identity)

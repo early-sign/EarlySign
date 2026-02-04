@@ -39,7 +39,7 @@ class Writer:
     """
 
     @staticmethod
-    def Commit(
+    def commit(
         session: "Session",
         record: Any,
         identity: Optional[str] = None,
@@ -76,7 +76,7 @@ class Writer:
         )
 
     @staticmethod
-    def CallAndCommit(
+    def call_and_commit(
         session: "Session",
         result_type: Type[Any],
         func: Callable[..., Any],

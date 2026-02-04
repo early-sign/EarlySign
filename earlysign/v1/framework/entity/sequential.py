@@ -26,7 +26,7 @@ class LatestStateProjector(Projector[Optional[S]], Generic[Index, S]):
     """A Projector that returns the latest state from a SequentialEntity trajectory.
 
     This is returned by SequentialEntity.latest property and provides a
-    Projector interface for use with `sess.Read()`.
+    Projector interface for use with `sess.read()`.
     """
 
     def __init__(self, entity: "SequentialEntity[Index, S]"):
@@ -194,7 +194,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         >>> # 2. First Read
         >>> with Session(ledger) as sess:
         ...     sums = SumsEntity(identity="test_sums")
-        ...     result = sess.Read(sums)
+        ...     result = sess.read(sums)
         ...     print(f"Len: {len(result.data)}")
         ...     print(f"L1: {result.data[0]}")
         ...     print(f"L2: {result.data[1]}")
@@ -209,7 +209,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         >>> # 4. Second Read (Resume)
         >>> with Session(ledger) as sess2:
         ...     sums2 = SumsEntity(identity="test_sums")
-        ...     result2 = sess2.Read(sums2)
+        ...     result2 = sess2.read(sums2)
         ...     print(f"Len: {len(result2.data)}")
         ...     print(f"L3: {result2.data[2]}")
         Len: 3

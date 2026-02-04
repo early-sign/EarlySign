@@ -31,7 +31,7 @@ class TemplateBase(ABC, Generic[TProtocol]):
         # Validate against schema
         protocol = self._protocol_class.model_validate(protocol)
         with Session(self.ledger) as sess:
-            sess.Commit(protocol)
+            sess.commit(protocol)
 
 
 class AutoNameMixin(BaseModel):

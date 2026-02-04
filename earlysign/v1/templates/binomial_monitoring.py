@@ -87,22 +87,22 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         if batch:
             with Session(self.ledger) as sess:
                 for item in batch:
-                    sess.Commit(item, trace=[])
+                    sess.commit(item, trace=[])
 
         with Session(self.ledger) as sess:
             # 1. Read Protocol
-            protocol = sess.Read(ProtocolProjector(EProcessProtocol)).data
+            protocol = sess.read(ProtocolProjector(EProcessProtocol)).data
 
             # 2. Read Metrics
-            metrics = sess.Read(BinomialScoreboard(identity="metrics"))
+            metrics = sess.read(BinomialScoreboard(identity="metrics"))
 
             # 3. Run Engine
             engine = BinomialEValueEngine(protocol)
 
             # 4. Commit LookResult
-            # Note: We can use sess.CallAndCommit or just sess.Commit(engine.run(metrics.data))
+            # Note: We can use sess.call_and_commit or just sess.commit(engine.run(metrics.data))
             look_result = engine.run(metrics.data)
-            sess.Commit(look_result)
+            sess.commit(look_result)
 
     def report_progress(self) -> Dict[str, Any]:
         """
@@ -111,7 +111,7 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         """
         with Session(self.ledger) as sess:
             # 1. Read Report (Projector handles protocol and summary reconstruction internally)
-            traced_report = sess.Read(BinomialEValueProgressProjector())
+            traced_report = sess.read(BinomialEValueProgressProjector())
             report = traced_report.data
 
             return report.model_dump(mode="json")
@@ -119,7 +119,7 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
-            return sess.Read(BinomialEValueFinalProjector()).data.model_dump(
+            return sess.read(BinomialEValueFinalProjector()).data.model_dump(
                 mode="json"
             )
 
@@ -136,7 +136,7 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
             with Session(self.ledger) as sess:
                 items = batch if isinstance(batch, list) else [batch]
                 for item in items:
-                    sess.Commit(item, trace=[])
+                    sess.commit(item, trace=[])
 
             res = self.report_progress()
             if res["is_rejected"]:
@@ -158,7 +158,7 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         # 1. Get Final Result & Protocol
         final_res = self.report_result()
         with Session(self.ledger) as sess:
-            protocol_res = sess.Read(ProtocolProjector(EProcessProtocol))
+            protocol_res = sess.read(ProtocolProjector(EProcessProtocol))
             p = protocol_res.data
 
             # 2. Reconstruct History
