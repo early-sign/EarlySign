@@ -38,18 +38,23 @@ namespace Log {
   }
 
   /**
-   * Result of a statistical test/evaluation for the study at a look.
+   * Result of a statistical test/evaluation for the study at a look (YEAST).
    */
   model LookResult extends Base.Log {
+    /** Total number of samples (cumulative). */
     sample_n: int32;
+    /** Fraction of information accrued. */
     info_frac: float64;
     
-    /** The calculated trajectory value */
+    /** The calculated trajectory value (Your Evidence). */
     trajectory: float64;
 
+    /** The efficacy boundary at this look. */
     efficacy_boundary?: float64;
+    /** Whether the trajectory crossed the efficacy boundary. */
     is_efficacy_crossed: boolean;
 
+    /** Current status of the YEAST test. */
     status: DecisionStatus | string;
   }
 }

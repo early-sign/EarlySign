@@ -40,21 +40,22 @@ class ContinuousYeastTaskSpec(BaseModel):
 
 
 class BinomialYeastTemplate(TemplateBase[Protocol]):
-    """
-    Template for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
+    """Template for YEAST on Binomial data.
+
     Standardized to use Session, Engine, and Projectors.
 
     Examples:
-        >>> import ibis
+        >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
         >>> from earlysign.schema.ES3.YEAST.Log import DecisionStatus
-
+        >>>
+        >>> # Setup
         >>> conn = ibis.connect("duckdb://:memory:")
         >>> ledger = Ledger(conn, "events")
         >>> ledger.ensure()
         >>> ledger = ledger.bind(experiment_id="doctest_yeast_binomial")
-
+        >>>
         >>> # 1. Design Protocol
         >>> task = BinomialYeastTaskSpec(
         ...     arms=["control", "treatment"],
@@ -77,7 +78,7 @@ class BinomialYeastTemplate(TemplateBase[Protocol]):
         ...     estimated_variance=1.0,
         ... )
         >>> template.set_protocol(protocol)
-
+        >>>
         >>> # 2. Update with data (Batch 1: Below boundary)
         >>> batch1 = [
         ...     BinomialArmData(n=50, success=20, arm="control"),
@@ -89,7 +90,7 @@ class BinomialYeastTemplate(TemplateBase[Protocol]):
         'continue'
         >>> report1["trajectory"]
         10.0
-
+        >>>
         >>> # 3. Update with more data (Batch 2: Crossing boundary)
         >>> batch2 = [
         ...     BinomialArmData(n=50, success=20, arm="control"),
@@ -177,36 +178,39 @@ class BinomialYeastTemplate(TemplateBase[Protocol]):
             )
 
     def report_progress(self) -> Dict[str, Any]:
-        """
-        Report current status.
+        """Report current status.
+
+        Returns:
+            A dictionary containing the current progress report.
         """
         with Session(self.ledger) as sess:
             report = sess.Read(ProgressProjector()).data
             return report.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
-        """
-        Report final result.
+        """Report final result.
+
+        Returns:
+            A dictionary containing the final result of the experiment.
         """
         with Session(self.ledger) as sess:
             return sess.Read(FinalProjector()).data.model_dump(mode="json")
 
 
 class ContinuousYeastTemplate(TemplateBase[Protocol]):
-    """
-    Template for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
+    """Template for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
 
     Examples:
         >>> import ibis
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
         >>> from earlysign.schema.ES3.YEAST.Log import DecisionStatus
-
+        >>>
         >>> conn = ibis.connect("duckdb://:memory:")
         >>> ledger = Ledger(conn, "events")
         >>> ledger.ensure()
         >>> ledger = ledger.bind(experiment_id="doctest_yeast_continuous")
-
+        >>>
         >>> task = ContinuousYeastTaskSpec(
         ...     arms=["control", "treatment"],
         ...     response_type="continuous",
@@ -220,7 +224,7 @@ class ContinuousYeastTemplate(TemplateBase[Protocol]):
         ...     estimated_variance=1.0,
         ... )
         >>> template.set_protocol(protocol)
-
+        >>>
         >>> # Batch 1: Below boundary
         >>> batch1 = [
         ...     ContinuousArmData(n=10, sum_x=10.0, sum_x2=20.0, arm="control"),
@@ -244,6 +248,8 @@ class ContinuousYeastTemplate(TemplateBase[Protocol]):
         'stop_efficacy'
         >>> report2["trajectory"]
         25.0
+        >>> report2["sample_n"]
+        40
     """
 
     _protocol_class = Protocol

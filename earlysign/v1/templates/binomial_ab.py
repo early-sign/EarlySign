@@ -87,25 +87,27 @@ if a stopping boundary has been crossed.
     ...     progress = template.report_progress()
     ...     if progress['status'] != DecisionStatus.CONTINUE_:
     ...         break
-
-Finally, we generate the final report to see the study outcome.
-
+    >>>
+    >>> # Finally, we generate the final report to see the study outcome.
+    >>>
     >>> final = template.report_result()
     >>> print(f"Final Status: {final['final_status']}")
     Final Status: stop_efficacy
     >>> print(f"Is Rejected: {final['is_rejected']}")
     Is Rejected: True
-
-In practice, each iteration may run in a different process.
-To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
-
+    >>>
+    >>> # In practice, each iteration may run in a different process.
+    >>> # To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
+    >>>
     >>> # Test: Protocol Deserialization from JSON
-    >>> protocol_json = '{"name": "earlysign.v1.templates.binomial_ab.BinomialABProtocol", "ES3_version": "v1.0.0", "task": {"kind": "group_sequential", "arms": ["C", "T"], "response_type": "binary", "hypotheses": {"h_null_description": "Diff <= 0", "h_alt_description": "Diff > 0.05", "test_logic": {"kind": "superiority"}, "target_effect": {"type": "binary", "proportions": {"C": 0.09, "T": 0.14}}}, "efficacy": {"alpha": 0.025}, "futility": {"power": 0.8, "binding": false}}, "method": {"kind": "group_sequential", "stopping_policy": {"statistic": {"kind": "two_arm_binomial_z"}, "strategy": {"kind": "alpha_beta_spending", "statistical_model": {"kind": "canonical_gaussian"}, "alpha_spending_fn": {"family": "obrien_fleming", "params": null}, "beta_spending_fn": {"family": "obrien_fleming", "params": null}, "alpha_budget": 0.025, "beta_budget": 0.2, "alpha_binding": true, "beta_binding": false}, "timer": {"kind": "sample_size", "unit": "individuals", "max_sample_size": 1255}, "schedule": {"kind": "fixed", "analyses": [0.5, 1.0]}}, "adaptation": null}}'
+    >>> protocol_json = '{"name": "earlysign.v1.templates.binomial_ab.BinomialABProtocol", "ES3_version": "v1.0.0", "task": {"kind": "group_sequential", "arms": ["C", "T"], "response_type": "binary", "hypotheses": {"h_null_description": "Diff <= 0", "h_alt_description": "Diff > 0.05", "test_logic": {"kind": "superiority", "superiority_margin": 0.05}, "target_effect": {"type": "binary", "proportions": {"C": 0.09, "T": 0.14}}}, "efficacy": {"alpha": 0.025}, "futility": {"power": 0.8, "binding": false}}, "method": {"kind": "group_sequential", "stopping_policy": {"statistic": {"kind": "two_arm_binomial_z"}, "strategy": {"kind": "alpha_beta_spending", "statistical_model": {"kind": "canonical_gaussian"}, "alpha_spending_fn": {"family": "obrien_fleming", "params": null}, "beta_spending_fn": {"family": "obrien_fleming", "params": null}, "alpha_budget": 0.025, "beta_budget": 0.2, "alpha_binding": true, "beta_binding": false}, "timer": {"kind": "sample_size", "unit": "individuals", "max_sample_size": 1255}, "schedule": {"kind": "fixed", "analyses": [0.5, 1.0]}}, "adaptation": null}}'
     >>> protocol_from_json = BinomialABProtocol.model_validate_json(protocol_json)
     >>> protocol_from_json.task.arms
     ['C', 'T']
     >>> protocol_from_json.method.stopping_policy.statistic.kind
     'two_arm_binomial_z'
+    >>> final['is_rejected']
+    True
 """
 
 from typing import Any, Dict, List, Optional
@@ -116,7 +118,6 @@ import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
-from earlysign.v1.framework.protocol_mixin import AutoNameMixin
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
@@ -129,7 +130,7 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.v1.templates.base import TemplateBase
+from earlysign.v1.templates.base import AutoNameMixin, TemplateBase
 
 
 class BinomialABTaskSpec(GST.TaskSpec):
@@ -148,8 +149,10 @@ class BinomialABProtocol(GST.Protocol, AutoNameMixin):
 
 
 class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
-    """
-    Standard orchestration for a Binomial A/B test using Group Sequential Design.
+    """Standard orchestrator for Binomial A/B tests.
+
+    Provides high-level methods for designing,Updating, and reporting
+    sequential A/B tests with binary outcomes.
     """
 
     _protocol_class = BinomialABProtocol

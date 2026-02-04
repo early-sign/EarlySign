@@ -12,12 +12,26 @@ from ..Base import Log
 
 
 class AdaptationLog(Log):
-    look: int
-    conditional_power: float
-    promising_zone_status: PromisingZoneStatus | str
-    promising_zone_recommendation: str
-    original_sample_size: int
-    recommended_sample_size: int | None = None
+    """
+    Log entry for an adaptation event (e.g., SSR).
+    """
+
+    look: int = Field(..., description="Look index at which adaptation was calculated.")
+    conditional_power: float = Field(
+        ..., description="Calculated conditional power based on current data."
+    )
+    promising_zone_status: PromisingZoneStatus | str = Field(
+        ..., description="Status of the promising zone logic."
+    )
+    promising_zone_recommendation: str = Field(
+        ..., description="Human-readable recommendation or message."
+    )
+    original_sample_size: int = Field(
+        ..., description="Original planned max sample size."
+    )
+    recommended_sample_size: int | None = Field(
+        None, description="Newly recommended max sample size (if SSR triggered)."
+    )
 
 
 class Analysis(Log):
@@ -61,15 +75,27 @@ class LookResult(BaseModel):
     Result of a statistical test/evaluation for the study at a look.
     """
 
-    look: int | None = None
-    sample_n: int
-    info_frac: float
-    z_stat: float
-    efficacy_boundary: float | None = None
-    is_efficacy_crossed: bool
-    futility_boundary: float | None = None
-    is_futility_crossed: bool
-    status: DecisionStatus | str
+    look: int | None = Field(None, description="Look index (1-indexed).")
+    sample_n: int = Field(..., description="Current cumulative sample size.")
+    info_frac: float = Field(
+        ..., description="Current fraction of information accrued."
+    )
+    z_stat: float = Field(..., description="Current calculated Z-statistic.")
+    efficacy_boundary: float | None = Field(
+        None, description="The calculated efficacy boundary at this look."
+    )
+    is_efficacy_crossed: bool = Field(
+        ..., description="Whether the efficacy boundary was crossed."
+    )
+    futility_boundary: float | None = Field(
+        None, description="The calculated futility boundary at this look."
+    )
+    is_futility_crossed: bool = Field(
+        ..., description="Whether the futility boundary was crossed."
+    )
+    status: DecisionStatus | str = Field(
+        ..., description="The decision status resulting from this look."
+    )
 
 
 class PromisingZoneStatus(StrEnum):

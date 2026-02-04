@@ -12,12 +12,16 @@ B = TypeVar("B", bound=BaseModel)
 
 
 class Session:
-    """
-    The primary execution context for the framework.
+    """The primary execution context for the framework.
 
     A session defines the 'Scientific Horizon' by capturing the state of
     the Ledger at initiation. It also manages 'Implicit Trace Accumulation'
     to automatically track causality.
+
+    Attributes:
+        ledger (Ledger): The event ledger instance.
+        horizon_ts (Optional[Any]): The captured timestamp defining the scientific horizon.
+        _session_trace (List[TraceId]): Accumulator for implicit traces during the session.
     """
 
     def __init__(self, ledger: Ledger):
@@ -40,16 +44,23 @@ class Session:
 
     @property
     def table(self) -> Any:
-        """
-        Returns a lazy table expression filtered by the Scientific Horizon.
+        """Return a lazy table expression filtered by the Scientific Horizon.
+
+        Returns:
+            An Ibis table expression containing records up to the horizon.
         """
         if self.horizon_ts is None:
             return self.ledger.t
         return self.ledger.t.filter(self.ledger.t.timestamp <= self.horizon_ts)
 
     def Read(self, projector: Projector[T]) -> Traced[T]:
-        """
-        Hydrates data using a Projector and accumulates its lineage.
+        """Hydrate data using a Projector and accumulate its lineage.
+
+        Args:
+            projector: The projector instance to execute.
+
+        Returns:
+            The traced result of the projection.
         """
         filtered_data = self.ledger.t
         if self.horizon_ts is not None:
@@ -73,11 +84,16 @@ class Session:
         trace: Optional[List[TraceId]] = None,
         attributes: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """
-        Records a model into the Ledger with implicit context.
+        """Record a model into the Ledger with implicit context.
 
         Automatically attaches the session's scientific horizon and
         implicit trace if no explicit trace is provided.
+
+        Args:
+            record: The data record (usually a Pydantic model).
+            identity: Optional unique identity for the record (e.g., entity ID).
+            trace: Optional explicit parent traces. Defaults to session trace.
+            attributes: Optional additional labels for the ledger.
         """
         target_trace = trace if trace is not None else self.trace
         combined_attributes = {"horizon": str(self.horizon_ts)}

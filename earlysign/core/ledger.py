@@ -1,72 +1,68 @@
-"""
-High level Ledger facade over a backend table (Ibis).
+"""High level Ledger facade over a backend table (Ibis).
 
-Design
-------
-- Append-only event ledger with JSON payload and labels.
-- Labels can be "bound" (like a scope) so that queries and inserts
-  automatically apply those filters / label merges.
-- `bind(**labels)` returns a new Ledger with additional labels bound.
-- `unbind(*selectors)` removes bound labels.
+Design:
+    - Append-only event ledger with JSON payload and labels.
+    - Labels can be "bound" (like a scope) so that queries and inserts
+      automatically apply those filters / label merges.
+    - `bind(**labels)` returns a new Ledger with additional labels bound.
+    - `unbind(*selectors)` removes bound labels.
 
-Table contract
---------------
-Base table has columns:
-  - uuid: string (auto-generated)
-  - type: string
-  - payload: json
-  - attributes: json
-  - timestamp: timestamp (UTC) (auto-generated)
-  - metadata: json (contains trace)
+Table contract:
+    Base table has columns:
+    - uuid: string (auto-generated)
+    - type: string
+    - payload: json
+    - attributes: json
+    - timestamp: timestamp (UTC) (auto-generated)
+    - metadata: json (contains trace)
 
-Doctests
---------
->>> import ibis, duckdb  # noqa: F401
->>> from earlysign.core.ledger import Ledger
->>> import re
-
-# Setup
->>> con = ibis.duckdb.connect(":memory:")
->>> ledger = Ledger(con, "events"); ledger.ensure()
-
-# Bind two attributes, then drop one (exact key)
->>> experiment_ledger = ledger.bind(experiment_id="exp1", env="prod")
->>> experiment_ledger.attributes == {"experiment_id": "exp1", "env": "prod"}
-True
->>> reduced_ledger = experiment_ledger.unbind("env")
->>> reduced_ledger.attributes == {"experiment_id": "exp1"}
-True
-
-# Insert with only remaining bound attribute applied
->>> class MyEvent:
-...     def __init__(self, a): self.a = a
->>> _ = reduced_ledger.insert(data=MyEvent(a=1))
-
-# Some backends differ in JSON key equality semantics; materialize and check in Python.
->>> df = ledger.t.execute()
->>> any(rec["attributes"].get("experiment_id") == "exp1" for rec in df.to_dict("records"))
-True
-
-# Regex unbind: drop all keys starting with 'site_'
->>> geo_ledger = experiment_ledger.bind(site_eu=True, site_us=True)
->>> geo_ledger.attributes == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
-True
->>> trimmed_ledger = geo_ledger.unbind(r"^site_.*")
->>> "site_eu" in trimmed_ledger.attributes or "site_us" in trimmed_ledger.attributes
-False
->>> set(trimmed_ledger.attributes.keys()) == {"experiment_id", "env"}
-True
-
-# Regex unbind with compiled pattern
->>> p = re.compile(r"^exp.*")
->>> no_exp_ledger = trimmed_ledger.unbind(p)
->>> "experiment_id" in no_exp_ledger.attributes
-False
-
-# Drop all bound attributes
->>> unbound_ledger = experiment_ledger.unbind()
->>> unbound_ledger.attributes
-{'experiment_id': 'exp1', 'env': 'prod'}
+Examples:
+    >>> import ibis, duckdb  # noqa: F401
+    >>> from earlysign.core.ledger import Ledger
+    >>> import re
+    >>>
+    >>> # Setup
+    >>> con = ibis.duckdb.connect(":memory:")
+    >>> ledger = Ledger(con, "events"); ledger.ensure()
+    >>>
+    >>> # Bind two attributes, then drop one (exact key)
+    >>> experiment_ledger = ledger.bind(experiment_id="exp1", env="prod")
+    >>> experiment_ledger.attributes == {"experiment_id": "exp1", "env": "prod"}
+    True
+    >>> reduced_ledger = experiment_ledger.unbind("env")
+    >>> reduced_ledger.attributes == {"experiment_id": "exp1"}
+    True
+    >>>
+    >>> # Insert with only remaining bound attribute applied
+    >>> class MyEvent:
+    ...     def __init__(self, a): self.a = a
+    >>> _ = reduced_ledger.insert(data=MyEvent(a=1))
+    >>>
+    >>> # Some backends differ in JSON key equality semantics; materialize and check in Python.
+    >>> df = ledger.t.execute()
+    >>> any(rec["attributes"].get("experiment_id") == "exp1" for rec in df.to_dict("records"))
+    True
+    >>>
+    >>> # Regex unbind: drop all keys starting with 'site_'
+    >>> geo_ledger = experiment_ledger.bind(site_eu=True, site_us=True)
+    >>> geo_ledger.attributes == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
+    True
+    >>> trimmed_ledger = geo_ledger.unbind(r"^site_.*")
+    >>> "site_eu" in trimmed_ledger.attributes or "site_us" in trimmed_ledger.attributes
+    False
+    >>> set(trimmed_ledger.attributes.keys()) == {"experiment_id", "env"}
+    True
+    >>>
+    >>> # Regex unbind with compiled pattern
+    >>> p = re.compile(r"^exp.*")
+    >>> no_exp_ledger = trimmed_ledger.unbind(p)
+    >>> "experiment_id" in no_exp_ledger.attributes
+    False
+    >>>
+    >>> # Drop all bound attributes
+    >>> unbound_ledger = experiment_ledger.unbind()
+    >>> unbound_ledger.attributes
+    {'experiment_id': 'exp1', 'env': 'prod'}
 """
 
 import json
@@ -102,17 +98,16 @@ def bq_parse_json(col: Any) -> Any:
 
 
 class Ledger:
-    """
-    Append-only Event Ledger.
+    """Append-only Event Ledger.
 
     The Ledger provides a unified interface for recording and querying events.
     It manages the mapping between high-level domain records and the physical
     append-only table.
 
     Attributes:
-        connector: The Ibis backend connector.
-        table_name: The physical table name.
-        attributes: Default attributes applied to all operations in the current scope.
+        connector (Optional[ibis.BaseBackend]): The Ibis backend connector.
+        table_name (str): The physical table name.
+        attributes (Dict[str, Any]): Default attributes applied to all operations in the current scope.
     """
 
     def __init__(
@@ -127,9 +122,25 @@ class Ledger:
 
     # --------- lifecycle ----------
     def set_connector(self, connector: ibis.BaseBackend) -> Self:
+        """Set the Ibis backend connector.
+
+        Args:
+            connector: The Ibis backend connector.
+
+        Returns:
+            A new Ledger instance with the connector set.
+        """
         return cast(Self, Ledger(connector, self.table_name, dict(self.attributes)))
 
     def use_default_table(self, name: str = "events") -> Self:
+        """Switch to a different physical table name.
+
+        Args:
+            name: The physical table name. Defaults to "events".
+
+        Returns:
+            A new Ledger instance with the table name set.
+        """
         return cast(Self, Ledger(self.connector, name, dict(self.attributes)))
 
     @property
@@ -147,7 +158,11 @@ class Ledger:
         )
 
     def ensure(self) -> None:
-        """Ensure the ledger table (with standard schema) exists."""
+        """Ensure the ledger table (with standard schema) exists.
+
+        Raises:
+            RuntimeError: If the ledger connector is not set.
+        """
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
         if self.table_name in self.connector.list_tables():
@@ -156,48 +171,60 @@ class Ledger:
 
     # --------- binding / scoping ----------
     def bind(self, **attributes: Any) -> Self:
-        """Return a new Ledger whose scope includes the given attributes."""
+        """Return a new Ledger whose scope includes the given attributes.
+
+        Args:
+            **attributes: Key-value pairs to bind to the ledger.
+
+        Returns:
+            A new Ledger instance with merged attributes.
+        """
         merged = dict(self.attributes)
         merged.update(attributes)
         return cast(Self, Ledger(self.connector, self.table_name, merged))
 
     def unbind(self, *patterns: Union[str, Pattern[str]]) -> Self:
-        """
-        Return a new Ledger with bound attributes removed if their keys match ANY pattern.
-        Keys for which ANY compiled pattern .search(key) succeeds will be removed.
+        """Return a new Ledger with bound attributes removed if their keys match ANY pattern.
 
-        Each argument in `patterns` may be:
-          - str: compiled via re.compile(...)
-          - re.Pattern[str]: used as-is
+        Keys for which ANY compiled pattern `.search(key)` succeeds will be removed.
+
+        Args:
+            *patterns: Patterns to match against attribute keys.
+                Each argument may be:
+                - str: compiled via `re.compile(...)`
+                - re.Pattern[str]: used as-is
+
+        Returns:
+            A new Ledger instance with matching attributes removed.
 
         Examples:
-        >>> from earlysign.core.ledger import Ledger
-        >>> import ibis, duckdb, re
-        >>> con = ibis.duckdb.connect(":memory:")
-        >>> base = Ledger(con, "events"); base.ensure()
-        >>> experiment_ledger = base.bind(experiment_id="exp1", env="prod")
-        >>> class MyEvent:
-        ...     def __init__(self, a): self.a = a
-        >>> _ = experiment_ledger.insert(data=MyEvent(a=1))
-        >>> df = base.t.execute()
-        >>> any(rec["attributes"].get("experiment_id") == "exp1" for rec in df.to_dict("records"))
-        True
-
-        # Regex unbind: drop all keys starting with 'site_'
-        >>> geo_ledger = experiment_ledger.bind(site_eu=True, site_us=True)
-        >>> geo_ledger.attributes == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
-        True
-        >>> trimmed_ledger = geo_ledger.unbind(r"^site_.*")
-        >>> "site_eu" in trimmed_ledger.attributes or "site_us" in trimmed_ledger.attributes
-        False
-        >>> set(trimmed_ledger.attributes.keys()) == {"experiment_id", "env"}
-        True
-
-        # Regex unbind with compiled pattern
-        >>> p = re.compile(r"^exp.*")
-        >>> no_exp_ledger = trimmed_ledger.unbind(p)
-        >>> "experiment_id" in no_exp_ledger.attributes
-        False
+            >>> from earlysign.core.ledger import Ledger
+            >>> import ibis, duckdb, re
+            >>> con = ibis.duckdb.connect(":memory:")
+            >>> base = Ledger(con, "events"); base.ensure()
+            >>> experiment_ledger = base.bind(experiment_id="exp1", env="prod")
+            >>> class MyEvent:
+            ...     def __init__(self, a): self.a = a
+            >>> _ = experiment_ledger.insert(data=MyEvent(a=1))
+            >>> df = base.t.execute()
+            >>> any(rec["attributes"].get("experiment_id") == "exp1" for rec in df.to_dict("records"))
+            True
+            >>>
+            >>> # Regex unbind: drop all keys starting with 'site_'
+            >>> geo_ledger = experiment_ledger.bind(site_eu=True, site_us=True)
+            >>> geo_ledger.attributes == {"experiment_id": "exp1", "env": "prod", "site_eu": True, "site_us": True}
+            True
+            >>> trimmed_ledger = geo_ledger.unbind(r"^site_.*")
+            >>> "site_eu" in trimmed_ledger.attributes or "site_us" in trimmed_ledger.attributes
+            False
+            >>> set(trimmed_ledger.attributes.keys()) == {"experiment_id", "env"}
+            True
+            >>>
+            >>> # Regex unbind with compiled pattern
+            >>> p = re.compile(r"^exp.*")
+            >>> no_exp_ledger = trimmed_ledger.unbind(p)
+            >>> "experiment_id" in no_exp_ledger.attributes
+            False
         """
         if not patterns:
             return self
@@ -232,14 +259,23 @@ class Ledger:
         attributes: Mapping[str, Any] | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> None:
-        """
-        Insert one row (append-only). Auto-fills uuid and timestamp.
-        The current scope attributes (self.attributes) are ALWAYS merged into `attributes`.
+        """Insert one row (append-only). Auto-fills uuid and timestamp.
 
-        Note: This method intentionally does not return anything.
-        In event sourcing all derived state should be obtained
-        by projecting from the ledger via Read, which provides Traced[T] with
-        proper lineage.
+        The current scope attributes (`self.attributes`) are ALWAYS merged into `attributes`.
+
+        Note:
+            This method intentionally does not return anything.
+            In event sourcing all derived state should be obtained
+            by projecting from the ledger via Read, which provides `Traced[T]` with
+            proper lineage.
+
+        Args:
+            data: The event data to insert.
+            attributes: Optional additional attributes for this event.
+            metadata: Optional additional metadata for this event.
+
+        Raises:
+            RuntimeError: If the ledger connector is not set.
         """
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
@@ -330,13 +366,29 @@ class Ledger:
     # --------- scientific horizon support ----------
     @property
     def latest_ts(self) -> Any:
-        """Returns the latest timestamp from the ledger."""
+        """Return the latest timestamp from the ledger.
+
+        Returns:
+            The maximum timestamp in the ledger.
+
+        Raises:
+            RuntimeError: If the ledger connector is not set.
+        """
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
         return self.t.timestamp.max().execute()
 
     # --------- utility ----------
     def show(self, all: bool = False) -> Any:
+        """Display the contents of the ledger.
+
+        Args:
+            all: If True, return the raw table. If False, return a truncated,
+                more readable version. Defaults to False.
+
+        Returns:
+            A DataFrame containing the ledger data.
+        """
         if all:
             return self.t.execute()
         else:

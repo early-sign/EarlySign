@@ -6,7 +6,9 @@ namespace ES3.GST;
  * Enforces that task and method belong to the GST domain.
  */
 model Protocol extends Base.Protocol {
+  /** The GST task specification. */
   task: TaskSpec;
+  /** The GST method specification. */
   method: MethodSpec;
 }
 
@@ -40,12 +42,17 @@ model TaskSpec extends Base.TaskSpec {
  * GST-Specific Method Definition (Univariate).
  */
 model MethodSpec extends Base.MethodSpec {
+  /** The kind of method (discriminator). */
   kind: "group_sequential" = "group_sequential"; 
 
-  /** Stopping Policy (discriminated union) */
+  /** Stopping Policy (discriminated union). */
   stopping_policy: StoppingPolicySpec;
   
+  /** Technical specification for interim adaptation (SSR, etc.). */
   adaptation?: AdaptationSpec;
+
+  /** Snapshot of internal state during adaptation, used for Weighted Z-score correction. */
+  adaptation_snapshot?: AdaptationSnapshot;
 }
 
 // --- Sub-Components ---
@@ -201,44 +208,57 @@ model WangTsiatisStrategy extends BoundaryFunctionStrategyBase {
 /**
  * Logical Margins and Test Objectives.
  */
-model HypothesisParameters {
+model HypothesisParametersBase {
   kind: string;
 }
 
-model EqualityHypothesis extends HypothesisParameters { kind: "equality"; }
-model SuperiorityHypothesis extends HypothesisParameters { kind: "superiority"; superiority_margin: float64 = 0.0; }
-model NonInferiorityHypothesis extends HypothesisParameters { kind: "non_inferiority"; non_inferiority_margin: float64; }
-model EquivalenceHypothesis extends HypothesisParameters { kind: "equivalence"; lower_margin: float64; upper_margin: float64; }
+union HypothesisParameters {
+  EqualityHypothesis,
+  SuperiorityHypothesis,
+  NonInferiorityHypothesis,
+  EquivalenceHypothesis,
+}
+
+model EqualityHypothesis extends HypothesisParametersBase { kind: "equality"; }
+model SuperiorityHypothesis extends HypothesisParametersBase { kind: "superiority"; superiority_margin: float64 = 0.0; }
+model NonInferiorityHypothesis extends HypothesisParametersBase { kind: "non_inferiority"; non_inferiority_margin: float64; }
+model EquivalenceHypothesis extends HypothesisParametersBase { kind: "equivalence"; lower_margin: float64; upper_margin: float64; }
 
 model HypothesisSpec {
   h_null_description: string;
   h_alt_description: string;
   test_logic: HypothesisParameters;
-  target_effect: EffectSizeSpec;
+  target_effect: EffectSizeUnion;
+}
+
+union EffectSizeUnion {
+  BinaryEffectSize,
+  ContinuousEffectSize,
+  SurvivalEffectSize,
 }
 
 /**
  * Numerical assumptions for the Alternative Hypothesis (H1).
  * Note: This defines the "ball position" (simulation target), separate from the "goal posts" (Hypothesis Margins).
  */
-model EffectSizeSpec {
+model EffectSizeSpecBase {
   type: string;
 }
 
-model BinaryEffectSize extends EffectSizeSpec {
+model BinaryEffectSize extends EffectSizeSpecBase {
   type: "binary";
   /** Arm name -> Expected rate */
   proportions: Record<float64>;
 }
 
-model ContinuousEffectSize extends EffectSizeSpec {
+model ContinuousEffectSize extends EffectSizeSpecBase {
   type: "continuous";
   /** Arm name -> Expected mean */
   means: Record<float64>;
   standard_deviation: float64;
 }
 
-model SurvivalEffectSize extends EffectSizeSpec {
+model SurvivalEffectSize extends EffectSizeSpecBase {
   type: "time_to_event";
   /** Arm name -> Hazard Ratio (relative to control) */
   hazard_ratios: Record<float64>;
@@ -496,21 +516,30 @@ namespace Log {
     message: string;
   }
 
-  /**
+/**
    * Result of a statistical test/evaluation for the study at a look.
    */
   model LookResult {
+    /** Look index (1-indexed). */
     look?: int32;
+    /** Current cumulative sample size. */
     sample_n: int32;
+    /** Current fraction of information accrued. */
     info_frac: float64;
+    /** Current calculated Z-statistic. */
     z_stat: float64;
 
+    /** The calculated efficacy boundary at this look. */
     efficacy_boundary?: float64;
+    /** Whether the efficacy boundary was crossed. */
     is_efficacy_crossed: boolean;
 
+    /** The calculated futility boundary at this look. */
     futility_boundary?: float64;
+    /** Whether the futility boundary was crossed. */
     is_futility_crossed: boolean;
 
+    /** The decision status resulting from this look. */
     status: DecisionStatus | string;
   }
 
@@ -521,12 +550,21 @@ namespace Log {
     Continue: "continue",
   }
 
+  /**
+   * Log entry for an adaptation event (e.g., SSR).
+   */
   model AdaptationLog extends Base.Log {
+    /** Look index at which adaptation was calculated. */
     look: int32;
+    /** Calculated conditional power based on current data. */
     conditional_power: float64;
+    /** Status of the promising zone logic. */
     promising_zone_status: PromisingZoneStatus | string;
+    /** Human-readable recommendation or message. */
     promising_zone_recommendation: string;
+    /** Original planned max sample size. */
     original_sample_size: int32;
+    /** Newly recommended max sample size (if SSR triggered). */
     recommended_sample_size?: int32;
   }
 }
@@ -580,4 +618,16 @@ namespace Multivariate {
     task: TaskSpec;
     method: MethodSpec;
   }
+}
+
+/**
+ * State captured during an adaptation event to preserve Type I error control.
+ */
+model AdaptationSnapshot {
+  /** Observed Z-statistic at the time of adaptation. */
+  z_t: float64;
+  /** Information fraction at the time of adaptation (t). */
+  info_frac: float64;
+  /** The maximum sample size before re-planning. */
+  original_max_sample_size: int32;
 }

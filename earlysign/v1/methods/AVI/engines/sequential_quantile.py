@@ -11,9 +11,9 @@ from earlysign.v1.framework.trace import TraceId
 
 
 class SequentialQuantileEngine:
-    """
-    Engine for Howard & Ramdas (2022) Sequential Quantile estimation.
-    This engine is stateless with respect to raw observations. it expects
+    """Engine for Howard & Ramdas (2022) Sequential Quantile estimation.
+
+    This engine is stateless with respect to raw observations. It expects
     pre-calculated order statistics (CI bounds) in its metrics.
     """
 
@@ -61,9 +61,14 @@ class SequentialQuantileEngine:
     def run(
         self, metrics: Scoreboard, trace: Optional[List[TraceId]] = None
     ) -> SequentialQuantileLookResult:
-        """
-        Evaluate the stopping condition based on injected metrics.
-        Returns a result indicating STOP_EFFICACY if bounds are disjoint.
+        """Evaluate the stopping condition based on injected metrics.
+
+        Args:
+            metrics: The scoreboard containing pre-calculated CI bounds.
+            trace: Optional parent traces.
+
+        Returns:
+            A result indicating whether the estimation has converged (disjoint bounds).
         """
         method = self.protocol.method
         if not isinstance(method, SequentialQuantileMethodSpec):

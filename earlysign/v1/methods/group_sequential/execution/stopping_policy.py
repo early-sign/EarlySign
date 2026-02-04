@@ -13,7 +13,12 @@ from earlysign.v1.methods.group_sequential.shared.spending import (
 
 
 class BoundarySolver(Protocol):
-    """Protocol for the statistical model capable of solving boundary constants."""
+    """Protocol for the statistical model capable of solving boundary constants.
+
+    Attributes:
+        info_times (NDArray[np.float64]): The information times for each look.
+        tails (int): The number of tails for the test (1 or 2).
+    """
 
     @property
     def info_times(self) -> NDArray[np.float64]: ...
@@ -24,13 +29,29 @@ class BoundarySolver(Protocol):
     def find_critical_value(
         self, shape: NDArray[np.float64], alpha: float, tails: Optional[int] = None
     ) -> float:
-        """Find critical value c such that P(Crossing c * shape) = alpha."""
+        """Find critical value c such that P(Crossing c * shape) = alpha.
+
+        Args:
+            shape (NDArray[np.float64]): The shape of the boundary.
+            alpha (float): The significance level.
+            tails (Optional[int]): The number of tails for the test.
+                If None, uses the `tails` attribute of the solver.
+
+        Returns:
+            float: The critical value c.
+        """
         ...
 
 
 @dataclass(frozen=True, kw_only=True)
 class StoppingPolicy(ABC):
-    """Abstract base class for execution-layer Stopping Logic."""
+    """Abstract base class for execution-layer Stopping Logic.
+
+    Attributes:
+        sided (str): "one" or "two" for one-sided or two-sided tests.
+        alpha_binding (bool): True if the efficacy boundary is binding, False otherwise.
+        beta_binding (bool): True if the futility boundary is binding, False otherwise.
+    """
 
     sided: str = "two"
     alpha_binding: bool = True
@@ -40,7 +61,17 @@ class StoppingPolicy(ABC):
     def solve(
         self, model: BoundarySolver
     ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
-        """Solve for boundaries given the model context."""
+        """Solve for boundaries given the model context.
+
+        Args:
+            model (BoundarySolver): The statistical model providing information times
+                and critical value finding capabilities.
+
+        Returns:
+            Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]: A tuple containing
+                the efficacy boundaries and futility boundaries (if applicable).
+                Each can be None if not solved or not applicable.
+        """
         ...
 
     @abstractmethod
@@ -51,15 +82,29 @@ class StoppingPolicy(ABC):
         info_time: float,
         rule_type: str = "efficacy",
     ) -> Optional[float]:
-        """
-        Compute boundary at a specific look and information time.
+        """Compute boundary at a specific look and information time.
+
+        Args:
+            model (Any): The statistical model or engine providing context.
+            look_index (int): The index of the current look.
+            info_time (float): The current information time.
+            rule_type (str): The type of boundary to retrieve ("efficacy" or "futility").
+
+        Returns:
+            Optional[float]: The boundary value, or None if no boundary is applicable
+                or found for the given parameters.
         """
         ...
 
 
 @dataclass(frozen=True, kw_only=True)
 class SpendingFunctionStoppingPolicy(StoppingPolicy):
-    """Spending-function based stopping policy (Lan-DeMets)."""
+    """Spending-function based stopping policy (Lan-DeMets).
+
+    Attributes:
+        efficacy_spending (Optional[SpendingFunction]): Optional efficacy spending function.
+        futility_spending (Optional[SpendingFunction]): Optional futility spending function.
+    """
 
     efficacy_spending: Optional[SpendingFunction] = None
     futility_spending: Optional[SpendingFunction] = None
@@ -67,6 +112,22 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
     def solve(
         self, model: BoundarySolver
     ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
+        """Solve for boundaries.
+
+        Note:
+            For spending functions, the actual boundary solving is typically
+            handled by the `Model/Engine` during initialization, as it requires
+            iterative calculations based on the spending function and the
+            underlying statistical model. This method returns None, None
+            as a placeholder.
+
+        Args:
+            model (BoundarySolver): The statistical model.
+
+        Returns:
+            Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]: Always returns
+                (None, None) as boundaries are solved dynamically.
+        """
         # Implementation in Model/Engine for spending functions
         return None, None
 
@@ -77,9 +138,23 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
         info_time: float,
         rule_type: str = "efficacy",
     ) -> Optional[float]:
-        """
-        Time-based (Spending) Strategy: follow realized info_time via numerical search.
-        If info_time deviates from the planned t, we re-solve stage-by-stage.
+        """Compute boundary at a specific look and information time using a spending function.
+
+        This method implements a time-based (Spending) strategy: it follows the
+        realized information time via numerical search. If `info_time` deviates
+        significantly from the planned information time, the boundary is re-solved
+        stage-by-stage using the spending function and historical data.
+
+        Args:
+            model (Any): The statistical model or engine providing context,
+                including planned information times and historical boundaries.
+            look_index (int): The index of the current look.
+            info_time (float): The current information time.
+            rule_type (str): The type of boundary to retrieve ("efficacy" or "futility").
+
+        Returns:
+            Optional[float]: The calculated boundary value, or None if no spending
+                function is defined for the given `rule_type`.
         """
         engine = model
         planned_t = engine._points[look_index]

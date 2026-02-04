@@ -14,9 +14,10 @@ from earlysign.v1.methods.group_sequential.shared.spending import (
 
 
 class ProtocolDesigner:
-    """
-    Designer for group sequential protocols.
-    Translates scientific intent (alpha, power, delta) into a realized design (boundaries, sample size).
+    """Designer for group sequential protocols.
+
+    Translates scientific intent (alpha, power, delta) into a realized
+    design (boundaries, sample size).
     """
 
     def __init__(self, model: Optional[CanonicalJointModel] = None):
@@ -24,11 +25,17 @@ class ProtocolDesigner:
 
     @classmethod
     def from_dict(cls, config: Dict[str, Any]) -> Self:
-        """
-        Creates a ProtocolDesigner instance from a configuration dictionary.
+        """Creates a ProtocolDesigner instance from a configuration dictionary.
+
         Supported keys:
             - 'model': 'canonical_joint' (mapped to CanonicalJointModel)
             - 'model_params': Dict containing 'rng_seed', etc.
+
+        Args:
+            config: A dictionary containing configuration parameters.
+
+        Returns:
+            A ProtocolDesigner instance.
         """
         model = None
         model_type = config.get("model")
@@ -54,8 +61,27 @@ class ProtocolDesigner:
         side: int = 1,
         rho: float = 3.0,
     ) -> GST.Protocol:
-        """
-        Plans a binomial A/B design and returns a fully populated GST.Protocol.
+        """Plans a binomial A/B design and returns a fully populated GST.Protocol.
+
+        Args:
+            alpha: Type I error rate.
+            power: Statistical power (1 - Type II error rate).
+            delta: The minimum detectable difference in proportions.
+            k: The number of planned analyses (looks).
+            p_control: The proportion in the control arm.
+            spending_fn: Optional spending function to use for boundary calculation.
+                If None, O'Brien-Fleming spending is used.
+            side: The number of sides for the test (1 or 2). Currently only 1-sided
+                tests are fully supported in the planning phase.
+            rho: Parameter for the variance estimation (not currently used in this
+                binomial planning, but kept for consistency with other methods).
+
+        Returns:
+            A fully populated GST.Protocol representing the planned design.
+
+        Raises:
+            ValueError: If the ProtocolDesigner was not initialized with a
+                CanonicalJointModel, or if boundary solving fails.
         """
         # Average variance under H0 approx: p_control * (1 - p_control)
         sigma2 = p_control * (1.0 - p_control)

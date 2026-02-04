@@ -66,7 +66,7 @@ namespace Base {
    * Metadata for EarlySign events and records.
    */
   model Metadata {
-    /** Schema version */
+    /** Schema version (e.g., "v1.0.0") */
     ES3_version?: string = ES3_VERSION;
   }
 
@@ -77,8 +77,11 @@ namespace Base {
   model Protocol {
     /** Schema version */
     ES3_version?: string = ES3_VERSION;
+    /** The name of the protocol. */
     name: string;
+    /** The problem definition. */
     task: TaskSpec;
+    /** The operational method. */
     method: MethodSpec;
   }
 
@@ -87,6 +90,7 @@ namespace Base {
    * Concrete protocols should extend this (e.g., GST.TaskSpec).
    */
   model TaskSpec {
+    /** The kind of task (discriminator). */
     kind: string;
   }
 
@@ -95,6 +99,7 @@ namespace Base {
    * Concrete protocols should extend this (e.g., GST.MethodSpec).
    */
   model MethodSpec {
+    /** The kind of method (discriminator). */
     kind: string;
   }
 
@@ -109,11 +114,14 @@ namespace Base {
 
 namespace Binomial {
   /**
-   * Raw evidence: data for a single arm.
+   * Raw evidence: data for a single arm (Binomial).
    */
   model ArmData extends Base.Log {
+    /** Total number of trials. */
     n: int32;
+    /** Total number of successes. */
     success: int32;
+    /** The name/id of the arm. */
     arm: string;
   }
 
@@ -121,8 +129,11 @@ namespace Binomial {
    * Standard statistics for a single arm (Bernoulli/Binomial).
    */
   model ArmMetrics {
+    /** Total number of trials. */
     n: int32;
+    /** Total number of successes. */
     successes: int32;
+    /** Success probability estimate (p-hat). */
     p_hat: float64;
   }
 
@@ -147,7 +158,9 @@ namespace Continuous {
    * Raw evidence: data for a single arm (continuous observation).
    */
   model Observation extends Base.Log {
+    /** The observed value. */
     value: float64;
+    /** Arm identifier. */
     arm: string;
   }
 
@@ -155,9 +168,13 @@ namespace Continuous {
    * Raw evidence: aggregated data for a single arm (continuous).
    */
   model ArmData extends Base.Log {
+    /** Sample size. */
     n: int32;
+    /** Sum of observations. */
     sum_x: float64;
+    /** Sum of squared observations. */
     sum_x2: float64;
+    /** Arm identifier. */
     arm: string;
   }
 
@@ -182,6 +199,7 @@ namespace Continuous {
    * Collective state of all arms (Scoreboard).
    */
   model Scoreboard {
+    /** Map of arm IDs to status. */
     arms: Record<ArmStatus>;
   }
 }

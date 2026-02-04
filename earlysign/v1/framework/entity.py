@@ -2,27 +2,26 @@
 Entity module for the framework.
 
 Design Philosophy (CQRS Hybrid):
-================================
-In CQRS, "Entity" is a term that traditionally refers to aggregates in the Write Model.
-However, in our Event Sourcing architecture, we use "Entity" to describe a special type
-of projection that:
+    In CQRS, "Entity" is a term that traditionally refers to aggregates in the Write Model.
+    However, in our Event Sourcing architecture, we use "Entity" to describe a special type
+    of projection that:
 
-1. Has a consistent **identity** across time
-2. Can be **snapshotted** for computational efficiency
-3. Is fundamentally derived from events (like a Read Model / Projection)
+    1. Has a consistent **identity** across time
+    2. Can be **snapshotted** for computational efficiency
+    3. Is fundamentally derived from events (like a Read Model / Projection)
 
-An Entity is NOT a pure Write Model nor a pure Read Model—it's a hybrid concept.
-It represents a consistently-identifiable aggregate whose state is derived from
-event projections but can be cached as Snapshots.
+    An Entity is NOT a pure Write Model nor a pure Read Model—it's a hybrid concept.
+    It represents a consistently-identifiable aggregate whose state is derived from
+    event projections but can be cached as Snapshots.
 
 Key Benefits:
-- Entities enable efficient incremental computation via snapshot + delta folding
--- The consistent identity allows Optimistic Concurrency Control (OCC)
-- Snapshots can be safely recomputed from events if needed
+    - Entities enable efficient incremental computation via snapshot + delta folding
+    - The consistent identity allows Optimistic Concurrency Control (OCC)
+    - Snapshots can be safely recomputed from events if needed
 
 See Also:
-- docs/source/explanation/20260115_entity_and_CQRS.md
-- docs/source/explanation/JSS.md
+    - docs/source/explanation/20260115_entity_and_CQRS.md
+    - docs/source/explanation/JSS.md
 """
 
 import json
@@ -54,11 +53,16 @@ Index = TypeVar("Index")
 
 
 class Snapshot(BaseModel, Generic[T]):
-    """
-    A recomputable intermediate fact (Memento).
+    """A recomputable intermediate fact (Memento).
 
     Snapshots cache the state of an Entity at a given point in time.
     They can always be recomputed from the underlying events.
+
+    Attributes:
+        entity_identity: The unique identity of the entity.
+        data: The captured state data.
+        timestamp: The ledger's last timestamp at the time of snapshot.
+        uuid: Optional record ID for trace reference.
     """
 
     entity_identity: str
@@ -68,8 +72,7 @@ class Snapshot(BaseModel, Generic[T]):
 
 
 class Entity(BaseEntity[T], ABC):
-    """
-    Base class for identifiable aggregates with snapshot caching.
+    """Base class for identifiable aggregates with snapshot caching.
 
     In CQRS terms, an Entity is a hybrid:
     - Its state is reconstructed from events (Read/Projection)
@@ -80,13 +83,16 @@ class Entity(BaseEntity[T], ABC):
     - `data_type`: The Pydantic model type for the entity's state
     - `compute()`: The fold logic to compute state from snapshot + delta
 
-    Example:
-        class MyEntityFact(Entity[MyState]):
-            data_type = MyState
-
-            def compute(self, snapshot, delta_expr, full_table):
-                # Fold logic here
-                ...
+    Examples:
+        >>> class MyState(BaseModel):
+        ...     count: int = 0
+        >>> class MyEntityFact(Entity[MyState]):
+        ...     data_type = MyState
+        ...     @property
+        ...     def initial_value(self): return MyState()
+        ...     def compute(self, snapshot, delta_expr, full_table):
+        ...         # Fold logic here
+        ...         return ProjectionResult(data=MyState(count=1), trace=[])
     """
 
     data_type: Type[T]
@@ -216,11 +222,10 @@ class Entity(BaseEntity[T], ABC):
 
 
 class LatestStateProjector(Projector[Optional[S]], Generic[Index, S]):
-    """
-    A Projector that returns the latest state from a SequentialEntity trajectory.
+    """A Projector that returns the latest state from a SequentialEntity trajectory.
 
     This is returned by SequentialEntity.latest property and provides a
-    Projector interface for use with sess.Read().
+    Projector interface for use with `sess.Read()`.
     """
 
     def __init__(self, entity: "SequentialEntity[Index, S]"):
@@ -321,10 +326,9 @@ class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Ind
 
 
 class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
-    """
-    Entity whose state is indexed by a sequential coordinate (look, sample, etc.).
+    """Entity whose state is indexed by a sequential coordinate (look, sample, etc.).
 
-    A Sequential Entity represents a trajectory of states $(S_0, S_1, \\ldots, S_n)$
+    A Sequential Entity represents a trajectory of states $(S_0, S_1, \\dots, S_n)$
     treated as a single coherent Entity. This is useful for sequential procedures
     like Group Sequential Testing where the entire path of decisions matters.
 
@@ -334,8 +338,9 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
 
     Attributes:
         index_field: The name of the column that contains the sequential index
-                     (e.g., "look", "sample", "stage")
-        snapshot_strategy: How to persist the trajectory (COLLECTIVE or POINTWISE)
+            (e.g., "look", "sample", "stage").
+        snapshot_strategy: How to persist the trajectory (COLLECTIVE or POINTWISE).
+        state_type: The Pydantic model type for individual states in the trajectory.
     """
 
     index_field: str = "look"
@@ -466,8 +471,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
 
 
 class SimpleEntity(BaseEntity[Optional[T]]):
-    """
-    A lightweight projection for 'the latest value' of a specific identity.
+    """A lightweight projection for 'the latest value' of a specific identity.
 
     Unlike Entity, SimpleEntity does not support incremental computation (fold).
     It simply looks for the latest record of the given schema type matching
@@ -509,8 +513,8 @@ class SimpleEntity(BaseEntity[Optional[T]]):
 
 
 class SimpleSequentialEntity(SequentialEntity[Index, S]):
-    """
-    A SequentialEntity that simplifies trajectory reconstruction.
+    """A SequentialEntity that simplifies trajectory reconstruction.
+
     Instead of a complex fold, it treats every record of a specific type
     with a matching identity as a point in the sequence.
 

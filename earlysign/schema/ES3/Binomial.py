@@ -3,19 +3,19 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .Base import Log
 
 
 class ArmData(Log):
     """
-    Raw evidence: data for a single arm.
+    Raw evidence: data for a single arm (Binomial).
     """
 
-    n: int
-    success: int
-    arm: str
+    n: int = Field(..., description="Total number of trials.")
+    success: int = Field(..., description="Total number of successes.")
+    arm: str = Field(..., description="The name/id of the arm.")
 
 
 class ArmMetrics(BaseModel):
@@ -23,9 +23,9 @@ class ArmMetrics(BaseModel):
     Standard statistics for a single arm (Bernoulli/Binomial).
     """
 
-    n: int
-    successes: int
-    p_hat: float
+    n: int = Field(..., description="Total number of trials.")
+    successes: int = Field(..., description="Total number of successes.")
+    p_hat: float = Field(..., description="Success probability estimate (p-hat).")
 
 
 class ArmStatus(BaseModel):

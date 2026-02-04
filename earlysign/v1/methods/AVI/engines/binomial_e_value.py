@@ -16,8 +16,7 @@ class EValueResult(BaseModel):
 
 
 class EProcessProtocol(BaseModel):
-    """
-    Protocol for continuous monitoring based on E-processes.
+    """Protocol for continuous monitoring based on E-processes.
 
     E-processes allow for anytime-valid testing, where a rejection at any point
     (without a fixed schedule) is scientifically valid.
@@ -35,18 +34,27 @@ class EProcessProtocol(BaseModel):
 def compute_binomial_e_value(
     n: int, successes: int, null_p: float, alt_p: float, alpha: float = 0.05
 ) -> EValueResult:
-    """
-    Computes a simple likelihood ratio e-value for a binomial test.
-    E = (alt_p / null_p)^S * ((1-alt_p) / (1-null_p))^(n-S)
+    """Computes a simple likelihood ratio e-value for a binomial test.
 
-    Examples
-    --------
-    >>> res = compute_binomial_e_value(100, 60, 0.5, 0.6)
-    >>> res.e_value > 1.0
-    True
-    >>> res = compute_binomial_e_value(100, 40, 0.5, 0.6)
-    >>> res.e_value < 1.0
-    True
+    Formula: $E = (alt\_p / null\_p)^S * ((1-alt\_p) / (1-null\_p))^{(n-S)}$
+
+    Args:
+        n: Total number of trials.
+        successes: Number of successes observed.
+        null_p: Probability of success under the null hypothesis.
+        alt_p: Probability of success under the alternative hypothesis.
+        alpha: Significant level for rejection boundary (1/alpha).
+
+    Returns:
+        An `EValueResult` containing the calculated e-value and rejection status.
+
+    Examples:
+        >>> res = compute_binomial_e_value(100, 60, 0.5, 0.6)
+        >>> res.e_value > 1.0
+        True
+        >>> res = compute_binomial_e_value(100, 40, 0.5, 0.6)
+        >>> res.e_value < 1.0
+        True
     """
     # Likelihood under H1 / Likelihood under H0
     if n == 0:
@@ -67,9 +75,7 @@ def compute_binomial_e_value(
 
 
 class BinomialEValueEngine:
-    """
-    Engine for 1-sample Binomial E-value monitoring.
-    """
+    """Engine for 1-sample Binomial E-value monitoring."""
 
     def __init__(self, protocol: EProcessProtocol):
         self.protocol = protocol

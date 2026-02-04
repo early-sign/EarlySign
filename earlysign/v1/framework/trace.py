@@ -22,17 +22,20 @@ TraceId = NewType("TraceId", str)
 
 @dataclass(frozen=True)
 class Traced(Generic[T]):
-    """
-    A container that wraps data with its scientific provenance (trace).
+    """A container that wraps data with its scientific provenance (trace).
 
     The framework uses this to track causality through an analysis session.
-    The trace is a list of parent record UUIDs.
 
-    >>> t = Traced(data=42, trace=[TraceId("abc123")])
-    >>> t.data
-    42
-    >>> t.trace
-    ['abc123']
+    Attributes:
+        data: The captured data value.
+        trace: A list of parent record UUIDs contributing to this data.
+
+    Examples:
+        >>> t = Traced(data=42, trace=[TraceId("abc123")])
+        >>> t.data
+        42
+        >>> t.trace
+        ['abc123']
     """
 
     data: T
@@ -40,19 +43,26 @@ class Traced(Generic[T]):
 
 
 def extract_traces(*args: Any, **kwargs: Any) -> Optional[List[TraceId]]:
-    """
-    Recursively extracts and flattens TraceId values from Traced containers.
-    Returns None if no Traced containers were encountered.
-    Returns an empty list [] if Traced containers were encountered but they had empty traces.
+    """Recursively extracts and flattens TraceId values from Traced containers.
 
-    >>> t1 = Traced(10, [TraceId("h1")])
-    >>> t2 = Traced(20, [TraceId("h2"), TraceId("h3")])
-    >>> sorted(extract_traces(t1, "normal_value", t2, extra=t1))
-    ['h1', 'h1', 'h2', 'h3']
-    >>> extract_traces(1, 2, 3) is None
-    True
-    >>> extract_traces(Traced(10, []))
-    []
+    Args:
+        *args: Positional arguments to scan for Traced containers.
+        **kwargs: Keyword arguments to scan for Traced containers.
+
+    Returns:
+        A flattened list of TraceIds if any Traced containers were encountered,
+        otherwise None. Returns an empty list if Traced containers were found
+        but they had no traces.
+
+    Examples:
+        >>> t1 = Traced(10, [TraceId("h1")])
+        >>> t2 = Traced(20, [TraceId("h2"), TraceId("h3")])
+        >>> sorted(extract_traces(t1, "normal_value", t2, extra=t1))
+        ['h1', 'h1', 'h2', 'h3']
+        >>> extract_traces(1, 2, 3) is None
+        True
+        >>> extract_traces(Traced(10, []))
+        []
     """
     found_traced = False
     traces: List[TraceId] = []

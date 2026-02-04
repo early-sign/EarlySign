@@ -52,13 +52,14 @@ from . import spending as spending_mod
 
 @dataclass(frozen=True)
 class EfficacySpec:
-    """Specification of the efficacy (upper) boundary policy."""
+    """Specification of the efficacy (upper) boundary policy.
 
-    style: str  # e.g. 'alpha_spending' | 'significance_level'
-    family: Optional[str] = None  # e.g. 'obf' | 'pocock' | 'hsd'
-    gamma: Optional[float] = None
-    # per-look alpha levels for 'significance_level' style
-    alpha_levels: Optional[Union[Mapping[int, float], List[float]]] = None
+    Attributes:
+        style: e.g. 'alpha_spending' | 'significance_level'.
+        family: e.g. 'obrien_fleming' | 'pocock' | 'hwang_shih_decani'.
+        gamma: Optional gamma parameter for HSD family.
+        alpha_levels: per-look alpha levels for 'significance_level' style.
+    """
 
 
 @dataclass(frozen=True)
@@ -77,8 +78,13 @@ class FutilitySpec:
 class BoundaryCalculatorSpec:
     """Configuration for BoundaryCalculator initialization.
 
-    This object contains the information that is stable for a given design
-    and will typically be created once and passed to the calculator.
+    Attributes:
+        alpha: Overall Type-1 error rate.
+        tails: Number of tails (1 or 2).
+        scale: The output scale ('z', 'bm', 't').
+        efficacy: The efficacy boundary specification.
+        futility: The futility boundary specification.
+        process: Optional stochastic process name.
     """
 
     alpha: float
@@ -194,7 +200,8 @@ class BoundaryCalculator:
     ) -> Dict[str, Any]:
         """Compute boundaries at multiple information times.
 
-        Returns a dict with keys: info_times, upper, lower, scale.
+        Returns:
+            A dict with keys: info_times, upper, lower, scale.
         """
         n = len(info_times)
         upper = np.zeros(n, dtype=float)

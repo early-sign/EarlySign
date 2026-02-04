@@ -80,11 +80,19 @@ namespace Log {
     status: DecisionStatus | string;
   }
 
+  /**
+   * Result of a sequential quantile test look.
+   */
   model SequentialQuantileLookResult extends Base.Log {
+    /** Current cumulative sample size. */
     sample_n: int32;
+    /** Point estimate of the target quantile. */
     estimated_quantile: float64;
+    /** Lower confidence bound. */
     interval_lower: float64;
+    /** Upper confidence bound. */
     interval_upper: float64;
+    /** Current status of the test. */
     status: DecisionStatus | string;
   }
 }

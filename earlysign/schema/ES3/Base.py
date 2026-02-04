@@ -19,7 +19,9 @@ class Metadata(BaseModel):
     Metadata for EarlySign events and records.
     """
 
-    ES3_version: str | None = Field("v1.0.0", description="Schema version")
+    ES3_version: str | None = Field(
+        "v1.0.0", description='Schema version (e.g., "v1.0.0")'
+    )
 
 
 class MethodSpec(BaseModel):
@@ -28,7 +30,7 @@ class MethodSpec(BaseModel):
     Concrete protocols should extend this (e.g., GST.MethodSpec).
     """
 
-    kind: str
+    kind: str = Field(..., description="The kind of method (discriminator).")
 
 
 class Protocol(BaseModel):
@@ -38,9 +40,9 @@ class Protocol(BaseModel):
     """
 
     ES3_version: str | None = Field("v1.0.0", description="Schema version")
-    name: str
-    task: TaskSpec
-    method: MethodSpec
+    name: str = Field(..., description="The name of the protocol.")
+    task: TaskSpec = Field(..., description="The problem definition.")
+    method: MethodSpec = Field(..., description="The operational method.")
 
 
 class TaskSpec(BaseModel):
@@ -49,4 +51,4 @@ class TaskSpec(BaseModel):
     Concrete protocols should extend this (e.g., GST.TaskSpec).
     """
 
-    kind: str
+    kind: str = Field(..., description="The kind of task (discriminator).")

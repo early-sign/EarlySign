@@ -77,8 +77,10 @@ class SequentialQuantileTemplate(TemplateBase[Protocol]):
     >>> t = con.create_table("raw_data_sq", {"arm": ["A", "A", "B", "B"], "val": [1.0, 2.0, 10.0, 11.0]})
     >>> template.update({"A": t.filter(t.arm == "A"), "B": t.filter(t.arm == "B")})
     >>> res = template.report_result()
-    >>> isinstance(res, dict) and "status" in res
-    True
+    >>> res["status"]
+    'continue'
+    >>> res["estimated_quantile"]
+    0.0
     """
 
     _protocol_class = Protocol

@@ -16,19 +16,24 @@ from ..Base import (
 )
 
 
-class AdaptationSpec(BaseModel):
-    type: str
-
-
 class AdaptationSnapshot(BaseModel):
     """
-    Captures the interim result at the point of adaptation.
-    Required for Type I error preservation (Weighted Z-Ratio).
+    State captured during an adaptation event to preserve Type I error control.
     """
 
-    z_t: float
-    info_frac: float
-    original_max_sample_size: int
+    z_t: float = Field(
+        ..., description="Observed Z-statistic at the time of adaptation."
+    )
+    info_frac: float = Field(
+        ..., description="Information fraction at the time of adaptation (t)."
+    )
+    original_max_sample_size: int = Field(
+        ..., description="The maximum sample size before re-planning."
+    )
+
+
+class AdaptationSpec(BaseModel):
+    type: str
 
 
 class DecisionStrategyBase(BaseModel):
@@ -47,7 +52,7 @@ class BoundaryFunctionStrategyBase(DecisionStrategyBase):
     """
 
 
-class EffectSizeSpec(BaseModel):
+class EffectSizeSpecBase(BaseModel):
     """
     Numerical assumptions for the Alternative Hypothesis (H1).
     Note: This defines the "ball position" (simulation target), separate from the "goal posts" (Hypothesis Margins).
@@ -56,12 +61,12 @@ class EffectSizeSpec(BaseModel):
     type: str
 
 
-class BinaryEffectSize(EffectSizeSpec):
+class BinaryEffectSize(EffectSizeSpecBase):
     type: Literal["binary"] = "binary"
     proportions: dict[str, float] = Field(..., description="Arm name -> Expected rate")
 
 
-class ContinuousEffectSize(EffectSizeSpec):
+class ContinuousEffectSize(EffectSizeSpecBase):
     type: Literal["continuous"] = "continuous"
     means: dict[str, float] = Field(..., description="Arm name -> Expected mean")
     standard_deviation: float
@@ -91,7 +96,7 @@ class FutilityRequirement(BaseModel):
     )
 
 
-class HypothesisParameters(BaseModel):
+class HypothesisParametersBase(BaseModel):
     """
     Logical Margins and Test Objectives.
     """
@@ -99,11 +104,11 @@ class HypothesisParameters(BaseModel):
     kind: str
 
 
-class EqualityHypothesis(HypothesisParameters):
+class EqualityHypothesis(HypothesisParametersBase):
     kind: Literal["equality"] = "equality"
 
 
-class EquivalenceHypothesis(HypothesisParameters):
+class EquivalenceHypothesis(HypothesisParametersBase):
     kind: Literal["equivalence"] = "equivalence"
     lower_margin: float
     upper_margin: float
@@ -113,10 +118,7 @@ class HypothesisSpec(BaseModel):
     h_null_description: str
     h_alt_description: str
     test_logic: HypothesisParameters
-    target_effect: Annotated[
-        BinaryEffectSize | ContinuousEffectSize | SurvivalEffectSize,
-        Field(..., discriminator="type"),
-    ]
+    target_effect: EffectSizeUnion
 
 
 class InformationTimerBase(BaseModel):
@@ -162,15 +164,22 @@ class MethodSpec(MethodSpec_1):
     GST-Specific Method Definition (Univariate).
     """
 
-    kind: Literal["group_sequential"] = "group_sequential"
-    stopping_policy: StoppingPolicySpec = Field(
-        ..., description="Stopping Policy (discriminated union)"
+    kind: Literal["group_sequential"] = Field(
+        "group_sequential", description="The kind of method (discriminator)."
     )
-    adaptation: AdaptationSpec | None = None
-    adaptation_snapshot: AdaptationSnapshot | None = None
+    stopping_policy: StoppingPolicySpec = Field(
+        ..., description="Stopping Policy (discriminated union)."
+    )
+    adaptation: AdaptationSpec | None = Field(
+        None, description="Technical specification for interim adaptation (SSR, etc.)."
+    )
+    adaptation_snapshot: AdaptationSnapshot | None = Field(
+        None,
+        description="Snapshot of internal state during adaptation, used for Weighted Z-score correction.",
+    )
 
 
-class NonInferiorityHypothesis(HypothesisParameters):
+class NonInferiorityHypothesis(HypothesisParametersBase):
     kind: Literal["non_inferiority"] = "non_inferiority"
     non_inferiority_margin: float
 
@@ -214,8 +223,8 @@ class Protocol(Protocol_1):
     Enforces that task and method belong to the GST domain.
     """
 
-    task: TaskSpec
-    method: MethodSpec
+    task: TaskSpec = Field(..., description="The GST task specification.")
+    method: MethodSpec = Field(..., description="The GST method specification.")
 
 
 class ResponseType(StrEnum):
@@ -229,10 +238,6 @@ class SampleSizeReestimationSpec(AdaptationSpec):
     method: Method
     target_power: float
     n_range: list[Any]
-    inflation_cap: float | None = Field(
-        4.0,
-        description="Maximum allowed inflation of the sample size (e.g., 4.0 for 4x). If null, no cap is applied.",
-    )
 
 
 class SampleSizeTimer(InformationTimerBase):
@@ -373,12 +378,21 @@ class StoppingPolicySpec(BaseModel):
     schedule: ScheduleSpec
 
 
-class SuperiorityHypothesis(HypothesisParameters):
+class SuperiorityHypothesis(HypothesisParametersBase):
     kind: Literal["superiority"] = "superiority"
     superiority_margin: float
 
 
-class SurvivalEffectSize(EffectSizeSpec):
+HypothesisParameters = TypeAliasType(
+    "HypothesisParameters",
+    EqualityHypothesis
+    | SuperiorityHypothesis
+    | NonInferiorityHypothesis
+    | EquivalenceHypothesis,
+)
+
+
+class SurvivalEffectSize(EffectSizeSpecBase):
     type: Literal["time_to_event"] = "time_to_event"
     hazard_ratios: dict[str, float] = Field(
         ..., description="Arm name -> Hazard Ratio (relative to control)"
@@ -387,6 +401,11 @@ class SurvivalEffectSize(EffectSizeSpec):
         None, description="Optional: for sample size calc"
     )
     event_rate: float | None = Field(None, description="Overall event rate if needed")
+
+
+EffectSizeUnion = TypeAliasType(
+    "EffectSizeUnion", BinaryEffectSize | ContinuousEffectSize | SurvivalEffectSize
+)
 
 
 class TProcessModel(StatisticalModel):

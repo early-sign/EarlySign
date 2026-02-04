@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .Base import Log
 
@@ -13,10 +13,10 @@ class ArmData(Log):
     Raw evidence: aggregated data for a single arm (continuous).
     """
 
-    n: int
-    sum_x: float
-    sum_x2: float
-    arm: str
+    n: int = Field(..., description="Sample size.")
+    sum_x: float = Field(..., description="Sum of observations.")
+    sum_x2: float = Field(..., description="Sum of squared observations.")
+    arm: str = Field(..., description="Arm identifier.")
 
 
 class ArmMetrics(BaseModel):
@@ -43,8 +43,8 @@ class Observation(Log):
     Raw evidence: data for a single arm (continuous observation).
     """
 
-    value: float
-    arm: str
+    value: float = Field(..., description="The observed value.")
+    arm: str = Field(..., description="Arm identifier.")
 
 
 class Scoreboard(BaseModel):
@@ -52,4 +52,4 @@ class Scoreboard(BaseModel):
     Collective state of all arms (Scoreboard).
     """
 
-    arms: dict[str, ArmStatus]
+    arms: dict[str, ArmStatus] = Field(..., description="Map of arm IDs to status.")

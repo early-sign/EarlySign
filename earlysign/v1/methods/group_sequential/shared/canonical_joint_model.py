@@ -8,7 +8,7 @@ Examples:
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import CanonicalJointModel, Config
     >>> from earlysign.v1.methods.group_sequential.shared.spending import OBrienFlemingSpending
-
+    >>>
     >>> # --- Test: Model from Spec Basic ---
     >>> info_times = [0.5, 1.0]
     >>> spec = GST.Protocol(
@@ -45,7 +45,7 @@ Examples:
     0.025
     >>> np.allclose(model.config.info_times, [0.5, 1.0])
     True
-
+    >>>
     >>> # --- Test: Dual Boundary Solving (Binding) ---
     >>> info_times_arr = np.array([0.5, 1.0])
     >>> config = Config(

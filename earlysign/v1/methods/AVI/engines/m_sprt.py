@@ -9,8 +9,10 @@ from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboard
 
 
 class mSPRTEngine:
-    """
-    Engine for Always Valid F-test (mSPRT).
+    """Engine for Always Valid F-test (mSPRT).
+
+    Implements the mixture Likelihood Ratio based confidence sequences
+    described in Johari et al. (2019).
     """
 
     def __init__(self, protocol: Protocol):
@@ -29,6 +31,15 @@ class mSPRTEngine:
         metrics: BinomialScoreboard | ContinuousScoreboard,
         **kwargs: Any,
     ) -> LookResult:
+        """Runs the mSPRT engine to determine if a boundary is crossed.
+
+        Args:
+            metrics: The scoreboard containing metrics for control and treatment arms.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            A `LookResult` object indicating the current status of the experiment.
+        """
         arms = self.protocol.task.arms
         if len(arms) != 2:
             raise ValueError("AVI requires exactly 2 arms.")

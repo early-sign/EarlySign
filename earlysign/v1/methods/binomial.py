@@ -13,12 +13,13 @@ from earlysign.v1.framework.trace import TraceId
 
 
 class Scoreboard(Entity[ScoreboardSchema]):
-    """
-    Projector that tracks the status and metrics of all arms.
-    Represented as a Scoreboard domain model.
+    """Projector that tracks the status and metrics of all arms for binomial data.
 
-    Aggregates ArmData across all arms and tracks which ones are
-    still active based on decision events.
+    Represented as a Scoreboard domain model. Aggregates ArmData across all
+    arms and tracks which ones are still active based on decision events.
+
+    Attributes:
+        data_type: The Pydantic model type for the scoreboard schema.
     """
 
     data_type = ScoreboardSchema
@@ -33,6 +34,16 @@ class Scoreboard(Entity[ScoreboardSchema]):
         delta_expr: ibis.Expr,
         full_table: ibis.Expr,
     ) -> ProjectionResult[ScoreboardSchema]:
+        """Incremental fold for binomial scoreboard.
+
+        Args:
+            snapshot: The previous state snapshot.
+            delta_expr: New events since the snapshot.
+            full_table: The entire event table.
+
+        Returns:
+            The updated scoreboard projection.
+        """
         # 1. Start with previous state
         current_state = snapshot.data if snapshot else self.initial_value
         current_arms = current_state.arms.copy()

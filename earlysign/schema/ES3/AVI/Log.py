@@ -31,8 +31,14 @@ class LookResult(Log):
 
 
 class SequentialQuantileLookResult(Log):
-    sample_n: int
-    estimated_quantile: float
-    interval_lower: float
-    interval_upper: float
-    status: DecisionStatus | str
+    """
+    Result of a sequential quantile test look.
+    """
+
+    sample_n: int = Field(..., description="Current cumulative sample size.")
+    estimated_quantile: float = Field(
+        ..., description="Point estimate of the target quantile."
+    )
+    interval_lower: float = Field(..., description="Lower confidence bound.")
+    interval_upper: float = Field(..., description="Upper confidence bound.")
+    status: DecisionStatus | str = Field(..., description="Current status of the test.")

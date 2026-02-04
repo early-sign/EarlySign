@@ -9,8 +9,10 @@ from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboard
 
 
 class GAVIEngine:
-    """
-    Engine for Generalized Always Valid Inference (GAVI).
+    """Engine for Generalized Always Valid Inference (GAVI).
+
+    Implements the boundary minimization using Lambert W_{-1} approximation
+    as described in Waudby-Smith et al. (2021).
     """
 
     def __init__(self, protocol: Protocol):
@@ -31,6 +33,16 @@ class GAVIEngine:
         metrics: BinomialScoreboard | ContinuousScoreboard,
         **kwargs: Any,
     ) -> LookResult:
+        """Runs the GAVI engine to determine if a boundary is crossed.
+
+        Args:
+            metrics: The scoreboard containing metrics for control and treatment arms.
+            **kwargs: Additional keyword arguments (not used in this method).
+
+        Returns:
+            A `LookResult` object indicating the current status of the experiment,
+            including trajectory, boundary, and decision status.
+        """
         arms = self.protocol.task.arms
         if len(arms) != 2:
             raise ValueError("AVI requires exactly 2 arms.")

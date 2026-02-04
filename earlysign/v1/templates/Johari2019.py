@@ -89,8 +89,8 @@ class Johari2019Template(TemplateBase[Protocol]):
         ... ]
         >>> template.update(batch2)
         >>> report2 = template.report_progress()
-        >>> report2["status"]
-        'stop_efficacy'
+        >>> print(report2["status"])
+        stop_efficacy
         >>> report2["sample_n"]
         2000
     """
@@ -98,6 +98,11 @@ class Johari2019Template(TemplateBase[Protocol]):
     _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
+        """Initializes the Johari2019Template.
+
+        Args:
+            ledger: The ledger instance to use for data storage and retrieval.
+        """
         self.ledger = ledger
 
     @classmethod

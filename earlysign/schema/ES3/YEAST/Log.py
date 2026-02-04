@@ -27,12 +27,20 @@ class DecisionStatus(StrEnum):
 
 class LookResult(Log):
     """
-    Result of a statistical test/evaluation for the study at a look.
+    Result of a statistical test/evaluation for the study at a look (YEAST).
     """
 
-    sample_n: int
-    info_frac: float
-    trajectory: float = Field(..., description="The calculated trajectory value")
-    efficacy_boundary: float | None = None
-    is_efficacy_crossed: bool
-    status: DecisionStatus | str
+    sample_n: int = Field(..., description="Total number of samples (cumulative).")
+    info_frac: float = Field(..., description="Fraction of information accrued.")
+    trajectory: float = Field(
+        ..., description="The calculated trajectory value (Your Evidence)."
+    )
+    efficacy_boundary: float | None = Field(
+        None, description="The efficacy boundary at this look."
+    )
+    is_efficacy_crossed: bool = Field(
+        ..., description="Whether the trajectory crossed the efficacy boundary."
+    )
+    status: DecisionStatus | str = Field(
+        ..., description="Current status of the YEAST test."
+    )

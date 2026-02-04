@@ -2,16 +2,15 @@
 Writer module for the framework.
 
 Design Philosophy (Event Sourcing):
-====================================
-In event sourcing, ALL state and lineage flows through Read operations (Projectors).
-Write operations (Commit, Ingest) are "fire and forget" - they record events to the
-ledger but do not return identifiers. If you need to reference data after writing,
-you Read it back via a Projector, which provides Traced[T] with proper lineage.
+    In event sourcing, ALL state and lineage flows through Read operations (Projectors).
+    Write operations (Commit, Ingest) are "fire and forget" - they record events to the
+    ledger but do not return identifiers. If you need to reference data after writing,
+    you Read it back via a Projector, which provides `Traced[T]` with proper lineage.
 
-This design ensures:
-1. All trace information comes from the ledger itself (via Projections)
-2. No out-of-band state passing through return values
-3. Clear separation: Write = record events, Read = reconstruct state and facts with lineage
+    This design ensures:
+    1. All trace information comes from the ledger itself (via Projections)
+    2. No out-of-band state passing through return values
+    3. Clear separation: Write = record events, Read = reconstruct state and facts with lineage
 """
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, TypeVar
@@ -31,8 +30,7 @@ B = TypeVar("B", bound=BaseModel)
 
 
 class Writer:
-    """
-    Fundamental operations for asserting events into the Ledger.
+    """Fundamental operations for asserting events into the Ledger.
 
     In Event Sourcing, the Writer is responsible for appending events to the
     event store (Ledger). These operations record events with their scientific
@@ -48,11 +46,18 @@ class Writer:
         trace: Optional[List[TraceId]] = None,
         attributes: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """
-        Records a Pydantic model into the Ledger with its scientific trace.
+        """Record a Pydantic model into the Ledger with its scientific trace.
 
-        Note: This method intentionally returns nothing. If you need to
-        reference this data later, Read it back via a Projector.
+        Note:
+            This method intentionally returns nothing. If you need to
+            reference this data later, Read it back via a Projector.
+
+        Args:
+            session: The active session.
+            record: The data to record.
+            identity: Optional unique identity.
+            trace: Optional parent traces.
+            attributes: Optional additional labels.
         """
         target_trace = trace if trace is not None else session.trace
 
