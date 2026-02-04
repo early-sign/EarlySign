@@ -34,7 +34,7 @@ class EProcessProtocol(BaseModel):
 def compute_binomial_e_value(
     n: int, successes: int, null_p: float, alt_p: float, alpha: float = 0.05
 ) -> EValueResult:
-    """Computes a simple likelihood ratio e-value for a binomial test.
+    r"""Computes a simple likelihood ratio e-value for a binomial test.
 
     Formula: $E = (alt\_p / null\_p)^S * ((1-alt\_p) / (1-null\_p))^{(n-S)}$
 
