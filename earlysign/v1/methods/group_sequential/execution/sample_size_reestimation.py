@@ -165,8 +165,6 @@ class ConditionalPowerAdaptationEngine:
             final_efficacy_bound=final_efficacy_bound,
             assumed_effect=theta,
         )
-
-        # 3. Categorize
         if cp < cp_threshold_min:
             status = PromisingZoneStatus.FUTILITY
             rec = "Consider stopping for futility (Low CP)"
@@ -213,6 +211,9 @@ class ConditionalPowerAdaptationEngine:
         c = get_final_efficacy_boundary(protocol)
         n_old = adaptation_log.original_sample_size
 
+        # Scaling theta by sqrt(n_old) to match the Z-stat scale
+        theta_total = theta * np.sqrt(n_old)
+
         if t >= 1.0 or theta <= 0:
             return new_protocol
 
@@ -221,7 +222,6 @@ class ConditionalPowerAdaptationEngine:
         # Explicitly cast or reassign to ensure type checkers are happy.
         z_t_val: float = z_t
         t_val: float = t
-        theta_val: float = theta
         c_val: float = c
         n_old_val: int = n_old
 
@@ -242,8 +242,8 @@ class ConditionalPowerAdaptationEngine:
             # Already reaching target cp or boundary impossible
             return new_protocol
 
-        # sqrt(r) = numerator / (theta * np.sqrt(1 - t))
-        r = (numerator / (theta_val * np.sqrt(1 - t_val))) ** 2
+        # sqrt(r) = numerator / (theta_total * np.sqrt(1 - t))
+        r = (numerator / (theta_total * np.sqrt(1 - t_val))) ** 2
 
         # New max sample size
         # N_new = N_look + r * N_rem = t * n_old + r * (1-t) * n_old
