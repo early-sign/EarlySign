@@ -34,6 +34,7 @@ class ProgressReport(BaseModel):
 class FinalReport(BaseModel):
     """Generic final summary report."""
 
+    look: Optional[int] = None
     sample_n: int
     z_stat: float
     is_rejected: bool
@@ -122,6 +123,7 @@ class FinalProjector(Projector[FinalReport]):
         metrics = metrics_traced.data
 
         report = FinalReport(
+            look=latest_look.look,
             sample_n=latest_look.sample_n,
             z_stat=latest_look.z_stat,
             is_rejected=latest_look.is_efficacy_crossed,
