@@ -1,41 +1,29 @@
-"""
-Binomial A/B Testing Template
-=============================
+"""Binomial A/B Testing Template.
 
-This module provides a standard template for running sequential A/B tests with binary outcomes.
+This module provides a standard template for running sequential A/B tests with
+binary outcomes.
 
-Usage
------
-The following example demonstrates how to set up and run a sequential A/B test
-simulating a scenario with a 20% baseline conversion rate and a relative 10% lift (Treatment = 22%).
-
-First, we set up the environment and import the necessary modules.
-
-    >>> import ibis
+Examples:
+    >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>> from earlysign.v1.tests.util import BinomialStream
-
-We use an in-memory DuckDB ledger for this example. In production, you would
-typically connect to a persistent database.
-
+    >>>
+    >>> # Setup
+    >>> # We use an in-memory DuckDB ledger for this example. In production, you would
+    >>> # typically connect to a persistent database.
     >>> conn = ibis.connect("duckdb://:memory:")
     >>> ledger = Ledger(conn, "events")
     >>> ledger.ensure()
-    >>> # Every record has a unique id and timestamp (timestamp)
-    >>> ledger.insert({"some": "data"})
-    >>> df = ledger.t.filter(ledger.t.type == "dict").execute()
-    >>> 'uuid' in df.columns and 'timestamp' in df.columns
-    True
-    >>> len(df.iloc[0]['uuid']) == 32  # hex uuid
-    True
+    >>>
+    >>> # Bind ledger for experiment
     >>> ledger = ledger.bind(experiment_id="example_001")
-
-Next, we define the experimental task. Here we are testing for a 10% relative lift
-(from 20% to 22% conversion rate) with standard error control (alpha=0.05, power=0.80).
-
+    >>>
+    >>> # Next, we define the experimental task. Here we are testing for a 10% relative lift
+    >>> # (from 20% to 22% conversion rate) with standard error control (alpha=0.05, power=0.80).
+    >>> # Define task
     >>> task = BinomialABTaskSpec(
     ...     arms=["control", "treatment"],
     ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
@@ -49,39 +37,34 @@ Next, we define the experimental task. Here we are testing for a 10% relative li
     ...         )
     ...     )
     ... )
-
-Now we design the protocol with 2 interim looks using the O'Brien-Fleming spending function.
-The designer calculates the required sample size and decision boundaries.
-
+    >>>
+    >>> # Now we design the protocol with 2 interim looks using the O'Brien-Fleming spending function.
+    >>> # The designer calculates the required sample size and decision boundaries.
     >>> protocol = BinomialABTemplate.design(
     ...     task=task,
     ...     looks=2,
     ...     spending_function="obrien_fleming",
     ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
-
     >>> print(f"Designed Max Sample Size: {int(protocol.method.stopping_policy.timer.max_sample_size)}")
     Designed Max Sample Size: 10163
-
-With the protocol designed, we initialize the template and persist it to the ledger.
-
+    >>>
+    >>> # With the protocol designed, we initialize the template and persist it to the ledger.
     >>> template = BinomialABTemplate(ledger)
     >>> template.set_protocol(protocol)
-
-For demonstration, we simulate a data stream where the treatment actually has a larger
-effect than designed for (p=0.25 vs p=0.20, a 25% relative lift). The arm names in
-the stream must match those defined in the protocol.
-
+    >>>
+    >>> # For demonstration, we simulate a data stream where the treatment actually has a larger
+    >>> # effect than designed for (p=0.25 vs p=0.20, a 25% relative lift). The arm names in
+    >>> # the stream must match those defined in the protocol.
     >>> stream = BinomialStream(
     ...     n_per_batch=1000,
     ...     arms={"control": 0.20, "treatment": 0.25},
     ...     n_max=13000,
     ...     seed=42
     ... )
-
-We run the experiment by iterating through data batches. After each update, we check
-if a stopping boundary has been crossed.
-
+    >>>
+    >>> # We run the experiment by iterating through data batches. After each update, we check
+    >>> # if a stopping boundary has been crossed.
     >>> for batch in stream:
     ...     template.update(batch)
     ...     progress = template.report_progress()

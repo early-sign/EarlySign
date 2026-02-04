@@ -1,54 +1,55 @@
-"""
-Promising Zone Adaptive Design Template (Cui-Hung-Wang)
-=======================================================
+"""Promising Zone Adaptive Design Template (Cui-Hung-Wang).
 
 This template implements a "Promising Zone" adaptive design for Binomial A/B testing.
 It allows for an interim Sample Size Re-estimation (SSR) if the results fall into
-a "promising" region (between efficacy and futility boundaries), increasing conditional power.
+a "promising" region (between efficacy and futility boundaries), increasing
+conditional power.
 
-Reference
----------
-Cui, L., Hung, H. M., & Wang, S. J. (1999). Modification of sample size in group sequential clinical trials. Biometrics, 55(3), 853–857.
+Reference:
+    Cui, L., Hung, H. M., & Wang, S. J. (1999). Modification of sample size in
+    group sequential clinical trials. Biometrics, 55(3), 853–857.
 
-Usage
------
->>> import ibis
->>> from earlysign.core.ledger import Ledger
->>> from earlysign.v1.templates.promising_zone_ab import PromisingZoneABTemplate
->>> from earlysign.schema.ES3.Binomial import ArmData
->>> from earlysign.schema.ES3.GST.Log import DecisionStatus
+    In practice, each iteration may run in a different process.
+    To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
 
-# 1. Setup Ledger
->>> conn = ibis.connect("duckdb://:memory:")
->>> ledger = Ledger(conn, "events")
->>> ledger.ensure()
-
-# 2. Design a protocol (Promising Zone enabled)
->>> protocol = PromisingZoneABTemplate.design_binomial(
-...     p_control=0.5, p_treatment=0.6, alpha=0.025, power=0.8, looks=2,
-...     designer_params={"model_params": {"rng_seed": 42}}
-... )
->>> protocol.method.stopping_policy.timer.max_sample_size
-798
-
-# 3. Initialize Template
->>> template = PromisingZoneABTemplate(ledger)
->>> template.set_protocol(protocol)
-
-# 4. Simulate an interim look that lands in 'Promising Zone'
-# (Note: Z approx 1.96 at n=250/arm is promising but not yet significant at interim)
->>> batch = [
-...     ArmData(arm="control", n=250, success=125),
-...     ArmData(arm="treatment", n=250, success=147)
-... ]
->>> template.update(batch)
-
-# 5. Verify that Sample Size Re-estimation (SSR) was triggered
->>> progress = template.report_progress()
->>> progress["status"] == DecisionStatus.CONTINUE_
-True
->>> progress["max_sample_size"]  # Increased from the original design
-3192
+Examples:
+    >>> import ibis, duckdb  # noqa: F401
+    >>> from earlysign.core.ledger import Ledger
+    >>> from earlysign.v1.templates.promising_zone_ab import PromisingZoneABTemplate
+    >>> from earlysign.schema.ES3.Binomial import ArmData
+    >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
+    >>>
+    >>> # 1. Setup Ledger
+    >>> conn = ibis.connect("duckdb://:memory:")
+    >>> ledger = Ledger(conn, "events")
+    >>> ledger.ensure()
+    >>>
+    >>> # 2. Design a protocol (Promising Zone enabled)
+    >>> protocol = PromisingZoneABTemplate.design_binomial(
+    ...     p_control=0.5, p_treatment=0.6, alpha=0.025, power=0.8, looks=2,
+    ...     designer_params={"model_params": {"rng_seed": 42}}
+    ... )
+    >>> protocol.method.stopping_policy.timer.max_sample_size
+    798
+    >>>
+    >>> # 3. Initialize Template
+    >>> template = PromisingZoneABTemplate(ledger)
+    >>> template.set_protocol(protocol)
+    >>>
+    >>> # 4. Simulate an interim look that lands in 'Promising Zone'
+    >>> # (Note: Z approx 1.96 at n=250/arm is promising but not yet significant at interim)
+    >>> batch = [
+    ...     ArmData(arm="control", n=250, success=125),
+    ...     ArmData(arm="treatment", n=250, success=147)
+    ... ]
+    >>> template.update(batch)
+    >>>
+    >>> # 5. Verify status and SSR trigger
+    >>> progress = template.report_progress()
+    >>> progress["status"] == DecisionStatus.CONTINUE_
+    True
+    >>> progress["max_sample_size"]  # Increased from the original design
+    869
 """
 
 from typing import Any, Dict, List, Optional

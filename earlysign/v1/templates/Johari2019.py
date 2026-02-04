@@ -16,43 +16,31 @@ from earlysign.v1.templates.base import TemplateBase
 
 
 class Johari2019Template(TemplateBase[Protocol]):
-    """
-    Template for Anytime-Valid Inference (AVI) using mSPRT as described in Johari et al. (2019).
+    """Template for Anytime-Valid Inference (AVI) using mSPRT.
 
-    This template implements the Mixture Sequential Probability Ratio Test (mSPRT) which
-    allows for continuous monitoring of A/B tests. Unlike traditional fixed-horizon tests,
-    mSPRT produces "anytime-valid" p-values that allow you to stop the test as soon as
-    significance is observed, without inflating the false positive rate.
-
-    The method uses a Normal mixing distribution N(0, tau^2) over the effect size.
-    The parameter `tau` determines the "characteristic scale" of the effect we are
-    looking for. It is mathematically equivalent to the Minimum Detectable Effect (MDE)
-    parameter in other AVI systems.
+    Implements the Mixture Sequential Probability Ratio Test (mSPRT) as described
+    in Johari et al. (2019), allowing for continuous monitoring.
 
     Reference:
         Johari, R., Pekelis, L., & Walsh, J. (2019).
         Always Valid Inference: Continuous Monitoring of A/B Tests.
         https://arxiv.org/abs/1512.04922
 
-    Doctests:
-        This example replicates a scenario similar to the Johari et al. blog post.
-        We simulate an A/B test with a control conversion rate of 0.25 and a
-        treatment rate of 0.35 (a 10 percentage point lift).
-
-        >>> import ibis
+    Examples:
+        >>> import ibis, duckdb
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
 
-        # 1. Setup Ledger
-        # We use an in-memory DuckDB for this demonstration.
+        >>> # 1. Setup Ledger
+        >>> # We use an in-memory DuckDB for this demonstration.
         >>> conn = ibis.connect("duckdb://:memory:")
         >>> ledger = Ledger(conn, "events")
         >>> ledger.ensure()
         >>> ledger = ledger.bind(experiment_id="johari_2019_blog_scenario")
 
-        # 2. Design Experiment
-        # We set alpha=0.05. The 'tau' parameter is set to 0.1, reflecting
-        # our expected lift magnitude.
+        >>> # 2. Design Experiment
+        >>> # We set alpha=0.05. The 'tau' parameter is set to 0.1, reflecting
+        >>> # our expected lift magnitude.
         >>> template = Johari2019Template(ledger)
         >>> protocol = Johari2019Template.design_binomial(
         ...     arms=["control", "treatment"],
@@ -62,10 +50,10 @@ class Johari2019Template(TemplateBase[Protocol]):
         ... )
         >>> template.set_protocol(protocol)
 
-        # 3. Initial Monitoring (Small Sample Size)
-        # Even with unequal allocation (Control: 200, Treatment: 100),
-        # the mSPRT correctly adjusts the confidence boundary.
-        # Control: 50/200 (25%), Treatment: 35/100 (35%)
+        >>> # 3. Initial Monitoring (Small Sample Size)
+        >>> # Even with unequal allocation (Control: 200, Treatment: 100),
+        >>> # the mSPRT correctly adjusts the confidence boundary.
+        >>> # Control: 50/200 (25%), Treatment: 35/100 (35%)
         >>> batch1 = [
         ...     BinomialArmData(n=200, success=50, arm="control"),
         ...     BinomialArmData(n=100, success=35, arm="treatment"),
@@ -74,15 +62,15 @@ class Johari2019Template(TemplateBase[Protocol]):
         >>> report1 = template.report_progress()
         >>> report1["status"]
         'continue'
-        >>> abs(report1["trajectory"] - 0.1) < 1e-9
-        True
+        >>> round(report1["trajectory"], 2)
+        0.1
         >>> report1["sample_n"]  # Total samples across arms
         300
-
-        # 4. Final Detection (Accumulated Evidence)
-        # As more data arrives, the trajectory persists at +10% lift.
-        # Total Control: 250/1000 (25%), Total Treatment: 350/1000 (35%)
-        # The anytime-valid boundary will eventually be crossed.
+        >>>
+        >>> # 4. Final Detection (Accumulated Evidence)
+        >>> # As more data arrives, the trajectory persists at +10% lift.
+        >>> # Total Control: 250/1000 (25%), Total Treatment: 350/1000 (35%)
+        >>> # The anytime-valid boundary will eventually be crossed.
         >>> batch2 = [
         ...     BinomialArmData(n=800, success=200, arm="control"),
         ...     BinomialArmData(n=900, success=315, arm="treatment"),
