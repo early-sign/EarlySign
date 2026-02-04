@@ -17,10 +17,23 @@ from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.v1.templates.base import TemplateBase
 
 
-class Maharaj2023Template(TemplateBase[Protocol]):
-    """Template for Anytime-Valid Inference (AVI) following Maharaj et al. (2023).
+class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
+    """Template for Asymptotic Confidence Sequences (Maharaj et al. 2023).
 
-    Supports "Unknown Variance" scenarios where variance is estimated from data.
+    This template serves as a generalized implementation that supports both **GAVI**
+    and **mSPRT** methodologies to construct Asymptotic Confidence Sequences (CS),
+    specifically extended for **Unknown Variance** scenarios.
+
+    While `ConfidenceSequence_WaudbySmith2021.py` and `mSPRT_Johari2019.py` focus on the canonical
+    implementations (often assuming known/bounded variance), this template implements
+    the practical, variance-adaptive approaches described in Maharaj et al. (2023)
+    typically used in large-scale experimentation platforms.
+
+    It allows you to choose the underlying strategy:
+    - `design_gavi(...)`: Uses General Anytime-Valid Inference (GAVI) to construct CS.
+    - `design_m_sprt(...)`: Uses Mixture Sequential Probability Ratio Test (mSPRT) to construct CS.
+
+    Both methods in this template are equipped to handle variance estimation from data.
 
     Reference:
         Maharaj, A., et al. (2023). Anytime-Valid Confidence Sequences in an
@@ -33,6 +46,7 @@ class Maharaj2023Template(TemplateBase[Protocol]):
         >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
         >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
         >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+        >>> from earlysign.v1.templates.AsymptoticConfidenceSequence_Maharaj2023 import AsymptoticConfidenceSequenceMaharaj2023Template
         >>>
         >>> # Setup ledger
         >>> conn = ibis.connect("duckdb://:memory:")
@@ -41,10 +55,10 @@ class Maharaj2023Template(TemplateBase[Protocol]):
         >>> ledger = ledger.bind(experiment_id="maharaj_test_001")
         >>>
         >>> # Initialize template
-        >>> template = Maharaj2023Template(ledger)
+        >>> template = AsymptoticConfidenceSequenceMaharaj2023Template(ledger)
         >>>
         >>> # 1. Design GAVI with UNKNOWN variance (variance=None)
-        >>> protocol = Maharaj2023Template.design_gavi(
+        >>> protocol = template.design_gavi(
         ...     arms=["control", "treatment"],
         ...     alpha=0.05,
         ...     variance=None,
@@ -105,7 +119,9 @@ class Maharaj2023Template(TemplateBase[Protocol]):
         task = TaskSpec(
             kind="AVI", arms=arms, response_type="binary"
         )  # Defaulting to binary for now, adjustable via overload if needed
-        return Protocol(name="Maharaj2023 GAVI", task=task, method=method)
+        return Protocol(
+            name="Asymptotic CS (Maharaj2023 GAVI)", task=task, method=method
+        )
 
     @classmethod
     def design_m_sprt(
@@ -126,7 +142,9 @@ class Maharaj2023Template(TemplateBase[Protocol]):
             mde=mde,
         )
         task = TaskSpec(kind="AVI", arms=arms, response_type="binary")
-        return Protocol(name="Maharaj2023 mSPRT", task=task, method=method)
+        return Protocol(
+            name="Asymptotic CS (Maharaj2023 mSPRT)", task=task, method=method
+        )
 
     def update(self, batch: List[Any]) -> None:
         """
@@ -137,19 +155,19 @@ class Maharaj2023Template(TemplateBase[Protocol]):
             with Session(self.ledger) as sess:
                 for item in batch:
                     # Determine trace if needed, empty for now
-                    sess.Commit(item, trace=[])
+                    sess.commit(item, trace=[])
 
         with Session(self.ledger) as sess:
-            protocol = sess.Read(ProtocolProjector(Protocol)).data
+            protocol = sess.read(ProtocolProjector(Protocol)).data
 
             # Determine response type to pick correct scoreboard
             # This logic mimics the standard AVI template but is simplified here
             response_type = getattr(protocol.task, "response_type", "binary")
 
             if response_type == "binary":
-                metrics = sess.Read(BinomialScoreboard(identity="metrics"))
+                metrics = sess.read(BinomialScoreboard(identity="metrics"))
             else:
-                metrics = sess.Read(ContinuousScoreboard(identity="metrics"))
+                metrics = sess.read(ContinuousScoreboard(identity="metrics"))
 
             # Select Engine
             if protocol.method.kind == "GAVI":
@@ -159,13 +177,13 @@ class Maharaj2023Template(TemplateBase[Protocol]):
             else:
                 raise ValueError(f"Unknown AVI method kind: {protocol.method.kind}")
 
-            sess.CallAndCommit(LookResult, engine.run, metrics=metrics)
+            sess.call_and_commit(LookResult, engine.run, metrics=metrics)
 
     def report_progress(self) -> Dict[str, Any]:
         """Returns the current interim report."""
         with Session(self.ledger) as sess:
-            return sess.Read(ProgressProjector()).data.model_dump(mode="json")
+            return sess.read(ProgressProjector()).data.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         with Session(self.ledger) as sess:
-            return sess.Read(FinalProjector()).data.model_dump(mode="json")
+            return sess.read(FinalProjector()).data.model_dump(mode="json")

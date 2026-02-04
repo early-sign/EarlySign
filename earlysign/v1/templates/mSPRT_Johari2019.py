@@ -1,0 +1,175 @@
+"""Always Valid Inference (mSPRT - Johari 2019).
+
+This template implements the Mixture Sequential Probability Ratio Test (mSPRT)
+as described in Johari et al. (2019).
+
+Reference:
+    Johari, R., Pekelis, L., & Walsh, J. (2019).
+    Always Valid Inference: Continuous Monitoring of A/B Tests.
+    https://arxiv.org/abs/1512.04922
+
+Examples:
+    >>> import ibis, duckdb  # noqa: F401
+    >>> from earlysign.core.ledger import Ledger
+    >>> from earlysign.v1.templates.mSPRT_Johari2019 import BinomialJohari2019Template
+    >>> from earlysign.schema.ES3.Binomial import ArmData
+    >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
+
+    >>> conn = ibis.connect("duckdb://:memory:")
+    >>> ledger = Ledger(conn, "events")
+    >>> ledger.ensure()
+    >>> ledger = ledger.bind(experiment_id="doctest_msprt")
+    >>>
+    >>> # Design mSPRT (Binomial)
+    >>> template = BinomialJohari2019Template(ledger)
+    >>> protocol = template.design(
+    ...     arms=["C", "T"],
+    ...     alpha=0.05,
+    ...     tau=0.1,  # Mixing parameter ~ MDE
+    ...     sides="two"
+    ... )
+    >>> template.set_protocol(protocol)
+    >>>
+    >>> # Update with data
+    >>> batch = [ArmData(n=100, success=20, arm="C"), ArmData(n=100, success=30, arm="T")]
+    >>> template.update(batch)
+    >>>
+    >>> # Check Report
+    >>> res = template.report_progress()
+    >>> res["status"]
+    'continue'
+"""
+
+from typing import Any, Dict, List, Literal
+
+from earlysign.core.ledger import Ledger
+from earlysign.schema.ES3.AVI import (
+    MSPRTMethodSpec,
+    Protocol,
+    TaskSpec,
+)
+from earlysign.schema.ES3.AVI.Log import LookResult
+from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+from earlysign.v1.framework.projector import ProtocolProjector
+from earlysign.v1.framework.session import Session
+from earlysign.v1.methods.AVI import mSPRTEngine
+from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
+from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
+from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
+from earlysign.v1.templates.base import TemplateBase
+
+
+class BinomialJohari2019Template(TemplateBase[Protocol]):
+    """Template for Binomial mSPRT (Johari 2019)."""
+
+    _protocol_class = Protocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+
+    @classmethod
+    def design(
+        cls,
+        arms: List[str],
+        alpha: float,
+        tau: float = 0.1,
+        sides: Literal["one", "two"] = "two",
+    ) -> Protocol:
+        """
+        Design an mSPRT experiment for binomial data.
+
+        Args:
+            arms: List of arm names (exactly 2).
+            alpha: Target false positive rate (at any time).
+            tau: Mixing standard deviation (tuning parameter for the mixing distribution).
+                 Commonly set to the expected effect size or MDE.
+            sides: "one" or "two" sided testing.
+        """
+        method = MSPRTMethodSpec(
+            alpha=alpha,
+            variance=None,  # Binomial variance is implicit/estimated by engine
+            sides=sides,
+            mde=tau,
+        )
+        task = TaskSpec(kind="AVI", arms=arms, response_type="binary")
+        return Protocol(name="mSPRT (Johari 2019)", task=task, method=method)
+
+    def update(self, batch: List[BinomialArmData]) -> None:
+        """
+        Update the experiment with a batch of data.
+        """
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.commit(item, trace=[])
+
+        with Session(self.ledger) as sess:
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+            metrics = sess.read(BinomialScoreboard(identity="metrics"))
+
+            # Run mSPRT Engine
+            engine = mSPRTEngine(protocol)
+            sess.call_and_commit(LookResult, engine.run, metrics=metrics)
+
+    def report_progress(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+
+    def report_result(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(FinalProjector()).data.model_dump(mode="json")
+
+
+class ContinuousJohari2019Template(TemplateBase[Protocol]):
+    """Template for Continuous mSPRT (Johari 2019)."""
+
+    _protocol_class = Protocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+
+    @classmethod
+    def design(
+        cls,
+        arms: List[str],
+        alpha: float,
+        tau: float,
+        variance: float,
+        sides: Literal["one", "two"] = "two",
+    ) -> Protocol:
+        """
+        Design an mSPRT experiment for continuous data.
+
+        Args:
+            variance: Known variance of the outcome (assumed fixed).
+        """
+        method = MSPRTMethodSpec(
+            alpha=alpha,
+            variance=variance,
+            sides=sides,
+            mde=tau,
+        )
+        task = TaskSpec(kind="AVI", arms=arms, response_type="continuous")
+        return Protocol(name="Continuous mSPRT (Johari 2019)", task=task, method=method)
+
+    def update(self, batch: List[ContinuousArmData]) -> None:
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.commit(item, trace=[])
+
+        with Session(self.ledger) as sess:
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+            metrics = sess.read(ContinuousScoreboard(identity="metrics"))
+
+            engine = mSPRTEngine(protocol)
+            sess.call_and_commit(LookResult, engine.run, metrics=metrics)
+
+    def report_progress(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+
+    def report_result(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(FinalProjector()).data.model_dump(mode="json")

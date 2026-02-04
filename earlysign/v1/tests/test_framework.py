@@ -11,7 +11,7 @@ This module provides a comprehensive introduction to the EarlySign framework thr
 >>> from earlysign.v1.framework.trace import Traced, TraceId
 >>> from earlysign.v1.methods.binomial import Scoreboard
 >>> from earlysign.schema.ES3.Binomial import ArmData
->>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
+>>> from earlysign.v1.templates.SpendingGST_LanDeMets1983 import LanDeMets1983Template as BinomialABTemplate, LanDeMets1983TaskSpec as BinomialABTaskSpec
 >>> from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 >>> import earlysign.schema.ES3.GST as GST
 >>> from earlysign.schema.ES3.GST.Log import DecisionStatus

@@ -61,9 +61,13 @@ class SequentialQuantileScoreboard:
         return ProjectionResult(data=Scoreboard(arms=arms), trace=all_trace)
 
 
-class SequentialQuantileTemplate(TemplateBase[Protocol]):
-    """
-    Template for Howard & Ramdas (2022) Sequential Quantile A/B Testing.
+class HowardRamdas2022Template(TemplateBase[Protocol]):
+    """Template for Howard & Ramdas (2022) Sequential Quantile A/B Testing.
+
+    Based on the method described in:
+        Howard, S. R., & Ramdas, A. (2022). Sequential estimation of quantiles
+        with applications to A/B testing and best-arm identification.
+        Bernoulli, 28(3), 1704–1728. https://doi.org/10.3150/21-BEJ1388
 
     Example:
     >>> import ibis
@@ -71,7 +75,7 @@ class SequentialQuantileTemplate(TemplateBase[Protocol]):
     >>> from earlysign.core.ledger import Ledger
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events_sq"); ledger.ensure()
-    >>> template = SequentialQuantileTemplate(ledger)
+    >>> template = HowardRamdas2022Template(ledger)
     >>> protocol = template.design(["A", "B"], quantile=0.5, alpha=0.05)
     >>> template.set_protocol(protocol)
     >>> t = con.create_table("raw_data_sq", {"arm": ["A", "A", "B", "B"], "val": [1.0, 2.0, 10.0, 11.0]})
@@ -152,7 +156,7 @@ class SequentialQuantileTemplate(TemplateBase[Protocol]):
 
         with Session(self.ledger) as sess:
             # 1. Read Protocol
-            protocol_traced = sess.Read(ProtocolProjector(Protocol))
+            protocol_traced = sess.read(ProtocolProjector(Protocol))
             protocol = protocol_traced.data
             method = protocol.method
 
@@ -180,16 +184,16 @@ class SequentialQuantileTemplate(TemplateBase[Protocol]):
                 )
 
                 # d. Commit to Ledger
-                sess.Commit(metrics, identity=arm_id)
+                sess.commit(metrics, identity=arm_id)
 
             # 3. Decision Logic
             scoreboard_projector = SequentialQuantileScoreboard(protocol.task.arms)
-            scoreboard_traced = sess.Read(scoreboard_projector)
+            scoreboard_traced = sess.read(scoreboard_projector)
 
             engine = SequentialQuantileEngine(protocol)
 
             # Commit LookResult
-            sess.CallAndCommit(
+            sess.call_and_commit(
                 SequentialQuantileLookResult, engine.run, metrics=scoreboard_traced.data
             )
 

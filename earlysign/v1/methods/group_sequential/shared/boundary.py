@@ -98,7 +98,9 @@ class BoundaryCalculatorSpec:
     efficacy: EfficacyConfig = field(
         default_factory=lambda: EfficacyConfig(style="alpha_spending")
     )
-    futility: FutilityConfig = field(default_factory=lambda: FutilityConfig(mode="none"))
+    futility: FutilityConfig = field(
+        default_factory=lambda: FutilityConfig(mode="none")
+    )
     # optional: name of preferred stochastic process primitive (eg 'bm')
     process: Optional[str] = None
 

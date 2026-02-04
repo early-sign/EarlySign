@@ -68,11 +68,9 @@ class ConditionalPowerAdaptationEngine:
         >>> round(cp, 3)
         0.711
         """
-        if not 0 < current_info_time < final_info_time:
-            # Degenerate cases
-            if current_info_time >= final_info_time:
-                return 0.0 if observed_z < final_efficacy_bound else 1.0
-            raise ValueError("Current info time must be less than final info time")
+        if current_info_time >= final_info_time:
+            # Degenerate cases: At or beyond final analysis
+            return 1.0 if observed_z >= final_efficacy_bound else 0.0
 
         delta_t = final_info_time - current_info_time
         mean_increment = assumed_effect * np.sqrt(delta_t)
@@ -184,6 +182,31 @@ class ConditionalPowerAdaptationEngine:
                 protocol.method.stopping_policy.timer, "max_sample_size", 0
             ),
         )
+
+    @classmethod
+    def check_and_adapt(
+        cls,
+        result: LookResult,
+        protocol: Protocol,
+        cp_threshold_min: float = 0.5,
+        cp_threshold_max: float = 0.9,
+        target_cp: float = 0.9,
+    ) -> AdaptationLog:
+        """
+        Convenience method that assesses the promising zone and recalculates
+        the sample size if needed.
+        """
+        log = cls.assess_promising_zone(
+            result, protocol, cp_threshold_min, cp_threshold_max
+        )
+
+        if log.promising_zone_status == PromisingZoneStatus.PROMISING:
+            new_proto = cls.replan_sample_size(protocol, log, result, target_cp)
+            log.recommended_sample_size = getattr(
+                new_proto.method.stopping_policy.timer, "max_sample_size", None
+            )
+
+        return log
 
     @classmethod
     def replan_sample_size(

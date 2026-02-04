@@ -1,0 +1,294 @@
+from typing import Any, Dict, List, Literal
+
+from earlysign.core.ledger import Ledger
+from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+from earlysign.schema.ES3.YEAST import (
+    MethodSpec,
+    Protocol,
+    ResponseType,
+    TaskSpec as YeastTaskSpec,
+)
+from earlysign.schema.ES3.YEAST.Log import Boundary as BoundarySchema, LookResult
+from earlysign.v1.framework.projector import ProtocolProjector
+from earlysign.v1.framework.session import Session
+from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
+from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
+from earlysign.v1.methods.YEAST.engine import BinomialYEASTEngine, ContinuousYEASTEngine
+from earlysign.v1.methods.YEAST.reporting import FinalProjector, ProgressProjector
+from earlysign.v1.templates.base import TemplateBase
+
+
+class BinomialKurennoy2025TaskSpec(YeastTaskSpec):
+    """User-facing Task Specification for Binomial YEAST."""
+
+    kind: Literal["yeast"] = "yeast"
+    arms: List[str]
+    response_type: ResponseType = ResponseType.BINARY
+    hypotheses: Dict[str, Any]
+
+
+class ContinuousKurennoy2025TaskSpec(YeastTaskSpec):
+    """User-facing Task Specification for Continuous YEAST."""
+
+    kind: Literal["yeast"] = "yeast"
+    arms: List[str]
+    response_type: ResponseType = ResponseType.CONTINUOUS
+    hypotheses: Dict[str, Any]
+
+
+class BinomialKurennoy2025Template(TemplateBase[Protocol]):
+    """Template for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
+
+    Based on the method described in:
+        Kurennoy, A., Dodin, M., Gurbanov, T., & Ramallo, A. P. (2025, October 29).
+        YEAST: Yet another sequential test. The Thirty-Ninth Annual Conference on Neural
+        Information Processing Systems. https://openreview.net/forum?id=aq3tgx5wcu
+
+    Standardized to use Session, Engine, and Projectors.
+
+    Examples:
+        >>> import ibis, duckdb  # noqa: F401
+        >>> from earlysign.core.ledger import Ledger
+        >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import BinomialKurennoy2025Template, BinomialKurennoy2025TaskSpec
+        >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+
+        >>> # Setup
+        >>> conn = ibis.connect("duckdb://:memory:")
+        >>> ledger = Ledger(conn, "events")
+        >>> ledger.ensure()
+        >>> ledger = ledger.bind(experiment_id="doctest_yeast_bin")
+        >>> template = BinomialKurennoy2025Template(ledger)
+
+        >>> # 1. Design with estimated variance (for Binomial, variance relates to p(1-p))
+        >>> # If we don't know it, we might estimate conservative 0.25max or from pilot.
+        >>> task = BinomialKurennoy2025TaskSpec(arms=["A", "B"], hypotheses={})
+        >>> protocol = template.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=0.25)
+        >>> template.set_protocol(protocol)
+
+        >>> # 2. Update
+        >>> batch = [BinomialArmData(n=100, success=20, arm="A"), BinomialArmData(n=100, success=25, arm="B")]
+        >>> template.update(batch)
+
+        >>> # 3. Report
+        >>> res = template.report_progress()
+        >>> res["status"]
+        'continue'
+    """
+
+    _protocol_class = Protocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+
+    def set_protocol(self, protocol: Protocol) -> None:
+        """
+        Persists the trial protocol to the ledger and calculates initial boundary.
+        """
+        super().set_protocol(protocol)
+        if not protocol.method.boundary_sequence:
+            # Pre-calculate boundary if not present
+            # For YEAST, boundary is usually static or calculated on fly?
+            # The Engine implementation handles boundary generation.
+            pass
+
+        with Session(self.ledger) as sess:
+            sess.commit(protocol)
+
+    @classmethod
+    def design(
+        cls,
+        task: BinomialKurennoy2025TaskSpec,
+        significance_level: float,
+        expected_num_observations: int,
+        estimated_variance: float,
+    ) -> Protocol:
+        """
+        Design a YEAST protocol from parameters.
+        """
+        method = MethodSpec(
+            kind="yeast",
+            significance_level=significance_level,
+            expected_num_observations=expected_num_observations,
+            estimated_variance=estimated_variance,
+            boundary_sequence=[],  # Will be populated by Engine/Designer if needed
+        )
+
+        return Protocol(
+            name="YEAST Binomial",
+            task=task,
+            method=method,
+        )
+
+    def update(self, batch: List[BinomialArmData]) -> None:
+        """
+        Update the experiment with a batch of data.
+        """
+        # 1. Ingest Data
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.commit(item, trace=[])
+
+        # 2. Analysis
+        with Session(self.ledger) as sess:
+            # Reconstruct Protocol from Ledger
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+
+            # Read Metrics
+            metrics = sess.read(BinomialScoreboard(identity="metrics"))
+
+            # 3. Engine Execution
+            engine = BinomialYEASTEngine(protocol)
+
+            # Extract current boundary if available in protocol sequence
+            # For simplicity, we use None or first value if available.
+            # Real implementation would index by look count.
+            boundary_val = None
+            if protocol.method.boundary_sequence:
+                boundary_val = protocol.method.boundary_sequence[0]
+
+            boundary = BoundarySchema(value=boundary_val)
+
+            # 4. Commit Result via CallAndCommit
+            sess.call_and_commit(
+                LookResult,
+                engine.run,
+                metrics=metrics,
+                boundary=boundary,
+            )
+
+    def report_progress(self) -> Dict[str, Any]:
+        """Report current status.
+
+        Returns:
+            A dictionary containing the current progress report.
+        """
+        with Session(self.ledger) as sess:
+            report = sess.read(ProgressProjector()).data
+            return report.model_dump(mode="json")
+
+    def report_result(self) -> Dict[str, Any]:
+        """Report final result.
+
+        Returns:
+            A dictionary containing the final result of the experiment.
+        """
+        with Session(self.ledger) as sess:
+            return sess.read(FinalProjector()).data.model_dump(mode="json")
+
+
+class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
+    """Template for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
+
+    Based on:
+        Kurennoy, A., Dodin, M., Gurbanov, T., & Ramallo, A. P. (2025). YEAST: Yet another sequential test.
+
+    Examples:
+        >>> import ibis
+        >>> from earlysign.core.ledger import Ledger
+        >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import ContinuousKurennoy2025Template, ContinuousKurennoy2025TaskSpec
+        >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+
+        >>> con = ibis.duckdb.connect(":memory:")
+        >>> ledger = Ledger(con, "events_cont")
+        >>> ledger.ensure()
+        >>> template = ContinuousKurennoy2025Template(ledger)
+
+        >>> task = ContinuousKurennoy2025TaskSpec(arms=["A", "B"], hypotheses={})
+        >>> protocol = template.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=1.0)
+        >>> template.set_protocol(protocol)
+
+        >>> batch = [ContinuousArmData(n=10, sum_x=5.0, sum_x2=10.0, arm="A")]
+        >>> template.update(batch)
+        >>> res = template.report_progress()
+        >>> res["status"]
+        'continue'
+    """
+
+    _protocol_class = Protocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+
+    def set_protocol(self, protocol: Protocol) -> None:
+        """
+        Persists the trial protocol to the ledger and calculates initial boundary.
+        """
+        super().set_protocol(protocol)
+        if not protocol.method.boundary_sequence:
+            # Pre-calculate boundary if not present
+            pass
+
+        with Session(self.ledger) as sess:
+            sess.commit(protocol)
+
+    @classmethod
+    def design(
+        cls,
+        task: ContinuousKurennoy2025TaskSpec,
+        significance_level: float,
+        expected_num_observations: int,
+        estimated_variance: float,
+    ) -> Protocol:
+        """
+        Design a YEAST protocol from parameters.
+        """
+        method = MethodSpec(
+            kind="yeast",
+            significance_level=significance_level,
+            expected_num_observations=expected_num_observations,
+            estimated_variance=estimated_variance,
+            boundary_sequence=[],  # Will be populated by Engine/Designer if needed
+        )
+        return Protocol(
+            name="YEAST Continuous",
+            task=task,
+            method=method,
+        )
+
+    def update(self, batch: List[ContinuousArmData]) -> None:
+        """
+        Update the experiment with a batch of data.
+        """
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.commit(item, trace=[])
+
+        with Session(self.ledger) as sess:
+            # 1. Read State
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+            metrics = sess.read(ContinuousScoreboard(identity="metrics"))
+
+            # 2. Run Engine (YEAST Logic)
+            engine = ContinuousYEASTEngine(protocol)
+
+            boundary_val = None
+            if protocol.method.boundary_sequence:
+                boundary_val = protocol.method.boundary_sequence[0]
+
+            boundary = BoundarySchema(value=boundary_val)
+
+            # 3. Commit Result
+            # CallAndCommit ensures that 'LookResult' is causally linked to 'metrics'
+            sess.call_and_commit(
+                LookResult,
+                engine.run,
+                metrics=metrics,
+                boundary=boundary,
+            )
+
+    def report_progress(self) -> Dict[str, Any]:
+        """
+        Report current status.
+        """
+        with Session(self.ledger) as sess:
+            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+
+    def report_result(self) -> Dict[str, Any]:
+        """
+        Report final result.
+        """
+        with Session(self.ledger) as sess:
+            return sess.read(FinalProjector()).data.model_dump(mode="json")

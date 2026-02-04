@@ -6,7 +6,7 @@ binary outcomes.
 Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.v1.templates.binomial_ab import BinomialABTemplate, BinomialABTaskSpec
+    >>> from earlysign.v1.templates.SpendingGST_LanDeMets1983 import LanDeMets1983Template, LanDeMets1983TaskSpec
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>> from earlysign.v1.tests.util import BinomialStream
@@ -24,7 +24,7 @@ Examples:
     >>> # Next, we define the experimental task. Here we are testing for a 10% relative lift
     >>> # (from 20% to 22% conversion rate) with standard error control (alpha=0.05, power=0.80).
     >>> # Define task
-    >>> task = BinomialABTaskSpec(
+    >>> task = LanDeMets1983TaskSpec(
     ...     arms=["control", "treatment"],
     ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
     ...     futility=GST.FutilityRequirement(power=0.8, binding=True),
@@ -40,7 +40,7 @@ Examples:
     >>>
     >>> # Now we design the protocol with 2 interim looks using the O'Brien-Fleming spending function.
     >>> # The designer calculates the required sample size and decision boundaries.
-    >>> protocol = BinomialABTemplate.design(
+    >>> protocol = LanDeMets1983Template.design(
     ...     task=task,
     ...     looks=2,
     ...     spending_function="obrien_fleming",
@@ -50,7 +50,7 @@ Examples:
     Designed Max Sample Size: 10163
     >>>
     >>> # With the protocol designed, we initialize the template and persist it to the ledger.
-    >>> template = BinomialABTemplate(ledger)
+    >>> template = LanDeMets1983Template(ledger)
     >>> template.set_protocol(protocol)
     >>>
     >>> # For demonstration, we simulate a data stream where the treatment actually has a larger
@@ -83,8 +83,8 @@ Examples:
     >>> # To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
     >>>
     >>> # Test: Protocol Deserialization from JSON
-    >>> protocol_json = '{"name": "earlysign.v1.templates.binomial_ab.BinomialABProtocol", "ES3_version": "v1.0.0", "task": {"kind": "group_sequential", "arms": ["C", "T"], "response_type": "binary", "hypotheses": {"h_null_description": "Diff <= 0", "h_alt_description": "Diff > 0.05", "test_logic": {"kind": "superiority", "superiority_margin": 0.05}, "target_effect": {"type": "binary", "proportions": {"C": 0.09, "T": 0.14}}}, "efficacy": {"alpha": 0.025}, "futility": {"power": 0.8, "binding": false}}, "method": {"kind": "group_sequential", "stopping_policy": {"statistic": {"kind": "two_arm_binomial_z"}, "strategy": {"kind": "alpha_beta_spending", "statistical_model": {"kind": "canonical_gaussian"}, "alpha_spending_fn": {"family": "obrien_fleming", "params": null}, "beta_spending_fn": {"family": "obrien_fleming", "params": null}, "alpha_budget": 0.025, "beta_budget": 0.2, "alpha_binding": true, "beta_binding": false}, "timer": {"kind": "sample_size", "unit": "individuals", "max_sample_size": 1255}, "schedule": {"kind": "fixed", "analyses": [0.5, 1.0]}}, "adaptation": null}}'
-    >>> protocol_from_json = BinomialABProtocol.model_validate_json(protocol_json)
+    >>> protocol_json = '{"name": "earlysign.v1.templates.SpendingGST_LanDeMets1983.LanDeMets1983Protocol", "ES3_version": "v1.0.0", "task": {"kind": "group_sequential", "arms": ["C", "T"], "response_type": "binary", "hypotheses": {"h_null_description": "Diff <= 0", "h_alt_description": "Diff > 0.05", "test_logic": {"kind": "superiority", "superiority_margin": 0.05}, "target_effect": {"type": "binary", "proportions": {"C": 0.09, "T": 0.14}}}, "efficacy": {"alpha": 0.025}, "futility": {"power": 0.8, "binding": false}}, "method": {"kind": "group_sequential", "stopping_policy": {"statistic": {"kind": "two_arm_binomial_z"}, "strategy": {"kind": "alpha_beta_spending", "statistical_model": {"kind": "canonical_gaussian"}, "alpha_spending_fn": {"family": "obrien_fleming", "params": null}, "beta_spending_fn": {"family": "obrien_fleming", "params": null}, "alpha_budget": 0.025, "beta_budget": 0.2, "alpha_binding": true, "beta_binding": false}, "timer": {"kind": "sample_size", "unit": "individuals", "max_sample_size": 1255}, "schedule": {"kind": "fixed", "analyses": [0.5, 1.0]}}, "adaptation": null}}'
+    >>> protocol_from_json = LanDeMets1983Protocol.model_validate_json(protocol_json)
     >>> protocol_from_json.task.arms
     ['C', 'T']
     >>> protocol_from_json.method.stopping_policy.statistic.kind
@@ -116,7 +116,7 @@ from earlysign.v1.methods.group_sequential.reporting.visualization import (
 from earlysign.v1.templates.base import AutoNameMixin, TemplateBase
 
 
-class BinomialABTaskSpec(GST.TaskSpec):
+class LanDeMets1983TaskSpec(GST.TaskSpec):
     response_type: GST.ResponseType = GST.ResponseType.BINARY
     # Design Requirements
     efficacy: GST.EfficacyRequirement
@@ -125,20 +125,24 @@ class BinomialABTaskSpec(GST.TaskSpec):
     hypotheses: GST.HypothesisSpec
 
 
-class BinomialABProtocol(GST.Protocol, AutoNameMixin):
-    task: BinomialABTaskSpec
+class LanDeMets1983Protocol(GST.Protocol, AutoNameMixin):
+    task: LanDeMets1983TaskSpec
     method: GST.MethodSpec
     name: str = Field(default="")
 
 
-class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
-    """Standard orchestrator for Binomial A/B tests.
+class LanDeMets1983Template(TemplateBase[LanDeMets1983Protocol]):
+    """Standard orchestrator for Binomial A/B tests (Lan & DeMets 1983).
 
-    Provides high-level methods for designing,Updating, and reporting
-    sequential A/B tests with binary outcomes.
+    Provides high-level methods for designing, Updating, and reporting
+    sequential A/B tests with binary outcomes using Alpha Spending functions.
+
+    Reference:
+        Lan, K. K. G., & DeMets, D. L. (1983). Discrete sequential boundaries
+        for clinical trials. Biometrika, 70(3), 659–663.
     """
 
-    _protocol_class = BinomialABProtocol
+    _protocol_class = LanDeMets1983Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
@@ -146,12 +150,12 @@ class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
     @classmethod
     def design(
         cls,
-        task: BinomialABTaskSpec,
+        task: LanDeMets1983TaskSpec,
         looks: int,
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
-    ) -> BinomialABProtocol:
+    ) -> LanDeMets1983Protocol:
         """
         Designs a Binomial A/B protocol based on the provided TaskSpec.
 
@@ -162,7 +166,7 @@ class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
             designer_params: Optional params for ProtocolDesigner (e.g., model type).
 
         Returns:
-            A populated BinomialABProtocol with the calculated schedule.
+            A populated LanDeMets1983Protocol with the calculated schedule.
         """
         designer = ProtocolDesigner.from_dict(designer_params or {})
 
@@ -176,7 +180,7 @@ class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
             },
         )
 
-        return BinomialABProtocol(
+        return LanDeMets1983Protocol(
             task=task,
             method=method_spec,
         )
@@ -190,14 +194,14 @@ class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
         if batch:
             with Session(self.ledger) as sess:
                 for item in batch:
-                    sess.Commit(item, trace=[])
+                    sess.commit(item, trace=[])
 
         # 2. Analysis
         with Session(self.ledger) as sess:
             # Reconstruct Protocol from Ledger
-            protocol = sess.Read(ProtocolProjector(BinomialABProtocol))
+            protocol = sess.read(ProtocolProjector(LanDeMets1983Protocol))
 
-            metrics = sess.Read(Scoreboard(identity="metrics"))
+            metrics = sess.read(Scoreboard(identity="metrics"))
 
             # 3. Engine Execution - compute result
             # The engine extracts arm names from protocol.task.arms internally.
@@ -206,7 +210,7 @@ class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
             # 4. Commit the result via CallAndCommit to automate lineage tracking.
             # This ensures causality between the input metrics and the LookResult.
             # Decision flow is handled downstream in callers (e.g. by checking status).
-            sess.CallAndCommit(
+            sess.call_and_commit(
                 LookResult,
                 engine.run,
                 metrics=metrics,
@@ -217,13 +221,13 @@ class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
         Returns the current progress report.
         """
         with Session(self.ledger) as sess:
-            report = sess.Read(ProgressProjector()).data
+            report = sess.read(ProgressProjector()).data
             return report.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
         with Session(self.ledger) as sess:
-            return sess.Read(FinalProjector()).data.model_dump(mode="json")
+            return sess.read(FinalProjector()).data.model_dump(mode="json")
 
     def backtest(self, batches: Any) -> Dict[str, Any]:
         """
@@ -249,10 +253,10 @@ class BinomialABTemplate(TemplateBase[BinomialABProtocol]):
             matplotlib.figure.Figure: The generated plot figure.
         """
         with Session(self.ledger) as sess:
-            protocol = sess.Read(ProtocolProjector(BinomialABProtocol))
+            protocol = sess.read(ProtocolProjector(LanDeMets1983Protocol))
 
             # Retrieve trajectory from InterimAnalyses entity
-            trajectory = sess.Read(InterimAnalyses(identity="interim_analyses"))
+            trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
 
             # Extract history from trajectory
             history_n: List[int] = []
