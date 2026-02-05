@@ -148,6 +148,42 @@ class LanDeMets1983Template(TemplateBase[LanDeMets1983Protocol]):
         self.ledger = ledger
 
     @classmethod
+    def design_binomial(
+        cls,
+        p_control: float,
+        p_treatment: float,
+        alpha: float = 0.05,
+        power: float = 0.8,
+        looks: int = 5,
+        spending_function: str = "obrien_fleming",
+        designer_params: Optional[Dict[str, Any]] = None,
+    ) -> LanDeMets1983Protocol:
+        """
+        High-level helper for designing Binomial A/B tests with Lan-DeMets boundaries.
+        Compatible with LanDeMets1983Template and existing tutorials.
+        """
+        task = LanDeMets1983TaskSpec(
+            arms=["control", "treatment"],
+            response_type=GST.ResponseType.BINARY,
+            efficacy=GST.EfficacyRequirement(alpha=alpha),
+            futility=GST.FutilityRequirement(power=power),
+            hypotheses=GST.HypothesisSpec(
+                h_null_description="Difference <= 0",
+                h_alt_description=f"Difference > {p_treatment - p_control:.4f}",
+                test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+                target_effect=GST.BinaryEffectSize(
+                    proportions={"control": p_control, "treatment": p_treatment}
+                ),
+            ),
+        )
+        return cls.design(
+            task=task,
+            looks=looks,
+            spending_function=spending_function,
+            designer_params=designer_params,
+        )
+
+    @classmethod
     def design(
         cls,
         task: LanDeMets1983TaskSpec,
@@ -168,7 +204,8 @@ class LanDeMets1983Template(TemplateBase[LanDeMets1983Protocol]):
         Returns:
             A populated LanDeMets1983Protocol with the calculated schedule.
         """
-        designer = ProtocolDesigner.from_dict(designer_params or {})
+        designer_params = designer_params or {"model": "canonical_joint"}
+        designer = ProtocolDesigner.from_dict(designer_params)
 
         # Delegate logic to Designer
         method_spec = designer.method_from_task_spec(
