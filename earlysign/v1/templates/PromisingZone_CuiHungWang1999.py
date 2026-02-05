@@ -44,7 +44,8 @@ Examples:
     ...     alpha=0.025,
     ...     power=0.8,
     ...     looks=2,
-    ...     spending_function="obrien_fleming"
+    ...     spending_function="obrien_fleming",
+    ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
     >>> template.set_protocol(protocol)
     >>>
@@ -59,7 +60,11 @@ Examples:
     >>> template.update(batch)
     >>>
     >>> # 5. Verify status and SSR trigger
-    >>> progress = template.report_progress()
+    >>> report = template.report_progress()
+    >>> report["status"]
+    'continue'
+    >>> report["max_sample_size"]
+    3189
 """
 
 from typing import Any, Dict, List, Optional

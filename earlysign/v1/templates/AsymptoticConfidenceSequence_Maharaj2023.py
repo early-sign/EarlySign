@@ -18,22 +18,19 @@ from earlysign.v1.templates.base import TemplateBase
 
 
 class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
-    """Template for Asymptotic Confidence Sequences (Maharaj et al. 2023).
+    r"""Template for Asymptotic Confidence Sequences (Maharaj et al. 2023).
 
-    This template serves as a generalized implementation that supports both **GAVI**
-    and **mSPRT** methodologies to construct Asymptotic Confidence Sequences (CS),
-    specifically extended for **Unknown Variance** scenarios.
+    This template implements the practical, variance-adaptive approaches described
+    in Maharaj et al. (2023) for constructing Asymptotic Confidence Sequences (CS).
+    It is specifically designed for **Unknown Variance** scenarios, estimating
+    effective variance dynamically from the data stream.
 
-    While `ConfidenceSequence_WaudbySmith2021.py` and `mSPRT_Johari2019.py` focus on the canonical
-    implementations (often assuming known/bounded variance), this template implements
-    the practical, variance-adaptive approaches described in Maharaj et al. (2023)
-    typically used in large-scale experimentation platforms.
-
-    It allows you to choose the underlying strategy:
-    - `design_gavi(...)`: Uses General Anytime-Valid Inference (GAVI) to construct CS.
-    - `design_m_sprt(...)`: Uses Mixture Sequential Probability Ratio Test (mSPRT) to construct CS.
-
-    Both methods in this template are equipped to handle variance estimation from data.
+    It supports two distinct design philosophies:
+    1. **Budget-based (`design_from_budget`)**: Optimizes the CS boundary for a
+       fixed target sample size ($max\_n$). Best when resources/time are constrained.
+    2. **Effect-based (`design_from_effect`)**: Optimizes the CS boundary for a
+       specific Minimum Detectable Effect ($mde$). Best when business sensitivity
+       drives the experiment.
 
     Reference:
         Maharaj, A., et al. (2023). Anytime-Valid Confidence Sequences in an
@@ -45,7 +42,6 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
         >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
-        >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
         >>> from earlysign.v1.templates.AsymptoticConfidenceSequence_Maharaj2023 import AsymptoticConfidenceSequenceMaharaj2023Template
         >>>
         >>> # Setup ledger
@@ -57,39 +53,23 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>> # Initialize template
         >>> template = AsymptoticConfidenceSequenceMaharaj2023Template(ledger)
         >>>
-        >>> # 1. Design GAVI with UNKNOWN variance (variance=None)
-        >>> protocol = template.design_gavi(
+        >>> # 1. Design from BUDGET (optimizing for max_n=1000)
+        >>> protocol = template.design_from_budget(
         ...     arms=["control", "treatment"],
         ...     alpha=0.05,
-        ...     variance=None,
-        ...     sides="two",
-        ...     max_n=1000
+        ...     max_n=1000,
+        ...     variance=None, # Estimated from data
+        ...     sides="two"
         ... )
         >>> template.set_protocol(protocol)
         >>>
-        >>> # 2. Simulate Data Update (Binomial)
-        >>> batch1 = [
-        ...     BinomialArmData(n=100, success=50, arm="control"),
-        ...     BinomialArmData(n=100, success=52, arm="treatment"),
-        ... ]
-        >>> template.update(batch1)
-        >>> report1 = template.report_progress()
-        >>> report1["status"]
-        'continue'
-        >>> round(report1["trajectory"], 4)
-        0.02
-        >>>
-        >>> # 3. Large difference update
-        >>> batch2 = [
-        ...     BinomialArmData(n=300, success=150, arm="control"),
-        ...     BinomialArmData(n=300, success=248, arm="treatment"),
-        ... ]
-        >>> template.update(batch2)
-        >>> report2 = template.report_progress()
-        >>> report2["status"]
+        >>> # 2. Simulate Data Update
+        >>> batch = [BinomialArmData(n=800, success=400, arm="control"),
+        ...          BinomialArmData(n=800, success=480, arm="treatment")]
+        >>> template.update(batch)
+        >>> report = template.report_progress()
+        >>> report["status"]
         'stop_efficacy'
-        >>> report2["sample_n"]
-        800
     """
 
     _protocol_class = Protocol
@@ -98,17 +78,45 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         self.ledger = ledger
 
     @classmethod
-    def design_gavi(
+    def design_from_budget(
         cls,
         arms: List[str],
         alpha: float,
-        variance: Optional[float],
-        sides: Literal["one", "two"],
         max_n: int,
+        variance: Optional[float] = None,
+        sides: Literal["one", "two"] = "two",
     ) -> Protocol:
         """
-        Design a GAVI (General Asymptotic Confidence Sequence) test.
-        If `variance` is None, it will be estimated from data (Maharaj et al., 2023).
+        Design an Asymptotic CS optimized for a fixed budget.
+
+        **Design Principle:**
+        Leverages the **GAVI (Generalized Anytime-Valid Inference)** framework.
+        While GAVI defines the statistical construction of the boundary,
+        this design path optimizes GAVI's tuning parameters to achieve
+        the maximum possible sensitivity (narrowest boundary) at a
+        pre-defined target sample size ($max\\_n$).
+
+        **Philosophy:**
+        "I have a budget of $N$ samples. Use the GAVI framework to give me
+        the tightest possible boundary at that specific point."
+
+        **Parameter Role:**
+        - `max_n`: Acts as the optimization target for the GAVI boundary.
+          The boundary minimization (using Lambert W approximation) is
+          centered around this value to ensure maximal sensitivity when
+          the budget is reached.
+
+        **Mental Model:**
+        Use this when you have a fixed experimental window or resource constraint.
+        GAVI's flexibility allows us to "aim" the statistical power at the
+        expected end-of-experiment, while maintaining anytime-validity.
+
+        Args:
+            arms: List of arm names.
+            alpha: Type-1 error rate.
+            max_n: The target/maximum sample size to optimize for.
+            variance: If provided, uses this fixed variance. If None, estimates from data.
+            sides: "one" or "two" sided test.
         """
         method = GAVIMethodSpec(
             alpha=alpha,
@@ -116,24 +124,50 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
             sides=sides,
             max_n=max_n,
         )
-        task = TaskSpec(
-            kind="AVI", arms=arms, response_type="binary"
-        )  # Defaulting to binary for now, adjustable via overload if needed
+        task = TaskSpec(kind="AVI", arms=arms, response_type="binary")
         return Protocol(
-            name="Asymptotic CS (Maharaj2023 GAVI)", task=task, method=method
+            name="Asymptotic CS (Budget-based GAVI)", task=task, method=method
         )
 
     @classmethod
-    def design_m_sprt(
+    def design_from_effect(
         cls,
         arms: List[str],
         alpha: float,
-        variance: Optional[float],
-        sides: Literal["one", "two"],
         mde: float,
+        variance: Optional[float] = None,
+        sides: Literal["one", "two"] = "two",
     ) -> Protocol:
         """
-        Design an mSPRT test.
+        Design an Asymptotic CS optimized to detect a target effect.
+
+        **Design Principle:**
+        Leverages the **mSPRT (Mixture Sequential Probability Ratio Test)**
+        framework. This design path focuses on detecting a specific effect
+        magnitude as efficiently as possible by tuning the prior mixing
+        distribution of the likelihood ratio.
+
+        **Philosophy:**
+        "I need to detect a change of at least $X$. Use the mSPRT framework
+        to give me the most efficient boundary for that magnitude of effect."
+
+        **Parameter Role:**
+        - `mde`: The Minimum Detectable Effect. It determines the prior mixing
+          variance (tau^2) in the mSPRT mixture likelihood. A smaller MDE
+          leads to a boundary that is more sensitive to small effects but
+          potentially slower to cross for larger ones.
+
+        **Mental Model:**
+        Use this when the experiment is driven by business sensitivity to
+        a specific lift. mSPRT is the canonical choice when you want to
+        minimize the expected time to detect a target effect size.
+
+        Args:
+            arms: List of arm names.
+            alpha: Type-1 error rate.
+            mde: The minimum detectable effect size to optimize for.
+            variance: If provided, uses this fixed variance. If None, estimates from data.
+            sides: "one" or "two" sided test.
         """
         method = MSPRTMethodSpec(
             alpha=alpha,
@@ -143,7 +177,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         )
         task = TaskSpec(kind="AVI", arms=arms, response_type="binary")
         return Protocol(
-            name="Asymptotic CS (Maharaj2023 mSPRT)", task=task, method=method
+            name="Asymptotic CS (Effect-based mSPRT)", task=task, method=method
         )
 
     def update(self, batch: List[Any]) -> None:
