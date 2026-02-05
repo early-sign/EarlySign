@@ -15,6 +15,7 @@ from typing import (
 )
 
 T = TypeVar("T", covariant=True)
+"""Generic type placeholder for traced data"""
 
 # Strong typing for trace identifiers (Ledger UUIDs)
 TraceId = NewType("TraceId", str)

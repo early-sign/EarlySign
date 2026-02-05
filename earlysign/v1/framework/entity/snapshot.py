@@ -1,8 +1,13 @@
+"""
+Snapshot model for entity state persistence.
+"""
+
 from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
 T = TypeVar("T")
+"""Generic type placeholder for the snapshotted data"""
 
 
 class Snapshot(BaseModel, Generic[T]):

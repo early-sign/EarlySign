@@ -1,3 +1,10 @@
+"""
+Projector interface for reconstructing state from event streams.
+
+Projectors define how to transform raw events from the Ledger into
+structured scientific contexts with evidentiary traces.
+"""
+
 import json
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, Protocol, Type, TypeVar, cast
@@ -8,7 +15,9 @@ from pydantic import BaseModel
 from earlysign.v1.framework.trace import Traced, TraceId
 
 T = TypeVar("T", covariant=True)
+"""Type of the projected state"""
 P = TypeVar("P", bound=BaseModel)
+"""Type of the pydantic model for protocols"""
 
 
 @dataclass(frozen=True)

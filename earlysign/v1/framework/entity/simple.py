@@ -1,3 +1,7 @@
+"""
+Lightweight entities for simple projection-based retrieval.
+"""
+
 from typing import List, Optional, Tuple, Type, TypeVar
 
 import ibis
@@ -8,8 +12,11 @@ from earlysign.v1.framework.projector import ProjectionResult
 from earlysign.v1.framework.trace import TraceId
 
 T = TypeVar("T")
+"""Generic type placeholder for the entity's state model"""
 S = TypeVar("S")
+"""Generic type placeholder for individual states in a trajectory"""
 Index = TypeVar("Index")
+"""Generic type placeholder for the sequential index"""
 
 
 class SimpleEntity(BaseEntity[Optional[T]]):

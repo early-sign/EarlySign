@@ -1,3 +1,7 @@
+"""
+Sequential entities for trajectory tracking.
+"""
+
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
@@ -19,7 +23,9 @@ from earlysign.v1.framework.projector import ProjectionResult, Projector
 from earlysign.v1.framework.trace import TraceId
 
 S = TypeVar("S")
+"""Generic type placeholder for individual states in a trajectory"""
 Index = TypeVar("Index")
+"""Generic type placeholder for the sequential index"""
 
 
 class LatestStateProjector(Projector[Optional[S]], Generic[Index, S]):

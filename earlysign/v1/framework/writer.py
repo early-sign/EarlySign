@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from earlysign.v1.framework.session import Session
 
 B = TypeVar("B", bound=BaseModel)
+"""Generic type placeholder for pydantic models"""
 
 
 class Writer:

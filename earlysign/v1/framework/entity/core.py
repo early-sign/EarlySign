@@ -40,6 +40,7 @@ from earlysign.v1.framework.session import Session
 from earlysign.v1.framework.trace import Traced
 
 T = TypeVar("T")
+"""Generic type placeholder for the entity's state model"""
 
 
 class Entity(BaseEntity[T], ABC):

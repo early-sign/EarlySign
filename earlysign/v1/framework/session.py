@@ -1,3 +1,10 @@
+"""
+Session management for scientific analysis.
+
+A session provides the context for executing projections and recording
+events within a consistent 'scientific horizon'.
+"""
+
 from typing import Any, Callable, Dict, List, Optional, Self, Type, TypeVar
 
 from pydantic import BaseModel
@@ -8,7 +15,9 @@ from earlysign.v1.framework.trace import Traced, TraceId, extract_traces
 from earlysign.v1.framework.writer import Writer
 
 T = TypeVar("T")
+"""Generic type placeholder for projection results"""
 B = TypeVar("B", bound=BaseModel)
+"""Generic type placeholder for pydantic models"""
 
 
 class Session:

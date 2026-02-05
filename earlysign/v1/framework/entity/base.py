@@ -1,9 +1,14 @@
+"""
+Base class for entities in the framework.
+"""
+
 from abc import ABC
 from typing import TypeVar
 
 from earlysign.v1.framework.projector import Projector
 
 T = TypeVar("T")
+"""Generic type placeholder for entity state"""
 
 
 class BaseEntity(Projector[T], ABC):
