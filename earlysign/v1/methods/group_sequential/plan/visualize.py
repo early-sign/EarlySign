@@ -457,6 +457,13 @@ def visualize_protocol_design(
     fig = None
     if plot:
         fig = plot_design_characteristics(protocol)
+        try:
+            import matplotlib.pyplot as plt
+
+            if fig is not None:
+                plt.close(fig)
+        except ImportError:
+            pass
 
     return {"summary": df, "figure": fig}
 

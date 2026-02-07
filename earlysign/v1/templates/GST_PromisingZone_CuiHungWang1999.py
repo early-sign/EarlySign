@@ -67,6 +67,7 @@ Examples:
     3194
 """
 
+import warnings
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
@@ -200,7 +201,17 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
         # 1. Ingest
         if batch:
             with Session(self.ledger) as sess:
+                # Validate arm names
+                protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
+                allowed_arms = set(protocol.task.arms)
                 for item in batch:
+                    arm_name = getattr(item, "arm", None)
+                    if arm_name and arm_name not in allowed_arms:
+                        warnings.warn(
+                            f"Received data for unexpected arm '{arm_name}'. "
+                            f"Expected arms: {allowed_arms}",
+                            UserWarning,
+                        )
                     sess.commit(item, trace=[])
 
         # 2. Analysis & Adaptation

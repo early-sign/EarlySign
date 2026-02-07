@@ -42,6 +42,7 @@ Example:
     Final Status: stop_efficacy
 """
 
+import warnings
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -227,7 +228,17 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         # 1. Ingest Data
         if batch:
             with Session(self.ledger) as sess:
+                # Validate arm names
+                protocol = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
+                allowed_arms = set(protocol.data.task.arms)
                 for item in batch:
+                    arm_name = getattr(item, "arm", None)
+                    if arm_name and arm_name not in allowed_arms:
+                        warnings.warn(
+                            f"Received data for unexpected arm '{arm_name}'. "
+                            f"Expected arms: {allowed_arms}",
+                            UserWarning,
+                        )
                     sess.commit(item, trace=[])
 
         # 2. Analysis
@@ -301,4 +312,4 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                 history_z.append(state.z_stat)
 
             # Generate Plot
-            return plot_gst_summary(protocol, history_n, history_z)
+            return plot_gst_summary(protocol.data, history_n, history_z)
