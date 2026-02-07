@@ -123,10 +123,10 @@ class ProtocolDesigner:
                 futility_spending=sf_fut,
             )
             drift_target = proxy_model.solve_drift(
-                proxy_times,
-                u_prox,
+                proxy_times.tolist(),
+                u_prox.tolist() if u_prox is not None else [],
                 target_power=power,
-                futility_boundaries=l_prox,
+                futility_boundaries=l_prox.tolist() if l_prox is not None else None,
                 tails=tails,
             )
 
@@ -163,10 +163,10 @@ class ProtocolDesigner:
 
         # 4. Solve Drift
         drift = model.solve_drift(
-            info_times,
-            upper,
+            info_times.tolist(),
+            upper.tolist() if upper is not None else [],
             target_power=power,
-            futility_boundaries=lower,
+            futility_boundaries=lower.tolist() if lower is not None else None,
             tails=tails,
         )
 
@@ -183,6 +183,7 @@ class ProtocolDesigner:
             n_max = int(np.ceil(4 * i_max * sigma2))
 
         # 6. Construct MethodSpec
+        strategy: Any
         if futility:
             strategy = GST.AlphaBetaSpendingStrategy(
                 alpha_spending_fn=GST.SpendingFunction(
@@ -272,7 +273,7 @@ class ProtocolDesigner:
 
         # 2. Solve Constant and Boundaries
         c_val = model.solve_boundary_constant(
-            info_times=info_times,
+            info_times=info_times.tolist(),
             alpha=alpha,
             shape_type=type,
             tails=tails,
@@ -280,14 +281,14 @@ class ProtocolDesigner:
         )
 
         if type == "pocock":
+            strategy_cls: Any = GST.PocockStrategy
             bound_shape = np.ones(looks)
-            strategy_cls = GST.PocockStrategy
         elif type == "obrien_fleming":
-            bound_shape = 1.0 / np.sqrt(info_times)
             strategy_cls = GST.OBrienFlemingStrategy
+            bound_shape = 1.0 / np.sqrt(info_times)
         elif type == "wang_tsiatis":
-            bound_shape = info_times ** (wang_tsiatis_delta - 0.5)
             strategy_cls = GST.WangTsiatisStrategy
+            bound_shape = info_times ** (wang_tsiatis_delta - 0.5)
         else:
             raise ValueError(f"Unknown classic design type: {type}")
 
@@ -311,7 +312,7 @@ class ProtocolDesigner:
             i_max = (drift / theta) ** 2
             n_max = int(np.ceil((4 if arms == 2 else 1) * i_max * sigma2_unit))
             timer_unit = GST.Unit.INDIVIDUALS
-            stat_spec = (
+            stat_spec: Any = (
                 GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED)
                 if arms == 2
                 else GST.OneArmBinomialZ(
@@ -344,7 +345,8 @@ class ProtocolDesigner:
             raise ValueError("Must provide either p_control or sigma.")
 
         # 5. Assemble MethodSpec
-        strategy_kwargs = {
+        # Prepare strategy arguments
+        strategy_kwargs: Dict[str, Any] = {
             "alpha": alpha,
             "sided": GST.Sided.ONE if tails == 1 else GST.Sided.TWO,
             "statistical_model": GST.CanonicalGaussianModel(),
@@ -398,7 +400,7 @@ class ProtocolDesigner:
         spending_params = spending_fn.params if spending_fn else None
 
         method_spec, n_max = self.design_gs_binomial(
-            info_times=info_times,
+            scheduling=info_times,
             alpha=alpha,
             power=power,
             p_control=p_control,
@@ -472,7 +474,7 @@ class ProtocolDesigner:
         info_times = np.linspace(1 / k, 1.0, k)
 
         method_spec, _ = self.design_gs_binomial(
-            info_times=info_times,
+            scheduling=info_times,
             alpha=alpha,
             power=futility.power if futility else 0.8,
             p_control=p_c,
@@ -480,7 +482,7 @@ class ProtocolDesigner:
             spending_function=shape_type,
             spending_params=spending_params,
             futility=futility is not None,
-            futility_binding=futility.binding if futility else False,
+            futility_binding=bool(futility.binding) if futility else False,
             tails=1,  # Default to 1-sided for this template logic
             rng_seed=self._model.config.rng_seed if self._model else None,
         )
