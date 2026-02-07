@@ -43,7 +43,7 @@ Example:
 """
 
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -107,7 +107,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
-        scheduling: str | List[float] = "equidistant",
+        scheduling: Literal["equidistant", "asn_minimizer"] | List[float] = "asn_minimizer",
         # Binomial params (convenience helpers if task is None)
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
