@@ -9,6 +9,7 @@ from scipy import stats
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
     AsymptoticSimulator,
 )
+from earlysign.v1.methods.group_sequential.plan.solver import solve_boundaries
 from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
@@ -241,69 +242,137 @@ def given_total_n(n_max: str, design_params: Dict[str, Any]) -> None:
 @when("I compute the binomial sequential design", target_fixture="results")
 @when("I compute the log-rank sequential design", target_fixture="results")
 def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
+    from earlysign.v1.methods.group_sequential.execution.stopping_policy import (
+        StoppingPolicyFactory,
+    )
+    from earlysign.v1.templates.GST_classic import ClassicGSTTemplate
+
     t = design_params.get("type", "normal-mean")
     alpha = design_params.get("alpha", 0.05)
     power = design_params.get("power", 0.9)
     delta = design_params.get("delta", 1.0)
     k = design_params.get("k", 5)
-
-    # Compute sigma2_unit based on design type
-    if "crossover" in t.lower():
-        sigma2_unit = design_params.get("sigma2", 1.0) / 2.0
-    elif "single-arm" in t.lower():
-        p0 = design_params.get("p0", 0.5)
-        sigma2_unit = p0 * (1 - p0)
-    elif "binomial" in t.lower():
-        p0 = design_params.get("p_control", 0.5)
-        sigma2_unit = p0 * (1 - p0) * 4.0  # Two-sample binomial
-    elif "paired" in t.lower():
-        sigma2_unit = design_params.get("sigma2", 1.0)
-    else:
-        sigma2_unit = design_params.get("sigma2", 1.0)
-
-    info_times = np.linspace(1 / k, 1.0, k)
     spending_family = design_params.get("spending_family", "obrien_fleming")
 
-    model = CanonicalJointModel(Config(info_times=info_times, n_sims=1000, rng_seed=42))
-    delta_wt = design_params.get("delta_wt")
-    shape_params = {"delta_wt": float(delta_wt)} if delta_wt is not None else None
+    # Map 'spending_family' string to 'type' argument for ClassicGSTTemplate
+    # The feature file uses "Pocock", "O'Brien-Fleming", "Wang-Tsiatis"
+    # Template expects "pocock", "obrien_fleming", "wang_tsiatis"
+    map_type = {
+        "Pocock": "pocock",
+        "O'Brien-Fleming": "obrien_fleming",
+        "Wang-Tsiatis": "wang_tsiatis",
+    }
+    # Handle direct lowercase or mapped
+    design_type = map_type.get(
+        spending_family, spending_family.lower().replace(" ", "_").replace("'", "")
+    )
+    if design_type not in ["pocock", "obrien_fleming", "wang_tsiatis"]:
+        # Fallback for weird strings in test, assume OBF default if not matched
+        if "obrien" in design_type:
+            design_type = "obrien_fleming"
+        elif "pocock" in design_type:
+            design_type = "pocock"
+        elif "wang" in design_type:
+            design_type = "wang_tsiatis"
 
-    c = model.solve_boundary_constant(
-        info_times.tolist(),
-        alpha,
-        shape_type=spending_family,
-        tails=design_params.get("tails", 2),
-        shape_params=shape_params,
+    # Determine model and variance
+    t_lower = t.lower()
+    # "normal-mean" and "t-test" are used in 1-sample contexts in this feature file.
+    # "paired" is explicitly 1-sample.
+    # "single-arm" is 1-sample.
+    # "crossover" is effectively 1-sample on differences.
+    is_one_sample = any(
+        x in t_lower
+        for x in ["paired", "normal-mean", "t-test", "single-arm", "crossover"]
+    )
+    arms = 1 if is_one_sample else 2
+
+    # Map parameters to template expectations
+    sigma = np.sqrt(design_params.get("sigma2", 1.0))
+    p_control = design_params.get("p_control", design_params.get("p0"))
+
+    if "crossover" in t_lower:
+        # In this feature suite, crossover assumes I = 2n/s2 => n = I*s2/2
+        # Template arms=1 assumes n = I*sigma_eff^2
+        # So sigma_eff = sigma / sqrt(2)
+        sigma /= np.sqrt(2.0)
+
+    wt_delta = design_params.get("delta_wt")
+
+    # Override tails if implicit in test type? (e.g. 1-sided in text vs 2-sided default)
+    tails = design_params.get("tails", 2)
+
+    # 1. Use Template to Design Protocol
+    # We pass a dummy ledger as we only need the Protocol object, which is returned by classmethod
+    protocol = ClassicGSTTemplate.design(
+        type=design_type,
+        alpha=alpha,
+        power=power,
+        delta=delta,
+        k=k,
+        p_control=p_control,
+        sigma=sigma,
+        wang_tsiatis_delta=float(wt_delta) if wt_delta is not None else None,
+        tails=tails,
+        arms=arms,
+        seed=design_params.get("rng_seed", 42),
     )
 
-    if spending_family == "pocock":
-        boundaries = np.full(k, c)
-    elif spending_family == "obrien_fleming":
-        boundaries = c / np.sqrt(info_times)
-    elif spending_family == "wang_tsiatis":
-        delta_wt = design_params.get("delta_wt", 0.25)
-        boundaries = c * (info_times ** (delta_wt - 0.5))
+    # 2. Extract Results from Protocol and Re-Solve Boundaries for Verification
+    info_times = np.array(protocol.method.stopping_policy.schedule.analyses)
+    n_max = protocol.method.stopping_policy.timer.max_sample_size
+
+    # Verify policy boundaries using Library Factory
+    policy = StoppingPolicyFactory.build_from_spec(protocol.method.stopping_policy)
+
+    # Solve boundaries using the improved Library Interface
+    boundaries, _ = solve_boundaries(policy, info_times, tails)
+
+    if boundaries is None:
+        raise ValueError("Policy did not return boundaries.")
+
+    # Derive C (Critical Value Constant)
+    # Re-derive based on expected shape
+    if design_type == "obrien_fleming":
+        c = boundaries[-1]  # at t=1, shape=1, B=C
+    elif design_type == "pocock":
+        c = boundaries[-1]  # B=C
+    elif design_type == "wang_tsiatis":
+        c = boundaries[-1]  # at t=1, t^(d-0.5)=1, B=C
     else:
-        boundaries = np.full(k, c)
+        c = boundaries[-1]
 
-    drift = model.solve_drift(
-        info_times.tolist(),
-        boundaries.tolist(),
-        target_power=power,
-        tails=design_params.get("tails", 2),
-        method="simulation",
-    )
-    i_max = (drift / delta) ** 2
+    # The test expects i_max = drift^2 / theta^2
+    # Where theta is standardized effect size: delta / sqrt(sigma2_unit_test)
+    # We use 'boundaries', 'c', 'n_max' derived from the LIBRARY (Protocol).
 
-    if "log-rank" in t.lower():
-        n_max = i_max * 4.0
-    elif "binomial" in t.lower():
-        p0 = design_params.get("p_control", 0.5)
-        n_max = i_max * sigma2_unit
+    # Identify model for extraction
+    p0 = design_params.get("p_control", design_params.get("p0"))
+    is_binomial = p0 is not None or "binomial" in t_lower
+    is_logrank = "log-rank" in t_lower
+    is_crossover = "crossover" in t_lower
+
+    if is_logrank:
+        i_max = n_max / 4.0
+    elif is_binomial:
+        v0 = p0 * (1 - p0) if p0 is not None else 0.25
+        i_max = n_max / v0 if arms == 1 else n_max / (4 * v0)
+    elif is_crossover:
+        s2 = design_params.get("sigma2", 1.0)
+        i_max = 2.0 * n_max / s2
     else:
-        n_max = i_max * sigma2_unit
+        # Normal Mean / T-test
+        s2 = design_params.get("sigma2", 1.0)
+        i_max = n_max / s2 if arms == 1 else n_max / (4 * s2)
 
+    # Fixed Sample Info (Textbook formula)
     i_fixed = (stats.norm.ppf(1 - alpha / 2) + stats.norm.ppf(power)) ** 2 / delta**2
+    # Note: Using delta directly implies non-standardized I_fixed logic in test expectation?
+    # Original: i_fixed = (...) / delta**2. Yes.
+
+    # Adjust for 1-tail if necessary (Textbooks often use 2-sided alpha, checking 'tails')
+    if tails == 1:
+        i_fixed = (stats.norm.ppf(1 - alpha) + stats.norm.ppf(power)) ** 2 / delta**2
 
     return {
         "boundaries": boundaries,
@@ -311,7 +380,11 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
         "i_max": i_max,
         "i_fixed": i_fixed,
         "n_max": n_max,
-        "n_g": n_max / 2.0 if "binomial" in t.lower() else n_max,
+        "n_g": (
+            n_max / 2.0
+            if "binomial" in t.lower() and "single" not in t.lower()
+            else n_max
+        ),
         "n_per_look": n_max / k,
         "info_times": info_times,
     }

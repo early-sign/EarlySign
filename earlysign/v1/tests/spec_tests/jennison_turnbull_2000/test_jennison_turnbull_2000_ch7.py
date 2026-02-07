@@ -553,6 +553,13 @@ def when_bhat_deaths(deaths: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
 
 @when(parsers.re(r"(?i)I compute the inflation factor R_OS"), target_fixture="results")
 def when_compute_ros(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
+    from earlysign.v1.methods.group_sequential.plan.operating_characteristics.overrunning import (
+        compute_overrunning_inflation,
+    )
+    from earlysign.v1.methods.group_sequential.shared.spending import (
+        PowerFamilySpending,
+    )
+
     alpha, power, rho, k = (
         ch7_params.get("alpha", 0.05),
         ch7_params.get("power", 0.9),
@@ -562,53 +569,28 @@ def when_compute_ros(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     t = np.linspace(1 / k, 1.0, k)
     i_fixed = (norm.ppf(1 - alpha) + norm.ppf(power)) ** 2
 
-    gpt0 = CanonicalGaussianProcess(
-        drift=0.0, rng=np.random.default_rng(ch7_params["rng_seed"])
+    # Configure for Over-running calculation
+    # The test implies we use Power Family spending for boundaries
+    config = Config(
+        info_times=t,
+        alpha=alpha,
+        power=power,
+        efficacy_spending=PowerFamilySpending(alpha, rho),
+        futility_spending=PowerFamilySpending(1 - power, rho),
+        efficacy_binding=True,
+        futility_binding=True,  # Test logic implied binding checks for both
+        tails=1,
+        n_sims=ch7_params["n_sims"],
+        rng_seed=ch7_params["rng_seed"],
     )
-    z_h0 = gpt0.sample(t, ch7_params["n_sims"])
 
-    def f(r_os: float) -> float:
-        drift = np.sqrt(r_os * i_fixed)
-        z_h1 = z_h0 + drift * np.sqrt(t)
-        a_tmp, b_tmp = np.zeros(k), np.zeros(k)
-        stop0, stop1 = np.zeros(len(z_h0), dtype=bool), np.zeros(len(z_h0), dtype=bool)
-        rej0, fut1 = np.zeros(len(z_h0), dtype=bool), np.zeros(len(z_h1), dtype=bool)
-        a_cum, b_cum = alpha * (t**rho), (1 - power) * (t**rho)
-        for i in range(k):
-            frac0 = (a_cum[i] * len(z_h0) - np.sum(rej0)) / max(1, np.sum(~stop0))
-            if frac0 >= 1.0 or np.sum(~stop0) < 10:
-                a_tmp[i] = -10.0 if frac0 > 0 else 10.0
-            else:
-                a_tmp[i] = np.percentile(
-                    z_h0[~stop0, i], 100 * max(0, min(1, 1 - frac0))
-                )
-            frac1 = (b_cum[i] * len(z_h1) - np.sum(fut1)) / max(1, np.sum(~stop1))
-            if frac1 >= 1.0 or np.sum(~stop1) < 10:
-                b_tmp[i] = 10.0 if frac1 > 0 else -10.0
-            else:
-                b_tmp[i] = np.percentile(z_h1[~stop1, i], 100 * max(0, min(1, frac1)))
+    # Drift for fixed design
+    # drift = theta * sqrt(I_fixed)
+    # Here standardize theta=1 (relative scale), so drift = sqrt(I_fixed)
+    drift_fixed = np.sqrt(i_fixed)
 
-            j0 = (~stop0) & (z_h0[:, i] > a_tmp[i])
-            rej0 |= j0
-            stop0 |= j0
-            jf0 = (~stop0) & (z_h0[:, i] < b_tmp[i])
-            stop0 |= jf0
+    r_os = compute_overrunning_inflation(config, drift=drift_fixed)
 
-            j1 = (~stop1) & (z_h1[:, i] > a_tmp[i])
-            stop1 |= j1
-            jf1 = (~stop1) & (z_h1[:, i] < b_tmp[i])
-            fut1 |= jf1
-            stop1 |= jf1
-
-        return float(a_tmp[-1] - b_tmp[-1])
-
-    from scipy.optimize import brentq
-
-    try:
-        r_os = brentq(f, 0.4, 4.0, xtol=1e-2)
-    except Exception:
-        f_low, f_high = f(0.4), f(4.0)
-        r_os = 0.4 if abs(f_low) < abs(f_high) else 4.0
     return {
         "R_OS": r_os,
         "i_fixed": i_fixed,
@@ -811,8 +793,6 @@ def then_check_imax(results: Dict[str, Any], val: str, atol: str) -> None:
     )
 )
 def then_check_final_power(results: Dict[str, Any], val: str, atol: str) -> None:
-    if "power" not in results:
-        print(f"DEBUG: results keys: {list(results.keys())}")
     assert results["power"] == pytest.approx(float(val), abs=float(atol))
 
 
@@ -872,7 +852,6 @@ def when_evaluate_asn(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     z_beta = stats.norm.ppf(power)
     r_ld = (drift_h1 / (z_alpha + z_beta)) ** 2
 
-    # Simulate expected information fraction at various drift points
     # Simulate expected information fraction at various drift points
 
     # Instantiate Simulator (Fixed seed ensures CRN/Correction across calls)
@@ -975,7 +954,6 @@ def when_evaluate_asn_onesided(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
     )
     r_os = (drift_h1**2) / i_fixed
 
-    # OC simulation
     # OC simulation
     sim = AsymptoticSimulator(
         model=CanonicalGaussianProcess(),
