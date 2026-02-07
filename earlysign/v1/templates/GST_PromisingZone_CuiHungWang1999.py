@@ -25,7 +25,7 @@ References:
 Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.v1.templates.PromisingZone_CuiHungWang1999 import CuiHungWang1999Template
+    >>> from earlysign.v1.templates.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Template
     >>> from earlysign.schema.ES3.Binomial import ArmData
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>>
@@ -37,8 +37,7 @@ Examples:
     >>>
     >>> # 2. Design with Promising Zone
     >>> # 2 Looks, initial N=1000.
-    >>> template = CuiHungWang1999Template(ledger)
-    >>> protocol = template.design_binomial(
+    >>> protocol = CuiHungWang1999Template.design(
     ...     p_control=0.10,
     ...     p_treatment=0.13,
     ...     alpha=0.025,
@@ -47,6 +46,7 @@ Examples:
     ...     spending_function="obrien_fleming",
     ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
+    >>> template = CuiHungWang1999Template(ledger)
     >>> template.set_protocol(protocol)
     >>>
     >>> # 3. Update with "Promising" data (Conditional Power ~ 0.6)
@@ -64,7 +64,7 @@ Examples:
     >>> report["status"]
     'continue'
     >>> report["max_sample_size"]
-    3189
+    3194
 """
 
 from typing import Any, Dict, List, Optional
@@ -123,104 +123,60 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
         self.ledger = ledger
 
     @classmethod
-    def design_binomial(
-        cls,
-        p_control: float,
-        p_treatment: float,
-        alpha: float = 0.05,
-        power: float = 0.8,
-        looks: int = 2,
-        spending_function: str = "obrien_fleming",
-        designer_params: Optional[Dict[str, Any]] = None,
-    ) -> CuiHungWang1999Protocol:
-        """
-        High-level API for Designing a Binomial A/B test with Promising Zone support.
-
-        Args:
-            p_control: Baseline proportion (e.g. 0.20)
-            p_treatment: Target proportion (e.g. 0.22)
-            alpha: Significance level (one-sided)
-            power: Desired power (e.g. 0.8)
-            looks: Number of interim analyses (K)
-            spending_function: Type of alpha spending function.
-            designer_params: Extra params for the designer (e.g. min_cp, max_n_increase).
-        """
-        from earlysign.v1.methods.group_sequential.plan.protocol_design import (
-            ProtocolDesigner,
-        )
-
-        delta = p_treatment - p_control
-        designer = ProtocolDesigner.from_dict(
-            designer_params or {"model": "canonical_joint"}
-        )
-
-        # We need to manually construct the task and method since plan_binomial_ab returns a Protocol
-        # But for template consistency we might want to use the designer's components.
-        # Alternatively, we can use plan_binomial_ab and then modify/validate into our protocol.
-
-        designer.plan_binomial_ab(
-            alpha=alpha,
-            power=power,
-            delta=delta,
-            k=looks,
-            p_control=p_control,
-            spending_fn=None,  # Name handling via factory usually requires string passing elsewhere or manual setup
-            # The existing ProtocolDesigner.plan_binomial_ab takes spending_fn object or None.
-            # But here we are passed a string.
-            # Looking at SpendingGST implementation, it used method_from_task_spec.
-        )
-
-        # Re-using logic from SpendingGST:
-        # Create Task
-
-        # Wait, BinomialGSTDesigner does not exist. I should use ProtocolDesigner.
-
-        # Let's rely on manual creation for clarity or ProtocolDesigner helpers if available.
-        # Actually proper way:
-        task = GST.TaskSpec(
-            arms=["control", "treatment"],
-            response_type=GST.ResponseType.BINARY,
-            efficacy=GST.EfficacyRequirement(alpha=alpha),
-            futility=GST.FutilityRequirement(power=power),
-            hypotheses=GST.HypothesisSpec(
-                h_null_description="diff <= 0",
-                h_alt_description=f"diff > {delta}",
-                test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                target_effect=GST.BinaryEffectSize(
-                    proportions={"control": p_control, "treatment": p_treatment}
-                ),
-            ),
-        )
-
-        method = designer.method_from_task_spec(
-            task,
-            params={
-                "looks": looks,
-                "spending_function": spending_function,
-                "spending_params": {},
-                "ssr_method": "cui_hung_wang",  # Assuming designer handles this or we patch it
-            },
-        )
-
-        return CuiHungWang1999Protocol(task=task, method=method)
-
-    @classmethod
     def design(
         cls,
-        task: GST.TaskSpec,
-        looks: int,
+        task: Optional[GST.TaskSpec] = None,
+        looks: int = 2,
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
+        # Binomial params (convenience)
+        p_control: Optional[float] = None,
+        p_treatment: Optional[float] = None,
+        alpha: float = 0.05,
+        power: float = 0.8,
     ) -> CuiHungWang1999Protocol:
         """
-        Designs the protocol using a generic TaskSpec.
+        Designs the protocol. Supports both TaskSpec and scalar inputs.
+
+        Args:
+             task: Generic task specification.
+             looks: Number of looks.
+             spending_function: Spending function family.
+             spending_params: Spending function parameters.
+             designer_params: Designer configuration.
+             p_control, p_treatment, alpha, power: Scalar inputs if task is None.
         """
         from earlysign.v1.methods.group_sequential.plan.protocol_design import (
             ProtocolDesigner,
         )
 
-        designer = ProtocolDesigner.from_dict(designer_params or {})
+        # 1. Construct/Validate Task
+        if task is None:
+            if p_control is None or p_treatment is None:
+                raise ValueError(
+                    "Must provide either 'task' or 'p_control'/'p_treatment'."
+                )
+
+            delta = p_treatment - p_control
+            task = GST.TaskSpec(
+                arms=["control", "treatment"],
+                response_type=GST.ResponseType.BINARY,
+                efficacy=GST.EfficacyRequirement(alpha=alpha),
+                futility=GST.FutilityRequirement(power=power),
+                hypotheses=GST.HypothesisSpec(
+                    h_null_description="diff <= 0",
+                    h_alt_description=f"diff > {delta}",
+                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=GST.BinaryEffectSize(
+                        proportions={"control": p_control, "treatment": p_treatment}
+                    ),
+                ),
+            )
+
+        # 2. Design
+        designer_params = designer_params or {"model": "canonical_joint"}
+        designer = ProtocolDesigner.from_dict(designer_params)
         method = designer.method_from_task_spec(
             task,
             params={

@@ -11,7 +11,7 @@ This module provides a comprehensive introduction to the EarlySign framework thr
 >>> from earlysign.v1.framework.trace import Traced, TraceId
 >>> from earlysign.v1.methods.binomial import Scoreboard
 >>> from earlysign.schema.ES3.Binomial import ArmData
->>> from earlysign.v1.templates.SpendingGST_LanDeMets1983 import LanDeMets1983Template as BinomialABTemplate, LanDeMets1983TaskSpec as BinomialABTaskSpec
+>>> from earlysign.v1.templates.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Template as BinomialABTemplate, JennisonTurnbull2000TaskSpec as BinomialABTaskSpec
 >>> from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 >>> import earlysign.schema.ES3.GST as GST
 >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
@@ -175,7 +175,7 @@ The library provides off-the-shelf entities for common trial components.
 >>> engine = BinomialGSTEngine(protocol=protocol)
 >>> # Projection of boundary at 50% info time
 >>> engine.get_boundary_at_look(0, 0.5)
-2.32617...
+2.326174307166874
 
 ## ES3 Schema
 ### Protocol

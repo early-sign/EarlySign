@@ -50,6 +50,320 @@ class ProtocolDesigner:
             )
         return cls(model=model)
 
+    def design_gs_binomial(
+        self,
+        alpha: float,
+        power: float,
+        p_control: float,
+        p_treatment: float,
+        looks: int = 5,
+        scheduling: str | np.ndarray = "equidistant",
+        spending_function: str = "obrien_fleming",
+        spending_params: Optional[Dict[str, Any]] = None,
+        futility: bool = True,
+        futility_binding: bool = False,
+        tails: int = 1,
+        arms: int = 2,
+        rng_seed: Optional[int] = None,
+    ) -> tuple[GST.MethodSpec, int]:
+        """Core logic for designing a Binomial Group Sequential Test.
+
+        Args:
+            alpha: Type I error rate.
+            power: Statistical power.
+            p_control: Baseline proportion.
+            p_treatment: Target proportion.
+            looks: Number of analyses (if info_times not provided).
+            scheduling: "equidistant", "asn_minimizer", or array of fractions.
+            spending_function: Spending function family.
+            spending_params: Spending function parameters.
+            futility: Whether to include futility boundaries.
+            futility_binding: Whether futility boundaries are binding.
+            tails: 1 or 2 sided.
+            arms: 1 or 2.
+            rng_seed: Random seed for model.
+
+        Returns:
+            A tuple of (MethodSpec, n_max).
+        """
+        # 0. Setup Spending Function Specimens (for Model Solver)
+        sf_factory = SpendingFunctionFactory(budget=alpha)
+        sf_eff = sf_factory.build_from_spec(
+            GST.SpendingFunction(family=spending_function, params=spending_params)
+        )
+        sf_fut = None
+        if futility:
+            sf_factory_fut = SpendingFunctionFactory(budget=1.0 - power)
+            sf_fut = sf_factory_fut.build_from_spec(
+                GST.SpendingFunction(family=spending_function, params=spending_params)
+            )
+
+        # 1. Determine Schedule
+        if isinstance(scheduling, (np.ndarray, list)):
+            info_times = np.array(scheduling)
+        elif scheduling == "equidistant":
+            info_times = np.linspace(1 / looks, 1.0, looks)
+        elif scheduling == "asn_minimizer":
+            from earlysign.v1.methods.group_sequential.plan.schedule_optimization import (
+                optimize_schedule,
+            )
+
+            # 1a. Solve Drift for Standard Target (using equidistant proxy) to drive optimizer
+            proxy_times = np.linspace(1 / looks, 1.0, looks)
+            proxy_cfg = Config(
+                info_times=proxy_times,
+                rng_seed=rng_seed,
+                efficacy_binding=True,
+                futility_binding=futility_binding,
+                tails=tails,
+            )
+            proxy_model = CanonicalJointModel(proxy_cfg)
+            u_prox, l_prox = proxy_model.solve_boundaries(
+                efficacy_spending=sf_eff,
+                futility_spending=sf_fut,
+            )
+            drift_target = proxy_model.solve_drift(
+                proxy_times,
+                u_prox,
+                target_power=power,
+                futility_boundaries=l_prox,
+                tails=tails,
+            )
+
+            # 1b. Run Schedule Optimization
+            res = optimize_schedule(
+                k_looks=looks,
+                efficacy_spending=sf_eff,
+                futility_spending=sf_fut,
+                alpha=alpha,
+                drift=drift_target,
+                tails=tails,
+                method="numerical_integration",
+                seed=rng_seed,
+            )
+            info_times = res.schedule
+        else:
+            raise ValueError(f"Invalid scheduling option: {scheduling}")
+
+        # 2. Setup Final Model
+        model_cfg = Config(
+            info_times=info_times,
+            rng_seed=rng_seed,
+            efficacy_binding=True,
+            futility_binding=futility_binding,
+            tails=tails,
+        )
+        model = CanonicalJointModel(model_cfg)
+
+        # 3. Solve Boundaries
+        upper, lower = model.solve_boundaries(
+            efficacy_spending=sf_eff,
+            futility_spending=sf_fut,
+        )
+
+        # 4. Solve Drift
+        drift = model.solve_drift(
+            info_times,
+            upper,
+            target_power=power,
+            futility_boundaries=lower,
+            tails=tails,
+        )
+
+        # 5. Calculate Sample Size (n_max)
+        delta = abs(p_treatment - p_control)
+        sigma2 = p_control * (1.0 - p_control)
+        theta = delta
+        i_max = (drift / theta) ** 2
+
+        if arms == 1:
+            n_max = int(np.ceil(i_max * sigma2))
+        else:
+            # Two-sample balanced
+            n_max = int(np.ceil(4 * i_max * sigma2))
+
+        # 6. Construct MethodSpec
+        if futility:
+            strategy = GST.AlphaBetaSpendingStrategy(
+                alpha_spending_fn=GST.SpendingFunction(
+                    family=spending_function, params=spending_params
+                ),
+                beta_spending_fn=GST.SpendingFunction(
+                    family=spending_function, params=spending_params
+                ),
+                alpha_budget=alpha,
+                beta_budget=1.0 - power,
+                alpha_binding=True,
+                beta_binding=futility_binding,
+                statistical_model=GST.CanonicalGaussianModel(),
+            )
+        else:
+            strategy = GST.AlphaSpendingStrategy(
+                spending_fn=GST.SpendingFunction(
+                    family=spending_function, params=spending_params
+                ),
+                budget=alpha,
+                sided=GST.Sided.ONE if tails == 1 else GST.Sided.TWO,
+                statistical_model=GST.CanonicalGaussianModel(),
+            )
+
+        method_spec = GST.MethodSpec(
+            kind="group_sequential",
+            stopping_policy=GST.StoppingPolicySpec(
+                statistic=(
+                    GST.TwoArmBinomialZ(
+                        variance_estimation=GST.VarianceEstimation.POOLED
+                    )
+                    if arms == 2
+                    else GST.OneArmBinomialZ(
+                        variance_source=GST.VarianceSource.NULL_HYPOTHESIS
+                    )
+                ),
+                strategy=strategy,
+                timer=GST.SampleSizeTimer(
+                    unit=GST.Unit.INDIVIDUALS,
+                    max_sample_size=n_max,
+                ),
+                schedule=GST.FixedSchedule(analyses=info_times.tolist()),
+            ),
+        )
+
+        return method_spec, n_max
+
+    def design_gs_classic(
+        self,
+        alpha: float,
+        power: float,
+        delta: float,
+        looks: int,
+        type: str,
+        p_control: Optional[float] = None,
+        sigma: Optional[float] = None,
+        wang_tsiatis_delta: float = 0.25,
+        tails: int = 2,
+        arms: int = 2,
+        rng_seed: Optional[int] = None,
+    ) -> tuple[GST.MethodSpec, int]:
+        """Core logic for designing a Classic (Fixed Shape) Group Sequential Test.
+
+        Args:
+            alpha: Type I error rate.
+            power: Statistical power.
+            delta: Absolute effect size.
+            looks: Number of analyses.
+            type: "pocock", "obrien_fleming", or "wang_tsiatis".
+            p_control: Required for Binomial designs.
+            sigma: Required for Continuous designs.
+            wang_tsiatis_delta: Delta for Wang-Tsiatis family (default 0.25).
+            tails: 1 or 2 sided.
+            arms: 1 or 2.
+            rng_seed: Random seed.
+
+        Returns:
+            A tuple of (MethodSpec, n_max).
+        """
+        # 1. Setup Model & Strategy
+        info_times = np.linspace(1 / looks, 1.0, looks)
+        model = CanonicalJointModel(Config(info_times=info_times, rng_seed=rng_seed))
+
+        shape_params = (
+            {"delta_wt": wang_tsiatis_delta} if type == "wang_tsiatis" else {}
+        )
+
+        # 2. Solve Constant and Boundaries
+        c_val = model.solve_boundary_constant(
+            info_times=info_times,
+            alpha=alpha,
+            shape_type=type,
+            tails=tails,
+            shape_params=shape_params,
+        )
+
+        if type == "pocock":
+            bound_shape = np.ones(looks)
+            strategy_cls = GST.PocockStrategy
+        elif type == "obrien_fleming":
+            bound_shape = 1.0 / np.sqrt(info_times)
+            strategy_cls = GST.OBrienFlemingStrategy
+        elif type == "wang_tsiatis":
+            bound_shape = info_times ** (wang_tsiatis_delta - 0.5)
+            strategy_cls = GST.WangTsiatisStrategy
+        else:
+            raise ValueError(f"Unknown classic design type: {type}")
+
+        boundaries = c_val * bound_shape
+
+        # 3. Solve Drift
+        drift = model.solve_drift(
+            info_times.tolist(),
+            boundaries.tolist(),
+            target_power=power,
+            tails=tails,
+        )
+
+        # 4. Map to Sample Size
+        if p_control is not None:
+            # Binomial
+            sigma2_unit = p_control * (1.0 - p_control)
+            theta = delta
+            # Z = (p1-p2)/sqrt(var1/n1 + var2/n2). For balanced 2-arm: I = n / (4*sigma2).
+            # For 1-arm Z = (p-p0)/sqrt(sigma2/n): I = n / sigma2.
+            i_max = (drift / theta) ** 2
+            n_max = int(np.ceil((4 if arms == 2 else 1) * i_max * sigma2_unit))
+            timer_unit = GST.Unit.INDIVIDUALS
+            stat_spec = (
+                GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED)
+                if arms == 2
+                else GST.OneArmBinomialZ(
+                    variance_source=GST.VarianceSource.NULL_HYPOTHESIS
+                )
+            )
+        elif sigma is not None:
+            # Continuous
+            # Two-sample balanced: Z = delta / sqrt(4*sigma^2/n) = delta*sqrt(n)/(2*sigma).
+            # theta = delta / (2*sigma). i_max = (drift / theta)**2. n_max = i_max.
+            # One-sample: Z = delta / (sigma/sqrt(n)) = delta*sqrt(n)/sigma.
+            # theta = delta / sigma. i_max = (drift/theta)**2. n_max = i_max.
+            theta = delta / (2 * sigma if arms == 2 else sigma)
+            i_max = (drift / theta) ** 2
+            n_max = int(np.ceil(i_max))
+            timer_unit = GST.Unit.INDIVIDUALS
+            stat_spec = (
+                GST.TwoArmContinuousZ(
+                    information_unit="fisher_information",
+                    variance=GST.TwoArmEstimatedVariance(
+                        kind="estimated", method=GST.MethodModel.POOLED
+                    ),
+                )
+                if arms == 2
+                else GST.OneArmContinuousZ(
+                    variance=GST.OneArmEstimatedVariance(kind="estimated")
+                )
+            )
+        else:
+            raise ValueError("Must provide either p_control or sigma.")
+
+        # 5. Assemble MethodSpec
+        strategy_kwargs = {
+            "alpha": alpha,
+            "sided": GST.Sided.ONE if tails == 1 else GST.Sided.TWO,
+            "statistical_model": GST.CanonicalGaussianModel(),
+        }
+        if type == "wang_tsiatis":
+            strategy_kwargs["delta"] = wang_tsiatis_delta
+
+        method_spec = GST.MethodSpec(
+            kind="group_sequential",
+            stopping_policy=GST.StoppingPolicySpec(
+                statistic=stat_spec,
+                strategy=strategy_cls(**strategy_kwargs),
+                timer=GST.SampleSizeTimer(unit=timer_unit, max_sample_size=n_max),
+                schedule=GST.FixedSchedule(analyses=info_times.tolist()),
+            ),
+        )
+
+        return method_spec, n_max
+
     def plan_binomial_ab(
         self,
         alpha: float,
@@ -71,67 +385,32 @@ class ProtocolDesigner:
             p_control: The proportion in the control arm.
             spending_fn: Optional spending function to use for boundary calculation.
                 If None, O'Brien-Fleming spending is used.
-            side: The number of sides for the test (1 or 2). Currently only 1-sided
-                tests are fully supported in the planning phase.
-            rho: Parameter for the variance estimation (not currently used in this
-                binomial planning, but kept for consistency with other methods).
+            side: The number of sides for the test (1 or 2).
+            rho: Not used for binomial but kept for compatibility.
 
         Returns:
             A fully populated GST.Protocol representing the planned design.
-
-        Raises:
-            ValueError: If the ProtocolDesigner was not initialized with a
-                CanonicalJointModel, or if boundary solving fails.
         """
-        # Average variance under H0 approx: p_control * (1 - p_control)
-        sigma2 = p_control * (1.0 - p_control)
-        theta = delta  # difference in proportions
-
         info_times = np.linspace(1 / k, 1.0, k)
+        p_treatment = p_control + delta
 
-        if self._model is None:
-            raise ValueError(
-                "ProtocolDesigner must be initialized with a CanonicalJointModel for planning."
-            )
+        spending_family = spending_fn.name if spending_fn else "obrien_fleming"
+        spending_params = spending_fn.params if spending_fn else None
 
-        # Create a new model instance for this specific design planning
-        # to ensure info_times match the requested k.
-        base_seed = self._model.config.rng_seed
-        plan_config = Config(
+        method_spec, n_max = self.design_gs_binomial(
             info_times=info_times,
-            rng_seed=base_seed,
-        )
-        model = CanonicalJointModel(plan_config)
-
-        # Use provided spending function for bound solving
-        # Fallback to OBF for safety if None
-        if spending_fn is None:
-            # Default to OBF if not provided
-            factory = SpendingFunctionFactory(budget=alpha)
-            spending_fn = factory.build_from_spec(
-                GST.SpendingFunction(family="obrien_fleming")
-            )
-
-        boundaries, _ = model.solve_boundaries(
-            efficacy_spending=spending_fn,
-        )
-        if boundaries is None:
-            raise ValueError("Failed to solve boundaries.")
-        boundaries_list = boundaries.tolist()
-
-        # 2. Solve for standardized drift delta = theta * sqrt(I_max)
-        drift = model.solve_drift(
-            info_times.tolist(), boundaries_list, target_power=power
+            alpha=alpha,
+            power=power,
+            p_control=p_control,
+            p_treatment=p_treatment,
+            spending_function=spending_family,
+            spending_params=spending_params,
+            futility=True,  # Default to including futility in planning
+            tails=side,
+            rng_seed=self._model.config.rng_seed if self._model else None,
         )
 
-        # 3. Calculate I_max = (drift / theta) ** 2
-        i_max = (drift / theta) ** 2
-
-        # 4. Map to sample size n_max (total for both arms)
-        n_max_float = 4 * i_max * sigma2
-        n_max = int(np.ceil(n_max_float))
-
-        # Construct the realized protocol with new schema
+        # Construct the realized protocol
         return GST.Protocol(
             name="Designed Protocol",
             task=GST.TaskSpec(
@@ -145,34 +424,14 @@ class ProtocolDesigner:
                     target_effect=GST.BinaryEffectSize(
                         proportions={
                             "control": p_control,
-                            "treatment": p_control + delta,
+                            "treatment": p_treatment,
                         }
                     ),
                 ),
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
                 futility=GST.FutilityRequirement(power=power),
             ),
-            method=GST.MethodSpec(
-                kind="group_sequential",
-                stopping_policy=GST.StoppingPolicySpec(
-                    statistic=GST.TwoArmBinomialZ(
-                        variance_estimation=GST.VarianceEstimation.POOLED
-                    ),
-                    strategy=GST.AlphaSpendingStrategy(
-                        spending_fn=GST.SpendingFunction(family=spending_fn.name),
-                        budget=alpha,
-                        sided=GST.Sided.ONE,
-                        statistical_model=GST.CanonicalGaussianModel(),
-                    ),
-                    timer=GST.SampleSizeTimer(
-                        unit=GST.Unit.INDIVIDUALS,
-                        max_sample_size=n_max,
-                    ),
-                    schedule=GST.FixedSchedule(
-                        analyses=info_times.tolist(),
-                    ),
-                ),
-            ),
+            method=method_spec,
         )
 
     def method_from_task_spec(
@@ -189,6 +448,7 @@ class ProtocolDesigner:
         futility = task.futility
         k = params.get("looks", 2)
         shape_type = params.get("spending_function", "obrien_fleming")
+        spending_params = params.get("spending_params", {})
 
         hypotheses = task.hypotheses
         if not hypotheses:
@@ -209,72 +469,23 @@ class ProtocolDesigner:
             else:
                 raise ValueError("Could not identify treatment proportion")
 
-        delta = abs(p_t - p_c)
+        info_times = np.linspace(1 / k, 1.0, k)
 
-        spending_params = params.get("spending_params", {})
-
-        # Instantiate spending function
-        factory = SpendingFunctionFactory(budget=alpha)
-        spending_spec = GST.SpendingFunction(family=shape_type, params=spending_params)
-        spending_fn = factory.build_from_spec(spending_spec)
-
-        # Determine stopping policy based on presence of futility
-        if futility:
-            power = futility.power
-            beta = 1.0 - power
-            stopping_policy: (
-                GST.AlphaSpendingStrategy
-                | GST.BetaSpendingStrategy
-                | GST.AlphaBetaSpendingStrategy
-            ) = GST.AlphaBetaSpendingStrategy(
-                alpha_spending_fn=GST.SpendingFunction(
-                    family=shape_type, params=spending_params
-                ),
-                beta_spending_fn=GST.SpendingFunction(
-                    family=shape_type, params=spending_params
-                ),
-                alpha_budget=alpha,
-                beta_budget=beta,
-                alpha_binding=(
-                    efficacy.binding if efficacy.binding is not None else True
-                ),
-                beta_binding=(
-                    futility.binding if futility.binding is not None else False
-                ),
-                statistical_model=GST.CanonicalGaussianModel(),
-            )
-        else:
-            stopping_policy = GST.AlphaSpendingStrategy(
-                spending_fn=GST.SpendingFunction(
-                    family=shape_type, params=spending_params
-                ),
-                budget=alpha,
-                sided=GST.Sided.ONE,
-                statistical_model=GST.CanonicalGaussianModel(),
-            )
-
-        # Calculate schedule from planning
-        power_for_plan = futility.power if futility else 0.8
-        generic_proto = self.plan_binomial_ab(
+        method_spec, _ = self.design_gs_binomial(
+            info_times=info_times,
             alpha=alpha,
-            power=power_for_plan,
-            delta=delta,
-            k=k,
+            power=futility.power if futility else 0.8,
             p_control=p_c,
-            spending_fn=spending_fn,
+            p_treatment=p_t,
+            spending_function=shape_type,
+            spending_params=spending_params,
+            futility=futility is not None,
+            futility_binding=futility.binding if futility else False,
+            tails=1,  # Default to 1-sided for this template logic
+            rng_seed=self._model.config.rng_seed if self._model else None,
         )
 
-        return GST.MethodSpec(
-            kind="group_sequential",
-            stopping_policy=GST.StoppingPolicySpec(
-                statistic=GST.TwoArmBinomialZ(
-                    variance_estimation=GST.VarianceEstimation.POOLED
-                ),
-                strategy=stopping_policy,
-                timer=generic_proto.method.stopping_policy.timer,
-                schedule=generic_proto.method.stopping_policy.schedule,
-            ),
-        )
+        return method_spec
 
     def plan_continuous_ab(
         self,

@@ -18,6 +18,7 @@ class SpendingFunction(Protocol):
     name: ClassVar[str]
 
     budget: float
+    params: Dict[str, Any]
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]: ...
     def boundaries_from_stage_alpha(
@@ -31,10 +32,11 @@ class OBrienFlemingSpending(SpendingFunction):
     For two-sided tests, provide budget=alpha/2.
     """
 
-    def __init__(self, budget: float) -> None:
+    def __init__(self, budget: float, **params: Any) -> None:
         if not (0.0 < budget < 1.0):
             raise ValueError("budget must be in (0, 1)")
         self.budget = float(budget)
+        self.params = params
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.asarray(t, dtype=float)
@@ -54,10 +56,11 @@ class OBrienFlemingSpending(SpendingFunction):
 class PocockSpending(SpendingFunction):
     """Pocock-like spending (approximate continuous form)."""
 
-    def __init__(self, budget: float) -> None:
+    def __init__(self, budget: float, **params: Any) -> None:
         if not (0.0 < budget < 1.0):
             raise ValueError("budget must be in (0, 1)")
         self.budget = float(budget)
+        self.params = params
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.clip(np.asarray(t, dtype=float), 0.0, 1.0)
@@ -73,11 +76,12 @@ class PocockSpending(SpendingFunction):
 class HwangShihDeCaniSpending(SpendingFunction):
     """Hwang–Shih–DeCani family."""
 
-    def __init__(self, budget: float, gamma: float = -4.0) -> None:
+    def __init__(self, budget: float, gamma: float = -4.0, **params: Any) -> None:
         if not (0.0 < budget < 1.0):
             raise ValueError("budget must be in (0, 1)")
         self.budget = float(budget)
         self.gamma = float(gamma)
+        self.params = {"gamma": self.gamma, **params}
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.clip(np.asarray(t, dtype=float), 0.0, 1.0)
@@ -97,13 +101,14 @@ class HwangShihDeCaniSpending(SpendingFunction):
 class PowerFamilySpending(SpendingFunction):
     """Power-family spending function (Kim-DeMets)."""
 
-    def __init__(self, budget: float, rho: float = 2.0) -> None:
+    def __init__(self, budget: float, rho: float = 2.0, **params: Any) -> None:
         if not (0.0 < budget < 1.0):
             raise ValueError("budget must be in (0, 1)")
         if rho <= 0:
             raise ValueError("rho must be positive")
         self.budget = float(budget)
         self.rho = float(rho)
+        self.params = {"rho": self.rho, **params}
 
     def cumulative(self, t: NDArray[Any]) -> NDArray[Any]:
         t_arr = np.clip(np.asarray(t, dtype=float), 0.0, 1.0)
