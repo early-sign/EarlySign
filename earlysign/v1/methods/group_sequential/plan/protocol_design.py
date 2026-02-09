@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any, Dict, Optional, Self
 
 import numpy as np
@@ -93,7 +94,10 @@ class ProtocolDesigner:
         )
         sf_fut = None
         if futility:
-            sf_factory_fut = SpendingFunctionFactory(budget=1.0 - power)
+            # Use Decimal for the budget calculation 1.0 - power to avoid floating-point
+            # artifacts (e.g., 1.0 - 0.8 becoming 0.19999999999999996).
+            beta_budget = float(Decimal("1.0") - Decimal(str(power)))
+            sf_factory_fut = SpendingFunctionFactory(budget=beta_budget)
             sf_fut = sf_factory_fut.build_from_spec(
                 GST.SpendingFunction(family=spending_function, params=spending_params)
             )
@@ -138,7 +142,7 @@ class ProtocolDesigner:
                 alpha=alpha,
                 drift=drift_target,
                 tails=tails,
-                method="numerical_integration",
+                method="simulation",
                 seed=rng_seed,
             )
             info_times = res.schedule
@@ -193,7 +197,7 @@ class ProtocolDesigner:
                     family=spending_function, params=spending_params
                 ),
                 alpha_budget=alpha,
-                beta_budget=1.0 - power,
+                beta_budget=float(Decimal("1.0") - Decimal(str(power))),
                 alpha_binding=True,
                 beta_binding=futility_binding,
                 statistical_model=GST.CanonicalGaussianModel(),
