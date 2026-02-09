@@ -23,7 +23,7 @@ class MethodSpec(MethodSpec_1):
         ...,
         description="The estimated variance of a single increment (difference).\nIf not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).",
     )
-    boundary_sequence: list[float] | None = None
+    boundary_sequence: list[float] | None = []
 
 
 class Protocol(Protocol_1):

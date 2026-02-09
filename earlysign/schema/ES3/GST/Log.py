@@ -76,6 +76,7 @@ class LookResult(BaseModel):
     """
 
     look: int | None = Field(None, description="Look index (1-indexed).")
+    trigger: Trigger | None = Field(None, description="The trigger for this look.")
     sample_n: int = Field(..., description="Current cumulative sample size.")
     info_frac: float = Field(
         ..., description="Current fraction of information accrued."
@@ -92,6 +93,12 @@ class LookResult(BaseModel):
     )
     is_futility_crossed: bool = Field(
         ..., description="Whether the futility boundary was crossed."
+    )
+    alpha_spent: float | None = Field(
+        None, description="Cumulative Alpha spent up to this look."
+    )
+    beta_spent: float | None = Field(
+        None, description="Cumulative Beta spent up to this look."
     )
     status: DecisionStatus | str = Field(
         ..., description="The decision status resulting from this look."

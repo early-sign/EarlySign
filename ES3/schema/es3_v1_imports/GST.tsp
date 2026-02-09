@@ -453,6 +453,32 @@ model StoppingPolicySpec {
   strategy: DecisionStrategy;
   timer: InformationTimer;
   schedule: ScheduleSpec;
+  
+  /**
+   * Strategy for triggering interim analyses.
+   * Defaults to "due_look" (trigger when a milestone is reached).
+   */
+  trigger_strategy?: TriggerStrategySpec = #{ kind: "due_look", tolerance: 0.0 };
+}
+
+/**
+ * Discriminated Union for Trigger Strategies.
+ */
+union TriggerStrategySpec {
+  DueLookTrigger,
+}
+
+model TriggerStrategySpecBase {
+  kind: string;
+}
+
+/**
+ * Triggers a look when a planned look is reached (due) and hasn't been analyzed.
+ */
+model DueLookTrigger extends TriggerStrategySpecBase {
+  kind: "due_look";
+  /** Information time tolerance (e.g. 0.01 for 1% buffer). */
+  tolerance?: float64 = 0.0;
 }
 
 namespace Log {
@@ -522,6 +548,8 @@ namespace Log {
   model LookResult {
     /** Look index (1-indexed). */
     look?: int32;
+    /** The trigger for this look. */
+    trigger?: Trigger;
     /** Current cumulative sample size. */
     sample_n: int32;
     /** Current fraction of information accrued. */
@@ -538,6 +566,11 @@ namespace Log {
     futility_boundary?: float64;
     /** Whether the futility boundary was crossed. */
     is_futility_crossed: boolean;
+
+    /** Cumulative Alpha spent up to this look. */
+    alpha_spent?: float64;
+    /** Cumulative Beta spent up to this look. */
+    beta_spent?: float64;
 
     /** The decision status resulting from this look. */
     status: DecisionStatus | string;

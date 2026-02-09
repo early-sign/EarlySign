@@ -15,6 +15,7 @@ model MethodSpec extends Base.MethodSpec {
    * If not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).
    */
   estimated_variance: float64 = 0.5;
+  boundary_sequence?: float64[] = #[];
 }
 
 model Protocol extends Base.Protocol {

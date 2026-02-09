@@ -376,6 +376,12 @@ class StoppingPolicySpec(BaseModel):
     strategy: DecisionStrategy
     timer: InformationTimer
     schedule: ScheduleSpec
+    trigger_strategy: TriggerStrategySpec | None = Field(
+        default_factory=lambda: TriggerStrategySpec.model_validate(
+            {"kind": "due_look", "tolerance": 0}
+        ),
+        description='Strategy for triggering interim analyses.\nDefaults to "due_look" (trigger when a milestone is reached).',
+    )
 
 
 class SuperiorityHypothesis(HypothesisParametersBase):
@@ -464,6 +470,27 @@ class OneArmContinuousZ(TestStatisticSpec):
     kind: Literal["one_arm_continuous_z"] = "one_arm_continuous_z"
     information_unit: Literal["fisher_information"] = "fisher_information"
     variance: OneArmContinuousVariance
+
+
+class TriggerStrategySpecBase(BaseModel):
+    kind: str
+
+
+class DueLookTrigger(TriggerStrategySpecBase):
+    """
+    Triggers a look when a planned look is reached (due) and hasn't been analyzed.
+    """
+
+    kind: Literal["due_look"] = "due_look"
+    tolerance: float | None = Field(
+        0, description="Information time tolerance (e.g. 0.01 for 1% buffer)."
+    )
+
+
+class TriggerStrategySpec(DueLookTrigger):
+    """
+    Discriminated Union for Trigger Strategies.
+    """
 
 
 class TwoArmBinomialZ(TestStatisticSpec):
