@@ -3,11 +3,14 @@
 This module provides the domain-specific adapter for evaluating Binomial A/B tests.
 """
 
-from typing import Any, Literal, Optional, cast
+from typing import Any, List, Literal, Optional, cast
 
 import numpy as np
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.schema.ES3 import (
+    GST,
+    Base as ES3_BASE,
+)
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
     AsymptoticSimulator,
     EvaluationResult,
@@ -52,33 +55,50 @@ class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         self.seed = seed
         self.evaluator: OperatingCharacteristicsEvaluator
 
-        # 1. Inspect Task to get Baseline/Target Props
-        self.p_control = 0.5
-        self.target_delta = 0.0
-
+        # 1. Inspect Task to get Baseline/Target Props and Arms
         task = protocol.task
-        if isinstance(task.hypotheses.target_effect, GST.BinaryEffectSize):
-            props = task.hypotheses.target_effect.proportions
-            if "control" in props:
-                self.p_control = props["control"]
-            elif len(props) > 0:
-                self.p_control = list(props.values())[0]
+        if not isinstance(task.hypotheses.target_effect, GST.BinaryEffectSize):
+            raise ValueError(
+                "Evaluator requires BinaryEffectSize in protocol hypotheses."
+            )
 
-            if "treatment" in props:
-                p_t = props["treatment"]
-                self.target_delta = p_t - self.p_control
-            elif len(props) > 1:
-                p_t = list(props.values())[1]
-                self.target_delta = p_t - self.p_control
+        props = task.hypotheses.target_effect.proportions
+        arms_struct = task.arms
+        if not isinstance(arms_struct, ES3_BASE.TwoArmComparison):
+            raise ValueError(
+                f"BinomialABOperatingCharacteristicsEvaluator requires a TwoArmComparison arm structure, but got {type(arms_struct).__name__}."
+            )
 
-        # 2. Derive statistical parameters for Canoncial Model
+        self.control_arm_name = arms_struct.control_arm_name
+        self.treatment_arm_name = arms_struct.treatment_arm_name
+        self.arm_names = [self.control_arm_name, self.treatment_arm_name]
+        self.arms = 2
+
+        # Identify control and treatment proportions explicitly
+        self.p_control = float(props[self.control_arm_name])
+        p_t = float(props[self.treatment_arm_name])
+
+        self.target_delta = float(p_t) - self.p_control
+
+        # 2. Derive statistical parameters for Canonical Model
         timer = protocol.method.stopping_policy.timer
-        self.n_max = (
-            int(timer.max_sample_size) if hasattr(timer, "max_sample_size") else 1000
-        )
+        if not hasattr(timer, "max_sample_size") or timer.max_sample_size is None:
+            raise ValueError(
+                "Protocol timer must specify 'max_sample_size' for evaluation."
+            )
+        self.n_max_total = int(timer.max_sample_size)
 
-        var_diff = 2 * self.p_control * (1 - self.p_control)
-        self.i_max = self.n_max / var_diff
+        # Variance per arm (assumed balanced for now)
+        sigma2 = self.p_control * (1.0 - self.p_control)
+        if self.arms == 1:
+            # I = N / sigma^2
+            self.i_max = self.n_max_total / sigma2
+            self.n_max_per_arm = {self.arm_names[0]: self.n_max_total}
+        else:
+            # I = N_total / (4 * sigma^2) = n_arm / (2 * sigma^2)
+            self.i_max = self.n_max_total / (4 * sigma2)
+            n_arm = self.n_max_total // 2
+            self.n_max_per_arm = {name: n_arm for name in self.arm_names}
 
         # 3. Solve Design Boundaries (Target Drift)
         target_drift = self.target_delta * np.sqrt(self.i_max)

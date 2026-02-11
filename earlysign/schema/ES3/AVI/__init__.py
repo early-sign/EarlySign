@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from typing_extensions import TypeAliasType
 
+from .. import Base
 from ..Base import (
     MethodSpec as MethodSpec_1,
     Protocol as Protocol_1,
@@ -86,5 +87,5 @@ class Sides(StrEnum):
 
 class TaskSpec(TaskSpec_1):
     kind: Literal["AVI"] = "AVI"
-    arms: list[str]
+    arms: Base.ArmStructure
     response_type: ResponseType

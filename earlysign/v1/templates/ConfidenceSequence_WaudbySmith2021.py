@@ -16,6 +16,7 @@ Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.ConfidenceSequence_WaudbySmith2021 import BinomialConfidenceSequenceWaudbySmith2021Template
+    >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.schema.ES3.Binomial import ArmData
 
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -26,7 +27,7 @@ Examples:
     >>>
     >>> # Design CS
     >>> protocol = template.design(
-    ...     arms=["C", "T"],
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
     ...     alpha=0.05,
     ...     variance=0.25, # Max variance for Bernoulli
     ...     sides="two",
@@ -41,6 +42,7 @@ Examples:
 
 from typing import Any, Dict, List, Literal
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import (
     GAVIMethodSpec,
@@ -73,7 +75,7 @@ class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):
     @classmethod
     def design(
         cls,
-        arms: List[str],
+        arms: ES3_BASE.ArmStructure,
         alpha: float,
         variance: float,  # Must be provided (e.g. 0.25)
         max_n: int,
@@ -88,7 +90,7 @@ class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):
             sides=sides,
             max_n=max_n,
         )
-        task = TaskSpec(kind="AVI", arms=arms, response_type="binary")
+        task = TaskSpec(arms=arms, response_type="binary")
         return Protocol(name="CS (Waudby-Smith 2021)", task=task, method=method)
 
     def update(self, batch: List[BinomialArmData]) -> None:
@@ -100,6 +102,12 @@ class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):
         with Session(self.ledger) as sess:
             protocol = sess.read(ProtocolProjector(Protocol)).data
             metrics = sess.read(BinomialScoreboard(identity="metrics"))
+
+            if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"ConfidenceSequence (Binomial) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    "Currently, only TwoArmComparison is supported."
+                )
 
             # Run GAVI Engine (calculates CS boundary)
             engine = GAVIEngine(protocol)
@@ -128,7 +136,7 @@ class ContinuousConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]
     @classmethod
     def design(
         cls,
-        arms: List[str],
+        arms: ES3_BASE.ArmStructure,
         alpha: float,
         variance: float,
         max_n: int,
@@ -140,7 +148,7 @@ class ContinuousConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]
             sides=sides,
             max_n=max_n,
         )
-        task = TaskSpec(kind="AVI", arms=arms, response_type="continuous")
+        task = TaskSpec(arms=arms, response_type="continuous")
         return Protocol(
             name="Continuous CS (Waudby-Smith 2021)", task=task, method=method
         )
@@ -154,6 +162,12 @@ class ContinuousConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]
         with Session(self.ledger) as sess:
             protocol = sess.read(ProtocolProjector(Protocol)).data
             metrics = sess.read(ContinuousScoreboard(identity="metrics"))
+
+            if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"ConfidenceSequence (Continuous) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    "Currently, only TwoArmComparison is supported."
+                )
 
             engine = GAVIEngine(protocol)
             sess.call_and_commit(LookResult, engine.run, metrics=metrics)

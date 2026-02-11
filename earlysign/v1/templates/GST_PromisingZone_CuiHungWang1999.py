@@ -72,6 +72,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
+import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import (
@@ -163,7 +164,10 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
 
             delta = p_treatment - p_control
             task = GST.TaskSpec(
-                arms=["control", "treatment"],
+                arms=ES3_BASE.TwoArmComparison(
+                    control_arm_name="control",
+                    treatment_arm_name="treatment",
+                ),
                 response_type=GST.ResponseType.BINARY,
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
                 futility=GST.FutilityRequirement(power=power),
@@ -205,7 +209,13 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
             with Session(self.ledger) as sess:
                 # Validate arm names
                 protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
-                allowed_arms = set(protocol.task.arms)
+                arms = protocol.task.arms
+                if not isinstance(arms, ES3_BASE.TwoArmComparison):
+                    raise NotImplementedError(
+                        f"GST on {type(arms).__name__} is not yet supported in this template. "
+                        "Currently, only TwoArmComparison is supported."
+                    )
+                allowed_arms = {arms.control_arm_name, arms.treatment_arm_name}
                 for item in batch:
                     arm_name = getattr(item, "arm", None)
                     if arm_name and arm_name not in allowed_arms:

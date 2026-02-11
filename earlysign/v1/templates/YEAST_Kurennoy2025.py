@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Literal
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
 from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
@@ -23,7 +24,7 @@ class BinomialKurennoy2025TaskSpec(YeastTaskSpec):
     """User-facing Task Specification for Binomial YEAST."""
 
     kind: Literal["yeast"] = "yeast"
-    arms: List[str]
+    arms: ES3_BASE.ArmStructure
     response_type: ResponseType = ResponseType.BINARY
     hypotheses: Dict[str, Any]
 
@@ -32,7 +33,7 @@ class ContinuousKurennoy2025TaskSpec(YeastTaskSpec):
     """User-facing Task Specification for Continuous YEAST."""
 
     kind: Literal["yeast"] = "yeast"
-    arms: List[str]
+    arms: ES3_BASE.ArmStructure
     response_type: ResponseType = ResponseType.CONTINUOUS
     hypotheses: Dict[str, Any]
 
@@ -62,7 +63,10 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
 
         >>> # 1. Design with estimated variance (for Binomial, variance relates to p(1-p))
         >>> # If we don't know it, we might estimate conservative 0.25max or from pilot.
-        >>> task = BinomialKurennoy2025TaskSpec(arms=["A", "B"], hypotheses={})
+        >>> task = BinomialKurennoy2025TaskSpec(
+        ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
+        ...     hypotheses={}
+        ... )
         >>> protocol = template.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=0.25)
         >>> template.set_protocol(protocol)
 
@@ -195,7 +199,10 @@ class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
         >>> ledger.ensure()
         >>> template = ContinuousKurennoy2025Template(ledger)
 
-        >>> task = ContinuousKurennoy2025TaskSpec(arms=["A", "B"], hypotheses={})
+        >>> task = ContinuousKurennoy2025TaskSpec(
+        ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
+        ...     hypotheses={}
+        ... )
         >>> protocol = template.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=1.0)
         >>> template.set_protocol(protocol)
 

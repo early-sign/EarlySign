@@ -110,6 +110,45 @@ namespace Base {
     /** Schema version */
     ES3_version?: string = ES3_VERSION;
   }
+
+  /**
+   * Structural definition of study arms and their roles.
+   */
+  union ArmStructure {
+    SingleArm,
+    TwoArmComparison,
+    MultiArmComparison,
+  }
+
+  model ArmStructureBase {
+    kind: string;
+  }
+
+  /**
+   * A single-arm trial design.
+   */
+  model SingleArm extends ArmStructureBase {
+    kind: "single";
+    arm_name: string;
+  }
+
+  /**
+   * A classic two-arm comparison (e.g., Treatment vs. Control).
+   */
+  model TwoArmComparison extends ArmStructureBase {
+    kind: "two_arm";
+    control_arm_name: string;
+    treatment_arm_name: string;
+  }
+
+  /**
+   * A multi-arm comparison against a common control.
+   */
+  model MultiArmComparison extends ArmStructureBase {
+    kind: "multi_arm";
+    control_arm_name: string;
+    treatment_arm_names: string[];
+  }
 }
 
 namespace Binomial {

@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Literal, Optional
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import (
     GAVIMethodSpec,
@@ -55,7 +56,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>>
         >>> # 1. Design from BUDGET (optimizing for max_n=1000)
         >>> protocol = template.design_from_budget(
-        ...     arms=["control", "treatment"],
+        ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
         ...     alpha=0.05,
         ...     max_n=1000,
         ...     variance=None, # Estimated from data
@@ -80,7 +81,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
     @classmethod
     def design_from_budget(
         cls,
-        arms: List[str],
+        arms: ES3_BASE.ArmStructure,
         alpha: float,
         max_n: int,
         variance: Optional[float] = None,
@@ -132,7 +133,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
     @classmethod
     def design_from_effect(
         cls,
-        arms: List[str],
+        arms: ES3_BASE.ArmStructure,
         alpha: float,
         mde: float,
         variance: Optional[float] = None,
@@ -202,6 +203,12 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
                 metrics = sess.read(BinomialScoreboard(identity="metrics"))
             else:
                 metrics = sess.read(ContinuousScoreboard(identity="metrics"))
+
+            if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"Asymptotic CS on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    "Currently, only TwoArmComparison is supported."
+                )
 
             # Select Engine
             if protocol.method.kind == "GAVI":

@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field
 from typing_extensions import TypeAliasType
 
+from .. import Base
 from ..Base import (
     MethodSpec as MethodSpec_1,
     Protocol as Protocol_1,
@@ -427,7 +428,7 @@ class TaskSpec(TaskSpec_1):
     """
 
     kind: Literal["group_sequential"] = "group_sequential"
-    arms: list[str]
+    arms: Base.ArmStructure
     response_type: ResponseType
     hypotheses: HypothesisSpec
     efficacy: EfficacyRequirement | None = Field(

@@ -2,6 +2,7 @@ from typing import Any
 
 import numpy as np
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.schema.ES3.AVI import MSPRTMethodSpec, Protocol
 from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
 from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboard
@@ -40,12 +41,14 @@ class mSPRTEngine:
         Returns:
             A `LookResult` object indicating the current status of the experiment.
         """
-        arms = self.protocol.task.arms
-        if len(arms) != 2:
-            raise ValueError("AVI requires exactly 2 arms.")
-
-        control_key = arms[0]
-        treatment_key = arms[1]
+        arms_struct = self.protocol.task.arms
+        if isinstance(arms_struct, ES3_BASE.TwoArmComparison):
+            control_key = arms_struct.control_arm_name
+            treatment_key = arms_struct.treatment_arm_name
+        else:
+            raise ValueError(
+                f"mSPRTEngine requires a TwoArmComparison arm structure, but got {type(arms_struct).__name__}."
+            )
 
         s_c = metrics.arms.get(control_key)
         s_t = metrics.arms.get(treatment_key)

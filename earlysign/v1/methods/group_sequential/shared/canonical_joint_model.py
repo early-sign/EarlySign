@@ -5,6 +5,7 @@ calculations based on the canonical joint distribution of Z-statistics.
 
 Examples:
     >>> import numpy as np
+    >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import CanonicalJointModel, Config
     >>> from earlysign.v1.methods.group_sequential.shared.spending import OBrienFlemingSpending
@@ -15,7 +16,7 @@ Examples:
     ...     name="Test Protocol",
     ...     task=GST.TaskSpec(
     ...         kind="group_sequential",
-    ...         arms=["C", "T"],
+    ...         arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
     ...         response_type=GST.ResponseType.BINARY,
     ...         efficacy=GST.EfficacyRequirement(alpha=0.025),
     ...         futility=GST.FutilityRequirement(power=0.9),

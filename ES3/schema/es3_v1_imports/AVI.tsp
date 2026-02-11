@@ -51,7 +51,7 @@ union MethodSpec {
 
 model TaskSpec extends Base.TaskSpec {
   kind: "AVI" = "AVI";
-  arms: string[];
+  arms: Base.ArmStructure;
   response_type: "binary" | "continuous";
 }
 

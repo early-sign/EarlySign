@@ -2,7 +2,7 @@ namespace ES3.YEAST;
 
 model TaskSpec extends Base.TaskSpec {
   kind: "yeast" = "yeast";
-  arms: string[];
+  arms: Base.ArmStructure;
   response_type: "binary" | "continuous" = "binary";
 }
 

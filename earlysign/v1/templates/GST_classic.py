@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import LookResult
@@ -91,6 +92,12 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             {"model": "canonical_joint", "model_params": {"rng_seed": seed}}
         )
 
+        if arms != 2:
+            raise NotImplementedError(
+                f"Classic GST with {arms} arms is not yet supported in this template. "
+                "Currently, only 2-arm (Two-sample) comparisons are supported."
+            )
+
         # 2. Design via common logic
         method_spec, n_max = designer.design_gs_classic(
             alpha=alpha,
@@ -118,7 +125,12 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
                 means={"control": 0.0, "treatment": delta}, standard_deviation=sigma
             )
 
-        task_arms = ["treatment"] if arms == 1 else ["control", "treatment"]
+        if arms == 1:
+            task_arms = ES3_BASE.SingleArm(arm_name="treatment")
+        else:
+            task_arms = ES3_BASE.TwoArmComparison(
+                control_arm_name="control", treatment_arm_name="treatment"
+            )
 
         task = ClassicTaskSpec(
             arms=task_arms,

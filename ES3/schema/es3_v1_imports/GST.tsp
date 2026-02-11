@@ -26,7 +26,7 @@ model Protocol extends Base.Protocol {
 model TaskSpec extends Base.TaskSpec {
   kind: "group_sequential" = "group_sequential"; // Discriminator value for Base
   
-  arms: string[]; 
+  arms: Base.ArmStructure; 
   response_type: "binary" | "continuous" | "time_to_event";
   hypotheses: HypothesisSpec; 
 

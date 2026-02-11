@@ -13,6 +13,7 @@ This module provides a comprehensive introduction to the EarlySign framework thr
 >>> from earlysign.schema.ES3.Binomial import ArmData
 >>> from earlysign.v1.templates.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Template as BinomialABTemplate, JennisonTurnbull2000TaskSpec as BinomialABTaskSpec
 >>> from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
+>>> import earlysign.schema.ES3.Base as ES3_BASE
 >>> import earlysign.schema.ES3.GST as GST
 >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
 
@@ -148,7 +149,7 @@ The library provides off-the-shelf entities for common trial components.
 ...     name="Example Trial",
 ...     task=GST.TaskSpec(
 ...         kind="group_sequential",
-...         arms=["C", "T"],
+...         arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
 ...         response_type=GST.ResponseType.BINARY,
 ...         efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...         hypotheses=GST.HypothesisSpec(
@@ -189,7 +190,7 @@ Templates provide a high-level API for running standard trial designs.
 ## GST Design, Backtest, Run, Report
 >>> template = BinomialABTemplate(ledger)
 >>> task = BinomialABTaskSpec(
-...     arms=["C", "T"],
+...     arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
 ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...     futility=GST.FutilityRequirement(power=0.8),
 ...     hypotheses=GST.HypothesisSpec(

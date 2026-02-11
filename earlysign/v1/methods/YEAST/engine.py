@@ -1,5 +1,6 @@
 from typing import Any
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.schema.ES3.Binomial import (
     ArmMetrics as BinomialArmMetrics,
     ArmStatus as BinomialArmStatus,
@@ -46,12 +47,14 @@ class BinomialYEASTEngine:
             LookResult containing the trajectory, boundaries, and status.
         """
         # Extract arm names
-        arms = self.protocol.task.arms
-        if len(arms) < 2:
-            raise ValueError("Protocol must define at least 2 arms.")
-
-        control_key = arms[0]
-        treatment_key = arms[1]
+        arms_struct = self.protocol.task.arms
+        if isinstance(arms_struct, ES3_BASE.TwoArmComparison):
+            control_key = arms_struct.control_arm_name
+            treatment_key = arms_struct.treatment_arm_name
+        else:
+            raise ValueError(
+                f"YEAST engine requires TwoArmComparison, but got {type(arms_struct).__name__}."
+            )
 
         default_arm = BinomialArmStatus(
             metrics=BinomialArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
@@ -110,12 +113,14 @@ class ContinuousYEASTEngine:
         """
         Computes the test result given current summary statistics.
         """
-        arms = self.protocol.task.arms
-        if len(arms) < 2:
-            raise ValueError("Protocol must define at least 2 arms.")
-
-        control_key = arms[0]
-        treatment_key = arms[1]
+        arms_struct = self.protocol.task.arms
+        if isinstance(arms_struct, ES3_BASE.TwoArmComparison):
+            control_key = arms_struct.control_arm_name
+            treatment_key = arms_struct.treatment_arm_name
+        else:
+            raise ValueError(
+                f"YEAST engine requires TwoArmComparison, but got {type(arms_struct).__name__}."
+            )
 
         default_arm = ContinuousArmStatus(
             metrics=ContinuousArmMetrics(n=0, mean=0.0, variance=0.0), is_active=True

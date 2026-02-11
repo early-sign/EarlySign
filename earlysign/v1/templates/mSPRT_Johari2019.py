@@ -23,7 +23,7 @@ Examples:
     >>> # Design mSPRT (Binomial)
     >>> template = BinomialJohari2019Template(ledger)
     >>> protocol = template.design(
-    ...     arms=["C", "T"],
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
     ...     alpha=0.05,
     ...     tau=0.1,  # Mixing parameter ~ MDE
     ...     sides="two"
@@ -42,6 +42,7 @@ Examples:
 
 from typing import Any, Dict, List, Literal
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import (
     MSPRTMethodSpec,
@@ -71,7 +72,7 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
     @classmethod
     def design(
         cls,
-        arms: List[str],
+        arms: ES3_BASE.ArmStructure,
         alpha: float,
         tau: float,
         sides: Literal["one", "two"] = "two",
@@ -92,7 +93,7 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
             sides=sides,
             mde=tau,
         )
-        task = TaskSpec(kind="AVI", arms=arms, response_type="binary")
+        task = TaskSpec(arms=arms, response_type="binary")
         return Protocol(name="mSPRT (Johari 2019)", task=task, method=method)
 
     def update(self, batch: List[BinomialArmData]) -> None:
@@ -107,6 +108,12 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
         with Session(self.ledger) as sess:
             protocol = sess.read(ProtocolProjector(Protocol)).data
             metrics = sess.read(BinomialScoreboard(identity="metrics"))
+
+            if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"mSPRT (Binomial) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    "Currently, only TwoArmComparison is supported."
+                )
 
             # Run mSPRT Engine
             engine = mSPRTEngine(protocol)
@@ -132,7 +139,7 @@ class ContinuousJohari2019Template(TemplateBase[Protocol]):
     @classmethod
     def design(
         cls,
-        arms: List[str],
+        arms: ES3_BASE.ArmStructure,
         alpha: float,
         tau: float,
         variance: float,
@@ -150,7 +157,7 @@ class ContinuousJohari2019Template(TemplateBase[Protocol]):
             sides=sides,
             mde=tau,
         )
-        task = TaskSpec(kind="AVI", arms=arms, response_type="continuous")
+        task = TaskSpec(arms=arms, response_type="continuous")
         return Protocol(name="Continuous mSPRT (Johari 2019)", task=task, method=method)
 
     def update(self, batch: List[ContinuousArmData]) -> None:
@@ -162,6 +169,12 @@ class ContinuousJohari2019Template(TemplateBase[Protocol]):
         with Session(self.ledger) as sess:
             protocol = sess.read(ProtocolProjector(Protocol)).data
             metrics = sess.read(ContinuousScoreboard(identity="metrics"))
+
+            if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"mSPRT (Continuous) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    "Currently, only TwoArmComparison is supported."
+                )
 
             engine = mSPRTEngine(protocol)
             sess.call_and_commit(LookResult, engine.run, metrics=metrics)

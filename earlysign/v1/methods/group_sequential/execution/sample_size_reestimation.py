@@ -96,6 +96,7 @@ class ConditionalPowerAdaptationEngine:
         """
         Assess if the trial is in the 'Promising Zone' and recommend action.
 
+        >>> import earlysign.schema.ES3.Base as ES3_BASE
         >>> from earlysign.schema.ES3.GST import (
         ...     Protocol, MethodSpec, StoppingPolicySpec, OBrienFlemingStrategy,
         ...     TaskSpec, HypothesisSpec, BinaryEffectSize, EquidistantSchedule,
@@ -113,7 +114,7 @@ class ConditionalPowerAdaptationEngine:
         >>> p = Protocol(
         ...     name="Binomial SSR Protocol",
         ...     task=TaskSpec(
-        ...         arms=["control", "treatment"],
+        ...         arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
         ...         response_type="binary",
         ...         hypotheses=HypothesisSpec(
         ...             h_null_description="H0",

@@ -11,6 +11,7 @@ Example:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Template, JennisonTurnbull2000TaskSpec
+    >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>> from earlysign.v1.tests.util import BinomialStream
@@ -47,6 +48,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
@@ -182,7 +184,10 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                     "Must provide either 'task' or 'p_control'/'p_treatment'."
                 )
             task = JennisonTurnbull2000TaskSpec(
-                arms=["control", "treatment"],
+                arms=ES3_BASE.TwoArmComparison(
+                    control_arm_name="control",
+                    treatment_arm_name="treatment",
+                ),
                 response_type=GST.ResponseType.BINARY,
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
                 futility=GST.FutilityRequirement(power=power),
@@ -203,7 +208,13 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
 
         # 3. Design Strategy Components using common ProtocolDesigner
         proportions = task.hypotheses.target_effect.proportions
-        arm_0, arm_1 = task.arms[0], task.arms[1]
+        arms = task.arms
+        if not isinstance(arms, ES3_BASE.TwoArmComparison):
+            raise NotImplementedError(
+                f"GST on {type(arms).__name__} is not yet supported in this template. "
+                "Currently, only TwoArmComparison is supported."
+            )
+        arm_0, arm_1 = arms.control_arm_name, arms.treatment_arm_name
 
         method_spec, _ = designer.design_gs_binomial(
             alpha=task.efficacy.alpha,
@@ -235,7 +246,11 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             with Session(self.ledger) as sess:
                 # Validate arm names
                 protocol = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
-                allowed_arms = set(protocol.data.task.arms)
+                arms = protocol.data.task.arms
+                if isinstance(arms, ES3_BASE.TwoArmComparison):
+                    allowed_arms = {arms.control_arm_name, arms.treatment_arm_name}
+                else:
+                    allowed_arms = set()
                 for item in batch:
                     arm_name = getattr(item, "arm", None)
                     if arm_name and arm_name not in allowed_arms:

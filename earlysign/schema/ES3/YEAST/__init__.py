@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from .. import Base
 from ..Base import (
     MethodSpec as MethodSpec_1,
     Protocol as Protocol_1,
@@ -38,5 +39,5 @@ class ResponseType(StrEnum):
 
 class TaskSpec(TaskSpec_1):
     kind: Literal["yeast"] = "yeast"
-    arms: list[str]
+    arms: Base.ArmStructure
     response_type: ResponseType

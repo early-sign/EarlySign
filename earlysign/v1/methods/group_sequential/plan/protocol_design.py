@@ -1,10 +1,10 @@
 from decimal import Decimal
 from typing import Any, Dict, Optional, Self
 
+import numpy as np
 from pydantic import BaseModel, Field
 
-import numpy as np
-
+import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
@@ -20,7 +20,7 @@ class MethodDesignParams(BaseModel):
     """Internal model for design parameter validation."""
 
     looks: int = Field(..., gt=0)
-    spending_function: str = "obrien_fleming"
+    spending_function: Optional[str] = None
     spending_params: Optional[Dict[str, Any]] = Field(default_factory=dict)
     power: Optional[float] = None
     ssr_method: Optional[str] = None
@@ -70,13 +70,12 @@ class ProtocolDesigner:
         p_control: float,
         p_treatment: float,
         looks: int,
+        spending_function: str,
         scheduling: str | np.ndarray = "equidistant",
-        spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         futility: bool = True,
         futility_binding: bool = False,
         tails: int = 1,
-        arms: int = 2,
         rng_seed: Optional[int] = None,
     ) -> tuple[GST.MethodSpec, int]:
         """Core logic for designing a Binomial Group Sequential Test.
@@ -175,6 +174,9 @@ class ProtocolDesigner:
         # 3. Solve Boundaries
         # During design, we solve for boundaries at a canonical drift of 1.0.
         # This determines the 'shape' of the boundaries on the Z-scale.
+        # Note: Since Boundaries on Z-scale are generally scale-invariant for
+        # spending functions, solving at drift=1.0 provides the standard
+        # normalized boundaries which are then scaled to the target power.
         upper, lower = model.solve_boundaries(
             efficacy_spending=sf_eff,
             futility_spending=sf_fut,
@@ -196,11 +198,8 @@ class ProtocolDesigner:
         theta = delta
         i_max = (drift / theta) ** 2
 
-        if arms == 1:
-            n_max = int(np.ceil(i_max * sigma2))
-        else:
-            # Two-sample balanced
-            n_max = int(np.ceil(4 * i_max * sigma2))
+        # Two-sample balanced
+        n_max = int(np.ceil(4 * i_max * sigma2))
 
         # 6. Construct MethodSpec
         strategy: Any
@@ -231,14 +230,8 @@ class ProtocolDesigner:
         method_spec = GST.MethodSpec(
             kind="group_sequential",
             stopping_policy=GST.StoppingPolicySpec(
-                statistic=(
-                    GST.TwoArmBinomialZ(
-                        variance_estimation=GST.VarianceEstimation.POOLED
-                    )
-                    if arms == 2
-                    else GST.OneArmBinomialZ(
-                        variance_source=GST.VarianceSource.NULL_HYPOTHESIS
-                    )
+                statistic=GST.TwoArmBinomialZ(
+                    variance_estimation=GST.VarianceEstimation.POOLED
                 ),
                 strategy=strategy,
                 timer=GST.SampleSizeTimer(
@@ -438,7 +431,10 @@ class ProtocolDesigner:
             name="Designed Protocol",
             task=GST.TaskSpec(
                 kind="group_sequential",
-                arms=["control", "treatment"],
+                arms=ES3_BASE.TwoArmComparison(
+                    control_arm_name="control",
+                    treatment_arm_name="treatment",
+                ),
                 response_type=GST.ResponseType.BINARY,
                 hypotheses=GST.HypothesisSpec(
                     h_null_description="Difference <= 0",
@@ -478,22 +474,24 @@ class ProtocolDesigner:
             raise ValueError("Task must have BinaryEffectSize for Binomial Design")
 
         props = hypotheses.target_effect.proportions
-        p_c = props.get("control") or list(props.values())[0]
+        arms = task.arms
+        if not isinstance(arms, ES3_BASE.TwoArmComparison):
+            raise ValueError(
+                f"method_from_task_spec (Binomial) requires TwoArmComparison, but got {type(arms).__name__}."
+            )
 
-        # Heuristic to find treatment or second value
-        p_t = props.get("treatment")
-        if p_t is None:
-            keys = list(props.keys())
-            if len(keys) > 1 and keys[1] != "control":
-                p_t = props[keys[1]]
-            else:
-                raise ValueError("Could not identify treatment proportion")
-
+        p_c = float(props[arms.control_arm_name])
+        p_t = float(props[arms.treatment_arm_name])
         futility = task.futility
         target_power = futility.power if futility else v_params.power
         if target_power is None:
             raise ValueError(
                 "Statistical 'power' must be provided either in TaskSpec.futility or in 'params' to determine maximum sample size."
+            )
+
+        if v_params.spending_function is None:
+            raise ValueError(
+                "'spending_function' must be provided in 'params' (e.g. 'obrien_fleming')."
             )
 
         method_spec, _ = self.design_gs_binomial(
@@ -502,8 +500,8 @@ class ProtocolDesigner:
             p_control=p_c,
             p_treatment=p_t,
             looks=v_params.looks,
-            scheduling=np.linspace(1 / v_params.looks, 1.0, v_params.looks),
             spending_function=v_params.spending_function,
+            scheduling=np.linspace(1 / v_params.looks, 1.0, v_params.looks),
             spending_params=v_params.spending_params,
             futility=futility is not None,
             futility_binding=bool(futility.binding) if futility else False,
@@ -584,7 +582,10 @@ class ProtocolDesigner:
             name="Continuous AB Protocol",
             task=GST.TaskSpec(
                 kind="group_sequential",
-                arms=["control", "treatment"],
+                arms=ES3_BASE.TwoArmComparison(
+                    control_arm_name="control",
+                    treatment_arm_name="treatment",
+                ),
                 response_type=GST.ResponseType.CONTINUOUS,
                 hypotheses=GST.HypothesisSpec(
                     h_null_description="Difference <= 0",
@@ -681,7 +682,10 @@ class ProtocolDesigner:
             name="Survival AB Protocol",
             task=GST.TaskSpec(
                 kind="group_sequential",
-                arms=["control", "treatment"],
+                arms=ES3_BASE.TwoArmComparison(
+                    control_arm_name="control",
+                    treatment_arm_name="treatment",
+                ),
                 response_type=GST.ResponseType.TIME_TO_EVENT,
                 hypotheses=GST.HypothesisSpec(
                     h_null_description="HR >= 1",

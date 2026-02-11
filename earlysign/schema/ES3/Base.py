@@ -3,7 +3,14 @@
 
 from __future__ import annotations
 
+from typing import Annotated, Literal
+
 from pydantic import BaseModel, Field
+from typing_extensions import TypeAliasType
+
+
+class ArmStructureBase(BaseModel):
+    kind: str
 
 
 class Log(BaseModel):
@@ -33,6 +40,16 @@ class MethodSpec(BaseModel):
     kind: str = Field(..., description="The kind of method (discriminator).")
 
 
+class MultiArmComparison(ArmStructureBase):
+    """
+    A multi-arm comparison against a common control.
+    """
+
+    kind: Literal["multi_arm"] = "multi_arm"
+    control_arm_name: str
+    treatment_arm_names: list[str]
+
+
 class Protocol(BaseModel):
     """
     The Root Protocol Container.
@@ -45,6 +62,15 @@ class Protocol(BaseModel):
     method: MethodSpec = Field(..., description="The operational method.")
 
 
+class SingleArm(ArmStructureBase):
+    """
+    A single-arm trial design.
+    """
+
+    kind: Literal["single"] = "single"
+    arm_name: str
+
+
 class TaskSpec(BaseModel):
     """
     Base class for Problem Definition.
@@ -52,3 +78,22 @@ class TaskSpec(BaseModel):
     """
 
     kind: str = Field(..., description="The kind of task (discriminator).")
+
+
+class TwoArmComparison(ArmStructureBase):
+    """
+    A classic two-arm comparison (e.g., Treatment vs. Control).
+    """
+
+    kind: Literal["two_arm"] = "two_arm"
+    control_arm_name: str
+    treatment_arm_name: str
+
+
+ArmStructure = TypeAliasType(
+    "ArmStructure",
+    Annotated[
+        SingleArm | TwoArmComparison | MultiArmComparison,
+        Field(..., description="Structural definition of study arms and their roles."),
+    ],
+)

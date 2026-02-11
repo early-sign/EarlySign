@@ -2,15 +2,20 @@ from typing import Any, Optional
 
 import numpy as np
 
+import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus, Scoreboard
-from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
+from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult, ScheduleTrigger
 from earlysign.v1.methods.group_sequential.execution.stopping_policy import (
+    SpendingFunctionStoppingPolicy,
     StoppingPolicy,
     StoppingPolicyFactory,
 )
 from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
+)
+from earlysign.v1.methods.group_sequential.shared.design_utils import (
+    get_standardized_drift,
 )
 
 
@@ -57,8 +62,16 @@ class BinomialGSTEngine:
 
         # Initialize Canonical Model and pre-calculate boundaries
         self.canonical_model = CanonicalJointModel.from_spec(protocol)
+
+        try:
+            drift = get_standardized_drift(protocol)
+        except ValueError:
+            # For designs where drift isn't strictly required at this stage (e.g. efficacy only)
+            # we allow a None drift, but CanonicalJointModel will raise if it's needed for futility.
+            drift = None
+
         self.efficacy_boundaries, self.futility_boundaries = (
-            self.canonical_model.solve_boundaries()
+            self.canonical_model.solve_boundaries(drift=drift)
         )
 
     def get_boundary_at_look(
@@ -84,30 +97,37 @@ class BinomialGSTEngine:
             rule_type=rule_type,
         )
 
-    def run(self, metrics: Scoreboard, **kwargs: Any) -> LookResult:
+    def run(
+        self,
+        metrics: Scoreboard,
+        history: list[tuple[int, LookResult]],
+        trigger: Optional[ScheduleTrigger] = None,
+        **kwargs: Any,
+    ) -> LookResult:
         """
-        Computes the test result given current summary statistics.
+        Computes the test result given current summary statistics and trajectory history.
 
-        The arm names are retrieved from the protocol's task specification.
-        The first arm in protocol.task.arms is treated as control,
-        and the second arm as treatment.
+        Zero-State Principle: This method derives the decision state solely from the
+        provided metrics, history, and protocol definition.
 
         Args:
             metrics: Scoreboard containing the aggregated metrics for all arms.
-            **kwargs: Additional keyword arguments (unused, for interface compatibility).
+            history: Trajectory of previous LookResult objects from the ledger.
+            trigger: The trigger that prompted this analysis (contains look index).
+            **kwargs: Additional keyword arguments.
 
         Returns:
-            LookResult containing the test statistic, boundaries, crossing status,
-            and decision (CONTINUE, STOP_EFFICACY, STOP_FUTILITY, STOP_PLAN_END_REACHED).
+            LookResult containing the test statistic, boundaries, and decision status.
         """
-        # Extract arm names from protocol
+        # Extract arm names from protocol's explicit roles
         arms = self.protocol.task.arms
-        if len(arms) < 2:
+        if not isinstance(arms, ES3_BASE.TwoArmComparison):
             raise ValueError(
-                "Protocol must define at least 2 arms (control and treatment)."
+                f"BinomialGSTEngine requires a TwoArmComparison arm structure, but got {type(arms).__name__}."
             )
-        control_key = arms[0]
-        treatment_key = arms[1]
+
+        control_key = arms.control_arm_name
+        treatment_key = arms.treatment_arm_name
 
         # Default empty metrics if arm not present
         default_arm = ArmStatus(
@@ -151,31 +171,32 @@ class BinomialGSTEngine:
                 z_weighted = np.sqrt(t) * z_t + np.sqrt(1 - t) * z_rem
                 z_stat = z_weighted
 
-        # 2. Determine Look
-        look_idx = -1
-        for i, pt in enumerate(self._points):
-            if info_frac >= pt:
-                look_idx = i
+        # 2. Determine Look and Boundaries
+        look_num = trigger.index if trigger else None
+        look_idx = (look_num - 1) if look_num is not None else -1
 
         efficacy_boundary = None
-        is_efficacy_crossed = False
         futility_boundary = None
+        alpha_spent = None
+        beta_spent = None
+        is_efficacy_crossed = False
         is_futility_crossed = False
         status = DecisionStatus.CONTINUE_
 
-        if look_idx >= 0:
-            # Efficacy boundary
-            efficacy_boundary = self.get_boundary_at_look(
-                look_idx, info_frac, "efficacy"
-            )
+        if look_num is not None:
+            # 3. Resolve boundaries
+            (
+                efficacy_boundary,
+                futility_boundary,
+                alpha_spent,
+                beta_spent,
+            ) = self._resolve_current_boundaries(look_idx, info_frac, history)
+
+            # 4. Evaluate Stopping
             if efficacy_boundary is not None and z_stat > efficacy_boundary:
                 is_efficacy_crossed = True
                 status = DecisionStatus.STOP_EFFICACY
 
-            # Futility boundary
-            futility_boundary = self.get_boundary_at_look(
-                look_idx, info_frac, "futility"
-            )
             if futility_boundary is not None and z_stat < futility_boundary:
                 is_futility_crossed = True
                 if status == DecisionStatus.CONTINUE_:
@@ -187,7 +208,8 @@ class BinomialGSTEngine:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
         return LookResult(
-            look=look_idx + 1 if look_idx >= 0 else None,
+            look=look_num,
+            trigger=trigger,
             sample_n=int(cumulative_n),
             info_frac=info_frac,
             z_stat=float(z_stat),
@@ -195,5 +217,87 @@ class BinomialGSTEngine:
             is_efficacy_crossed=is_efficacy_crossed,
             futility_boundary=futility_boundary,
             is_futility_crossed=is_futility_crossed,
+            alpha_spent=alpha_spent,
+            beta_spent=beta_spent,
             status=status,
         )
+
+    def _resolve_current_boundaries(
+        self,
+        look_idx: int,
+        info_frac: float,
+        history: list[tuple[int, LookResult]],
+    ) -> tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
+        """Resolves efficacy and futility boundaries for the current look."""
+        efficacy_boundary = None
+        futility_boundary = None
+        alpha_spent = None
+        beta_spent = None
+
+        if isinstance(self.stopping_policy, SpendingFunctionStoppingPolicy):
+            # Extract realized history
+            prev_times = [float(res.info_frac) for idx, res in history]
+            prev_eff = [
+                (
+                    float(res.efficacy_boundary)
+                    if res.efficacy_boundary is not None
+                    else np.inf
+                )
+                for idx, res in history
+            ]
+            prev_fut = [
+                (
+                    float(res.futility_boundary)
+                    if res.futility_boundary is not None
+                    else -np.inf
+                )
+                for idx, res in history
+            ]
+
+            # Efficacy
+            if self.stopping_policy.efficacy_spending:
+                alpha_spent_arr = self.stopping_policy.efficacy_spending.cumulative(
+                    np.array([info_frac])
+                )
+                alpha_spent = float(alpha_spent_arr[0])
+                efficacy_boundary = self.canonical_model.solve_next_boundary(
+                    previous_times=prev_times,
+                    current_t=info_frac,
+                    target_cumulative_prob=alpha_spent,
+                    previous_efficacy=prev_eff,
+                    previous_futility=prev_fut,
+                    rule_type="efficacy",
+                )
+
+            # Futility
+            if self.stopping_policy.futility_spending:
+                beta_spent_arr = self.stopping_policy.futility_spending.cumulative(
+                    np.array([info_frac])
+                )
+                beta_spent = float(beta_spent_arr[0])
+                # For beta spending, the standardized drift (H1 effect) must be known.
+                try:
+                    drift = get_standardized_drift(self.protocol)
+                except ValueError as e:
+                    raise ValueError(
+                        f"Cannot compute futility boundary: {str(e)}"
+                    ) from e
+                futility_boundary = self.canonical_model.solve_next_boundary(
+                    previous_times=prev_times,
+                    current_t=info_frac,
+                    target_cumulative_prob=beta_spent,
+                    previous_efficacy=prev_eff,
+                    previous_futility=prev_fut,
+                    rule_type="futility",
+                    drift=drift,
+                )
+        else:
+            # Use pre-calculated or shape-based boundaries
+            efficacy_boundary = self.get_boundary_at_look(
+                look_idx, info_frac, "efficacy"
+            )
+            futility_boundary = self.get_boundary_at_look(
+                look_idx, info_frac, "futility"
+            )
+
+        return efficacy_boundary, futility_boundary, alpha_spent, beta_spent

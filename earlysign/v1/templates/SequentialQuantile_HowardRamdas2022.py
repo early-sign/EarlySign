@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import ibis
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import Protocol, SequentialQuantileMethodSpec, TaskSpec
 from earlysign.schema.ES3.AVI.Log import SequentialQuantileLookResult
@@ -76,7 +77,11 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events_sq"); ledger.ensure()
     >>> template = HowardRamdas2022Template(ledger)
-    >>> protocol = template.design(["A", "B"], quantile=0.5, alpha=0.05)
+    >>> protocol = template.design(
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
+    ...     quantile=0.5,
+    ...     alpha=0.05
+    ... )
     >>> template.set_protocol(protocol)
     >>> t = con.create_table("raw_data_sq", {"arm": ["A", "A", "B", "B"], "val": [1.0, 2.0, 10.0, 11.0]})
     >>> template.update({"A": t.filter(t.arm == "A"), "B": t.filter(t.arm == "B")})
@@ -95,7 +100,7 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
     @classmethod
     def design(
         cls,
-        arms: List[str],
+        arms: ES3_BASE.ArmStructure,
         quantile: float = 0.5,
         alpha: float = 0.05,
         max_n: Optional[int] = None,
@@ -106,7 +111,7 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
             alpha=alpha,
             max_n=max_n,
         )
-        task = TaskSpec(kind="AVI", arms=arms, response_type="continuous")
+        task = TaskSpec(arms=arms, response_type="continuous")
         return Protocol(name="Sequential Quantile A/B Test", task=task, method=method)
 
     def _calculate_order_statistics(
@@ -164,7 +169,15 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
                 raise TypeError("Ledger protocol is not SequentialQuantile")
 
             # 2. For each arm, calculate and commit metrics
-            for arm_id in protocol.task.arms:
+            arms = protocol.task.arms
+            if not isinstance(arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"SequentialQuantile on {type(arms).__name__} is not yet supported in this template. "
+                    "Currently, only TwoArmComparison is supported."
+                )
+            arm_ids = [arms.control_arm_name, arms.treatment_arm_name]
+
+            for arm_id in arm_ids:
                 table = arms_data.get(arm_id)
                 if table is None:
                     continue
@@ -187,7 +200,7 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
                 sess.commit(metrics, identity=arm_id)
 
             # 3. Decision Logic
-            scoreboard_projector = SequentialQuantileScoreboard(protocol.task.arms)
+            scoreboard_projector = SequentialQuantileScoreboard(arm_ids)
             scoreboard_traced = sess.read(scoreboard_projector)
 
             engine = SequentialQuantileEngine(protocol)

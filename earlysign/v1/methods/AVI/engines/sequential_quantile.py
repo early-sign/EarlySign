@@ -1,6 +1,7 @@
 import math
 from typing import List, Optional, Tuple
 
+import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.schema.ES3.AVI import (
     Protocol,
     SequentialQuantileMethodSpec,
@@ -74,22 +75,14 @@ class SequentialQuantileEngine:
         if not isinstance(method, SequentialQuantileMethodSpec):
             raise TypeError("Expected SequentialQuantileMethodSpec")
 
-        # In a typical A/B test setup in this framework:
-        # Arm 0 is Control, Arm 1 is Treatment (or generic key based)
-        arm_ids = sorted(metrics.arms.keys())
-        if len(arm_ids) < 2:
-            # Need at least two arms for A/B check
-            return SequentialQuantileLookResult(
-                sample_n=0,
-                estimated_quantile=0.0,
-                interval_lower=0.0,
-                interval_upper=0.0,
-                status=DecisionStatus.CONTINUE_,
+        arms_struct = self.protocol.task.arms
+        if isinstance(arms_struct, ES3_BASE.TwoArmComparison):
+            ctrl_id = arms_struct.control_arm_name
+            treat_id = arms_struct.treatment_arm_name
+        else:
+            raise ValueError(
+                f"SequentialQuantileEngine requires a TwoArmComparison arm structure, but got {type(arms_struct).__name__}."
             )
-
-        # Basic logic: compare the first two arms
-        ctrl_id = arm_ids[0]
-        treat_id = arm_ids[1]
 
         ctrl = metrics.arms[ctrl_id].metrics
         treat = metrics.arms[treat_id].metrics
