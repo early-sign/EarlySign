@@ -45,7 +45,8 @@ class OCCurvePlotter:
         null_value: float = 0.0,
         effect_label: str = "Effect Size",
         plot_options: Optional[Dict[str, Any]] = None,
-        arms_to_plot: Optional[List[str]] = None,  # List of arm names or "Total"
+        plot_arms: List[str] = [],  # List of arm names
+        plot_total: bool = True,  # Whether to plot the total
         n_max_per_arm: Optional[Dict[str, int]] = None,
         n_fixed_per_arm: Optional[Dict[str, float]] = None,
         ax: Optional[Axes] = None,
@@ -68,15 +69,19 @@ class OCCurvePlotter:
             _, ax = plt.subplots(1, 1, figsize=self.figsize)
 
         # Determine which targets to plot
-        available_arms = []
-        if results and results[0].expected_n_per_arm:
-            available_arms = list(results[0].expected_n_per_arm.keys())
+        targets = []
+        if plot_total:
+            targets.append("Total")
 
-        if arms_to_plot is None:
-            # Default: Everything available
+        if plot_arms:
+            targets.extend(plot_arms)
+
+        # Fallback if both are empty to avoid empty plot
+        if not targets:
+            available_arms = []
+            if results and results[0].expected_n_per_arm:
+                available_arms = list(results[0].expected_n_per_arm.keys())
             targets = ["Total"] + available_arms
-        else:
-            targets = arms_to_plot
 
         for i, target in enumerate(targets):
             color = self.colors[i % len(self.colors)]
@@ -259,7 +264,8 @@ def get_evaluator_for_task(
 def plot_design_characteristics(
     protocol: GST.Protocol,
     num_points: int = 50,
-    arms_to_plot: Optional[List[str]] = None,
+    plot_arms: List[str] = [],
+    plot_total: bool = True,
     n_sims: int = 5000,
     seed: int = 42,
 ) -> Axes:
@@ -287,7 +293,8 @@ def plot_design_characteristics(
         target_effect=curve.target_x_value,
         null_value=curve.null_x_value if curve.null_x_value else 0.0,
         effect_label="Relative Lift (%)",
-        arms_to_plot=arms_to_plot,
+        plot_arms=plot_arms,
+        plot_total=plot_total,
         n_max_per_arm=curve.n_max_per_arm,
         n_fixed_per_arm=curve.n_fixed_per_arm,
     )
@@ -470,7 +477,8 @@ def visualize_protocol_design(
     method: Literal["simulation", "numerical_integration"] = "simulation",
     n_sims: int = 5000,
     seed: int = 42,
-    arms_to_plot: Optional[List[str]] = None,
+    plot_arms: List[str] = [],
+    plot_total: bool = True,
 ) -> Dict[str, Any]:
     """
     Visualizes a given protocol design (Table and Plot).
@@ -523,7 +531,8 @@ def visualize_protocol_design(
                 point_results.null_x_value if point_results.null_x_value else 0.0
             ),
             effect_label=effect_label,
-            arms_to_plot=arms_to_plot,
+            plot_arms=plot_arms,
+            plot_total=plot_total,
             n_max_per_arm=point_results.n_max_per_arm,
             n_fixed_per_arm=point_results.n_fixed_per_arm,
         )
