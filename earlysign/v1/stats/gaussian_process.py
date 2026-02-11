@@ -338,8 +338,8 @@ class CanonicalGaussianProcess(GaussianProcess):
             u = float(u_arr[0]) if u_arr is not None else np.inf
             lower = float(l_arr[0]) if l_arr is not None else -np.inf
             # P(Z > u or Z < low) = P(Z > u) + P(Z < low)
-            # Numerical Stability: We use norm.sf(u) + norm.cdf(lower) instead of 
-            # 1 - (norm.cdf(u) - norm.cdf(lower)) to avoid precision loss when 
+            # Numerical Stability: We use norm.sf(u) + norm.cdf(lower) instead of
+            # 1 - (norm.cdf(u) - norm.cdf(lower)) to avoid precision loss when
             # u or lower are very large.
             return float(norm.sf(u, loc=mu) + norm.cdf(lower, loc=mu))
 

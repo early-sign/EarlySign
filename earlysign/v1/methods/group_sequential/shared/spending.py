@@ -44,7 +44,7 @@ class OBrienFlemingSpending(SpendingFunction):
         t_arr = np.maximum(t_arr, 1e-12)
         z = float(norm.isf(self.budget))
         # 1-sided formula: α(t) = P(Z > z_α / √t) = norm.sf(z_α / √t)
-        # Numerical Stability: We use norm.sf instead of 1-norm.cdf to avoid precision 
+        # Numerical Stability: We use norm.sf instead of 1-norm.cdf to avoid precision
         # loss (underflow to 0.0) at very early information fractions (large z_alpha/sqrt(t)).
         return np.asarray(norm.sf(z / np.sqrt(t_arr)), dtype=float)
 

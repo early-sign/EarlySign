@@ -247,6 +247,7 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
             data=report, trace=metrics_traced.trace + protocol_traced.trace
         )
 
+
 class TrajectoryProjector(Projector[pd.DataFrame]):
     """
     Projector that reconstructs the history of LookResults from the ledger.
@@ -256,29 +257,30 @@ class TrajectoryProjector(Projector[pd.DataFrame]):
     def project(self, table: ibis.Expr) -> ProjectionResult[pd.DataFrame]:
         # 1. Filter for LookResult facts
         results = table.filter(table.type == "LookResult")
-        
+
         # 2. Extract and sort by timestamp
         df = results.order_by(ibis.asc("timestamp")).execute()
-        
+
         if df.empty:
             return ProjectionResult(data=pd.DataFrame(), trace=[])
 
         # 3. Parse payloads
         import json
+
         def _parse(p):
             if isinstance(p, str):
                 return json.loads(p)
             return p
-            
+
         payloads = df["payload"].apply(_parse)
         plot_df = pd.DataFrame(payloads.tolist())
-        
+
         # Add timestamp for continuity
         plot_df["timestamp"] = df["timestamp"].values
-        
+
         # Collect trace
         trace = [TraceId(str(u)) for u in df["uuid"]]
-        
+
         return ProjectionResult(data=plot_df, trace=trace)
 
 
@@ -292,7 +294,7 @@ def plot_avi_trajectory(
 ) -> Any:
     """
     Plots the history of AVI trajectory and boundaries.
-    
+
     This function uses TrajectoryProjector to reconstruct history from the ledger
     and provides a standard visualization for AVI methods.
     """
@@ -302,7 +304,7 @@ def plot_avi_trajectory(
         raise ImportError("matplotlib is required for plot_avi_trajectory")
 
     from earlysign.v1.framework.session import Session
-    
+
     with Session(ledger) as sess:
         history = sess.read(TrajectoryProjector()).data
 
@@ -313,7 +315,7 @@ def plot_avi_trajectory(
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
     else:
-        fig = ax.figure
+        pass
 
     # Plot sequence
     n = history["sample_n"]
@@ -322,17 +324,17 @@ def plot_avi_trajectory(
 
     # Trajectory
     ax.plot(n, est, marker="o", label="Estimate", color="#1f77b4", linewidth=2)
-    
+
     # Boundaries (if present)
     if bound.notnull().any():
         # Confidence Sequence / Boundaries
         ax.fill_between(
-            n, 
-            est - bound, 
-            est + bound, 
-            color="#1f77b4", 
-            alpha=0.2, 
-            label="Confidence Sequence"
+            n,
+            est - bound,
+            est + bound,
+            color="#1f77b4",
+            alpha=0.2,
+            label="Confidence Sequence",
         )
         ax.plot(n, est - bound, color="#1f77b4", linestyle="--", alpha=0.5)
         ax.plot(n, est + bound, color="#1f77b4", linestyle="--", alpha=0.5)
@@ -344,5 +346,5 @@ def plot_avi_trajectory(
     ax.set_ylabel(ylabel)
     ax.grid(True, alpha=0.3)
     ax.legend()
-    
+
     return ax

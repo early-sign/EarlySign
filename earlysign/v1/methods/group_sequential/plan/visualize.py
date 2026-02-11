@@ -80,50 +80,76 @@ class OCCurvePlotter:
 
         for i, target in enumerate(targets):
             color = self.colors[i % len(self.colors)]
-            linestyle = self.linestyles[0] if target == "Total" else self.linestyles[(i + 1) % len(self.linestyles)]
+            linestyle = (
+                self.linestyles[0]
+                if target == "Total"
+                else self.linestyles[(i + 1) % len(self.linestyles)]
+            )
 
             if target == "Total":
-                get_ess = lambda r: (
-                    sum(r.expected_n_per_arm.values())
-                    if r.expected_n_per_arm
-                    else (
-                        r.asn * sum(n_max_per_arm.values())
-                        if n_max_per_arm
-                        else (r.expected_sample_size or r.asn)
+
+                def get_ess(r: "EvaluationResult") -> float:
+                    return (
+                        sum(r.expected_n_per_arm.values())
+                        if r.expected_n_per_arm
+                        else (
+                            r.asn * sum(n_max_per_arm.values())
+                            if n_max_per_arm
+                            else (r.expected_sample_size or r.asn)
+                        )
                     )
-                )
 
                 def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
-                    times = r.info_times if r.info_times is not None else np.array([1.0])
+                    times = (
+                        r.info_times if r.info_times is not None else np.array([1.0])
+                    )
                     if r.n_per_arm_schedule:
                         return cast(
                             NDArray[np.float64],
                             np.array(list(r.n_per_arm_schedule.values())).sum(axis=0),
                         )
-                    return times * sum(n_max_per_arm.values()) if n_max_per_arm else times
+                    return (
+                        times * sum(n_max_per_arm.values()) if n_max_per_arm else times
+                    )
 
                 ref_max_n = sum(n_max_per_arm.values()) if n_max_per_arm else None
                 ref_fixed_n = sum(n_fixed_per_arm.values()) if n_fixed_per_arm else None
             else:
                 arm_name = target
-                get_ess = lambda r: (
-                    r.expected_n_per_arm[arm_name]
-                    if r.expected_n_per_arm and arm_name in r.expected_n_per_arm
-                    else (
-                        r.asn * n_max_per_arm[arm_name]
-                        if n_max_per_arm and arm_name in n_max_per_arm
-                        else r.asn
+
+                def get_ess(r: "EvaluationResult") -> float:
+                    return (
+                        r.expected_n_per_arm[arm_name]
+                        if r.expected_n_per_arm and arm_name in r.expected_n_per_arm
+                        else (
+                            r.asn * n_max_per_arm[arm_name]
+                            if n_max_per_arm and arm_name in n_max_per_arm
+                            else r.asn
+                        )
                     )
-                )
 
                 def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
-                    times = r.info_times if r.info_times is not None else np.array([1.0])
+                    times = (
+                        r.info_times if r.info_times is not None else np.array([1.0])
+                    )
                     if r.n_per_arm_schedule and arm_name in r.n_per_arm_schedule:
                         return r.n_per_arm_schedule[arm_name]
-                    return times * n_max_per_arm[arm_name] if (n_max_per_arm and arm_name in n_max_per_arm) else times
+                    return (
+                        times * n_max_per_arm[arm_name]
+                        if (n_max_per_arm and arm_name in n_max_per_arm)
+                        else times
+                    )
 
-                ref_max_n = n_max_per_arm[arm_name] if (n_max_per_arm and arm_name in n_max_per_arm) else None
-                ref_fixed_n = n_fixed_per_arm[arm_name] if (n_fixed_per_arm and arm_name in n_fixed_per_arm) else None
+                ref_max_n = (
+                    n_max_per_arm[arm_name]
+                    if (n_max_per_arm and arm_name in n_max_per_arm)
+                    else None
+                )
+                ref_fixed_n = (
+                    n_fixed_per_arm[arm_name]
+                    if (n_fixed_per_arm and arm_name in n_fixed_per_arm)
+                    else None
+                )
 
             # 1. Plot ESS curve
             ess = [get_ess(r) for r in sorted_res]
@@ -143,7 +169,12 @@ class OCCurvePlotter:
                 for j, r in enumerate(sorted_res):
                     eff = sorted_x[j] + null_value
                     ax.scatter(
-                        [eff], [ess[j]], color=bubble_color, s=80, edgecolors="black", zorder=7
+                        [eff],
+                        [ess[j]],
+                        color=bubble_color,
+                        s=80,
+                        edgecolors="black",
+                        zorder=7,
                     )
 
                     ns = get_schedule(r)
