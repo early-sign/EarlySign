@@ -299,3 +299,43 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         return self._evaluate_lift_from_deltas(
             deltas, x_values, metric_type, target_val, null_val
         )
+
+    def evaluate_metric_curve(
+        self,
+        range_min: float,
+        range_max: float,
+        n_points: int,
+        metric_type: str,
+    ) -> SimulationCurve:
+        """Alias for evaluate_lift_curve to satisfy ProtocolEvaluator."""
+        # Check if metric_type is valid for this evaluator
+        if metric_type not in ["relative_lift_pct", "absolute_diff_pct"]:
+            # If default generic metric is passed, map to default specific
+            if metric_type == "effect_size":
+                metric_type = "relative_lift_pct"
+
+        return self.evaluate_lift_curve(
+            range_min=range_min,
+            range_max=range_max,
+            n_points=n_points,
+            metric_type=cast(
+                Literal["relative_lift_pct", "absolute_diff_pct"], metric_type
+            ),
+        )
+
+    def evaluate_metric_at(
+        self,
+        x_values: List[float],
+        metric_type: str,
+    ) -> SimulationCurve:
+        """Alias for evaluate_lift_at to satisfy ProtocolEvaluator."""
+        if metric_type not in ["relative_lift_pct", "absolute_diff_pct"]:
+            if metric_type == "effect_size":
+                metric_type = "relative_lift_pct"
+
+        return self.evaluate_lift_at(
+            effect_sizes_pct=x_values,
+            metric_type=cast(
+                Literal["relative_lift_pct", "absolute_diff_pct"], metric_type
+            ),
+        )

@@ -11,12 +11,13 @@ from matplotlib.axes import Axes
 from numpy.typing import NDArray
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.v1.methods.group_sequential.plan.operating_characteristics.binomial import (
-    BinomialABOperatingCharacteristicsEvaluator,
+from earlysign.v1.interfaces import ProtocolEvaluator
+from earlysign.v1.methods.group_sequential.plan.operating_characteristics import (
+    BinomialOperatingCharacteristicsEvaluator,
+    ContinuousOperatingCharacteristicsEvaluator,
 )
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
     EvaluationResult,
-    OperatingCharacteristicsEvaluator,
     SimulationCurve,
 )
 
@@ -244,15 +245,16 @@ def get_evaluator_for_task(
     protocol: GST.Protocol,
     method: Literal["simulation", "numerical_integration"] = "simulation",
     n_sims: int = 5000,
-    seed: int = 42,
-) -> OperatingCharacteristicsEvaluator:
-    """
-    Factory to get the appropriate OC evaluator based on the protocol task.
-    """
-
+    seed: Optional[int] = None,
+) -> ProtocolEvaluator:
     task = protocol.task
     if task.response_type == GST.ResponseType.BINARY:
-        return BinomialABOperatingCharacteristicsEvaluator(
+        return BinomialOperatingCharacteristicsEvaluator(
+            protocol, method=method, n_sims=n_sims, seed=seed
+        )
+
+    if task.response_type == GST.ResponseType.CONTINUOUS:
+        return ContinuousOperatingCharacteristicsEvaluator(
             protocol, method=method, n_sims=n_sims, seed=seed
         )
 
@@ -274,16 +276,24 @@ def plot_design_characteristics(
         protocol, method="simulation", n_sims=n_sims, seed=seed
     )
 
-    if not isinstance(evaluator, BinomialABOperatingCharacteristicsEvaluator):
+    if not isinstance(evaluator, ProtocolEvaluator):
         raise NotImplementedError(
-            "plot_design_characteristics only supports Binomial tasks currently."
+            f"Evaluator {type(evaluator)} does not implement ProtocolEvaluator."
         )
 
-    curve = evaluator.evaluate_lift_curve(
-        range_min=-0.5,
-        range_max=1.0,
+    # Default Metric
+    metric = "relative_lift_pct"
+    x_min, x_max = -0.5, 1.0
+
+    if isinstance(evaluator, ContinuousOperatingCharacteristicsEvaluator):
+        metric = "absolute_diff"
+        x_min, x_max = -evaluator.sd, evaluator.sd  # Default range: +/- 1 SD
+
+    curve = evaluator.evaluate_metric_curve(
+        range_min=x_min,
+        range_max=x_max,
         n_points=num_points,
-        metric_type="relative_lift_pct",
+        metric_type=metric,
     )
 
     plotter = OCCurvePlotter()
@@ -499,10 +509,15 @@ def visualize_protocol_design(
     )
 
     # Point Results for Table and Plot
-    if isinstance(evaluator, BinomialABOperatingCharacteristicsEvaluator):
-        point_results = evaluator.evaluate_lift_at(
-            effect_sizes_pct=effect_sizes,
-            metric_type="relative_lift_pct",
+    if isinstance(evaluator, ProtocolEvaluator):
+        # Determine Metric
+        metric = "relative_lift_pct"
+        if isinstance(evaluator, ContinuousOperatingCharacteristicsEvaluator):
+            metric = "absolute_diff"
+
+        point_results = evaluator.evaluate_metric_at(
+            x_values=effect_sizes,
+            metric_type=metric,
         )
     else:
         # Fallback for future evaluators
@@ -522,6 +537,8 @@ def visualize_protocol_design(
         effect_label = "Effect Size"
         if protocol.task.response_type == GST.ResponseType.BINARY:
             effect_label = "Rel. Lift (%) : (pt - pc) / pc"
+        elif protocol.task.response_type == GST.ResponseType.CONTINUOUS:
+            effect_label = "Absolute Difference (Mean)"
 
         ax = plotter.plot_oc_curve(
             point_results.results,
