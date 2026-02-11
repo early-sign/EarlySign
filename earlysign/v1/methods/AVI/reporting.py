@@ -267,7 +267,7 @@ class TrajectoryProjector(Projector[pd.DataFrame]):
         # 3. Parse payloads
         import json
 
-        def _parse(p):
+        def _parse(p: Any) -> Any:
             if isinstance(p, str):
                 return json.loads(p)
             return p
