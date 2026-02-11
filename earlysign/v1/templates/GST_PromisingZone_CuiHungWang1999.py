@@ -54,8 +54,8 @@ Examples:
     >>> # Control: 50/500 (10%), Treatment: 65/500 (13%) -> Z ~ 1.5
     >>> # This should fall into the promising zone if configured right.
     >>> batch = [
-    ...     ArmData(n=500, success=50, arm="C"),
-    ...     ArmData(n=500, success=65, arm="T")
+    ...     ArmData(n=500, success=50, arm="control"),
+    ...     ArmData(n=500, success=65, arm="treatment")
     ... ]
     >>> template.update(batch)
     >>>
@@ -77,6 +77,7 @@ from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import (
     AdaptationLog,
     DecisionStatus,
+    LookResult,
     PromisingZoneStatus,
 )
 from earlysign.v1.framework.projector import ProtocolProjector
@@ -84,6 +85,7 @@ from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
 )
+from earlysign.v1.methods.group_sequential.execution.entities import InterimAnalyses
 from earlysign.v1.methods.group_sequential.execution.sample_size_reestimation import (
     ConditionalPowerAdaptationEngine as PromisingZoneAdaptationEngine,
 )
@@ -126,16 +128,16 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
     @classmethod
     def design(
         cls,
+        looks: int,
+        alpha: float,
+        power: float,
         task: Optional[GST.TaskSpec] = None,
-        looks: int = 2,
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
         # Binomial params (convenience)
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
-        alpha: float = 0.05,
-        power: float = 0.8,
     ) -> CuiHungWang1999Protocol:
         """
         Designs the protocol. Supports both TaskSpec and scalar inputs.
@@ -214,21 +216,33 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
                         )
                     sess.commit(item, trace=[])
 
-        # 2. Analysis & Adaptation
+        # 2. Analysis
         with Session(self.ledger) as sess:
-            protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
-            metrics = sess.read(Scoreboard(identity="metrics")).data
+            protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol))
+            metrics = sess.read(Scoreboard(identity="metrics"))
+            history = sess.read(InterimAnalyses(identity="interim_analyses"))
 
             # 3. Standard GSD Engine
-            engine = BinomialGSTEngine(protocol)
+            engine = BinomialGSTEngine(protocol.data)
 
-            look_result = engine.run(metrics)
+            sess.call_and_commit(
+                LookResult,
+                engine.run,
+                metrics=metrics,
+                history=history,
+            )
 
-            # Commit the LookResult
-            sess.commit(look_result)
+        # 3. Adaptation Logic (only if continuing)
+        with Session(self.ledger) as sess:
+            # Re-read to get the committed LookResult (with its status).
+            trajectory = sess.read(InterimAnalyses(identity="interim_analyses")).data
+            if not trajectory:
+                return
 
-            # 4. Adaptation Logic (only if continuing)
+            look_result = trajectory[-1][1]
+
             if look_result.status == DecisionStatus.CONTINUE_:
+                protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
                 adapter = PromisingZoneAdaptationEngine()
                 adaptation_log = adapter.check_and_adapt(look_result, protocol)
 
@@ -260,8 +274,6 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
             return sess.read(FinalProjector()).data.model_dump(mode="json")
 
     def plot_result(self) -> Any:
-        from earlysign.v1.framework.entity import InterimAnalyses
-
         with Session(self.ledger) as sess:
             protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
             trajectory = sess.read(InterimAnalyses(identity="interim_analyses")).data
@@ -275,16 +287,9 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
                 for _, row in logs_df.iterrows():
                     adaptation_logs.append(AdaptationLog.model_validate(row["payload"]))
 
-            history_n = []
-            history_z = []
-            for _, state in trajectory.data:
-                history_n.append(state.sample_n)
-                history_z.append(state.z_stat)
-
             return plot_gst_summary(
                 protocol,
-                history_n,
-                history_z,
                 title="Promising Zone Design Monitoring",
                 adaptation_logs=adaptation_logs,
+                full_history=trajectory.data,
             )

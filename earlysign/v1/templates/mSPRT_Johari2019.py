@@ -73,7 +73,7 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
         cls,
         arms: List[str],
         alpha: float,
-        tau: float = 0.1,
+        tau: float,
         sides: Literal["one", "two"] = "two",
     ) -> Protocol:
         """

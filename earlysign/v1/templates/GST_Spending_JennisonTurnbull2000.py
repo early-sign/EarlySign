@@ -43,7 +43,7 @@ Example:
 """
 
 import warnings
-from typing import Any, Dict, List, Optional, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -55,6 +55,9 @@ from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 from earlysign.v1.methods.group_sequential.execution.entities import InterimAnalyses
+from earlysign.v1.methods.group_sequential.execution.trigger_strategies import (
+    get_pending_look_trigger,
+)
 from earlysign.v1.methods.group_sequential.plan.protocol_design import (
     ProtocolDesigner,
 )
@@ -102,17 +105,19 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
     @classmethod
     def design(
         cls,
+        looks: int,
+        alpha: float,
+        power: float,
         task: Optional[JennisonTurnbull2000TaskSpec] = None,
-        looks: int = 5,
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
-        scheduling: Literal["equidistant", "asn_minimizer"] | List[float] = "asn_minimizer",
+        scheduling: (
+            Literal["equidistant", "asn_minimizer"] | List[float]
+        ) = "asn_minimizer",
         # Binomial params (convenience helpers if task is None)
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
-        alpha: float = 0.05,
-        power: float = 0.8,
     ) -> JennisonTurnbull2000Protocol:
         """
         Designs a Binomial A/B protocol.
@@ -152,7 +157,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             >>>
             >>> # --- Example 2: Fixed Custom Schedule ---
             >>> protocol_fix = JennisonTurnbull2000Template.design(
-            ...     p_control=0.20, p_treatment=0.22, looks=3,
+            ...     p_control=0.20, p_treatment=0.22, alpha=0.05, power=0.8, looks=3,
             ...     scheduling=[0.2, 0.5, 1.0]
             ... )
             >>> protocol_fix.method.stopping_policy.schedule.analyses
@@ -160,7 +165,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             >>>
             >>> # --- Example 3: ASN Minimization ---
             >>> protocol_asn = JennisonTurnbull2000Template.design(
-            ...     p_control=0.20, p_treatment=0.22, looks=3,
+            ...     p_control=0.20, p_treatment=0.22, alpha=0.05, power=0.8, looks=3,
             ...     scheduling="asn_minimizer",
             ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
             ... )
@@ -241,25 +246,27 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                         )
                     sess.commit(item, trace=[])
 
-        # 2. Analysis
+        # 2. Analysis & Trigger check
         with Session(self.ledger) as sess:
             # Reconstruct Protocol from Ledger
             protocol = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
-
             metrics = sess.read(Scoreboard(identity="metrics"))
+            trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
 
-            # 3. Engine Execution - compute result
-            # The engine extracts arm names from protocol.task.arms internally.
-            engine = BinomialGSTEngine(protocol.data)
+            # 3. Check if an analysis is "due"
+            trigger = get_pending_look_trigger(protocol, metrics, trajectory)
 
-            # 4. Commit the result via CallAndCommit to automate lineage tracking.
-            # This ensures causality between the input metrics and the LookResult.
-            # Decision flow is handled downstream in callers (e.g. by checking status).
-            sess.call_and_commit(
-                LookResult,
-                engine.run,
-                metrics=metrics,
-            )
+            if trigger:
+                # 4. Engine Execution - compute result using trajectory history
+                engine = BinomialGSTEngine(protocol.data)
+
+                sess.call_and_commit(
+                    LookResult,
+                    engine.run,
+                    metrics=metrics,
+                    history=trajectory,
+                    trigger=trigger,
+                )
 
     def report_progress(self) -> Dict[str, Any]:
         """
@@ -303,13 +310,9 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             # Retrieve trajectory from InterimAnalyses entity
             trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
 
-            # Extract history from trajectory
-            history_n: List[int] = []
-            history_z: List[float] = []
-
-            for _, state in trajectory.data:
-                history_n.append(state.sample_n)
-                history_z.append(state.z_stat)
-
             # Generate Plot
-            return plot_gst_summary(protocol.data, history_n, history_z)
+            return plot_gst_summary(
+                protocol.data,
+                title="GST Monitoring",
+                full_history=trajectory.data,
+            )

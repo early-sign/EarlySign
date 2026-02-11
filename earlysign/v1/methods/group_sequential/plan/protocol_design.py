@@ -1,6 +1,8 @@
 from decimal import Decimal
 from typing import Any, Dict, Optional, Self
 
+from pydantic import BaseModel, Field
+
 import numpy as np
 
 import earlysign.schema.ES3.GST as GST
@@ -12,6 +14,16 @@ from earlysign.v1.methods.group_sequential.shared.spending import (
     SpendingFunction,
     SpendingFunctionFactory,
 )
+
+
+class MethodDesignParams(BaseModel):
+    """Internal model for design parameter validation."""
+
+    looks: int = Field(..., gt=0)
+    spending_function: str = "obrien_fleming"
+    spending_params: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    power: Optional[float] = None
+    ssr_method: Optional[str] = None
 
 
 class ProtocolDesigner:
@@ -57,7 +69,7 @@ class ProtocolDesigner:
         power: float,
         p_control: float,
         p_treatment: float,
-        looks: int = 5,
+        looks: int,
         scheduling: str | np.ndarray = "equidistant",
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
@@ -125,6 +137,7 @@ class ProtocolDesigner:
             u_prox, l_prox = proxy_model.solve_boundaries(
                 efficacy_spending=sf_eff,
                 futility_spending=sf_fut,
+                drift=1.0,
             )
             drift_target = proxy_model.solve_drift(
                 proxy_times.tolist(),
@@ -160,9 +173,12 @@ class ProtocolDesigner:
         model = CanonicalJointModel(model_cfg)
 
         # 3. Solve Boundaries
+        # During design, we solve for boundaries at a canonical drift of 1.0.
+        # This determines the 'shape' of the boundaries on the Z-scale.
         upper, lower = model.solve_boundaries(
             efficacy_spending=sf_eff,
             futility_spending=sf_fut,
+            drift=1.0,
         )
 
         # 4. Solve Drift
@@ -404,11 +420,12 @@ class ProtocolDesigner:
         spending_params = spending_fn.params if spending_fn else None
 
         method_spec, n_max = self.design_gs_binomial(
-            scheduling=info_times,
             alpha=alpha,
             power=power,
             p_control=p_control,
             p_treatment=p_treatment,
+            looks=k,
+            scheduling=info_times,
             spending_function=spending_family,
             spending_params=spending_params,
             futility=True,  # Default to including futility in planning
@@ -446,15 +463,12 @@ class ProtocolDesigner:
         """
         Derives a MethodSpec from a TaskSpec effectively serving as a 'Design Strategy'.
         """
+        # Validate and extract parameters using Pydantic
+        v_params = MethodDesignParams.model_validate(params)
+
         efficacy = task.efficacy
         if not efficacy:
             raise ValueError("Task is missing efficacy requirements.")
-        alpha = efficacy.alpha
-
-        futility = task.futility
-        k = params.get("looks", 2)
-        shape_type = params.get("spending_function", "obrien_fleming")
-        spending_params = params.get("spending_params", {})
 
         hypotheses = task.hypotheses
         if not hypotheses:
@@ -475,16 +489,22 @@ class ProtocolDesigner:
             else:
                 raise ValueError("Could not identify treatment proportion")
 
-        info_times = np.linspace(1 / k, 1.0, k)
+        futility = task.futility
+        target_power = futility.power if futility else v_params.power
+        if target_power is None:
+            raise ValueError(
+                "Statistical 'power' must be provided either in TaskSpec.futility or in 'params' to determine maximum sample size."
+            )
 
         method_spec, _ = self.design_gs_binomial(
-            scheduling=info_times,
-            alpha=alpha,
-            power=futility.power if futility else 0.8,
+            alpha=efficacy.alpha,
+            power=float(target_power),
             p_control=p_c,
             p_treatment=p_t,
-            spending_function=shape_type,
-            spending_params=spending_params,
+            looks=v_params.looks,
+            scheduling=np.linspace(1 / v_params.looks, 1.0, v_params.looks),
+            spending_function=v_params.spending_function,
+            spending_params=v_params.spending_params,
             futility=futility is not None,
             futility_binding=bool(futility.binding) if futility else False,
             tails=1,  # Default to 1-sided for this template logic
@@ -545,7 +565,7 @@ class ProtocolDesigner:
                 GST.SpendingFunction(family="obrien_fleming")
             )
 
-        boundaries, _ = model.solve_boundaries(efficacy_spending=spending_fn)
+        boundaries, _ = model.solve_boundaries(efficacy_spending=spending_fn, drift=1.0)
         if boundaries is None:
             raise ValueError("Failed to solve boundaries.")
         boundaries_list = boundaries.tolist()

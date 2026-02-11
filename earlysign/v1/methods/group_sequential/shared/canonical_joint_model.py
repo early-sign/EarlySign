@@ -64,6 +64,7 @@ Examples:
     True
 """
 
+import warnings
 from dataclasses import dataclass
 from typing import Dict, Literal, Optional, Sequence, Tuple
 
@@ -79,6 +80,11 @@ from earlysign.v1.methods.group_sequential.execution.stopping_policy import (
 )
 from earlysign.v1.methods.group_sequential.shared.spending import SpendingFunction
 from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
+
+# Internal numerical safety limits.
+# These are kept local to avoid influencing general design logic.
+_Z_SOLVER_LIMIT = 100.0
+_SOLVER_BRACKET_HIGH = 100.0
 
 
 @dataclass
@@ -141,7 +147,10 @@ class CanonicalJointModel:
 
     @classmethod
     def from_spec(
-        cls, spec: GST.Protocol, n_sims: int = 20000, rng_seed: Optional[int] = None
+        cls,
+        spec: GST.Protocol,
+        n_sims: int = 20000,
+        rng_seed: Optional[int] = None,
     ) -> "CanonicalJointModel":
         """Instantiate the model from an ES3 GST.Protocol specification."""
         task = spec.task
@@ -270,13 +279,25 @@ class CanonicalJointModel:
 
         try:
             res = root_scalar(
-                objective, bracket=[0.0, 10.0], method="brentq", xtol=1e-3
+                objective,
+                bracket=[0.0, _Z_SOLVER_LIMIT],
+                method="brentq",
+                xtol=1e-3,
             )
             return float(res.root)
         except ValueError:
-            if objective(10.0) > 0:
+            if objective(_Z_SOLVER_LIMIT) > 0:
+                warnings.warn(
+                    f"Boundary constant exceeding standard search range ({_Z_SOLVER_LIMIT}). "
+                    "A wider bracket will be used, but this may indicate an extreme alpha or design requirement.",
+                    UserWarning,
+                    stacklevel=2,
+                )
                 res = root_scalar(
-                    objective, bracket=[10.0, 50.0], method="brentq", xtol=1e-3
+                    objective,
+                    bracket=[_Z_SOLVER_LIMIT, 5.0 * _Z_SOLVER_LIMIT],
+                    method="brentq",
+                    xtol=1e-3,
                 )
                 return float(res.root)
             raise
@@ -286,7 +307,7 @@ class CanonicalJointModel:
         info_times: NDArray[np.float64],
         efficacy_targets: Optional[NDArray[np.float64]] = None,
         futility_targets: Optional[NDArray[np.float64]] = None,
-        drift: float = 0.0,
+        drift: Optional[float] = None,
         efficacy_binding: bool = True,
         futility_binding: bool = False,
         tails: int = 1,
@@ -309,12 +330,21 @@ class CanonicalJointModel:
         t = info_times
         k = len(t)
 
+        if futility_targets is not None and drift is None:
+            raise ValueError(
+                "Standardized drift must be provided to solve for futility boundaries."
+            )
+
+        # Fallback for efficacious-only simulation path if needed by underlying GP,
+        # but drift is only used for H1 GP simulation.
+        safe_drift = drift if drift is not None else 0.0
+
         if method == "numerical_integration":
             return self._solve_numerical(
                 info_times,
                 efficacy_targets,
                 futility_targets,
-                drift,
+                safe_drift,
                 efficacy_binding,
                 futility_binding,
                 tails,
@@ -324,11 +354,11 @@ class CanonicalJointModel:
         gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=self._rng)
         z_sims_h0 = gp_h0.sample(t, self.config.n_sims)
 
-        gp_h1 = CanonicalGaussianProcess(drift=drift, rng=self._rng)
+        gp_h1 = CanonicalGaussianProcess(drift=safe_drift, rng=self._rng)
         z_sims_h1 = gp_h1.sample(t, self.config.n_sims)
 
         a = np.zeros(k) if efficacy_targets is not None else None
-        b = np.full(k, -10.0) if futility_targets is not None else None
+        b = np.full(k, -np.inf) if futility_targets is not None else None
 
         rejected_h0 = np.zeros(self.config.n_sims, dtype=bool)
         stopped_h0 = np.zeros(self.config.n_sims, dtype=bool)
@@ -343,9 +373,9 @@ class CanonicalJointModel:
                 num_rem = np.sum(rem_mask)
 
                 if needed <= 0:
-                    a[i] = 10.0 if i < k - 1 else (a[i - 1] if i > 0 else 2.0)
+                    a[i] = np.inf if i < k - 1 else (a[i - 1] if i > 0 else 2.0)
                 elif num_rem < 10:
-                    a[i] = -10.0
+                    a[i] = -np.inf
                 else:
                     frac = max(0, min(1, needed / num_rem))
                     if tails == 2:
@@ -362,9 +392,9 @@ class CanonicalJointModel:
                 num_rem_h1 = np.sum(rem_mask_h1)
 
                 if needed <= 0:
-                    b[i] = -10.0
+                    b[i] = -np.inf
                 elif num_rem_h1 < 10:
-                    b[i] = 10.0
+                    b[i] = np.inf
                 else:
                     frac = max(0, min(1, needed / num_rem_h1))
                     b[i] = np.percentile(z_sims_h1[rem_mask_h1, i], 100 * frac)
@@ -414,26 +444,26 @@ class CanonicalJointModel:
 
         # Prepare boundary masks
         eff = (
-            np.asarray(list(previous_efficacy) + [10.0])
+            np.asarray(list(previous_efficacy) + [np.inf])
             if previous_efficacy is not None
             else None
         )
         fut = (
-            np.asarray(list(previous_futility) + [-10.0])
+            np.asarray(list(previous_futility) + [-np.inf])
             if previous_futility is not None
             else None
         )
 
         if rule_type == "efficacy":
             if eff is None:
-                eff = np.full(k, 10.0)
+                eff = np.full(k, np.inf)
 
             # Efficacy binding logic (usually true)
             # We want P(Cross eff or Cross fut_binding) = target_cumulative_prob
             binding_fut = (
                 fut
                 if (fut is not None and self.config.futility_binding)
-                else np.full(k, -10.0)
+                else np.full(k, -np.inf)
             )
 
             def obj_a(val: float) -> float:
@@ -449,24 +479,32 @@ class CanonicalJointModel:
 
             # Robust check to avoid BrentQ failure on extremely small alpha spent or large B
             f_0 = obj_a(0.0)
-            f_20 = obj_a(20.0)
-            if f_0 * f_20 > 0:
-                # If both are same sign, the root is likely outside [0, 20]
+            f_lim = obj_a(_SOLVER_BRACKET_HIGH)
+            if f_0 * f_lim > 0:
+                # If both are same sign, the root is likely outside [0, _SOLVER_BRACKET_HIGH]
                 # Since f_0 (at val=0) is usually 0.5 - target (> 0),
-                # if f_20 is also positive, the boundary is > 20.
-                return 20.0 if f_0 > 0 else 0.0
+                # if f_lim is also positive, the boundary is > _SOLVER_BRACKET_HIGH.
+                warnings.warn(
+                    f"Efficacy boundary solver reached technical limit ({_SOLVER_BRACKET_HIGH}). "
+                    "This usually happens when using extremely aggressive spending functions (like OBF) at early looks.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return _SOLVER_BRACKET_HIGH if f_0 > 0 else 0.0
 
-            res = root_scalar(obj_a, bracket=[0.0, 20.0], method="brentq", xtol=1e-6)
+            res = root_scalar(
+                obj_a, bracket=[0.0, _SOLVER_BRACKET_HIGH], method="brentq", xtol=1e-6
+            )
             return float(res.root)
 
         elif rule_type == "futility":
             if fut is None:
-                fut = np.full(k, -10.0)
+                fut = np.full(k, -np.inf)
 
             binding_eff = (
                 eff
                 if (eff is not None and self.config.efficacy_binding)
-                else np.full(k, 10.0)
+                else np.full(k, np.inf)
             )
 
             def obj_b(val: float) -> float:
@@ -481,12 +519,22 @@ class CanonicalJointModel:
                 return float(prob - target_cumulative_prob)
 
             # Robust check for futility
-            f_low = obj_b(-10.0)
-            f_high = obj_b(10.0)
+            f_low = obj_b(-_Z_SOLVER_LIMIT)
+            f_high = obj_b(_Z_SOLVER_LIMIT)
             if f_low * f_high > 0:
-                return -10.0 if f_high < 0 else 10.0
+                warnings.warn(
+                    f"Futility boundary solver reached technical limit (plus/minus {_Z_SOLVER_LIMIT}).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return -np.inf if f_high < 0 else np.inf
 
-            res = root_scalar(obj_b, bracket=[-10.0, 10.0], method="brentq", xtol=1e-6)
+            res = root_scalar(
+                obj_b,
+                bracket=[-_Z_SOLVER_LIMIT, _Z_SOLVER_LIMIT],
+                method="brentq",
+                xtol=1e-6,
+            )
             return float(res.root)
 
         return 0.0
@@ -504,7 +552,7 @@ class CanonicalJointModel:
         """Solve stage-by-stage using numerical integration for high precision."""
         k = len(info_times)
         a = np.zeros(k) if efficacy_targets is not None else None
-        b = np.full(k, -10.0) if futility_targets is not None else None
+        b = np.full(k, -np.inf) if futility_targets is not None else None
 
         # Higher-level helpers for numerical integration
         gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=self._rng)
@@ -516,12 +564,12 @@ class CanonicalJointModel:
                 temp_b = (
                     b.copy()
                     if (b is not None and futility_binding)
-                    else np.asarray([-10.0] * k)
+                    else np.asarray([-np.inf] * k)
                 )
 
                 # Calculate base probability (excluding efficacy stop at current step i)
                 temp_a_base = a.copy()
-                temp_a_base[i] = 10.0  # Approx +inf
+                temp_a_base[i] = np.inf  # Approx +inf
                 prob_base = gp_h0.compute_crossing_probability(
                     t=info_times[: i + 1],
                     upper=temp_a_base[: i + 1],
@@ -547,8 +595,13 @@ class CanonicalJointModel:
                     )
                     return float(prob_cross - target_prob)
 
-                low, high = 0.0, 20.0
+                low, high = 0.0, _SOLVER_BRACKET_HIGH
                 if obj_a(low) * obj_a(high) > 0:
+                    warnings.warn(
+                        f"Numerical efficacy boundary i={i} reached technical limit ({high}).",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                     a[i] = high if obj_a(high) < 0 else low
                 else:
                     res = root_scalar(
@@ -561,13 +614,13 @@ class CanonicalJointModel:
                 temp_a = (
                     a.copy()
                     if (a is not None and efficacy_binding)
-                    else np.asarray([10.0] * k)
+                    else np.asarray([np.inf] * k)
                 )
 
                 # Calculate base probability (excluding futility stop at current step i)
-                # We use -10.0 as approximate -inf for numerical stability in existing routines
+                # We use np.inf for numerical stability in existing routines
                 temp_b_base = b.copy()
-                temp_b_base[i] = -10.0
+                temp_b_base[i] = -np.inf
                 prob_base = gp_h1.compute_crossing_probability(
                     t=info_times[: i + 1],
                     upper=temp_a[: i + 1],
@@ -592,8 +645,13 @@ class CanonicalJointModel:
                     )
                     return float(prob_cross - target_prob)
 
-                low, high = -10.0, 10.0
+                low, high = -_Z_SOLVER_LIMIT, _Z_SOLVER_LIMIT
                 if obj_b(low) * obj_b(high) > 0:
+                    warnings.warn(
+                        f"Numerical futility boundary i={i} reached technical limit ({high}).",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                     b[i] = high if obj_b(high) < 0 else low
                 else:
                     res = root_scalar(
@@ -675,8 +733,11 @@ class CanonicalJointModel:
         ):
             fut_sched = self.config.stopping_policy.futility_spending
 
-        if drift is None:
-            drift = 1.0
+        if fut_sched and drift is None:
+            raise ValueError(
+                "Standardized drift must be provided to solve for futility boundaries "
+                "from a spending function."
+            )
 
         t = (
             self.config.spending_times

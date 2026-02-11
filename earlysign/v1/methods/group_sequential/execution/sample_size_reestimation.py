@@ -273,21 +273,15 @@ class ConditionalPowerAdaptationEngine:
         new_n_float = (t_val + r * (1 - t_val)) * n_old_val
         new_n = int(np.ceil(new_n_float))
 
-        # Constraints (Regulatory/Practical)
         # Often SSR is capped (e.g., at 2x or 4x the original n_max).
         # We respect the inflation_cap from the protocol spec if provided.
-        inflation_cap = 4.0  # Default if not specified
+        inflation_cap = float("inf")  # Default if not specified (uncapped)
         if (
             protocol.method.adaptation
             and hasattr(protocol.method.adaptation, "inflation_cap")
             and protocol.method.adaptation.inflation_cap is not None
         ):
             inflation_cap = protocol.method.adaptation.inflation_cap
-        elif protocol.method.adaptation and hasattr(
-            protocol.method.adaptation, "inflation_cap"
-        ):
-            # If explicitly None in spec, we disable the cap by setting it to infinity
-            inflation_cap = float("inf")
 
         new_n = min(new_n, int(np.ceil(inflation_cap * n_old_val)))
         new_n = max(new_n, n_old_val)

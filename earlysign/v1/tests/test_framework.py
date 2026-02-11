@@ -200,7 +200,7 @@ Templates provide a high-level API for running standard trial designs.
 ... )
 >>> # Design
 >>> protocol = template.design(
-...     task=task, looks=2, spending_function="obrien_fleming",
+...     task=task, looks=2, alpha=0.05, power=0.8, spending_function="obrien_fleming",
 ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
 ... )
 >>> template.set_protocol(protocol)

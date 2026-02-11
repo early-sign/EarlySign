@@ -24,7 +24,7 @@ class EProcessProtocol(BaseModel):
 
     alpha: float = Field(0.05, description="Type-1 error rate")
     null_p: float = Field(
-        0.5, description="Success probability hypothesized under the Null (H0)."
+        ..., description="Success probability hypothesized under the Null (H0)."
     )
     alt_p: float = Field(
         ..., description="Success probability hypothesized under the Alternative (H1)."

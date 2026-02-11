@@ -82,9 +82,13 @@ class mSPRTEngine:
         else:
             val_c = metrics.arms[control_key].metrics.mean
             val_t = metrics.arms[treatment_key].metrics.mean
-            # Continuous sample variance
-            var_c = metrics.arms[control_key].metrics.variance or 1.0  # Fallback
-            var_t = metrics.arms[treatment_key].metrics.variance or 1.0
+            # Continuous sample variance - required for mSPRT
+            var_c = metrics.arms[control_key].metrics.variance
+            var_t = metrics.arms[treatment_key].metrics.variance
+            if var_c is None or var_t is None:
+                raise ValueError(
+                    "Variance is required for continuous data in mSPRT but is missing in scoreboard."
+                )
 
         estimate = val_t - val_c
         alpha = self._get_alpha_adjusted()
@@ -100,11 +104,13 @@ class mSPRTEngine:
 
         info = 1.0 / var_diff
 
-        # tau: Prior mixing standard deviation.
         # We use the Target Effect Size (MDE) as a proxy for the optimal tau.
         tau = self.method.mde
         if tau <= 0:
-            tau = 0.05  # Sensible fallback for mSPRT
+            raise ValueError(
+                f"Invalid or missing MDE (tau) for mSPRT: {tau}. "
+                "A positive Minimum Detectable Effect is required for the prior mixture."
+            )
 
         phi = 1.0 / (tau**2)  # Prior precision (information)
 
