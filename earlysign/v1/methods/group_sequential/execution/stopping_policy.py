@@ -257,6 +257,8 @@ class OBrienFlemingStoppingPolicy(BoundaryFunctionStoppingPolicy):
         # Store c for internal reference
         object.__setattr__(self, "_c", c)
         a = c * shape
+        if self.sided == "two":
+            return a, -a
         return a, None
 
     # Inherits get_boundary (index-based lookup) from BoundaryFunctionStoppingPolicy

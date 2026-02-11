@@ -127,6 +127,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         info_times: Optional[np.ndarray] = None,
         upper_boundaries: Optional[np.ndarray] = None,
         lower_boundaries: Optional[np.ndarray] = None,
+        sided: int = 1,
         **kwargs: Any,
     ) -> EvaluationResult:
         # Compatibility wrapper
@@ -135,11 +136,16 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         ub = upper_boundaries if upper_boundaries is not None else self.upper
         lb = lower_boundaries if lower_boundaries is not None else self.lower
 
+        assert it is not None
+        assert ub is not None
+        assert lb is not None
+
         return self.evaluator.evaluate_point(
             drift,
             info_times=it,
-            upper_boundaries=cast(np.ndarray, ub),
-            lower_boundaries=cast(np.ndarray, lb),
+            upper_boundaries=ub,
+            lower_boundaries=lb,
+            sided=sided,
             **kwargs,
         )
 
@@ -223,6 +229,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             info_times=self.info_times,
             upper_boundaries=cast(np.ndarray, self.upper),
             lower_boundaries=cast(np.ndarray, self.lower),
+            sided=self.model.tails,
         )
 
         # Inject Domain Context

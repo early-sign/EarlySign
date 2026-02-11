@@ -11,10 +11,10 @@ from matplotlib.axes import Axes
 from numpy.typing import NDArray
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.v1.interfaces import ProtocolEvaluator
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics import (
     BinomialOperatingCharacteristicsEvaluator,
     ContinuousOperatingCharacteristicsEvaluator,
+    ProtocolEvaluator,
 )
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
     EvaluationResult,

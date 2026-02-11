@@ -156,10 +156,9 @@ def compute_overrunning_inflation(
             rej0 |= just_rej0
             stop0 |= just_rej0
 
-            # Binding futility for H0? Test logic says:
-            # jf0 = (~stop0) & (z_h0[:, i] < b_tmp[i]) -> stop0 |= jf0
-            # So we need b_tmp[i] first?
-            # Actually the test loop solves a_tmp and b_tmp in the same step i.
+            # Futility stopping logic for H0 (binding futility).
+            # We solve for b_tmp[i] alongside a_tmp[i].
+            # The test loop solves a_tmp and b_tmp in the same step i.
             # But b_tmp depends on H1 stats.
 
             # H1 logic for Futility Bound (match accumulated beta spending)
@@ -179,10 +178,7 @@ def compute_overrunning_inflation(
                 )
 
             # Apply bounds to update state for NEXT step
-            # Note: The test logic updates stop0 with b_tmp (binding?)
-            # "jf0 = (~stop0) & (z_h0[:, i] < b_tmp[i])"
-            # Yes, if futility is binding, it stops H0 paths too.
-            # Assuming binding futility here based on test implementation.
+            # If futility is binding, it also stops H0 paths.
 
             if config.futility_binding:
                 just_fut0 = (~stop0) & (z_h0[:, i] < b_tmp[i])
@@ -196,9 +192,7 @@ def compute_overrunning_inflation(
             fut1 |= just_fut1
             stop1 |= just_fut1
 
-        # Objective: We want the bounds to "meet" at the end approx?
-        # The test used: return float(a_tmp[-1] - b_tmp[-1])
-        # Trying to make a_K == b_K implies the decision is exhaustive (no continue).
+        # Find the R_OS where the boundaries meet at the final analysis (K).
         return float(a_tmp[-1] - b_tmp[-1])
 
     try:

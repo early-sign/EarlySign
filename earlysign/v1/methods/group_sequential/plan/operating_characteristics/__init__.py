@@ -19,6 +19,7 @@ from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engine
     EvaluationResult,
     NumericalCalculator,
     OperatingCharacteristicsEvaluator,
+    ProtocolEvaluator,
     SimulationCurve,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "AsymptoticSimulator",
     "NumericalCalculator",
     "OperatingCharacteristicsEvaluator",
+    "ProtocolEvaluator",
     "SimulationCurve",
 ]

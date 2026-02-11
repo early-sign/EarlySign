@@ -6,12 +6,45 @@ operating characteristics using different methods (Monte Carlo, Numerical Integr
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    cast,
+    runtime_checkable,
+)
 
 import numpy as np
 from numpy.typing import NDArray
 
 from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
+
+
+@runtime_checkable
+class ProtocolEvaluator(Protocol):
+    """Protocol for evaluating Operating Characteristics over a range of effect sizes."""
+
+    def evaluate_metric_curve(
+        self,
+        range_min: float,
+        range_max: float,
+        n_points: int,
+        metric_type: str,
+    ) -> "SimulationCurve":
+        """Evaluate OC curve over a continuous range."""
+        ...
+
+    def evaluate_metric_at(
+        self,
+        x_values: List[float],
+        metric_type: str,
+    ) -> "SimulationCurve":
+        """Evaluate OC curve at specific points."""
+        ...
 
 
 @dataclass
@@ -107,6 +140,7 @@ class OperatingCharacteristicsEvaluator(ABC):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
+        sided: int = 1,
         **kwargs: Any,
     ) -> EvaluationResult:
         """Evaluate OC at a single drift point."""
@@ -118,6 +152,7 @@ class OperatingCharacteristicsEvaluator(ABC):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
+        sided: int = 1,
         **kwargs: Any,
     ) -> SimulationCurve:
         """Evaluate OC over a range of drifts."""
@@ -127,6 +162,7 @@ class OperatingCharacteristicsEvaluator(ABC):
                 info_times=info_times,
                 upper_boundaries=upper_boundaries,
                 lower_boundaries=lower_boundaries,
+                sided=sided,
                 **kwargs,
             )
             for d in drifts
@@ -161,6 +197,7 @@ class AsymptoticSimulator(OperatingCharacteristicsEvaluator):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
+        sided: int = 1,
         **kwargs: Any,
     ) -> EvaluationResult:
         # Prepare kwargs for the process (e.g. m_counts for TProcess)
@@ -179,13 +216,23 @@ class AsymptoticSimulator(OperatingCharacteristicsEvaluator):
         )
 
         prob_total = prob_eff + prob_fut
-        power = float(np.sum(prob_eff))
 
-        # ASN Calculation (Fractional)
-        # Assuming stops occur at info times
+        # Power calculation
+        # If 1-sided: sum(prob_eff)
+        # If 2-sided: sum(prob_eff) + sum(prob_fut excluding final acceptance)
+
+        # Calculate remainder (failing to cross any boundary)
         remainder = float(1.0 - np.sum(prob_total))
         remainder = max(0.0, remainder)
 
+        if sided == 2:
+            # For 2-sided tests, power is the total probability of crossing either boundary.
+            power = float(np.sum(prob_eff) + np.sum(prob_fut))
+        else:
+            power = float(np.sum(prob_eff))
+
+        # ASN Calculation (Fractional)
+        # Assuming stops occur at info times
         asn_fraction = float(np.sum(prob_total * info_times)) + float(
             remainder * 1.0  # Assumes max info time is 1.0
         )
@@ -225,6 +272,7 @@ class NumericalCalculator(OperatingCharacteristicsEvaluator):
         info_times: NDArray[np.float64],
         upper_boundaries: NDArray[np.float64],
         lower_boundaries: NDArray[np.float64],
+        sided: int = 1,
         **kwargs: Any,
     ) -> EvaluationResult:
         # Instantiates generic Gaussian Process for integration
@@ -238,10 +286,14 @@ class NumericalCalculator(OperatingCharacteristicsEvaluator):
         )
 
         prob_total = prob_eff + prob_fut
-        power = float(np.sum(prob_eff))
 
         remainder = float(1.0 - np.sum(prob_total))
         remainder = max(0.0, remainder)
+
+        if sided == 2:
+            power = float(np.sum(prob_eff) + np.sum(prob_fut))
+        else:
+            power = float(np.sum(prob_eff))
 
         asn_fraction = float(np.sum(prob_total * info_times)) + float(remainder * 1.0)
 

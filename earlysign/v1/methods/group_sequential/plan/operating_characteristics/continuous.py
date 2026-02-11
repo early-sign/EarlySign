@@ -143,6 +143,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         info_times: Optional[np.ndarray] = None,
         upper_boundaries: Optional[np.ndarray] = None,
         lower_boundaries: Optional[np.ndarray] = None,
+        sided: int = 1,
         **kwargs: Any,
     ) -> EvaluationResult:
         # Compatibility wrapper
@@ -150,11 +151,16 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         ub = upper_boundaries if upper_boundaries is not None else self.upper
         lb = lower_boundaries if lower_boundaries is not None else self.lower
 
+        assert it is not None
+        assert ub is not None
+        assert lb is not None
+
         return self.evaluator.evaluate_point(
             drift,
             info_times=it,
-            upper_boundaries=cast(np.ndarray, ub),
-            lower_boundaries=cast(np.ndarray, lb),
+            upper_boundaries=ub,
+            lower_boundaries=lb,
+            sided=sided,
             **kwargs,
         )
 
@@ -170,23 +176,18 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             if metric_type == "effect_size":
                 metric_type = "absolute_diff"
 
-        # If absolute_diff_pct, treat as percent, else absolute units
         # For continuous, usually absolute difference is preferred
 
         x_vals = np.array(x_values, dtype=float)
 
         if metric_type == "absolute_diff_pct":
-            deltas = (
-                x_vals / 100.0
-            )  # assuming % of something? ambiguous for continuous without baseline
-            # Or maybe it means % change from control mean?
-            # Let's assume % change from mu_control if mu_control != 0
+            # For continuous outcomes, 'absolute_diff_pct' is interpreted as a percentage
+            # change from the control mean (requires mu_control != 0).
             if abs(self.mu_control) > 1e-9:
                 deltas = (x_vals / 100.0) * self.mu_control
             else:
-                # If baseline is 0, pct is meaningless, treat as absolute??
-                # Or raise error. Let's treat as absolute for safety or warn.
-                deltas = x_vals  # fallback
+                # Fallback to absolute if baseline is zero.
+                deltas = x_vals
         else:
             deltas = x_vals
 
@@ -262,6 +263,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             info_times=self.info_times,
             upper_boundaries=cast(np.ndarray, self.upper),
             lower_boundaries=cast(np.ndarray, self.lower),
+            sided=self.model.tails,
         )
 
         # Inject Domain Context

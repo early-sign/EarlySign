@@ -392,8 +392,8 @@ def nominal_t_from_z(z: float, df: float, *, tails: int = 2) -> float:
         # For 2-sided, z is the critical value for alpha/2.
         # But we use the SAME nominal levels for t-test.
         # Nom level for z is 2*(1-Phi(z)).
-        # t_boundary should be t_{df, 1-(level/2)} = t_{df, 1-(1-Phi(z))} = t_{df, Phi(z)}
-        # Wait, if z is positive, Phi(z) > 0.5. t_dist.isf(p, df) is the upper-tail quantile.
+        # t_boundary should be t_{df, Phi(z)}
+        # We use the same nominal levels for t-test as for z-test.
         # p = level/2 = 1-Phi(z).
         # isf(1-Phi(z), df)
         # Using norm.sf(z) is 1-Phi(z).
