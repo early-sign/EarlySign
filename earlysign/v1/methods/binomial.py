@@ -1,6 +1,7 @@
 from typing import Optional
 
 import ibis
+import numpy as np
 
 from earlysign.schema.ES3.Binomial import (
     ArmMetrics,
@@ -90,3 +91,22 @@ class Scoreboard(Entity[ScoreboardSchema]):
         return ProjectionResult(
             data=ScoreboardSchema(arms=current_arms), trace=tracked_uuids
         )
+
+
+def calculate_binomial_z_statistic(control: ArmMetrics, treatment: ArmMetrics) -> float:
+    """
+    Computes the standard Z-statistic for two binomial proportions.
+    """
+    n_c, n_t = control.n, treatment.n
+    cumulative_n = n_c + n_t
+
+    if n_c < 2 or n_t < 2:
+        return 0.0
+
+    p_pool = (control.successes + treatment.successes) / cumulative_n
+    se = np.sqrt(p_pool * (1 - p_pool) * (1 / n_c + 1 / n_t))
+
+    if se <= 0:
+        return 0.0
+
+    return float((treatment.p_hat - control.p_hat) / se)
