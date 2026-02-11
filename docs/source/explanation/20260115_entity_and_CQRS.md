@@ -1,5 +1,9 @@
 # Optimistic Concurrency Control (OCC) in Event Store
 
+> [!NOTE]
+> **Architectural Pattern**: This document describes the *architectural design* for ensuring strict consistency in concurrent environments. 
+> The core `Ledger` class in the `earlysign` framework provides the fundamental append-only storage. Strict OCC enforcement as described below (using version numbers to prevent data forking) is an advanced pattern implemented by specific Entity logic (like `_find_latest_snapshot` checks) or backend-specific constraints, rather than a hard constraint on every `Ledger.insert` operation.
+
 EarlySign's development framework supports defining a special type of aggregate, namely Entities.
 In the Event Sourcing pattern, there are no first-class entities, but all constructs are derived from events.
 However, for efficiency of computation, we support the concept of entities as special types of aggregates having consistent identity.
@@ -128,16 +132,25 @@ Sequential Entities provide two canonical projections:
 1. **Latest State Projection**: The head of the snapshot, providing the current value and statistical status.
 2. **Trajectory Projection**: The history of the process, retrieved via collection (Projective Mode) or direct reading (Cumulative Mode).
 
-## 8. Design Principle: State Derivation over Result Caching
+## 8. Core Principles of Ledger Interaction
+EarlySign adheres to two fundamental principles for managing data flow and system communication:
+
+### 8.1 1st Principle: Ledger-Centric Communication
+In principle, all information exchange within the system occurs via reading from and writing to the **Ledger**. The Ledger serves as the Single Source of Truth (SSoT), ensuring that all components operate on a consistent and durable record of events. Passing transient in-memory state between independent components is discouraged in favor of persisting and re-projecting state.
+
+### 8.2 2nd Principle: Performance Optimization through CQRS
+To minimize database communication latency and reduce redundant computational overhead, database access is consolidated and optimized through **Projectors**. In a CQRS architecture, these Projectors act as the "Query" side, providing efficient, pre-aggregated views of the event stream tailored to the specific needs of the application.
+
+## 9. Design Principle: State Derivation over Result Caching
 A common anti-pattern in event sourcing is to have a Command (Write side) return its computed result to be used directly by the Query (Read side). This breaks the **Unidirectional Data Flow** and creates a dependency on transient execution state rather than the durable event log.
 
-### 8.1 Read Model Purity
+### 9.1 Read Model Purity
 All Query operations (e.g., `report_progress()`) MUST derive their state by reading from the ledger using Projectors. 
 - **Tier 1 (Raw Events)**: Ingested batches, observations.
 - **Tier 2 (Derived Facts)**: Computed statistics, interim test results, decision records.
 - **Tier 3 (Entities/Aggregates)**: Projections that group related Tier 1/2 facts (e.g., `InterimAnalyses`).
 
-### 8.2 Performance and Tier Separation
+### 9.2 Performance and Tier Separation
 When a Command (e.g., `update()`) is executed, it computes a Tier 2 fact (e.g., `BinomialTestResult`) and commits it. Subsequents Reads for reporting should NOT re-compute these expensive values. Instead, they should utilize a **Sequential Entity** projection that finds the latest pre-computed Tier 2 fact.
 
 This ensures:
