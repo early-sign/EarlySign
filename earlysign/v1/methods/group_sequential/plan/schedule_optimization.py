@@ -136,12 +136,12 @@ class SequentialASNEstimator:
         model = CanonicalJointModel(model_config)
 
         try:
-            # We solve boundaries at a standardized canonical drift of 1.0.
-            # This determines the 'shape' of the boundaries (e.g. OBF) on the Z-scale.
-            # Since Z-scale boundaries are generally scale-invariant for spending functions,
-            # solving at drift=1.0 provides normalized boundaries which we then evaluate
-            # at the target 'self.drift' to find the ASN of a valid design.
-            a, b = model.solve_boundaries(drift=1.0, method=self.config.method)
+            # Solve boundaries at the target drift for this optimization step.
+            # The boundary shape (especially for futility) depends on the drift
+            # used for spending. Larger effect sizes (and hence larger drift sizes)
+            # tend to provide stronger signals, which can lead to higher chances
+            # of stopping early when we plan early looks.
+            a, b = model.solve_boundaries(drift=self.drift, method=self.config.method)
         except Exception:
             return 1e6
 
@@ -182,8 +182,8 @@ class SequentialASNEstimator:
         model = CanonicalJointModel(model_config)
 
         try:
-            # Solve for the standard boundary shape at unit drift (1.0).
-            a, b = model.solve_boundaries(drift=1.0, method=self.config.method)
+            # Solve for the boundary shape at the target evaluation drift.
+            a, b = model.solve_boundaries(drift=self.drift, method=self.config.method)
         except Exception:
             return 1e6, 0.0
 
