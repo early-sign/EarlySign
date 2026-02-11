@@ -363,6 +363,7 @@ def optimize_schedule(
     # Calculate final power
     _, best_power = estimator.evaluate(best_x)
 
-    return OptimizationResult(
-        schedule=np.cumsum(best_x), asn=best_asn, power=best_power
-    )
+    schedule = np.cumsum(best_x)
+    schedule[-1] = 1.0
+
+    return OptimizationResult(schedule=schedule, asn=best_asn, power=best_power)
