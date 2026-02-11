@@ -334,10 +334,14 @@ class CanonicalGaussianProcess(GaussianProcess):
         k = len(t_arr)
         if k == 1:
             # Efficient 1D case
-            mu = self.drift * np.sqrt(t_arr[0])
-            u = u_arr[0] if u_arr is not None else np.inf
-            lower_bound = l_arr[0] if l_arr is not None else -np.inf
-            return 1.0 - float(norm.cdf(u, loc=mu) - norm.cdf(lower_bound, loc=mu))
+            mu = float(self.drift * np.sqrt(t_arr[0]))
+            u = float(u_arr[0]) if u_arr is not None else np.inf
+            lower = float(l_arr[0]) if l_arr is not None else -np.inf
+            # P(Z > u or Z < low) = P(Z > u) + P(Z < low)
+            # Numerical Stability: We use norm.sf(u) + norm.cdf(lower) instead of 
+            # 1 - (norm.cdf(u) - norm.cdf(lower)) to avoid precision loss when 
+            # u or lower are very large.
+            return float(norm.sf(u, loc=mu) + norm.cdf(lower, loc=mu))
 
         # Canonical covariance: Cov(Z_i, Z_j) = sqrt(t_i/t_j) for i <= j
         cov = np.zeros((k, k))

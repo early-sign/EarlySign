@@ -43,8 +43,10 @@ class OBrienFlemingSpending(SpendingFunction):
         t_arr = np.clip(t_arr, 0.0, 1.0)
         t_arr = np.maximum(t_arr, 1e-12)
         z = float(norm.isf(self.budget))
-        # 1-sided formula: α(t) = 1 - Φ(z_α / √t)
-        return np.asarray(1.0 - norm.cdf(z / np.sqrt(t_arr)), dtype=float)
+        # 1-sided formula: α(t) = P(Z > z_α / √t) = norm.sf(z_α / √t)
+        # Numerical Stability: We use norm.sf instead of 1-norm.cdf to avoid precision 
+        # loss (underflow to 0.0) at very early information fractions (large z_alpha/sqrt(t)).
+        return np.asarray(norm.sf(z / np.sqrt(t_arr)), dtype=float)
 
     def boundaries_from_stage_alpha(self, stage_alpha: NDArray[Any]) -> NDArray[Any]:
         a = np.clip(np.asarray(stage_alpha, dtype=float), 1e-16, 1.0 - 1e-16)
