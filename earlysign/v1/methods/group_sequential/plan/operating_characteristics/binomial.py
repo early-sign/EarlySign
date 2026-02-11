@@ -25,8 +25,8 @@ from earlysign.v1.methods.group_sequential.shared.canonical_joint_model import (
 from earlysign.v1.stats.gaussian_process import CanonicalGaussianProcess
 
 
-class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
-    """Adapter for operating characteristics of Binomial A/B tests.
+class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
+    """Adapter for operating characteristics of Binomial tests.
 
     This simulation-based evaluator acts as a DataMonteCarloSimulator (via delegation
     or direct inheritance in the future). Currently delegates to AsymptoticSimulator
@@ -66,7 +66,7 @@ class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         arms_struct = task.arms
         if not isinstance(arms_struct, ES3_BASE.TwoArmComparison):
             raise ValueError(
-                f"BinomialABOperatingCharacteristicsEvaluator requires a TwoArmComparison arm structure, but got {type(arms_struct).__name__}."
+                f"BinomialOperatingCharacteristicsEvaluator requires a TwoArmComparison arm structure, but got {type(arms_struct).__name__}."
             )
 
         self.control_arm_name = arms_struct.control_arm_name

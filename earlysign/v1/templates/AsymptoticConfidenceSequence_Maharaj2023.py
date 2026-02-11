@@ -27,6 +27,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
     effective variance dynamically from the data stream.
 
     It supports two distinct design philosophies:
+
     1. **Budget-based (`design_from_budget`)**: Optimizes the CS boundary for a
        fixed target sample size ($max\_n$). Best when resources/time are constrained.
     2. **Effect-based (`design_from_effect`)**: Optimizes the CS boundary for a
@@ -102,6 +103,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         the tightest possible boundary at that specific point."
 
         **Parameter Role:**
+
         - `max_n`: Acts as the optimization target for the GAVI boundary.
           The boundary minimization (using Lambert W approximation) is
           centered around this value to ensure maximal sensitivity when
@@ -153,6 +155,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         to give me the most efficient boundary for that magnitude of effect."
 
         **Parameter Role:**
+
         - `mde`: The Minimum Detectable Effect. It determines the prior mixing
           variance (tau^2) in the mSPRT mixture likelihood. A smaller MDE
           leads to a boundary that is more sensitive to small effects but

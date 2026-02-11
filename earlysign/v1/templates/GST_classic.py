@@ -60,13 +60,16 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
         type: Literal["pocock", "obrien_fleming", "wang_tsiatis"],
         alpha: float,
         power: float,
-        delta: float,  # Effect size (difference in proportions or means)
         k: int,
-        p_control: Optional[float] = None,  # Required for Binomial Sample Size
-        sigma: Optional[float] = None,  # Required for Continuous Sample Size
+        delta: Optional[float] = None,  # Can be derived if arm values are provided
+        p_control: Optional[float] = None,
+        p_treatment: Optional[float] = None,
+        sigma: Optional[float] = None,
+        mu_control: Optional[float] = 0.0,
+        mu_treatment: Optional[float] = None,
         wang_tsiatis_delta: Optional[float] = None,
         tails: int = 2,
-        arms: int = 2,  # 1 (Paired/Single) or 2 (Two-sample)
+        arms: int = 2,
         seed: int = 42,
     ) -> ClassicProtocol:
         """Designs a Classic GST Protocol.
@@ -75,10 +78,13 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             type: Design type ("pocock", "obrien_fleming", "wang_tsiatis").
             alpha: Type I error rate.
             power: Target power.
-            delta: Detectable effect size (absolute difference).
             k: Number of looks.
+            delta: Detectable effect size (absolute difference). Optional if explicit arm values are provided.
             p_control: Control arm proportion (for Binomial designs).
+            p_treatment: Treatment arm proportion (for Binomial designs).
             sigma: Standard deviation (for Continuous designs).
+            mu_control: Control arm mean (for Continuous designs). Defaults to 0.0.
+            mu_treatment: Treatment arm mean (for Continuous designs).
             wang_tsiatis_delta: Delta parameter for Wang-Tsiatis family.
             tails: Number of tails (1 or 2).
             arms: Number of arms (1 or 2).
@@ -87,22 +93,74 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
         Returns:
             A populated ClassicProtocol.
         """
-        # 1. Setup Designer
+        # 1. Resolve Parameters via Match/Case
+        # We determine response_type, effect_size, and calculated_delta
+        response_type: GST.ResponseType
+        eff_size: GST.EffectSizeUnion
+        calc_delta: float
+
+        match (p_control, p_treatment, delta, sigma):
+            # --- Binomial Cases ---
+            case (float() as pc, float() as pt, _, _):
+                # Explicit Proportions
+                calc_delta = pt - pc
+                response_type = GST.ResponseType.BINARY
+                eff_props = (
+                    {"control": pc, "treatment": pt} if arms == 2 else {"treatment": pt}
+                )
+                eff_size = GST.BinaryEffectSize(proportions=eff_props)
+
+            case (float() as pc, None, float() as d, _):
+                # Control + Delta
+                calc_delta = d
+                pt = pc + d
+                response_type = GST.ResponseType.BINARY
+                eff_props = (
+                    {"control": pc, "treatment": pt} if arms == 2 else {"treatment": pt}
+                )
+                eff_size = GST.BinaryEffectSize(proportions=eff_props)
+
+            # --- Continuous Cases ---
+            case (None, None, _, float() as s):
+                # Continuous (sigma provided)
+                response_type = GST.ResponseType.CONTINUOUS
+
+                # Resolve Means
+                mc = mu_control if mu_control is not None else 0.0
+
+                if mu_treatment is not None:
+                    mt = mu_treatment
+                    calc_delta = mt - mc
+                elif delta is not None:
+                    calc_delta = delta
+                    mt = mc + delta
+                else:
+                    raise ValueError(
+                        "For Continuous designs, must provide either `delta` or `mu_treatment`."
+                    )
+
+                means = (
+                    {"control": mc, "treatment": mt} if arms == 2 else {"treatment": mt}
+                )
+                eff_size = GST.ContinuousEffectSize(means=means, standard_deviation=s)
+
+            case _:
+                raise ValueError(
+                    "Invalid parameter combination. Provide either:\n"
+                    "1. (p_control, p_treatment) or (p_control, delta) for Binomial.\n"
+                    "2. (sigma) plus (mu_treatment, mu_control) or (delta) for Continuous."
+                )
+
+        # 2. Setup Designer
         designer = ProtocolDesigner.from_dict(
             {"model": "canonical_joint", "model_params": {"rng_seed": seed}}
         )
 
-        if arms != 2:
-            raise NotImplementedError(
-                f"Classic GST with {arms} arms is not yet supported in this template. "
-                "Currently, only 2-arm (Two-sample) comparisons are supported."
-            )
-
-        # 2. Design via common logic
+        # 3. Design via common logic
         method_spec, n_max = designer.design_gs_classic(
             alpha=alpha,
             power=power,
-            delta=delta,
+            delta=calc_delta,
             looks=k,
             type=type,
             p_control=p_control,
@@ -113,18 +171,7 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             rng_seed=seed,
         )
 
-        # 3. Assemble Task Spec
-        if p_control is not None:
-            response_type = GST.ResponseType.BINARY
-            eff_size = GST.BinaryEffectSize(
-                proportions={"control": p_control, "treatment": p_control + delta}
-            )
-        else:
-            response_type = GST.ResponseType.CONTINUOUS
-            eff_size = GST.ContinuousEffectSize(
-                means={"control": 0.0, "treatment": delta}, standard_deviation=sigma
-            )
-
+        # 4. Assemble Task Spec
         if arms == 1:
             task_arms = ES3_BASE.SingleArm(arm_name="treatment")
         else:
@@ -137,7 +184,7 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             response_type=response_type,
             hypotheses=GST.HypothesisSpec(
                 h_null_description="No Difference",
-                h_alt_description=f"Difference {delta}",
+                h_alt_description=f"Difference {calc_delta}",
                 test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                 target_effect=eff_size,
             ),

@@ -641,7 +641,7 @@ class ProtocolDesigner:
         hazard_ratio : float
             Target Hazard Ratio (lambda_treatment / lambda_control).
             Assumption: < 1 indicates benefit.
-            Converted to standardized effect: theta = |log(HR)| / 2.
+            Converted to standardized effect: theta = ``|log(HR)|`` / 2.
 
         Returns
         -------

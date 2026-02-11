@@ -10,10 +10,10 @@ It allows for an interim Sample Size Re-estimation (SSR) if the results fall int
 a "Promising Zone" (neither efficacious nor futile, but showing promise).
 
 Key Features:
-    - Group Sequential Design (GSD) foundation (e.g., O'Brien-Fleming).
-    - Conditional Power (CP) calculation at interim looks.
-    - SSR rule: Increase sample size to recover power if CP is within the promising zone.
-    - Weighted test statistic (Chen-DeMets-Lan) to preserve Type-1 error rate after adaptation.
+  - Group Sequential Design (GSD) foundation (e.g., O'Brien-Fleming).
+  - Conditional Power (CP) calculation at interim looks.
+  - SSR rule: Increase sample size to recover power if CP is within the promising zone.
+  - Weighted test statistic (Chen-DeMets-Lan) to preserve Type-1 error rate after adaptation.
 
 References:
     Cui, L., Hung, H. M., & Wang, S. J. (1999). Modification of sample size in
@@ -114,6 +114,7 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
     """Orchestrator for Promising Zone Adaptive Designs (Cui-Hung-Wang).
 
     Logic:
+
     1. Standard Group Sequential Test (Binomial).
     2. If not stopped: Check Promising Zone.
     3. If Promising: Calc new N (SSR) -> Update Protocol -> Commit Adaptation Log.
