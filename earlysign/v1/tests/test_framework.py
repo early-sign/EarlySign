@@ -176,7 +176,7 @@ The library provides off-the-shelf entities for common trial components.
 >>> engine = BinomialGSTEngine(protocol=protocol)
 >>> # Projection of boundary at 50% info time
 >>> engine.get_boundary_at_look(0, 0.5)
-2.3261743106419153
+2.3261743106419144
 
 ## ES3 Schema
 ### Protocol
