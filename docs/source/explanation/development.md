@@ -1,4 +1,3 @@
-````markdown
 # Contributing to the Project
 
 ## Local setup
