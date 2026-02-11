@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional, Union
 
 import ibis
+import pandas as pd
 from pydantic import BaseModel
 
 from earlysign.schema.ES3.AVI import Protocol
@@ -12,6 +13,7 @@ from earlysign.v1.framework.projector import (
     Projector,
     ProtocolProjector,
 )
+from earlysign.v1.framework.trace import TraceId
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 
@@ -244,3 +246,103 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
         return ProjectionResult(
             data=report, trace=metrics_traced.trace + protocol_traced.trace
         )
+
+class TrajectoryProjector(Projector[pd.DataFrame]):
+    """
+    Projector that reconstructs the history of LookResults from the ledger.
+    Useful for plotting trajectories of e-values or confidence sequences.
+    """
+
+    def project(self, table: ibis.Expr) -> ProjectionResult[pd.DataFrame]:
+        # 1. Filter for LookResult facts
+        results = table.filter(table.type == "LookResult")
+        
+        # 2. Extract and sort by timestamp
+        df = results.order_by(ibis.asc("timestamp")).execute()
+        
+        if df.empty:
+            return ProjectionResult(data=pd.DataFrame(), trace=[])
+
+        # 3. Parse payloads
+        import json
+        def _parse(p):
+            if isinstance(p, str):
+                return json.loads(p)
+            return p
+            
+        payloads = df["payload"].apply(_parse)
+        plot_df = pd.DataFrame(payloads.tolist())
+        
+        # Add timestamp for continuity
+        plot_df["timestamp"] = df["timestamp"].values
+        
+        # Collect trace
+        trace = [TraceId(str(u)) for u in df["uuid"]]
+        
+        return ProjectionResult(data=plot_df, trace=trace)
+
+
+def plot_avi_trajectory(
+    ledger: Any,
+    title: str = "AVI Trajectory",
+    xlabel: str = "Cumulative Sample Size (N)",
+    ylabel: str = "Effect Estimate",
+    ax: Optional[Any] = None,
+    figsize: tuple[int, int] = (10, 6),
+) -> Any:
+    """
+    Plots the history of AVI trajectory and boundaries.
+    
+    This function uses TrajectoryProjector to reconstruct history from the ledger
+    and provides a standard visualization for AVI methods.
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        raise ImportError("matplotlib is required for plot_avi_trajectory")
+
+    from earlysign.v1.framework.session import Session
+    
+    with Session(ledger) as sess:
+        history = sess.read(TrajectoryProjector()).data
+
+    if history.empty:
+        print("No history found in ledger to plot.")
+        return ax
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    # Plot sequence
+    n = history["sample_n"]
+    est = history["trajectory"]
+    bound = history["boundary"]
+
+    # Trajectory
+    ax.plot(n, est, marker="o", label="Estimate", color="#1f77b4", linewidth=2)
+    
+    # Boundaries (if present)
+    if bound.notnull().any():
+        # Confidence Sequence / Boundaries
+        ax.fill_between(
+            n, 
+            est - bound, 
+            est + bound, 
+            color="#1f77b4", 
+            alpha=0.2, 
+            label="Confidence Sequence"
+        )
+        ax.plot(n, est - bound, color="#1f77b4", linestyle="--", alpha=0.5)
+        ax.plot(n, est + bound, color="#1f77b4", linestyle="--", alpha=0.5)
+
+    # Styling
+    ax.axhline(0, color="black", linestyle="-", alpha=0.3)
+    ax.set_title(title, fontweight="bold", fontsize=14)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    
+    return ax

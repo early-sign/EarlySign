@@ -7,14 +7,8 @@ import pandas as pd
 # import matplotlib.pyplot as plt
 # import seaborn as sns
 # from matplotlib.figure import Figure
-if "Figure" not in globals():
-    from typing import Any
-
-    Figure = Any  # Placeholder type hint if matplotlib missing
-
-# For type hinting Axex
-if "Axes" not in globals():
-    Axes = Any
+from matplotlib.axes import Axes
+from numpy.typing import NDArray
 
 import earlysign.schema.ES3.GST as GST
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics.binomial import (
@@ -22,8 +16,12 @@ from earlysign.v1.methods.group_sequential.plan.operating_characteristics.binomi
 )
 from earlysign.v1.methods.group_sequential.plan.operating_characteristics.engines import (
     EvaluationResult,
+    OperatingCharacteristicsEvaluator,
     SimulationCurve,
 )
+
+# Internal rendering defaults
+_DEFAULT_GRID_POINTS = 100
 
 
 class OCCurvePlotter:
@@ -42,13 +40,15 @@ class OCCurvePlotter:
     def plot_oc_curve(
         self,
         results: List[EvaluationResult],
-        x_values: List[float],  # Explicit X-axis mapping
+        x_values: List[float],
         target_effect: Optional[float] = None,
         null_value: float = 0.0,
         effect_label: str = "Effect Size",
-        ax: Optional[Axes] = None,
         plot_options: Optional[Dict[str, Any]] = None,
-        n_max: Optional[int] = None,
+        plot_arm: str = "Total",  # "Total" or specific arm name
+        n_max_per_arm: Optional[Dict[str, int]] = None,
+        n_fixed_per_arm: Optional[Dict[str, float]] = None,
+        ax: Optional[Axes] = None,
     ) -> Axes:
         """Plot ESS vs effect size and overlay stopping distribution."""
         try:
@@ -64,18 +64,138 @@ class OCCurvePlotter:
         sorted_x = np.array([p[0] for p in paired], dtype=float)
         sorted_res = [p[1] for p in paired]
 
-        # Prefer expected_sample_size (actual N) over asn (fraction)
-        ess_values = np.array(
-            [
-                r.expected_sample_size if r.expected_sample_size is not None else r.asn
-                for r in sorted_res
-            ],
-            dtype=float,
+        if ax is None:
+            _, ax = plt.subplots(1, 1, figsize=self.figsize)
+
+        # Determine scale (Total vs Per-Arm)
+        if plot_arm == "Total":
+
+            def get_ess(r: "EvaluationResult") -> float:
+                if r.expected_n_per_arm:
+                    return sum(r.expected_n_per_arm.values())
+                else:
+                    if not n_max_per_arm:
+                        raise ValueError(
+                            "Sample size scaling information (n_max) is required for absolute ESS plots but is missing."
+                        )
+                    return r.asn * sum(n_max_per_arm.values())
+
+            def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
+                times = r.info_times if r.info_times is not None else np.array([1.0])
+                if r.n_per_arm_schedule:
+                    return cast(
+                        NDArray[np.float64],
+                        np.array(list(r.n_per_arm_schedule.values())).sum(axis=0),
+                    )
+                else:
+                    if not n_max_per_arm:
+                        raise ValueError(
+                            "Sample size scaling information (n_max) is required for absolute schedule plots but is missing."
+                        )
+                    return times * sum(n_max_per_arm.values())
+
+            y_label_ext = "(Total)"
+            ref_max_n = sum(n_max_per_arm.values()) if n_max_per_arm else None
+            ref_fixed_n = sum(n_fixed_per_arm.values()) if n_fixed_per_arm else None
+        else:
+
+            def get_ess(r: "EvaluationResult") -> float:
+                if r.expected_n_per_arm and plot_arm in r.expected_n_per_arm:
+                    return r.expected_n_per_arm[plot_arm]
+                else:
+                    if not n_max_per_arm or plot_arm not in n_max_per_arm:
+                        raise ValueError(
+                            f"Sample size scaling information for arm '{plot_arm}' is required but missing."
+                        )
+                    return r.asn * n_max_per_arm[plot_arm]
+
+            def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
+                times = r.info_times if r.info_times is not None else np.array([1.0])
+                if r.n_per_arm_schedule and plot_arm in r.n_per_arm_schedule:
+                    return r.n_per_arm_schedule[plot_arm]
+                else:
+                    if not n_max_per_arm or plot_arm not in n_max_per_arm:
+                        raise ValueError(
+                            f"Sample size scaling information for arm '{plot_arm}' is required but missing."
+                        )
+                    return times * n_max_per_arm[plot_arm]
+
+            y_label_ext = f"({plot_arm})"
+            ref_max_n = (
+                n_max_per_arm[plot_arm]
+                if n_max_per_arm and plot_arm in n_max_per_arm
+                else None
+            )
+            ref_fixed_n = (
+                n_fixed_per_arm[plot_arm]
+                if n_fixed_per_arm and plot_arm in n_fixed_per_arm
+                else None
+            )
+
+        gst_color = self.colors[0]
+        fsd_color = self.colors[1] if len(self.colors) > 1 else "orange"
+
+        # 1. Plot ESS curve
+        ess = [get_ess(r) for r in sorted_res]
+        ax.plot(
+            sorted_x + null_value,
+            ess,
+            label="GST: ESS",
+            color=gst_color,
+            linewidth=2.5,
+            zorder=5,
         )
 
-        created_fig = None
-        if ax is None:
-            created_fig, ax = plt.subplots(1, 1, figsize=self.figsize)
+        # 2. Add Bubbles (Stopping Distribution)
+        for i, r in enumerate(sorted_res):
+            eff = sorted_x[i] + null_value
+            ax.scatter(
+                [eff], [ess[i]], color=gst_color, s=80, edgecolors="black", zorder=7
+            )
+
+            ns = get_schedule(r)
+            probs = r.prob_stop_total
+            for n, p in zip(ns, probs):
+                if p > 0.005:
+                    ax.scatter(
+                        [eff],
+                        [n],
+                        s=p * 1500,
+                        color=gst_color,
+                        alpha=0.15,
+                        edgecolors=gst_color,
+                        zorder=4,
+                    )
+
+        # 3. Draw Reference Markers
+        if ref_max_n is not None:
+            ax.axhline(
+                y=ref_max_n,
+                color="#7f8c8d",
+                linestyle="--",
+                alpha=0.4,
+                linewidth=1,
+                label=f"Max N GST {y_label_ext}",
+            )
+
+        if target_effect is not None and ref_fixed_n is not None:
+            ax.scatter(
+                [target_effect + null_value],
+                [ref_fixed_n],
+                marker="*",
+                color=fsd_color,
+                s=350,
+                edgecolors="black",
+                zorder=8,
+                label=f"Fixed Design {y_label_ext}",
+            )
+            ax.axhline(
+                y=ref_fixed_n,
+                color=fsd_color,
+                linestyle="--",
+                alpha=0.5,
+                linewidth=1.5,
+            )
 
         ax.set_title(
             "Operating Characteristics: ESS vs Effect Size",
@@ -83,151 +203,52 @@ class OCCurvePlotter:
             fontweight="bold",
         )
         ax.set_xlabel(effect_label, fontsize=12)
-        ax.set_ylabel("Expected Sample Size (ESS)", fontsize=12)
-        ax.grid(True, alpha=0.3)
-
-        # Plot ESS curve (GST) using main color
-        gst_color = self.colors[0]
-        fsd_color = self.colors[1] if len(self.colors) > 1 else self.colors[0]
-
-        ax.plot(
-            sorted_x + null_value,
-            ess_values,
-            color=gst_color,
-            linestyle=self.linestyles[0],
-            linewidth=2.5,
-            label="GST: ESS",
-            alpha=0.95,
-        )
-
-        # For each effect point, draw the ESS marker and stopping-distribution of sample sizes
-        if n_max:
-            # Infer schedule: Equidistant as fallback or use result len
-            k = len(sorted_res[0].prob_stop_total)
-            ns = np.linspace(n_max / k, n_max, k).astype(int)  # Approximate
-
-            for i, r in enumerate(sorted_res):
-                eff = sorted_x[i] + null_value
-
-                # ESS Marker
-                val = (
-                    r.expected_sample_size
-                    if r.expected_sample_size is not None
-                    else r.asn
-                )
-                ax.scatter(
-                    [eff],
-                    [val],
-                    color=gst_color,
-                    s=64,
-                    zorder=5,
-                    edgecolors="black",
-                )
-
-                # Bubbles
-                probs = r.prob_stop_total
-
-                for look_idx, p in enumerate(probs):
-                    if p > 0.001:
-                        # Bubble logic
-                        size = max(30, min(300, int(p * 600)))
-                        alpha_val = min(max(p * 0.8, 0.05), 0.9)
-
-                        ax.scatter(
-                            [eff],
-                            [ns[look_idx]],
-                            color=gst_color,
-                            s=size,
-                            alpha=alpha_val,
-                            edgecolors="black",
-                            zorder=6,
-                        )
-
-        # Draw FSD marker
-        if target_effect is not None and n_max is not None:
-            ax.scatter(
-                [target_effect + null_value],
-                [int(n_max)],
-                marker="*",
-                color=fsd_color,
-                s=350,
-                edgecolors="black",
-                zorder=8,
-                label="Fixed Design",
-            )
-            ax.axhline(
-                y=int(n_max),
-                color=fsd_color,
-                linestyle="--",
-                alpha=0.7,
-                linewidth=1.5,
-            )
-
-        ax.legend(loc="best", fontsize=10)
-
-        # Ensure Y starts at 0
-        cur_ylim = ax.get_ylim()
-        ax.set_ylim(bottom=0, top=max(cur_ylim[1], 10))
-
-        if created_fig is not None:
-            created_fig.tight_layout()
+        ax.set_ylabel(f"Expected Sample Size {y_label_ext}", fontsize=12)
+        ax.grid(True, alpha=0.2)
+        ax.legend(loc="lower left", fontsize=10)
+        ax.set_ylim(bottom=0)
 
         return ax
 
 
-def plot_design_characteristics(
+def get_evaluator_for_task(
     protocol: GST.Protocol,
-    effect_sizes: Optional[List[float]] = None,
-    num_points: int = 50,
-    control_proportion: Optional[float] = None,
-) -> Figure:
+    method: Literal["simulation", "numerical_integration"] = "simulation",
+    n_sims: int = 5000,
+    seed: int = 42,
+) -> OperatingCharacteristicsEvaluator:
     """
-    Plots the ASN and sampling distribution for a Group Sequential Design.
+    Factory to get the appropriate OC evaluator based on the protocol task.
     """
-    # Instantiate Binomial Evaluator
-    # We default to numerical_integration for speed in plotting unless specified
-    evaluator = BinomialABOperatingCharacteristicsEvaluator(
-        protocol, method="simulation", n_sims=5000
+
+    task = protocol.task
+    if task.response_type == GST.ResponseType.BINARY:
+        return BinomialABOperatingCharacteristicsEvaluator(
+            protocol, method=method, n_sims=n_sims, seed=seed
+        )
+
+    raise NotImplementedError(
+        f"Operating Characteristics evaluation not implemented for response type: {task.response_type}"
     )
 
-    # Determine Range
-    # If effect_sizes provided, use them.
-    # Otherwise, default range [-50%, 50%] relative lift is standard in BinomialEvaluator
-    # But `plot_design_characteristics` used to do [0, 1.5*target].
 
-    # Let's use the Evaluator's curve generation but control the range to match legacy behavior if needed.
+def plot_design_characteristics(
+    protocol: GST.Protocol,
+    num_points: int = 50,
+    plot_arm: str = "Total",
+    n_sims: int = 5000,
+    seed: int = 42,
+) -> Axes:
+    """Plots the ASN and sampling distribution for a Group Sequential Design."""
+    evaluator = get_evaluator_for_task(
+        protocol, method="simulation", n_sims=n_sims, seed=seed
+    )
 
-    # Legacy behavior for effect_sizes=None: [0, 1.5 * target_drift].
-    # New Evaluator expects Range Min/Max.
+    if not isinstance(evaluator, BinomialABOperatingCharacteristicsEvaluator):
+        raise NotImplementedError(
+            "plot_design_characteristics only supports Binomial tasks currently."
+        )
 
-    # If effect_sizes is None, let's use a standard range that covers the target.
-    # Target Delta is known by Evaluator.
-    pass
-    # We want range [0, 1.5 * target].
-    # But evaluator expects min/max for linspace.
-
-    if effect_sizes is not None:
-        # We need to manually evaluate points?
-        # BinomialEvaluator.evaluate_lift_curve computes on linspace.
-        # We might need `evaluate_points` on BinomialEvaluator?
-        # It currently only has `evaluate_lift_curve`.
-        # However, for plotting, a curve is fine.
-        # If user passed specific points, they probably want those exact points plotted?
-        # The old function allowed that.
-        # Let's skip supporting arbitrary list for now and use range that covers it,
-        # OR add support to BinomialEvaluator?
-        # Actually `evaluate_curve` in base supports sequence.
-        # But BinomialEvaluator.evaluate_lift_curve takes min/max.
-
-        # Extension: Let's just use the default range for now to ensure robustness,
-        # verifying key points like Null and Target are covered.
-        pass
-
-    # Generate Curve
-    # Default range: [-0.2, 0.5] relative lift?
-    # Or [0, 1.5 * target] as relative lift.
-
-    # Let's use a wide enough range.
     curve = evaluator.evaluate_lift_curve(
         range_min=-0.5,
         range_max=1.0,
@@ -240,12 +261,14 @@ def plot_design_characteristics(
         curve.results,
         x_values=list(curve.x_values),
         target_effect=curve.target_x_value,
-        n_max=curve.n_max,
-        effect_label="Relative Lift (%)",  # Matching metric
         null_value=curve.null_x_value if curve.null_x_value else 0.0,
+        effect_label="Relative Lift (%)",
+        plot_arm=plot_arm,
+        n_max_per_arm=curve.n_max_per_arm,
+        n_fixed_per_arm=curve.n_fixed_per_arm,
     )
 
-    return ax.figure
+    return ax
 
 
 def plot_operating_characteristics(
@@ -286,14 +309,16 @@ def plot_operating_characteristics(
 
     # 2. Bubbles
     if show_bubbles and result.n_max:
-        # Infer Ns at looks
-        # We assume result.results[0] has prob arrays of length K
-        k = len(result.results[0].prob_stop_total)
-        ns = np.linspace(result.n_max / k, result.n_max, k).astype(int)
-
         for i, r in enumerate(result.results):
             x_val = x_axis[i]
             probs = r.prob_stop_total
+
+            # Infer Ns at looks: Use precise sizes if available, else approximate
+            if r.sample_sizes is not None:
+                ns = r.sample_sizes
+            else:
+                k = len(probs)
+                ns = np.linspace(result.n_max / k, result.n_max, k).astype(int)
 
             for look_idx, p in enumerate(probs):
                 if p > 0.001:
@@ -351,60 +376,77 @@ def plot_operating_characteristics(
     return ax
 
 
-def overlay_fixed_design_reference(
-    ax: Axes,
-    x_value: float,
-    sample_size: int,
-    label: str = "Fixed Design N",
-    color: str = "gray",
-    marker: str = "*",
-    marker_size: int = 300,
-) -> None:
-    """
-    Overlays a Fixed Design reference point (Star) and horizontal line.
-    """
-    ax.scatter(
-        [x_value],
-        [sample_size],
-        marker=marker,
-        s=marker_size,
-        color=color,
-        label=label,
-        zorder=4,
-    )
-    ax.axhline(sample_size, color=color, linestyle="--", alpha=0.6, zorder=1)
-    ax.legend(loc="best")
-
-
 def generate_operating_characteristics_table(results: SimulationCurve) -> pd.DataFrame:
-    """
-    Generates a summary DataFrame from a SimulationCurve.
-    """
+    """Generates a summary DataFrame from a SimulationCurve with enhanced diagnostics."""
     rows = []
+    n_max_total = results.n_max_total or 0.0
+    n_fixed_total = results.n_fixed_total or 0.0
+
     for i, r in enumerate(results.results):
         x_val = results.x_values[i]
-        ess = r.expected_sample_size if r.expected_sample_size is not None else r.asn
-        rows.append(
-            {
-                "Effect Size": x_val,
-                "Power / Rejection Prob": f"{r.power:.2%}",
-                "ASN (Average Sample Number)": f"{ess:.1f}",
-                "Max Sample Size": results.n_max or 0,
-                "Pct of Max": (
-                    f"{ess/results.n_max:.1%}"
-                    if results.n_max and results.n_max > 0
-                    else "N/A"
-                ),
-            }
+
+        # Use total N for summary
+        ess_total = (
+            (
+                sum(r.expected_n_per_arm.values())
+                if r.expected_n_per_arm
+                else r.asn * n_max_total
+            )
+            if n_max_total > 0
+            else (r.asn if r.asn is not None else 0.0)
         )
+        # Note: If n_max_total is 0, we fallback to showing ASN (0-1) if absolute data is missing.
+        # This is better than guessing 1000.
+
+        # 1. Basic Stats & Parameter
+        row = {
+            "Rel. Lift (%) : (pt - pc) / pc": x_val,
+            "Power / Rejection Prob": f"{r.power:.2%}",
+        }
+
+        # 2. Stopping Breakdown (Placed before ESS as requested)
+        early_stop_prob = (
+            np.sum(r.prob_stop_total[:-1]) if len(r.prob_stop_total) > 1 else 0.0
+        )
+        row["Early Stop Prob"] = f"{early_stop_prob:.1%}"
+        row["Stop (Efficacy)"] = f"{np.sum(r.prob_stop_efficacy):.1%}"
+        row["Stop (Futility)"] = f"{np.sum(r.prob_stop_futility):.1%}"
+
+        # 3. Total ESS
+        row["Total ESS"] = f"{ess_total:.1f}"
+
+        # 4. Sequential vs Fixed Comparisons
+        if n_fixed_total > 0:
+            row["Fixed N (Ref)"] = f"{n_fixed_total:.1f}"
+            row["ESS / Fixed N (%)"] = f"{ess_total / n_fixed_total:.1%}"
+
+        # 5. Capacity / Max N (Placed right after Efficiency)
+        if n_max_total > 0:
+            row["ESS / Max (%)"] = f"{ess_total / n_max_total:.1%}"
+            row["Max N (Total)"] = f"{n_max_total:.1f}"
+
+        # 6. Risk metrics
+        if n_fixed_total > 0 and r.n_per_arm_schedule and r.prob_stop_total is not None:
+            total_n_schedule = np.zeros_like(r.prob_stop_total)
+            for arm_schedule in r.n_per_arm_schedule.values():
+                total_n_schedule += arm_schedule
+            exceed_mask = total_n_schedule > (n_fixed_total + 1e-6)
+            prob_exceed = np.sum(r.prob_stop_total[exceed_mask])
+            row["Prob > Fixed N"] = f"{prob_exceed:.1%}"
+
+        rows.append(row)
+
     return pd.DataFrame(rows)
 
 
 def visualize_protocol_design(
     protocol: GST.Protocol,
-    effect_sizes: Optional[List[float]] = None,
+    effect_sizes: List[float],
     plot: bool = True,
     method: Literal["simulation", "numerical_integration"] = "simulation",
+    n_sims: int = 5000,
+    seed: int = 42,
+    plot_arm: str = "Total",
 ) -> Dict[str, Any]:
     """
     Visualizes a given protocol design (Table and Plot).
@@ -414,54 +456,62 @@ def visualize_protocol_design(
         effect_sizes: Specific effect sizes (relative lift %) to evaluate.
         plot: Whether to generate a plot.
         method: Evaluation method.
+        simulation_kwargs: Optional kwargs for simulation (e.g. n_sims, seed).
+        plot_arm: Which arm (or "Total") to plot sample sizes for.
 
     Returns:
         Dictionary with 'summary' (DataFrame) and 'figure' (matplotlib Figure or None).
     """
-    evaluator = BinomialABOperatingCharacteristicsEvaluator(
-        protocol, method=method, n_sims=5000
+    evaluator = get_evaluator_for_task(
+        protocol, method=method, n_sims=n_sims, seed=seed
     )
 
-    # 1. Generate Summary Table (at specific points)
-    if effect_sizes is None:
-        # Default points: Null, 0.5*Target, Target, 1.25*Target
-        target = evaluator.target_delta
-        if evaluator.p_control > 0:
-            target_pct = (target / evaluator.p_control) * 100
-        else:
-            target_pct = 0.0
-        effect_sizes = [0.0, 0.5 * target_pct, target_pct, 1.25 * target_pct]
+    # Point Results for Table and Plot
+    if isinstance(evaluator, BinomialABOperatingCharacteristicsEvaluator):
+        point_results = evaluator.evaluate_lift_at(
+            effect_sizes_pct=effect_sizes,
+            metric_type="relative_lift_pct",
+        )
+    else:
+        # Fallback for future evaluators
+        raise NotImplementedError(
+            f"Explicit point evaluation not implemented for evaluator: {type(evaluator)}"
+        )
 
-    # Map effect sizes to relative lift (fraction) for evaluator
-    lifts = np.array(effect_sizes) / 100.0
-
-    # Evaluate at these points
-    drifts = (lifts * np.sqrt(evaluator.i_max)).tolist()
-    point_results = evaluator.evaluator.evaluate_curve(
-        drifts,
-        info_times=evaluator.info_times,
-        upper_boundaries=cast(np.ndarray, evaluator.upper),
-        lower_boundaries=cast(np.ndarray, evaluator.lower),
-    )
-
-    # Inject context for table generation
-    point_results.x_values = np.array(effect_sizes)  # Use pct for table
-    point_results.n_max = evaluator.n_max
-    for res in point_results.results:
-        if res.expected_sample_size is None:
-            res.expected_sample_size = res.asn * evaluator.n_max
-
+    # Use the evaluated results for the table
     df = generate_operating_characteristics_table(point_results)
 
     # 2. Generate Plot
     fig = None
     if plot:
-        fig = plot_design_characteristics(protocol)
+        plotter = OCCurvePlotter()
+
+        # Update effect label based on task
+        effect_label = "Effect Size"
+        if protocol.task.response_type == GST.ResponseType.BINARY:
+            effect_label = "Rel. Lift (%) : (pt - pc) / pc"
+
+        ax = plotter.plot_oc_curve(
+            point_results.results,
+            x_values=list(point_results.x_values),
+            target_effect=point_results.target_x_value,
+            null_value=(
+                point_results.null_x_value if point_results.null_x_value else 0.0
+            ),
+            effect_label=effect_label,
+            plot_arm=plot_arm,
+            n_max_per_arm=point_results.n_max_per_arm,
+            n_fixed_per_arm=point_results.n_fixed_per_arm,
+        )
+        fig = ax.figure
         try:
             import matplotlib.pyplot as plt
 
             if fig is not None:
-                plt.close(fig)
+                from matplotlib.figure import Figure
+
+                if isinstance(fig, Figure):
+                    plt.close(cast(Any, fig))
         except ImportError:
             pass
 
@@ -501,4 +551,6 @@ def visualize_design_from_params(
         # spending_fn=..., # plan_binomial_ab handles default if None
     )
 
-    return visualize_protocol_design(protocol_obj, plot=plot)
+    return visualize_protocol_design(
+        protocol_obj, effect_sizes=[-10, 0, 10, 20], plot=plot
+    )

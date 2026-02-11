@@ -143,12 +143,121 @@ class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             **kwargs,
         )
 
+    def evaluate_lift_at(
+        self,
+        effect_sizes_pct: List[float],
+        metric_type: Literal[
+            "relative_lift_pct", "absolute_diff_pct"
+        ] = "relative_lift_pct",
+    ) -> SimulationCurve:
+        """Evaluate OC curve at specific relative lift percentages or absolute differences.
+
+        Args:
+            effect_sizes_pct: List of values in percent (e.g., [5.0, 10.0]).
+            metric_type: "relative_lift_pct" (pt-pc)/pc or "absolute_diff_pct" (pt-pc).
+
+        Returns:
+            SimulationCurve with results mapped to the requested metric.
+        """
+        x_values = np.array(effect_sizes_pct, dtype=float)
+
+        if metric_type == "relative_lift_pct":
+            lifts = x_values / 100.0
+            p_treatments = self.p_control * (1 + lifts)
+            deltas = p_treatments - self.p_control
+            null_val = 0.0
+            target_val = (
+                (self.target_delta / self.p_control) * 100
+                if self.p_control > 0
+                else 0.0
+            )
+        elif metric_type == "absolute_diff_pct":
+            deltas = x_values / 100.0
+            null_val = 0.0
+            target_val = self.target_delta * 100
+        else:
+            raise ValueError(f"Unknown metric type: {metric_type}")
+
+        return self._evaluate_lift_from_deltas(
+            deltas, x_values, metric_type, target_val, null_val
+        )
+
+    def _evaluate_lift_from_deltas(
+        self,
+        deltas: np.ndarray,
+        x_values: np.ndarray,
+        metric_type: str,
+        target_val: float,
+        null_val: float,
+    ) -> SimulationCurve:
+        """Internal helper to evaluate curve from health-scale deltas."""
+        from scipy.stats import norm
+
+        # 0. Calculate n_fixed (for equivalent alpha/power at target delta)
+        efficacy = self.protocol.task.efficacy
+        if efficacy is None:
+            raise ValueError("Protocol task missing efficacy requirements.")
+        alpha = efficacy.alpha
+
+        futility = self.protocol.task.futility
+        if futility is None:
+            raise ValueError("Protocol task missing futility requirements.")
+        power = futility.power
+
+        z_alpha = norm.ppf(1 - alpha)
+        z_beta = norm.ppf(power)
+
+        if self.target_delta != 0:
+            i_fixed = ((z_alpha + z_beta) ** 2) / (self.target_delta**2)
+            var_unit = 4 * self.p_control * (1 - self.p_control)
+            n_fixed = i_fixed * var_unit
+        else:
+            n_fixed = None
+
+        # Map to Drifts
+        drifts = deltas * np.sqrt(self.i_max)
+
+        # Evaluate
+        curve = self.evaluator.evaluate_curve(
+            drifts,
+            info_times=self.info_times,
+            upper_boundaries=cast(np.ndarray, self.upper),
+            lower_boundaries=cast(np.ndarray, self.lower),
+        )
+
+        # Inject Domain Context
+        curve.x_values = x_values
+        curve.metric_type = metric_type
+        curve.target_x_value = target_val
+        curve.p_control = self.p_control
+        curve.null_x_value = null_val
+        curve.info_times = self.info_times
+        curve.n_max_per_arm = self.n_max_per_arm
+
+        if n_fixed is not None:
+            n_fixed_arm = n_fixed / self.arms
+            curve.n_fixed_per_arm = {name: n_fixed_arm for name in self.arm_names}
+
+        for res in curve.results:
+            res.expected_n_per_arm = {
+                name: res.asn * self.n_max_per_arm[name] for name in self.arm_names
+            }
+            res.n_per_arm_schedule = {
+                name: self.info_times * self.n_max_per_arm[name]
+                for name in self.arm_names
+            }
+            res.info_times = self.info_times
+
+        return curve
+
     def evaluate_lift_curve(
         self,
         range_min: float = -0.5,  # -50%
         range_max: float = 0.5,  # +50%
         n_points: int = 50,
-        metric_type: str = "relative_lift_pct",
+        metric_type: Literal[
+            "relative_lift_pct", "absolute_diff_pct"
+        ] = "relative_lift_pct",
     ) -> SimulationCurve:
         """Evaluate OC curve over a range of lifts/differences.
 
@@ -187,30 +296,6 @@ class BinomialABOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         else:
             raise ValueError(f"Unknown metric type: {metric_type}")
 
-        # Map to Drifts
-        # drift = delta * sqrt(I_max)
-        drifts = deltas * np.sqrt(self.i_max)
-
-        # Evaluate
-        curve = self.evaluator.evaluate_curve(
-            drifts,
-            info_times=self.info_times,
-            upper_boundaries=cast(np.ndarray, self.upper),
-            lower_boundaries=cast(np.ndarray, self.lower),
+        return self._evaluate_lift_from_deltas(
+            deltas, x_values, metric_type, target_val, null_val
         )
-
-        # Inject Domain Context
-        curve.x_values = x_values
-        curve.metric_type = metric_type
-        curve.n_max = self.n_max
-        curve.p_control = self.p_control
-        curve.null_x_value = null_val
-        curve.target_x_value = target_val
-        curve.p_control = self.p_control
-
-        # Rescale ASN to Sample Size
-        for res in curve.results:
-            if res.expected_sample_size is None:
-                res.expected_sample_size = res.asn * self.n_max
-
-        return curve
