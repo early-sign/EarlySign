@@ -89,7 +89,7 @@ autoapi_type = "python"
 # Restrict autoapi to the package source directory so it doesn't scan the
 # virtualenv or unrelated repository folders. This keeps module names
 # correctly rooted at `earlysign.*` while avoiding .venv recursion.
-autoapi_dirs = ["../.."]
+autoapi_dirs = ["../../earlysign"]
 
 # Keep a conservative ignore list as a safety net
 autoapi_ignore = [
@@ -119,6 +119,13 @@ autoapi_options = [
     "show-module-summary",
 ]
 
+add_module_names = False
+
 autoapi_template_dir = "_templates/autoapi"
 
 autoapi_python_class_content = "both"  # "class", "init"
+
+suppress_warnings = [
+    "autoapi.python_import_resolution",
+    "autodoc.import_object",
+]
