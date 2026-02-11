@@ -6,7 +6,7 @@ operating characteristics using different methods (Monte Carlo, Numerical Integr
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -27,6 +27,21 @@ class EvaluationResult:
     expected_sample_size: Optional[float] = (
         None  # Actual expected sample size if available
     )
+    # Actual expected sample size per arm if available
+    expected_n_per_arm: Optional[Dict[str, float]] = None
+    # Actual look schedule per arm (counts)
+    n_per_arm_schedule: Optional[Dict[str, NDArray[np.float64]]] = None
+    info_times: Optional[NDArray[np.float64]] = None  # Actual look schedule (fractions)
+
+    @property
+    def sample_sizes(self) -> Optional[NDArray[np.float64]]:
+        """Backwards compatibility for total N schedule."""
+        if self.n_per_arm_schedule is None:
+            return None
+        return cast(
+            Optional[NDArray[np.float64]],
+            np.array(list(self.n_per_arm_schedule.values())).sum(axis=0),
+        )
 
     @property
     def total_prob_stop(self) -> float:
@@ -41,9 +56,24 @@ class SimulationCurve:
     results: List[EvaluationResult]
     metric_type: str = "drift"  # Context label
     n_max: Optional[int] = None
-    null_x_value: Optional[float] = None
     target_x_value: Optional[float] = None
     p_control: Optional[float] = None
+    info_times: Optional[NDArray[np.float64]] = None
+    n_max_per_arm: Optional[Dict[str, int]] = None
+    n_fixed_per_arm: Optional[Dict[str, float]] = None
+    null_x_value: Optional[float] = None  # For plotting null references
+
+    @property
+    def n_max_total(self) -> Optional[int]:
+        if self.n_max_per_arm is None:
+            return None
+        return sum(self.n_max_per_arm.values())
+
+    @property
+    def n_fixed_total(self) -> Optional[float]:
+        if self.n_fixed_per_arm is None:
+            return None
+        return sum(self.n_fixed_per_arm.values())
 
 
 class StatisticalProcess(ABC):
