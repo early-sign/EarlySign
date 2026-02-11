@@ -45,7 +45,7 @@ class OCCurvePlotter:
         null_value: float = 0.0,
         effect_label: str = "Effect Size",
         plot_options: Optional[Dict[str, Any]] = None,
-        plot_arm: str = "Total",  # "Total" or specific arm name
+        arms_to_plot: Optional[List[str]] = None,  # List of arm names or "Total"
         n_max_per_arm: Optional[Dict[str, int]] = None,
         n_fixed_per_arm: Optional[Dict[str, float]] = None,
         ax: Optional[Axes] = None,
@@ -67,135 +67,128 @@ class OCCurvePlotter:
         if ax is None:
             _, ax = plt.subplots(1, 1, figsize=self.figsize)
 
-        # Determine scale (Total vs Per-Arm)
-        if plot_arm == "Total":
+        # Determine which targets to plot
+        available_arms = []
+        if results and results[0].expected_n_per_arm:
+            available_arms = list(results[0].expected_n_per_arm.keys())
 
-            def get_ess(r: "EvaluationResult") -> float:
-                if r.expected_n_per_arm:
-                    return sum(r.expected_n_per_arm.values())
-                else:
-                    if not n_max_per_arm:
-                        raise ValueError(
-                            "Sample size scaling information (n_max) is required for absolute ESS plots but is missing."
-                        )
-                    return r.asn * sum(n_max_per_arm.values())
-
-            def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
-                times = r.info_times if r.info_times is not None else np.array([1.0])
-                if r.n_per_arm_schedule:
-                    return cast(
-                        NDArray[np.float64],
-                        np.array(list(r.n_per_arm_schedule.values())).sum(axis=0),
-                    )
-                else:
-                    if not n_max_per_arm:
-                        raise ValueError(
-                            "Sample size scaling information (n_max) is required for absolute schedule plots but is missing."
-                        )
-                    return times * sum(n_max_per_arm.values())
-
-            y_label_ext = "(Total)"
-            ref_max_n = sum(n_max_per_arm.values()) if n_max_per_arm else None
-            ref_fixed_n = sum(n_fixed_per_arm.values()) if n_fixed_per_arm else None
+        if arms_to_plot is None:
+            # Default: Everything available
+            targets = ["Total"] + available_arms
         else:
+            targets = arms_to_plot
 
-            def get_ess(r: "EvaluationResult") -> float:
-                if r.expected_n_per_arm and plot_arm in r.expected_n_per_arm:
-                    return r.expected_n_per_arm[plot_arm]
-                else:
-                    if not n_max_per_arm or plot_arm not in n_max_per_arm:
-                        raise ValueError(
-                            f"Sample size scaling information for arm '{plot_arm}' is required but missing."
+        for i, target in enumerate(targets):
+            color = self.colors[i % len(self.colors)]
+            linestyle = self.linestyles[0] if target == "Total" else self.linestyles[(i + 1) % len(self.linestyles)]
+
+            if target == "Total":
+                get_ess = lambda r: (
+                    sum(r.expected_n_per_arm.values())
+                    if r.expected_n_per_arm
+                    else (
+                        r.asn * sum(n_max_per_arm.values())
+                        if n_max_per_arm
+                        else (r.expected_sample_size or r.asn)
+                    )
+                )
+
+                def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
+                    times = r.info_times if r.info_times is not None else np.array([1.0])
+                    if r.n_per_arm_schedule:
+                        return cast(
+                            NDArray[np.float64],
+                            np.array(list(r.n_per_arm_schedule.values())).sum(axis=0),
                         )
-                    return r.asn * n_max_per_arm[plot_arm]
+                    return times * sum(n_max_per_arm.values()) if n_max_per_arm else times
 
-            def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
-                times = r.info_times if r.info_times is not None else np.array([1.0])
-                if r.n_per_arm_schedule and plot_arm in r.n_per_arm_schedule:
-                    return r.n_per_arm_schedule[plot_arm]
-                else:
-                    if not n_max_per_arm or plot_arm not in n_max_per_arm:
-                        raise ValueError(
-                            f"Sample size scaling information for arm '{plot_arm}' is required but missing."
-                        )
-                    return times * n_max_per_arm[plot_arm]
+                ref_max_n = sum(n_max_per_arm.values()) if n_max_per_arm else None
+                ref_fixed_n = sum(n_fixed_per_arm.values()) if n_fixed_per_arm else None
+            else:
+                arm_name = target
+                get_ess = lambda r: (
+                    r.expected_n_per_arm[arm_name]
+                    if r.expected_n_per_arm and arm_name in r.expected_n_per_arm
+                    else (
+                        r.asn * n_max_per_arm[arm_name]
+                        if n_max_per_arm and arm_name in n_max_per_arm
+                        else r.asn
+                    )
+                )
 
-            y_label_ext = f"({plot_arm})"
-            ref_max_n = (
-                n_max_per_arm[plot_arm]
-                if n_max_per_arm and plot_arm in n_max_per_arm
-                else None
-            )
-            ref_fixed_n = (
-                n_fixed_per_arm[plot_arm]
-                if n_fixed_per_arm and plot_arm in n_fixed_per_arm
-                else None
-            )
+                def get_schedule(r: "EvaluationResult") -> NDArray[np.float64]:
+                    times = r.info_times if r.info_times is not None else np.array([1.0])
+                    if r.n_per_arm_schedule and arm_name in r.n_per_arm_schedule:
+                        return r.n_per_arm_schedule[arm_name]
+                    return times * n_max_per_arm[arm_name] if (n_max_per_arm and arm_name in n_max_per_arm) else times
 
-        gst_color = self.colors[0]
-        fsd_color = self.colors[1] if len(self.colors) > 1 else "orange"
+                ref_max_n = n_max_per_arm[arm_name] if (n_max_per_arm and arm_name in n_max_per_arm) else None
+                ref_fixed_n = n_fixed_per_arm[arm_name] if (n_fixed_per_arm and arm_name in n_fixed_per_arm) else None
 
-        # 1. Plot ESS curve
-        ess = [get_ess(r) for r in sorted_res]
-        ax.plot(
-            sorted_x + null_value,
-            ess,
-            label="GST: ESS",
-            color=gst_color,
-            linewidth=2.5,
-            zorder=5,
-        )
-
-        # 2. Add Bubbles (Stopping Distribution)
-        for i, r in enumerate(sorted_res):
-            eff = sorted_x[i] + null_value
-            ax.scatter(
-                [eff], [ess[i]], color=gst_color, s=80, edgecolors="black", zorder=7
+            # 1. Plot ESS curve
+            ess = [get_ess(r) for r in sorted_res]
+            ax.plot(
+                sorted_x + null_value,
+                ess,
+                label=f"ESS ({target})",
+                color=color,
+                linestyle=linestyle,
+                linewidth=2.5,
+                zorder=5,
             )
 
-            ns = get_schedule(r)
-            probs = r.prob_stop_total
-            for n, p in zip(ns, probs):
-                if p > 0.005:
+            # 2. Add Bubbles (Stopping Distribution) - only for "Total" or if single target to avoid clutter
+            if target == "Total" or len(targets) == 1:
+                bubble_color = color
+                for j, r in enumerate(sorted_res):
+                    eff = sorted_x[j] + null_value
                     ax.scatter(
-                        [eff],
-                        [n],
-                        s=p * 1500,
-                        color=gst_color,
-                        alpha=0.15,
-                        edgecolors=gst_color,
-                        zorder=4,
+                        [eff], [ess[j]], color=bubble_color, s=80, edgecolors="black", zorder=7
                     )
 
-        # 3. Draw Reference Markers
-        if ref_max_n is not None:
-            ax.axhline(
-                y=ref_max_n,
-                color="#7f8c8d",
-                linestyle="--",
-                alpha=0.4,
-                linewidth=1,
-                label=f"Max N GST {y_label_ext}",
-            )
+                    ns = get_schedule(r)
+                    probs = r.prob_stop_total
+                    for n, p in zip(ns, probs):
+                        if p > 0.005:
+                            ax.scatter(
+                                [eff],
+                                [n],
+                                s=p * 1500,
+                                color=bubble_color,
+                                alpha=0.15,
+                                edgecolors=bubble_color,
+                                zorder=4,
+                            )
 
-        if target_effect is not None and ref_fixed_n is not None:
-            ax.scatter(
-                [target_effect + null_value],
-                [ref_fixed_n],
-                marker="*",
-                color=fsd_color,
-                s=350,
-                edgecolors="black",
-                zorder=8,
-                label=f"Fixed Design {y_label_ext}",
-            )
-            ax.axhline(
-                y=ref_fixed_n,
-                color=fsd_color,
-                linestyle="--",
-                alpha=0.5,
-                linewidth=1.5,
-            )
+            # 3. Draw Reference Markers
+            if ref_max_n is not None:
+                ax.axhline(
+                    y=ref_max_n,
+                    color=color,
+                    linestyle="--",
+                    alpha=0.3,
+                    linewidth=1,
+                    label=f"Max N ({target})",
+                )
+
+            if target_effect is not None and ref_fixed_n is not None:
+                ax.scatter(
+                    [target_effect + null_value],
+                    [ref_fixed_n],
+                    marker="*",
+                    color=color,
+                    s=350,
+                    edgecolors="black",
+                    zorder=8,
+                    label=f"Fixed Design ({target})",
+                )
+                ax.axhline(
+                    y=ref_fixed_n,
+                    color=color,
+                    linestyle=":",
+                    alpha=0.4,
+                    linewidth=1.5,
+                )
 
         ax.set_title(
             "Operating Characteristics: ESS vs Effect Size",
@@ -203,9 +196,9 @@ class OCCurvePlotter:
             fontweight="bold",
         )
         ax.set_xlabel(effect_label, fontsize=12)
-        ax.set_ylabel(f"Expected Sample Size {y_label_ext}", fontsize=12)
+        ax.set_ylabel("Expected Sample Size", fontsize=12)
         ax.grid(True, alpha=0.2)
-        ax.legend(loc="lower left", fontsize=10)
+        ax.legend(loc="upper left", bbox_to_anchor=(1, 1), fontsize=9)
         ax.set_ylim(bottom=0)
 
         return ax
@@ -235,7 +228,7 @@ def get_evaluator_for_task(
 def plot_design_characteristics(
     protocol: GST.Protocol,
     num_points: int = 50,
-    plot_arm: str = "Total",
+    arms_to_plot: Optional[List[str]] = None,
     n_sims: int = 5000,
     seed: int = 42,
 ) -> Axes:
@@ -263,7 +256,7 @@ def plot_design_characteristics(
         target_effect=curve.target_x_value,
         null_value=curve.null_x_value if curve.null_x_value else 0.0,
         effect_label="Relative Lift (%)",
-        plot_arm=plot_arm,
+        arms_to_plot=arms_to_plot,
         n_max_per_arm=curve.n_max_per_arm,
         n_fixed_per_arm=curve.n_fixed_per_arm,
     )
@@ -446,7 +439,7 @@ def visualize_protocol_design(
     method: Literal["simulation", "numerical_integration"] = "simulation",
     n_sims: int = 5000,
     seed: int = 42,
-    plot_arm: str = "Total",
+    arms_to_plot: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Visualizes a given protocol design (Table and Plot).
@@ -499,7 +492,7 @@ def visualize_protocol_design(
                 point_results.null_x_value if point_results.null_x_value else 0.0
             ),
             effect_label=effect_label,
-            plot_arm=plot_arm,
+            arms_to_plot=arms_to_plot,
             n_max_per_arm=point_results.n_max_per_arm,
             n_fixed_per_arm=point_results.n_fixed_per_arm,
         )
