@@ -27,7 +27,7 @@ Examples:
     >>>
     >>> # Design CS
     >>> protocol = template.design(
-    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
     ...     alpha=0.05,
     ...     variance=0.25, # Max variance for Bernoulli
     ...     sides="two",
@@ -36,7 +36,7 @@ Examples:
     >>> template.set_protocol(protocol)
     >>>
     >>> # Update
-    >>> batch = [ArmData(n=50, success=10, arm="C"), ArmData(n=50, success=15, arm="T")]
+    >>> batch = [ArmData(n=50, success=10, arm="control"), ArmData(n=50, success=15, arm="treatment")]
     >>> template.update(batch)
 """
 

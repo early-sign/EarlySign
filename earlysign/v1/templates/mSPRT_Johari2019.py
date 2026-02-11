@@ -23,7 +23,7 @@ Examples:
     >>> # Design mSPRT (Binomial)
     >>> template = BinomialJohari2019Template(ledger)
     >>> protocol = template.design(
-    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
     ...     alpha=0.05,
     ...     tau=0.1,  # Mixing parameter ~ MDE
     ...     sides="two"
@@ -31,7 +31,7 @@ Examples:
     >>> template.set_protocol(protocol)
     >>>
     >>> # Update with data
-    >>> batch = [ArmData(n=100, success=20, arm="C"), ArmData(n=100, success=30, arm="T")]
+    >>> batch = [ArmData(n=100, success=20, arm="control"), ArmData(n=100, success=30, arm="treatment")]
     >>> template.update(batch)
     >>>
     >>> # Check Report

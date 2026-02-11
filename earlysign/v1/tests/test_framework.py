@@ -149,13 +149,13 @@ The library provides off-the-shelf entities for common trial components.
 ...     name="Example Trial",
 ...     task=GST.TaskSpec(
 ...         kind="group_sequential",
-...         arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
+...         arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
 ...         response_type=GST.ResponseType.BINARY,
 ...         efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...         hypotheses=GST.HypothesisSpec(
 ...             h_null_description="p_t <= p_c", h_alt_description="p_t > p_c",
 ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.2, "T": 0.3})
+...             target_effect=GST.BinaryEffectSize(proportions={"control": 0.2, "treatment": 0.3})
 ...         )
 ...     ),
 ...     method=GST.MethodSpec(
@@ -176,7 +176,7 @@ The library provides off-the-shelf entities for common trial components.
 >>> engine = BinomialGSTEngine(protocol=protocol)
 >>> # Projection of boundary at 50% info time
 >>> engine.get_boundary_at_look(0, 0.5)
-2.326174307166874
+2.3261743106419153
 
 ## ES3 Schema
 ### Protocol
@@ -190,13 +190,13 @@ Templates provide a high-level API for running standard trial designs.
 ## GST Design, Backtest, Run, Report
 >>> template = BinomialABTemplate(ledger)
 >>> task = BinomialABTaskSpec(
-...     arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
+...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
 ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
 ...     futility=GST.FutilityRequirement(power=0.8),
 ...     hypotheses=GST.HypothesisSpec(
 ...         h_null_description="p_t <= p_c", h_alt_description="p_t > p_c",
 ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-...         target_effect=GST.BinaryEffectSize(proportions={"C": 0.2, "T": 0.3})
+...         target_effect=GST.BinaryEffectSize(proportions={"control": 0.2, "treatment": 0.3})
 ...     )
 ... )
 >>> # Design
@@ -206,7 +206,7 @@ Templates provide a high-level API for running standard trial designs.
 ... )
 >>> template.set_protocol(protocol)
 >>> # Update & Report
->>> batch = [ArmData(n=100, success=25, arm="C"), ArmData(n=100, success=35, arm="T")]
+>>> batch = [ArmData(n=100, success=25, arm="control"), ArmData(n=100, success=35, arm="treatment")]
 >>> template.update(batch)
 >>> report = template.report_progress()
 >>> report['status']

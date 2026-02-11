@@ -16,14 +16,14 @@ Examples:
     ...     name="Test Protocol",
     ...     task=GST.TaskSpec(
     ...         kind="group_sequential",
-    ...         arms=ES3_BASE.TwoArmComparison(control_arm_name="C", treatment_arm_name="T"),
+    ...         arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
     ...         response_type=GST.ResponseType.BINARY,
     ...         efficacy=GST.EfficacyRequirement(alpha=0.025),
     ...         futility=GST.FutilityRequirement(power=0.9),
     ...         hypotheses=GST.HypothesisSpec(
     ...             h_null_description="H0", h_alt_description="H1",
     ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-    ...             target_effect=GST.BinaryEffectSize(proportions={"C": 0.1, "T": 0.15})
+    ...             target_effect=GST.BinaryEffectSize(proportions={"control": 0.1, "treatment": 0.15})
     ...         )
     ...     ),
     ...     method=GST.MethodSpec(
