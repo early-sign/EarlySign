@@ -11,6 +11,7 @@ Reference:
 Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
+    >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.v1.templates.mSPRT_Johari2019 import BinomialJohari2019Template
     >>> from earlysign.schema.ES3.Binomial import ArmData
     >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
@@ -34,10 +35,17 @@ Examples:
     >>> batch = [ArmData(n=100, success=20, arm="control"), ArmData(n=100, success=30, arm="treatment")]
     >>> template.update(batch)
     >>>
-    >>> # Check Report
+    >>> # Check Report (Batch 1)
     >>> res = template.report_progress()
-    >>> res["status"]
-    'continue'
+    >>> print(f"Diff: {res['trajectory']:.3f}, Boundary: {res['boundary']:.3f}, Status: {res['status']}")
+    Diff: 0.100, Boundary: 0.192, Status: continue
+    >>>
+    >>> # Update with more data (Batch 2)
+    >>> batch2 = [ArmData(n=1000, success=200, arm="control"), ArmData(n=1000, success=300, arm="treatment")]
+    >>> template.update(batch2)
+    >>> res2 = template.report_progress()
+    >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.3f}, Status: {res2['status']}")
+    Diff: 0.100, Boundary: 0.057, Status: stop_efficacy
 """
 
 from typing import Any, Dict, List, Literal

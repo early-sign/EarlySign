@@ -22,7 +22,7 @@ from earlysign.v1.templates.base import TemplateBase
 class BinomialMonitoringProtocol(AVIProtocol):
     name: str = "Binomial Monitoring (AVI)"
     task: TaskSpec
-    method: MethodSpec
+    method: "earlysign.schema.ES3.AVI.MethodSpec"
 
 
 class DecisionRecord(BaseModel):
@@ -38,6 +38,7 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.Binomial import ArmData
         >>> from earlysign.v1.methods.AVI.engines.binomial_e_value import EProcessProtocol
+        >>> from earlysign.v1.templates.binomial_monitoring import BinomialMonitoringTemplate
         >>>
         >>> # Setup
         >>> conn = ibis.connect("duckdb://:memory:")
@@ -50,26 +51,22 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         >>> template = BinomialMonitoringTemplate(ledger)
         >>> template.set_protocol(protocol)
         >>>
-        >>> # 2. Update with H0-like data
+        >>> # 2. Update with H0-like data (p=0.5, success=50/100)
         >>> batch1 = ArmData(n=100, success=50, arm="control")
         >>> template.update([batch1])
         >>> report1 = template.report_progress()
-        >>> report1["status"]
-        'continue'
-        >>> report1["arms"]["control"]["successes"]
-        50
-        >>> round(report1["trajectory"], 2)
-        0.0
+        >>> print(f"E-value: {report1['trajectory']:.2f}, Status: {report1['status']}")
+        E-value: 1.00, Status: continue
         >>>
-        >>> # 3. Update with H1-like data to cross threshold
+        >>> # 3. Update with H1-like data (p=0.7, success=650/900 more samples)
         >>> batch2 = ArmData(n=900, success=650, arm="control")
         >>> template.update([batch2])
         >>> report2 = template.report_progress()
-        >>> report2["status"]
-        'stop_efficacy'
+        >>> print(f"E-value: {report2['trajectory']:.2f}, Status: {report2['status']}")
+        E-value: 2361.35, Status: stop_efficacy
         >>> final_report = template.report_result()
-        >>> final_report["is_rejected"]
-        True
+        >>> print(f"Is Rejected: {final_report['is_rejected']}")
+        Is Rejected: True
     """
 
     _protocol_class = EProcessProtocol

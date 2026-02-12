@@ -26,6 +26,7 @@ Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Template
+    >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.schema.ES3.Binomial import ArmData
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>>
@@ -61,10 +62,12 @@ Examples:
     >>>
     >>> # 5. Verify status and SSR trigger
     >>> report = template.report_progress()
-    >>> report["status"]
-    'continue'
-    >>> report["max_sample_size"]
-    3194
+    >>> print(f"Status: {report['status']}, Initial Max N: {protocol.method.stopping_policy.timer.max_sample_size}")
+    Status: continue, Initial Max N: 1314
+    >>> print(f"Adapted Max N: {report['max_sample_size']}")
+    Adapted Max N: 3194
+    >>> # Note: The increase reflects SSR to recover power based on interim results.
+    >>> # (CP was calculated and found to be in the promising zone).
 """
 
 import warnings

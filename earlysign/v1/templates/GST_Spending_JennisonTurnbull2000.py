@@ -35,8 +35,13 @@ Example:
     >>> stream = BinomialStream(n_per_batch=1000, arms={"control": 0.20, "treatment": 0.25}, n_max=13000, seed=42)
     >>> for batch in stream:
     ...     template.update(batch)
-    ...     if template.report_progress()['status'] != DecisionStatus.CONTINUE_:
+    ...     prog = template.report_progress()
+    ...     if prog['is_milestone']:
+    ...         print(f"Look {prog['look']}: Z={prog['z_stat']:.3f}, Boundary={prog['efficacy_boundary']:.3f}")
+    ...     if prog['status'] != DecisionStatus.CONTINUE_:
     ...         break
+    Look 1: Z=2.072, Boundary=2.306
+    Look 2: Z=3.450, Boundary=1.921
     >>>
     >>> final = template.report_result()
     >>> print(f"Final Status: {final['final_status']}")
@@ -148,6 +153,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         Examples:
             >>> import numpy as np
             >>> from earlysign.v1.templates.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Template
+            >>> import earlysign.schema.ES3.Base as ES3_BASE
             >>>
             >>> # --- Example 1: Standard Equidistant Schedule ---
             >>> protocol_eq = JennisonTurnbull2000Template.design(

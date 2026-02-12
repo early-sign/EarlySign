@@ -51,6 +51,7 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
     Examples:
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
+        >>> import earlysign.schema.ES3.Base as ES3_BASE
         >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import BinomialKurennoy2025Template, BinomialKurennoy2025TaskSpec
         >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
 
@@ -76,8 +77,10 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
 
         >>> # 3. Report
         >>> res = template.report_progress()
-        >>> res["status"]
-        'continue'
+        >>> print(f"Evidence (Trajectory): {res['trajectory']:.4f}")
+        Evidence (Trajectory): 0.5000
+        >>> print(f"Boundary: {res['boundary']:.4f}, Status: {res['status']}")
+        Boundary: 5.7624, Status: continue
     """
 
     _protocol_class = Protocol
@@ -191,6 +194,7 @@ class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
     Examples:
         >>> import ibis
         >>> from earlysign.core.ledger import Ledger
+        >>> import earlysign.schema.ES3.Base as ES3_BASE
         >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import ContinuousKurennoy2025Template, ContinuousKurennoy2025TaskSpec
         >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 

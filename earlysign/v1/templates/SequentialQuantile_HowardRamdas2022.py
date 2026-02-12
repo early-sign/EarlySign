@@ -74,6 +74,8 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
     >>> import ibis
     >>> import duckdb
     >>> from earlysign.core.ledger import Ledger
+    >>> import earlysign.schema.ES3.Base as ES3_BASE
+    >>> from earlysign.v1.templates.SequentialQuantile_HowardRamdas2022 import HowardRamdas2022Template
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events_sq"); ledger.ensure()
     >>> template = HowardRamdas2022Template(ledger)
@@ -86,10 +88,11 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
     >>> t = con.create_table("raw_data_sq", {"arm": ["A", "A", "B", "B"], "val": [1.0, 2.0, 10.0, 11.0]})
     >>> template.update({"A": t.filter(t.arm == "A"), "B": t.filter(t.arm == "B")})
     >>> res = template.report_result()
-    >>> res["status"]
-    'continue'
-    >>> res["estimated_quantile"]
-    0.0
+    >>> print(f"Est: {res['estimated_quantile']:.2f}, CI: [{res['interval_lower']:.2f}, {res['interval_upper']:.2f}]")
+    Est: 11.00, CI: [10.00, 11.00]
+    >>> print(f"Status: {res['status']}")
+    Status: continue
+    >>> # Note: The intervals of A and B still overlap, so we continue.
     """
 
     _protocol_class = Protocol

@@ -44,6 +44,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
         >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+        >>> import earlysign.schema.ES3.Base as ES3_BASE
         >>> from earlysign.v1.templates.AsymptoticConfidenceSequence_Maharaj2023 import AsymptoticConfidenceSequenceMaharaj2023Template
         >>>
         >>> # Setup ledger
@@ -70,8 +71,8 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         ...          BinomialArmData(n=800, success=480, arm="treatment")]
         >>> template.update(batch)
         >>> report = template.report_progress()
-        >>> report["status"]
-        'stop_efficacy'
+        >>> print(f"Diff: {report['trajectory']:.3f}, Boundary: {report['boundary']:.3f}, Status: {report['status']}")
+        Diff: 0.100, Boundary: 0.053, Status: stop_efficacy
     """
 
     _protocol_class = Protocol
