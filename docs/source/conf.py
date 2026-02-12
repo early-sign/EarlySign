@@ -50,6 +50,9 @@ try:
             "use_issues_button": True,
             "path_to_docs": "docs/source",
             "launch_buttons": {"colab_url": "https://colab.research.google.com"},
+            "show_navbar_depth": 1,
+            "navigation_depth": 10,
+            "max_navbar_depth": 10,
         }
     else:
         html_theme = "alabaster"
@@ -121,7 +124,11 @@ autoapi_options = [
 
 add_module_names = False
 
-autoapi_template_dir = "_templates/autoapi"
+napoleon_use_ivar = True
+
+autoapi_template_dir = os.path.join(os.path.dirname(__file__), "_templates", "autoapi")
+
+autoapi_keep_files = True
 
 autoapi_python_class_content = "both"  # "class", "init"
 

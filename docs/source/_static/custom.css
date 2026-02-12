@@ -40,6 +40,7 @@ table tbody tr:nth-child(odd):hover,
 .bd-content div.cell_output table.dataframe tbody tr:nth-child(odd):hover {
   background-color: var(--pst-color-table-row-zebra-low-bg) !important;
 }
+
 .table tbody tr:nth-child(2n):hover,
 table tbody tr:nth-child(2n):hover,
 .bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:nth-child(2n):hover,
@@ -54,15 +55,42 @@ html[data-theme=dark] .bd-content .nboutput .output_area .jp-RenderedHTMLCommon 
 html[data-theme=dark] .bd-content div.cell_output table.dataframe tbody tr:hover {
   background-image: none !important;
 }
+
 html[data-theme=dark] .table tbody tr:nth-child(odd):hover,
 html[data-theme=dark] table tbody tr:nth-child(odd):hover,
 html[data-theme=dark] .bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:nth-child(odd):hover,
 html[data-theme=dark] .bd-content div.cell_output table.dataframe tbody tr:nth-child(odd):hover {
   background-color: var(--pst-color-table-row-zebra-low-bg) !important;
 }
+
 html[data-theme=dark] .table tbody tr:nth-child(2n):hover,
 html[data-theme=dark] table tbody tr:nth-child(2n):hover,
 html[data-theme=dark] .bd-content .nboutput .output_area .jp-RenderedHTMLCommon table.dataframe tbody tr:nth-child(2n):hover,
 html[data-theme=dark] .bd-content div.cell_output table.dataframe tbody tr:nth-child(2n):hover {
   background-color: var(--pst-color-table-row-zebra-high-bg) !important;
+}
+
+/* Breadcrumbs style for API Reference pages */
+.autoapi-breadcrumbs {
+  margin-top: -1.2em;
+  margin-bottom: 2.0em;
+  font-size: 0.9em;
+  color: var(--pst-color-text-muted);
+  font-family: var(--pst-font-family-monospace);
+}
+
+.autoapi-breadcrumbs a {
+  color: var(--pst-color-link) !important;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.autoapi-breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.autoapi-breadcrumbs span {
+  margin: 0 0.4em;
+  color: var(--pst-color-text-muted);
+  font-size: 0.8em;
 }
