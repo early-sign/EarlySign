@@ -22,7 +22,7 @@ from earlysign.v1.templates.base import TemplateBase
 class BinomialMonitoringProtocol(AVIProtocol):
     name: str = "Binomial Monitoring (AVI)"
     task: TaskSpec
-    method: "earlysign.schema.ES3.AVI.MethodSpec"
+    method: MethodSpec
 
 
 class DecisionRecord(BaseModel):
