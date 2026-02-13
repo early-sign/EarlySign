@@ -108,7 +108,7 @@ Analysis within a session is protected from concurrent writes.
 
 >>> with Session(ledger) as sess:
 ...     # 1. Write something outside (directly to ledger) AFTER session started
-...     ledger.insert(data=MyDecision(action="EXTERNAL_B", reason="outside"))
+...     _ = ledger.insert(data=MyDecision(action="EXTERNAL_B", reason="outside"))
 ...     # 2. Projection within session only sees records up to the horizon (e.g., 'STOP')
 ...     res = sess.read(DecisionProjector())
 >>> res.data
