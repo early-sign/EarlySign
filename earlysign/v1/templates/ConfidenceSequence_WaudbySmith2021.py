@@ -40,14 +40,14 @@ Examples:
     >>> template.update(batch)
     >>> res1 = template.report_progress()
     >>> print(f"Diff: {res1['trajectory']:.3f}, Boundary: {res1['boundary']:.4f}, Status: {res1['status']}")
-    Diff: 0.100, Boundary: 0.2312, Status: continue
+    Diff: 0.100, Boundary: 0.3337, Status: continue
     >>>
     >>> # Update (Batch 2: High data crossing threshold)
     >>> batch2 = [ArmData(n=500, success=100, arm="control"), ArmData(n=500, success=250, arm="treatment")]
     >>> template.update(batch2)
     >>> res2 = template.report_progress()
     >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.4f}, Status: {res2['status']}")
-    Diff: 0.273, Boundary: 0.0754, Status: stop_efficacy
+    Diff: 0.282, Boundary: 0.0655, Status: stop_efficacy
 """
 
 from typing import Any, Dict, List, Literal

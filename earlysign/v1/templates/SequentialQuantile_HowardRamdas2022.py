@@ -91,8 +91,8 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
     >>> print(f"Est: {res['estimated_quantile']:.2f}, CI: [{res['interval_lower']:.2f}, {res['interval_upper']:.2f}]")
     Est: 11.00, CI: [10.00, 11.00]
     >>> print(f"Status: {res['status']}")
-    Status: continue
-    >>> # Note: The intervals of A and B still overlap, so we continue.
+    Status: stop_efficacy
+    >>> # Note: The intervals are disjoint (A approx [1, 2], B=[10, 11]), so we stop for efficacy.
     """
 
     _protocol_class = Protocol

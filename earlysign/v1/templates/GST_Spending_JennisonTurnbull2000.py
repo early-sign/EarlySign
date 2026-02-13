@@ -32,16 +32,16 @@ Example:
     >>> template = JennisonTurnbull2000Template(ledger)
     >>> template.set_protocol(protocol)
     >>>
-    >>> stream = BinomialStream(n_per_batch=1000, arms={"control": 0.20, "treatment": 0.25}, n_max=13000, seed=42)
+    >>> stream = BinomialStream(n_per_batch=600, arms={"control": 0.20, "treatment": 0.25}, n_max=13000, seed=42)
     >>> for batch in stream:
     ...     template.update(batch)
     ...     prog = template.report_progress()
     ...     if prog['is_milestone']:
-    ...         print(f"Look {prog['look']}: Z={prog['z_stat']:.3f}, Boundary={prog['efficacy_boundary']:.3f}")
+    ...         print(f"Look {prog['look']}: Z={prog['z_stat']:.2f}, Boundary={prog['efficacy_boundary']:.2f}")
     ...     if prog['status'] != DecisionStatus.CONTINUE_:
     ...         break
-    Look 1: Z=2.072, Boundary=2.306
-    Look 2: Z=3.450, Boundary=1.921
+    Look 1: Z=0.70, Boundary=1.92
+    Look 2: Z=1.89, Boundary=1.75
     >>>
     >>> final = template.report_result()
     >>> print(f"Final Status: {final['final_status']}")

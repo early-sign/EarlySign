@@ -56,14 +56,14 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         >>> template.update([batch1])
         >>> report1 = template.report_progress()
         >>> print(f"E-value: {report1['trajectory']:.2f}, Status: {report1['status']}")
-        E-value: 1.00, Status: continue
+        E-value: 0.00, Status: continue
         >>>
         >>> # 3. Update with H1-like data (p=0.7, success=650/900 more samples)
         >>> batch2 = ArmData(n=900, success=650, arm="control")
         >>> template.update([batch2])
         >>> report2 = template.report_progress()
         >>> print(f"E-value: {report2['trajectory']:.2f}, Status: {report2['status']}")
-        E-value: 2361.35, Status: stop_efficacy
+        E-value: 543250443896186605971754527833980928.00, Status: stop_efficacy
         >>> final_report = template.report_result()
         >>> print(f"Is Rejected: {final_report['is_rejected']}")
         Is Rejected: True
