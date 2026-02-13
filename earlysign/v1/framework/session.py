@@ -82,7 +82,6 @@ class Session:
         self._session_commit_buffer = []
         self.horizon_ts = None
 
-
     @property
     def trace(self) -> List[TraceId]:
         """Returns the current implicit session trace."""
