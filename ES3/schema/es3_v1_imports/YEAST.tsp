@@ -49,6 +49,8 @@ namespace Log {
     
     /** The calculated trajectory value (Your Evidence). */
     trajectory: float64;
+    /** The raw difference (sum of successes/values difference) before normalization. */
+    raw_difference?: float64;
 
     /** The efficacy boundary at this look. */
     efficacy_boundary?: float64;

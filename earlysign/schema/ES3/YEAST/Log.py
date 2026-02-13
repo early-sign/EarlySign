@@ -35,6 +35,10 @@ class LookResult(Log):
     trajectory: float = Field(
         ..., description="The calculated trajectory value (Your Evidence)."
     )
+    raw_difference: float | None = Field(
+        None,
+        description="The raw difference (sum of successes/values difference) before normalization.",
+    )
     efficacy_boundary: float | None = Field(
         None, description="The efficacy boundary at this look."
     )
