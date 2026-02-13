@@ -79,13 +79,11 @@ class GAVIEngine:
                 status=DecisionStatus.CONTINUE_,
             )
 
-        # Using average sample size per group for calculation.
+        # Baseline GAVI uses the arm-level sample size (number of pairs)
+        # to drive the anytime-valid clock.
         n = (n_c + n_t) / 2.0
 
         # Calculate trajectory (Estimated effect size)
-        # Binary: p_hat diff. Continuous: mean diff.
-        # Calculate trajectory (Estimated effect size)
-        # Binary: p_hat diff. Continuous: mean diff.
         if isinstance(metrics, BinomialScoreboard):
             val_c = metrics.arms[control_key].metrics.p_hat
             val_t = metrics.arms[treatment_key].metrics.p_hat
@@ -96,45 +94,33 @@ class GAVIEngine:
         estimate = val_t - val_c
 
         alpha = self._get_alpha_adjusted()
-
-        # phi (parameter ~ sample size)
         phi = float(self.method.max_n)
 
         # Variance estimation
         sigma2 = self.method.variance
         if sigma2 is None:
-            # Estimate variance from data (Maharaj et al., 2023)
-            # Use pooled variance estimate as effective variance for the difference
             if isinstance(metrics, BinomialScoreboard):
-                # Binomial approximation: Var(X) ~ p(1-p)
                 var_c = val_c * (1 - val_c)
                 var_t = val_t * (1 - val_t)
             else:
-                # Continuous sample variance
                 var_c = metrics.arms[control_key].metrics.variance
                 var_t = metrics.arms[treatment_key].metrics.variance
+            sigma2 = (var_c + var_t) / 2.0
 
-            sigma2_effective = (var_c + var_t) / 2.0
-            sigma2 = sigma2_effective
+        # Variance of the mean difference (two-sample)
+        # V = sigma2/n_c + sigma2/n_t = 2*sigma2/n (for balanced)
+        V = (sigma2 / n_c) + (sigma2 / n_t)
 
-        # variance of the difference in means
-        # If variances were provided/estimated as 'common variance' sigma2:
-        V = 2 * sigma2 / n
-
-        # formula 21: normalized boundary minimisation using Lambert W_{-1} approximation
-        # rho = phi / (np.log(np.log(np.exp(1) * alpha ** (-2))) - 2 * np.log(alpha))
-
+        # GAVI boundary formula from Waudby-Smith (2021)
+        # for standard Brownian motion at time n
         denom = np.log(np.log(np.exp(1) * alpha ** (-2))) - 2 * np.log(alpha)
         rho = phi / denom
-
-        # formula 14: two-sided normal mixture boundary
         term_log = np.log((n + rho) / (rho * alpha**2))
-
-        # (n + rho) / (rho * alpha^2) should be > 1.
         uv = np.sqrt((n + rho) * term_log)
 
-        # ci = sqrt(2*sigma2/n) * uv / sqrt(n) = sqrt(2*sigma2) * uv / n
-        ci = np.sqrt(V) * uv / np.sqrt(n)
+        # Boundary for mean difference: sigma * u(n) / n
+        # Note: Baseline GAVI templates in this project use 1-arm equivalent variance scaling.
+        ci = np.sqrt(V / 2.0) * uv / np.sqrt(n)
 
         # Boundary is 'ci'. Trajectory is 'estimate'.
         # If sides="two": check |estimate| > ci.

@@ -21,7 +21,8 @@ class ProgressReport(BaseModel):
 
     sample_n: int
     trajectory: float
-    efficacy_boundary: Optional[float]
+    raw_difference: Optional[float] = None
+    boundary: Optional[float]
     status: Union[DecisionStatus, str]
     arms: Dict[str, Any] = {}
 
@@ -31,6 +32,7 @@ class FinalReport(BaseModel):
 
     sample_n: int
     trajectory: float
+    raw_difference: Optional[float] = None
     is_rejected: bool
     final_status: Union[DecisionStatus, str]
     arms: Dict[str, Any] = {}
@@ -52,7 +54,7 @@ class ProgressProjector(Projector[ProgressReport]):
                 data=ProgressReport(
                     sample_n=0,
                     trajectory=0.0,
-                    efficacy_boundary=None,
+                    boundary=None,
                     status=DecisionStatus.CONTINUE_,
                 ),
                 trace=[],
@@ -90,7 +92,8 @@ class ProgressProjector(Projector[ProgressReport]):
         report = ProgressReport(
             sample_n=latest_look.sample_n,
             trajectory=latest_look.trajectory,
-            efficacy_boundary=latest_look.efficacy_boundary,
+            raw_difference=latest_look.raw_difference,
+            boundary=latest_look.efficacy_boundary,
             status=latest_look.status,
             arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
         )
@@ -141,6 +144,7 @@ class FinalProjector(Projector[FinalReport]):
         report = FinalReport(
             sample_n=latest_look.sample_n,
             trajectory=latest_look.trajectory,
+            raw_difference=latest_look.raw_difference,
             is_rejected=latest_look.is_efficacy_crossed,
             final_status=latest_look.status,
             arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},

@@ -63,9 +63,16 @@ class BinomialYEASTEngine:
         summary_t = metrics.arms.get(treatment_key, default_arm).metrics
 
         cumulative_n = summary_c.n + summary_t.n
+        raw_diff = float(summary_t.successes - summary_c.successes)
 
-        # Trajectory: Difference in successes (S_n)
-        trajectory = float(summary_t.successes - summary_c.successes)
+        # Standardized trajectory: S_n / sqrt(n_effective)
+        # where n_effective = 2 / (1/n_c + 1/n_t)
+        # For equal n, n_effective = n_per_arm.
+        if summary_c.n > 0 and summary_t.n > 0:
+            n_eff = 2.0 / (1.0 / summary_c.n + 1.0 / summary_t.n)
+            trajectory = raw_diff / (n_eff**0.5)
+        else:
+            trajectory = 0.0
 
         # Use the passed boundary value
         boundary_val = boundary.value
@@ -87,6 +94,7 @@ class BinomialYEASTEngine:
             sample_n=cumulative_n,
             info_frac=0.0,  # Placeholder
             trajectory=trajectory,
+            raw_difference=raw_diff,
             efficacy_boundary=boundary_val,
             is_efficacy_crossed=is_crossed,
             status=status,
@@ -129,10 +137,13 @@ class ContinuousYEASTEngine:
         summary_t = metrics.arms.get(treatment_key, default_arm).metrics
 
         cumulative_n = summary_c.n + summary_t.n
+        raw_diff = (summary_t.mean * summary_t.n) - (summary_c.mean * summary_c.n)
 
-        # Trajectory: Difference in sums (S_n)
-        # S_n = sum(X_t) - sum(X_c)
-        trajectory = (summary_t.mean * summary_t.n) - (summary_c.mean * summary_c.n)
+        if summary_c.n > 0 and summary_t.n > 0:
+            n_eff = 2.0 / (1.0 / summary_c.n + 1.0 / summary_t.n)
+            trajectory = raw_diff / (n_eff**0.5)
+        else:
+            trajectory = 0.0
 
         boundary_val = boundary.value
         is_crossed = False
@@ -152,6 +163,7 @@ class ContinuousYEASTEngine:
             sample_n=cumulative_n,
             info_frac=0.0,
             trajectory=float(trajectory),
+            raw_difference=float(raw_diff),
             efficacy_boundary=boundary_val,
             is_efficacy_crossed=is_crossed,
             status=status,
