@@ -36,7 +36,8 @@ Examples:
     >>> # Insert with only remaining bound attribute applied
     >>> class MyEvent:
     ...     def __init__(self, a): self.a = a
-    >>> _ = reduced_ledger.insert(data=MyEvent(a=1))
+    >>> reduced_ledger.insert(data=MyEvent(a=1))
+    UUID(...)
     >>>
     >>> # Some backends differ in JSON key equality semantics; materialize and check in Python.
     >>> df = ledger.t.execute()
@@ -205,7 +206,8 @@ class Ledger:
             >>> experiment_ledger = base.bind(experiment_id="exp1", env="prod")
             >>> class MyEvent:
             ...     def __init__(self, a): self.a = a
-            >>> _ = experiment_ledger.insert(data=MyEvent(a=1))
+            >>> experiment_ledger.insert(data=MyEvent(a=1))
+            UUID(...)
             >>> df = base.t.execute()
             >>> any(rec["attributes"].get("experiment_id") == "exp1" for rec in df.to_dict("records"))
             True
@@ -258,7 +260,7 @@ class Ledger:
         data: Any,
         attributes: Mapping[str, Any] | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> None:
+    ) -> uuidlib.UUID:
         """Insert one row (append-only). Auto-fills uuid and timestamp.
 
         The current scope attributes (`self.attributes`) are ALWAYS merged into `attributes`.
@@ -279,6 +281,10 @@ class Ledger:
         """
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
+
+        # 0. Generate UUID
+        row_uuid = uuidlib.uuid4()
+        row_uuid_str = row_uuid.hex
 
         # Derive type from data
         payload_type = data.__class__.__name__
@@ -302,7 +308,7 @@ class Ledger:
 
         ts = datetime.now(timezone.utc)
         row = {
-            "uuid": uuidlib.uuid4().hex,
+            "uuid": row_uuid_str,
             "type": payload_type,
             "payload": payload,
             "attributes": json.dumps(sanitize_for_json(combined_attributes)),
@@ -314,6 +320,8 @@ class Ledger:
             self._insert_bigquery(row)
         else:
             self._insert_ibis(row)
+
+        return row_uuid
 
     def _insert_bigquery(self, row: Dict[str, Any]) -> None:
         """BigQuery SDK insert for robustness with JSON types."""

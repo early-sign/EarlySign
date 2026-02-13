@@ -48,7 +48,7 @@ Examples:
     Diff: 0.100, Boundary: 0.057, Status: stop_efficacy
 """
 
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
@@ -57,7 +57,7 @@ from earlysign.schema.ES3.AVI import (
     Protocol,
     TaskSpec,
 )
-from earlysign.schema.ES3.AVI.Log import LookResult
+from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
 from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
 from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 from earlysign.v1.framework.projector import ProtocolProjector

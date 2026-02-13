@@ -110,7 +110,9 @@ class Entity(BaseEntity[T], ABC):
         >>> ledger.ensure()
         >>>
         >>> ledger.insert(Increment(value=1))
+        UUID(...)
         >>> ledger.insert(Increment(value=2))
+        UUID(...)
         >>>
         >>> # 3. First Session: Read and Snapshot
         >>> with Session(ledger) as sess:
@@ -130,6 +132,7 @@ class Entity(BaseEntity[T], ABC):
         >>>
         >>> # 4. Second Session: Resume from Snapshot
         >>> ledger.insert(Increment(value=10))
+        UUID(...)
         >>> with Session(ledger) as sess2:
         ...     counter2 = CounterEntity(identity="my_counter")
         ...     result2 = sess2.read(counter2)

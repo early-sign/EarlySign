@@ -13,6 +13,7 @@ Design Philosophy (Event Sourcing):
     3. Clear separation: Write = record events, Read = reconstruct state and facts with lineage
 """
 
+import uuid as uuidlib
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel
@@ -46,7 +47,7 @@ class Writer:
         identity: Optional[str] = None,
         trace: Optional[List[TraceId]] = None,
         attributes: Optional[Dict[str, Any]] = None,
-    ) -> None:
+    ) -> uuidlib.UUID:
         """Record a Pydantic model into the Ledger with its scientific trace.
 
         Note:
@@ -70,7 +71,7 @@ class Writer:
         if attributes:
             combined_attributes.update(attributes)
 
-        session.ledger.insert(
+        return session.ledger.insert(
             data=record,
             attributes=combined_attributes,
             metadata={"trace": [str(t) for t in target_trace]},
@@ -83,9 +84,8 @@ class Writer:
         func: Callable[..., Any],
         *args: Any,
         **kwargs: Any,
-    ) -> None:
-        """
-        Executes a function and commits its result with scientific lineage.
+    ) -> uuidlib.UUID:
+        """Executes a function and commits its result with scientific lineage.
 
         The trace is extracted from Traced inputs or defaults to session.trace.
         This method intentionally returns nothing - if you need the result,
@@ -112,7 +112,7 @@ class Writer:
         else:
             record = result_data
 
-        session.ledger.insert(
+        return session.ledger.insert(
             data=record,
             attributes={"is_result": True},
             metadata={"trace": [str(t) for t in target_trace]},

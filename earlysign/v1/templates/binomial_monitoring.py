@@ -81,23 +81,18 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         from earlysign.v1.framework.projector import ProtocolProjector
         from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 
-        if batch:
-            with Session(self.ledger) as sess:
+        # 1. Unified Session
+        with Session(self.ledger) as sess:
+            if batch:
                 for item in batch:
                     sess.commit(item, trace=[])
 
-        with Session(self.ledger) as sess:
-            # 1. Read Protocol
+            # 2. Read Protocol & Metrics
             protocol = sess.read(ProtocolProjector(EProcessProtocol)).data
-
-            # 2. Read Metrics
             metrics = sess.read(BinomialScoreboard(identity="metrics"))
 
-            # 3. Run Engine
+            # 3. Run Engine & Commit
             engine = BinomialEValueEngine(protocol)
-
-            # 4. Commit LookResult
-            # Note: We can use sess.call_and_commit or just sess.commit(engine.run(metrics.data))
             look_result = engine.run(metrics.data)
             sess.commit(look_result)
 

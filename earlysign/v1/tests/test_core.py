@@ -25,7 +25,10 @@ Doctests
 ...     dict(type="", payload={"x":"A"}, attributes={"kind":"k1"}),
 ...     dict(type="", payload={"x":"B"}, attributes={"kind":"k2"}),
 ... ]
->>> for row in rows: _ = ledger.insert(data=row["payload"], attributes=row["attributes"])
+>>> ledger.insert(data=rows[0]["payload"], attributes=rows[0]["attributes"])
+UUID(...)
+>>> ledger.insert(data=rows[1]["payload"], attributes=rows[1]["attributes"])
+UUID(...)
 >>> got = df.select(df.payload["x"].name("x")).execute().to_dict("records")
 >>> sorted(v["x"] for v in got)
 ['A', 'B']
@@ -80,10 +83,11 @@ DatabaseTable: events
 True
 
 # Insert more data and verify JSON access works
->>> _ = L.insert(
+>>> L.insert(
 ...   data={"nA":150,"mA":60,"nB":140,"mB":48},
 ...   attributes={"kind":"observation","batch":3}
 ... )
+UUID(...)
 >>> q2 = (
 ...     L.t.filter(L.t.type == "dict")
 ...     .order_by(L.t.timestamp.desc())
@@ -96,7 +100,8 @@ True
 
 # Simple verification that basic operations work
 >>> len_before = len(L.t.execute())
->>> _ = L.insert(data={"test": True}, attributes={"kind": "test"})
+>>> L.insert(data={"test": True}, attributes={"kind": "test"})
+UUID(...)
 >>> len_after = len(L.t.execute())
 >>> len_after > len_before
 True

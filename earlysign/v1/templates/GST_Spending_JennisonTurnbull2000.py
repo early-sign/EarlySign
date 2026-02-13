@@ -248,11 +248,13 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         Ingest -> [Read -> Analyze -> Decide -> Snapshot].
         """
         # 1. Ingest Data
-        if batch:
-            with Session(self.ledger) as sess:
+        with Session(self.ledger) as sess:
+            if batch:
                 # Validate arm names
-                protocol = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
-                arms = protocol.data.task.arms
+                protocol_traced = sess.read(
+                    ProtocolProjector(JennisonTurnbull2000Protocol)
+                )
+                arms = protocol_traced.data.task.arms
                 if isinstance(arms, ES3_BASE.TwoArmComparison):
                     allowed_arms = {arms.control_arm_name, arms.treatment_arm_name}
                 else:
@@ -267,19 +269,18 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                         )
                     sess.commit(item, trace=[])
 
-        # 2. Analysis & Trigger check
-        with Session(self.ledger) as sess:
+            # 2. Analysis & Trigger check
             # Reconstruct Protocol from Ledger
-            protocol = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
+            protocol_traced = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
             metrics = sess.read(Scoreboard(identity="metrics"))
             trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
 
             # 3. Check if an analysis is "due"
-            trigger = get_pending_look_trigger(protocol, metrics, trajectory)
+            trigger = get_pending_look_trigger(protocol_traced, metrics, trajectory)
 
             if trigger:
                 # 4. Engine Execution - compute result using trajectory history
-                engine = BinomialGSTEngine(protocol.data)
+                engine = BinomialGSTEngine(protocol_traced.data)
 
                 sess.call_and_commit(
                     LookResult,
@@ -314,7 +315,9 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             self.update(batch if isinstance(batch, list) else [batch])
             prog = self.report_progress()
             if prog.get("status") != DecisionStatus.CONTINUE_:
-                return self.report_result()
+                break
+
+        return self.report_result()
 
         return self.report_result()
 

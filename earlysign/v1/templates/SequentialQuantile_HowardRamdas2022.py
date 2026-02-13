@@ -203,6 +203,11 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
                 sess.commit(metrics, identity=arm_id)
 
             # 3. Decision Logic
+            # Re-read protocol
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+            arms = protocol.task.arms
+            arm_ids = [arms.control_arm_name, arms.treatment_arm_name]
+
             scoreboard_projector = SequentialQuantileScoreboard(arm_ids)
             scoreboard_traced = sess.read(scoreboard_projector)
 

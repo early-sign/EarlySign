@@ -195,7 +195,9 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         >>>
         >>> # 1. Insert initial data (Looks 1 and 2)
         >>> ledger.insert(Add(look=1, amount=10), attributes={"look": 1})
+        UUID(...)
         >>> ledger.insert(Add(look=2, amount=20), attributes={"look": 2})
+        UUID(...)
         >>>
         >>> # 2. First Read
         >>> with Session(ledger) as sess:
@@ -211,6 +213,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         >>>
         >>> # 3. Add incremental data (Look 3)
         >>> ledger.insert(Add(look=3, amount=5), attributes={"look": 3})
+        UUID(...)
         >>>
         >>> # 4. Second Read (Resume)
         >>> with Session(ledger) as sess2:

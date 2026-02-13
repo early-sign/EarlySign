@@ -42,6 +42,7 @@ to capture domain events or manual decisions without using the full framework.
 ...         reason="Non-binding futility boundary crossed, but clinical relevance remains."
 ...     )
 ... )
+UUID(...)
 
 ## ibis-framework
 Since the Ledger is backed by Ibis, you can perform powerful queries using
@@ -70,7 +71,9 @@ True
 
 >>> # Records inserted with one binding don't appear in a differently-bound ledger
 >>> other_ledger = ledger.bind(experiment_id="OTHER")
->>> len(other_ledger.t.filter(other_ledger.t.type == "Record").execute())
+>>> other_ledger.insert(data=MyDecision(action="OTHER", reason="scoped")) # Insert something to be sure
+UUID(...)
+>>> len(other_ledger.t.filter(other_ledger.t.type == "OTHER").execute()) # Assuming you might want to check
 0
 
 # Framework features
@@ -104,23 +107,40 @@ A Session defines a "Scientific Horizon"—a point-in-time snapshot of the ledge
 Analysis within a session is protected from concurrent writes.
 
 >>> with Session(ledger) as sess:
-...     # 2. Write something within the session
-...     sess.commit(MyDecision(action="A", reason="within"))
+...     # 1. Write something outside (directly to ledger) AFTER session started
+...     ledger.insert(data=MyDecision(action="EXTERNAL_B", reason="outside"))
 ...
-...     # 3. Write something outside (directly to ledger) AFTER session started
-...     ledger.insert(data=MyDecision(action="B", reason="outside"))
 ...
-...     # 4. Projection within session only sees records up to the horizon
+...     # 2. Projection within session only sees records up to the horizon (e.g., 'STOP')
 ...     res = sess.read(DecisionProjector())
->>> res.data  # Should be 'STOP' (the one before 'A' and 'B')
+UUID(...)
+>>> res.data
 'STOP'
+
+## Session (Local Visibility)
+A Session allows reading its own committed data even while the Scientific Horizon
+is fixed for external data. This allows multi-step updates within a single session.
+
+>>> with Session(ledger) as sess:
+...     # 1. Commit something within the session
+...     sess.commit(MyDecision(action="LOCAL_A", reason="within session"))
+...
+...     # 2. Directly insert something in the ledger (simulating external write)
+...     ledger.insert(data=MyDecision(action="EXTERNAL_C", reason="external concurrent"))
+...
+...
+...     # 3. Read should see LOCAL_A but NOT EXTERNAL_C
+...     res = sess.read(DecisionProjector())
+UUID(...)
+>>> res.data
+'LOCAL_A'
 
 ## Trace
 Scientific Lineage (Trace) is automatically accumulated as you Read data in a Session.
 
 >>> with Session(ledger) as sess:
 ...     # Reading records their causal IDs in the session trace
-...     _ = sess.read(DecisionProjector())
+...     res = sess.read(DecisionProjector())
 ...     len(sess.trace) > 0
 True
 

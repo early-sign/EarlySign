@@ -209,11 +209,11 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
         from earlysign.v1.methods.binomial import Scoreboard
 
         # 1. Ingest
-        if batch:
-            with Session(self.ledger) as sess:
+        with Session(self.ledger) as sess:
+            if batch:
                 # Validate arm names
-                protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
-                arms = protocol.task.arms
+                protocol_traced = sess.read(ProtocolProjector(CuiHungWang1999Protocol))
+                arms = protocol_traced.data.task.arms
                 if not isinstance(arms, ES3_BASE.TwoArmComparison):
                     raise NotImplementedError(
                         f"GST on {type(arms).__name__} is not yet supported in this template. "
@@ -230,14 +230,13 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
                         )
                     sess.commit(item, trace=[])
 
-        # 2. Analysis
-        with Session(self.ledger) as sess:
-            protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol))
+            # 2. Analysis
+            protocol_traced = sess.read(ProtocolProjector(CuiHungWang1999Protocol))
             metrics = sess.read(Scoreboard(identity="metrics"))
             history = sess.read(InterimAnalyses(identity="interim_analyses"))
 
             # 3. Standard GSD Engine
-            engine = BinomialGSTEngine(protocol.data)
+            engine = BinomialGSTEngine(protocol_traced.data)
 
             sess.call_and_commit(
                 LookResult,
@@ -246,8 +245,7 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
                 history=history,
             )
 
-        # 3. Adaptation Logic (only if continuing)
-        with Session(self.ledger) as sess:
+            # 4. Adaptation Logic (only if continuing)
             # Re-read to get the committed LookResult (with its status).
             trajectory = sess.read(InterimAnalyses(identity="interim_analyses")).data
             if not trajectory:
@@ -256,9 +254,10 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
             look_result = trajectory[-1][1]
 
             if look_result.status == DecisionStatus.CONTINUE_:
-                protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
                 adapter = PromisingZoneAdaptationEngine()
-                adaptation_log = adapter.check_and_adapt(look_result, protocol)
+                adaptation_log = adapter.check_and_adapt(
+                    look_result, protocol_traced.data
+                )
 
                 sess.commit(adaptation_log)
 
@@ -269,7 +268,7 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
                 ):
                     # APPLY ADAPTATION: Update Protocol
                     new_protocol = adapter.replan_sample_size(
-                        protocol, adaptation_log, look_result
+                        protocol_traced.data, adaptation_log, look_result
                     )
                     sess.commit(new_protocol)
 

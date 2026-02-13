@@ -5,6 +5,7 @@ A session provides the context for executing projections and recording
 events within a consistent 'scientific horizon'.
 """
 
+import uuid as uuidlib
 from typing import Any, Callable, Dict, List, Optional, Self, Type, TypeVar
 
 from pydantic import BaseModel
@@ -37,6 +38,7 @@ class Session:
         self.ledger = ledger
         self.horizon_ts: Optional[Any] = None  # Captured lazily
         self._session_trace: List[TraceId] = []
+        self._session_committed_uuids: List[uuidlib.UUID] = []
 
     def __enter__(self) -> Self:
         # Capture Scientific Horizon at session start
@@ -60,7 +62,11 @@ class Session:
         """
         if self.horizon_ts is None:
             return self.ledger.t
-        return self.ledger.t.filter(self.ledger.t.timestamp <= self.horizon_ts)
+        t = self.ledger.t
+        return t.filter(
+            (t.timestamp <= self.horizon_ts)
+            | (t.uuid.isin([u.hex for u in self._session_committed_uuids]))
+        )
 
     def read(self, projector: Projector[T]) -> Traced[T]:
         """Hydrate data using a Projector and accumulate its lineage.
@@ -74,7 +80,12 @@ class Session:
         filtered_data = self.ledger.t
         if self.horizon_ts is not None:
             filtered_data = filtered_data.filter(
-                self.ledger.t.timestamp <= self.horizon_ts
+                (self.ledger.t.timestamp <= self.horizon_ts)
+                | (
+                    self.ledger.t.uuid.isin(
+                        [u.hex for u in self._session_committed_uuids]
+                    )
+                )
             )
 
         # Execute projection
@@ -109,13 +120,14 @@ class Session:
         if attributes:
             combined_attributes.update(attributes)
 
-        Writer.commit(
+        uuid = Writer.commit(
             self,
             record,
             identity=identity,
             trace=target_trace,
             attributes=combined_attributes,
         )
+        self._session_committed_uuids.append(uuid)
 
     def call_and_commit(
         self,
@@ -138,7 +150,7 @@ class Session:
             arg_traces = extract_traces(*args, **kwargs)
             target_trace = arg_traces if arg_traces is not None else self.trace
 
-        Writer.call_and_commit(
+        uuid = Writer.call_and_commit(
             self,
             result_type,
             func,
@@ -146,3 +158,4 @@ class Session:
             trace=target_trace,
             **kwargs,
         )
+        self._session_committed_uuids.append(uuid)

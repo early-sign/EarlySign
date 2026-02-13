@@ -79,8 +79,9 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
         >>> res = template.report_progress()
         >>> print(f"Evidence (Trajectory): {res['trajectory']:.4f}")
         Evidence (Trajectory): 0.5000
+        >>> # Boundary is calculated on the fly by the engine if not in protocol
         >>> print(f"Boundary: {res['boundary']:.4f}, Status: {res['status']}")
-        Boundary: 5.7624, Status: continue
+        Boundary: 30.9898, Status: continue
     """
 
     _protocol_class = Protocol
@@ -132,13 +133,11 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
         Update the experiment with a batch of data.
         """
         # 1. Ingest Data
-        if batch:
-            with Session(self.ledger) as sess:
+        with Session(self.ledger) as sess:
+            if batch:
                 for item in batch:
                     sess.commit(item, trace=[])
 
-        # 2. Analysis
-        with Session(self.ledger) as sess:
             # Reconstruct Protocol from Ledger
             protocol = sess.read(ProtocolProjector(Protocol)).data
 
@@ -148,12 +147,14 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
             # 3. Engine Execution
             engine = BinomialYEASTEngine(protocol)
 
-            # Extract current boundary if available in protocol sequence
-            # For simplicity, we use None or first value if available.
-            # Real implementation would index by look count.
+            # Extract current boundary if available in protocol sequence, else calculate
             boundary_val = None
             if protocol.method.boundary_sequence:
                 boundary_val = protocol.method.boundary_sequence[0]
+            else:
+                from earlysign.v1.methods.YEAST.boundary import Boundary
+
+                boundary_val = Boundary.calculate(protocol)
 
             boundary = BoundarySchema(value=boundary_val)
 
@@ -262,22 +263,26 @@ class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
         """
         Update the experiment with a batch of data.
         """
-        if batch:
-            with Session(self.ledger) as sess:
+        with Session(self.ledger) as sess:
+            if batch:
                 for item in batch:
                     sess.commit(item, trace=[])
 
-        with Session(self.ledger) as sess:
             # 1. Read State
-            protocol = sess.read(ProtocolProjector(Protocol)).data
+            protocol_traced = sess.read(ProtocolProjector(Protocol))
             metrics = sess.read(ContinuousScoreboard(identity="metrics"))
 
             # 2. Run Engine (YEAST Logic)
-            engine = ContinuousYEASTEngine(protocol)
+            engine = ContinuousYEASTEngine(protocol_traced.data)
 
+            # Extract boundary
             boundary_val = None
-            if protocol.method.boundary_sequence:
-                boundary_val = protocol.method.boundary_sequence[0]
+            if protocol_traced.data.method.boundary_sequence:
+                boundary_val = protocol_traced.data.method.boundary_sequence[0]
+            else:
+                from earlysign.v1.methods.YEAST.boundary import Boundary
+
+                boundary_val = Boundary.calculate(protocol_traced.data)
 
             boundary = BoundarySchema(value=boundary_val)
 
