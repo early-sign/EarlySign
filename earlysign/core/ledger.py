@@ -131,7 +131,10 @@ class Ledger:
         Returns:
             A new Ledger instance with the connector set.
         """
-        return cast(Self, Ledger(connector, self.table_name, dict(self.attributes)))
+        return cast(
+            Self,
+            Ledger(connector, self.table_name, dict(self.attributes)),
+        )
 
     def use_default_table(self, name: str = "events") -> Self:
         """Switch to a different physical table name.
@@ -142,7 +145,10 @@ class Ledger:
         Returns:
             A new Ledger instance with the table name set.
         """
-        return cast(Self, Ledger(self.connector, name, dict(self.attributes)))
+        return cast(
+            Self,
+            Ledger(self.connector, name, dict(self.attributes)),
+        )
 
     @property
     def _schema(self) -> sch.Schema:
@@ -255,33 +261,22 @@ class Ledger:
         return t
 
     # --------- write ----------
-    def insert(
+    def prepare_row(
         self,
         data: Any,
         attributes: Mapping[str, Any] | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> uuidlib.UUID:
-        """Insert one row (append-only). Auto-fills uuid and timestamp.
-
-        The current scope attributes (`self.attributes`) are ALWAYS merged into `attributes`.
-
-        Note:
-            This method intentionally does not return anything.
-            In event sourcing all derived state should be obtained
-            by projecting from the ledger via Read, which provides `Traced[T]` with
-            proper lineage.
+    ) -> Dict[str, Any]:
+        """Prepare a row dictionary for insertion, handling serialization and UUIDs.
 
         Args:
-            data: The event data to insert.
-            attributes: Optional additional attributes for this event.
-            metadata: Optional additional metadata for this event.
+            data: The event data.
+            attributes: Optional attributes.
+            metadata: Optional metadata.
 
-        Raises:
-            RuntimeError: If the ledger connector is not set.
+        Returns:
+            A dictionary representing the row to be inserted.
         """
-        if self.connector is None:
-            raise RuntimeError("Ledger connector not set")
-
         # 0. Generate UUID
         row_uuid = uuidlib.uuid4()
         row_uuid_str = row_uuid.hex
@@ -315,15 +310,51 @@ class Ledger:
             "timestamp": ts,
             "metadata": json.dumps(sanitize_for_json(combined_metadata)),
         }
+        return row
+
+    def insert(
+        self,
+        data: Any,
+        attributes: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> uuidlib.UUID:
+        """Insert one row (append-only). Auto-fills uuid and timestamp.
+
+        The current scope attributes (`self.attributes`) are ALWAYS merged into `attributes`.
+
+        Returns:
+            uuidlib.UUID: The UUID of the inserted event.
+        """
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
+
+        row = self.prepare_row(data, attributes, metadata)
 
         if self.connector.name == "bigquery":
-            self._insert_bigquery(row)
+            self._insert_bigquery([row])
         else:
-            self._insert_ibis(row)
+            self._insert_ibis([row])
 
-        return row_uuid
+        return uuidlib.UUID(hex=row["uuid"])
 
-    def _insert_bigquery(self, row: Dict[str, Any]) -> None:
+    def insert_batch(self, rows: list[Dict[str, Any]]) -> None:
+        """Insert multiple rows at once (atomic if backend supports it).
+
+        Args:
+            rows: List of pre-prepared row dictionaries.
+        """
+        if not rows:
+            return
+
+        if self.connector is None:
+            raise RuntimeError("Ledger connector not set")
+
+        if self.connector.name == "bigquery":
+            self._insert_bigquery(rows)
+        else:
+            self._insert_ibis(rows)
+
+    def _insert_bigquery(self, rows: list[Dict[str, Any]]) -> None:
         """BigQuery SDK insert for robustness with JSON types."""
         # Client reference is dynamic on the connector
         client = getattr(self.connector, "client", None)
@@ -335,20 +366,20 @@ class Ledger:
 
         table_id = f"{project_id}.{dataset_id}.{self.table_name}"
 
-        # Convert row to strict format for JSON API
-        api_row = row.copy()
-        # Timestamp must be ISO string
-        if isinstance(api_row["timestamp"], datetime):
-            api_row["timestamp"] = api_row["timestamp"].isoformat()
+        # Convert rows to strict format for JSON API
+        api_rows = []
+        for row in rows:
+            api_row = row.copy()
+            # Timestamp must be ISO string
+            if isinstance(api_row["timestamp"], datetime):
+                api_row["timestamp"] = api_row["timestamp"].isoformat()
+            api_rows.append(api_row)
 
-        # Note: row["payload"], row["attributes"], row["metadata"] are already JSON strings
-        # matching what the BQ SDK expects for JSON columns.
-
-        errors = client.insert_rows_json(table_id, [api_row])
+        errors = client.insert_rows_json(table_id, api_rows)
         if errors:
             raise RuntimeError(f"BigQuery insert failed: {errors}")
 
-    def _insert_ibis(self, row: Dict[str, Any]) -> None:
+    def _insert_ibis(self, rows: list[Dict[str, Any]]) -> None:
         """Standard Ibis insert via memtable."""
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
@@ -364,7 +395,7 @@ class Ledger:
                 metadata=dt.string,
             )
         )
-        mem_table = ibis.memtable([row], schema=insert_schema)
+        mem_table = ibis.memtable(rows, schema=insert_schema)
 
         to_insert = mem_table.select(
             *[mem_table[name].cast(self._schema[name]) for name in self._schema.names]

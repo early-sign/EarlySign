@@ -6,7 +6,6 @@ This module provides a comprehensive introduction to the EarlySign framework thr
 >>> from pydantic import BaseModel
 >>> from earlysign.core.ledger import Ledger
 >>> from earlysign.v1.framework.session import Session
->>> from earlysign.v1.framework.writer import Writer
 >>> from earlysign.v1.framework.projector import ProtocolProjector
 >>> from earlysign.v1.framework.trace import Traced, TraceId
 >>> from earlysign.v1.methods.binomial import Scoreboard
@@ -83,6 +82,7 @@ The Framework provides `Session.commit` to record events with scientific lineage
 
 >>> with Session(ledger) as sess:
 ...    sess.commit(MyDecision(action="STOP", reason="Safety concern"))
+UUID(...)
 
 ## Projector
 Projectors are "State-as-a-Fold" operators. They reconstruct high-level facts
@@ -109,11 +109,8 @@ Analysis within a session is protected from concurrent writes.
 >>> with Session(ledger) as sess:
 ...     # 1. Write something outside (directly to ledger) AFTER session started
 ...     ledger.insert(data=MyDecision(action="EXTERNAL_B", reason="outside"))
-...
-...
 ...     # 2. Projection within session only sees records up to the horizon (e.g., 'STOP')
 ...     res = sess.read(DecisionProjector())
-UUID(...)
 >>> res.data
 'STOP'
 
@@ -124,11 +121,8 @@ is fixed for external data. This allows multi-step updates within a single sessi
 >>> with Session(ledger) as sess:
 ...     # 1. Commit something within the session
 ...     sess.commit(MyDecision(action="LOCAL_A", reason="within session"))
-...
 ...     # 2. Directly insert something in the ledger (simulating external write)
 ...     ledger.insert(data=MyDecision(action="EXTERNAL_C", reason="external concurrent"))
-...
-...
 ...     # 3. Read should see LOCAL_A but NOT EXTERNAL_C
 ...     res = sess.read(DecisionProjector())
 UUID(...)
@@ -151,6 +145,7 @@ Entities are special aggregates with identity. `Entity` supports differential fo
 >>> # Pre-populate data in a separate session so it's visible in the next horizon
 >>> with Session(ledger) as sess:
 ...     sess.commit(ArmData(n=10, success=2, arm="A"))
+UUID(...)
 
 >>> with Session(ledger) as sess:
 ...     state = sess.read(fact)

@@ -21,7 +21,6 @@ These tests verify:
 >>> from earlysign.v1.framework.projector import Projector, ProjectionResult
 >>> from earlysign.v1.framework.session import Session
 >>> from earlysign.v1.framework.trace import Traced, TraceId, extract_traces
->>> from earlysign.v1.framework.writer import Writer
 
 --- Test Models ---
 >>> class Fact(BaseModel):
@@ -94,6 +93,8 @@ True
 >>> with Session(ledger) as sess:
 ...     sess.commit(Fact(val=10), trace=[])
 ...     sess.commit(Fact(val=20), trace=[])
+UUID(...)
+UUID(...)
 
 # Trace comes from Read, not from Commit return values
 >>> with Session(ledger) as sess:
@@ -118,6 +119,7 @@ True
 >>> with Session(ledger) as sess:
 ...     _ = sess.read(FactProjector())  # Populates session.trace
 ...     sess.commit(Result(total=30))  # Uses implicit trace
+UUID(...)
 
 # Verify the Result was committed with trace from the Read
 >>> # Use Ibis to inspect the JSON metadata column
@@ -135,6 +137,7 @@ True
 >>> with Session(ledger) as sess:
 ...     _ = sess.read(FactProjector())  # Populates session.trace with 2 items
 ...     sess.commit(Result(total=99), trace=[])  # Explicit empty trace
+UUID(...)
 
 >>> t = ledger.t
 >>> q = t.filter(t.type == "Result").order_by(t.timestamp.desc()).limit(1)

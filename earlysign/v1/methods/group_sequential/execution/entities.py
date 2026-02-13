@@ -48,6 +48,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     ...                  status="continue")
     >>> with Session(ledger) as sess:
     ...     sess.commit(res, identity="my-trial")
+    UUID(...)
     >>> # Read trajectory back
     >>> with Session(ledger) as sess:
     ...     trajectory = sess.read(analyses)
