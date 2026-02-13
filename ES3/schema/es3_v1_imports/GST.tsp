@@ -268,9 +268,33 @@ model SurvivalEffectSize extends EffectSizeSpecBase {
   event_rate?: float64;
 }
 
+
 /**
- * The "Model": Statistical Assumptions for Inference.
+ * Effect Measure for Binomial comparisons.
  */
+model EffectMeasureBase {
+  kind: string;
+  value: float64;
+}
+
+model AbsoluteDifference extends EffectMeasureBase {
+    kind: "absolute_difference" = "absolute_difference";
+}
+
+model OddsRatio extends EffectMeasureBase {
+    kind: "odds_ratio" = "odds_ratio";
+}
+
+model RelativeRisk extends EffectMeasureBase {
+    kind: "relative_risk" = "relative_risk";
+}
+
+union EffectMeasure {
+  AbsoluteDifference,
+  OddsRatio,
+  RelativeRisk,
+}
+
 /**
  * The "Model": Statistical Assumptions for Inference.
  */

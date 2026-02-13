@@ -53,6 +53,19 @@ class BoundaryFunctionStrategyBase(DecisionStrategyBase):
     """
 
 
+class EffectMeasureBase(BaseModel):
+    """
+    Effect Measure for Binomial comparisons.
+    """
+
+    kind: str
+    value: float
+
+
+class AbsoluteDifference(EffectMeasureBase):
+    kind: Literal["absolute_difference"] = "absolute_difference"
+
+
 class EffectSizeSpecBase(BaseModel):
     """
     Numerical assumptions for the Alternative Hypothesis (H1).
@@ -195,6 +208,10 @@ class OBrienFlemingStrategy(BoundaryFunctionStrategyBase):
     sided: Sided
 
 
+class OddsRatio(EffectMeasureBase):
+    kind: Literal["odds_ratio"] = "odds_ratio"
+
+
 class OneArmEstimatedVariance(BaseModel):
     """
     One-Arm Variance options.
@@ -226,6 +243,15 @@ class Protocol(Protocol_1):
 
     task: TaskSpec = Field(..., description="The GST task specification.")
     method: MethodSpec = Field(..., description="The GST method specification.")
+
+
+class RelativeRisk(EffectMeasureBase):
+    kind: Literal["relative_risk"] = "relative_risk"
+
+
+EffectMeasure = TypeAliasType(
+    "EffectMeasure", AbsoluteDifference | OddsRatio | RelativeRisk
+)
 
 
 class ResponseType(StrEnum):
@@ -354,7 +380,7 @@ class SpendingFunctionType(StrEnum):
 
 class StatisticalModel(BaseModel):
     """
-    The "Model": Statistical Assumptions for Inference.The "Model": Statistical Assumptions for Inference.
+    The "Model": Statistical Assumptions for Inference.
     """
 
     kind: str

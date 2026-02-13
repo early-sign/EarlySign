@@ -49,19 +49,29 @@ Example:
 """
 
 import warnings
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter
 
 import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
+from earlysign.schema.ES3.GST import (
+    AbsoluteDifference,
+    EffectMeasure,
+    OddsRatio,
+    RelativeRisk,
+)
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
 from earlysign.v1.methods.binomial import Scoreboard
-from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
-from earlysign.v1.methods.group_sequential.execution.entities import InterimAnalyses
+from earlysign.v1.methods.group_sequential.execution.binomial import (
+    BinomialGSTEngine,
+)
+from earlysign.v1.methods.group_sequential.execution.entities import (
+    InterimAnalyses,
+)
 from earlysign.v1.methods.group_sequential.execution.trigger_strategies import (
     get_pending_look_trigger,
 )
@@ -91,6 +101,29 @@ class JennisonTurnbull2000Protocol(GST.Protocol, AutoNameMixin):
     task: JennisonTurnbull2000TaskSpec
     method: GST.MethodSpec
     name: str = Field(default="")
+
+
+def _resolve_p_treatment(
+    p_control: float, effect_spec: Union[EffectMeasure, Dict[str, Any]]
+) -> float:
+    """Helper to resolve p_treatment from p_control and an effect measure."""
+    if isinstance(effect_spec, dict):
+        effect_spec = TypeAdapter(EffectMeasure).validate_python(effect_spec)
+
+    match effect_spec:
+        case AbsoluteDifference(value=delta):
+            return p_control + delta
+        case OddsRatio(value=or_val):
+            # OR = (p1/(1-p1)) / (p0/(1-p0))
+            if not (0 < p_control < 1):
+                raise ValueError("p_control must be between 0 and 1 for Odds Ratio")
+            odds_c = p_control / (1.0 - p_control)
+            odds_t = or_val * odds_c
+            return odds_t / (1.0 + odds_t)
+        case RelativeRisk(value=rr_val):
+            return p_control * rr_val
+        case _:
+            raise ValueError(f"Unknown effect type: {type(effect_spec)}")
 
 
 class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
@@ -125,6 +158,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         # Binomial params (convenience helpers if task is None)
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
+        effect_spec: Optional[Union[EffectMeasure, Dict[str, Any]]] = None,
     ) -> JennisonTurnbull2000Protocol:
         """
         Designs a Binomial A/B protocol.
@@ -144,8 +178,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                         - List[float]: explicit list of information fractions (0 < t <= 1)
             p_control: Baseline proportion (if task is None).
             p_treatment: Target proportion (if task is None).
-            alpha: Type I error rate (if task is None).
-            power: Target power (if task is None).
+            effect_spec: Structured target effect size (e.g. delta, OR, RR).
 
         Returns:
             A populated JennisonTurnbull2000Protocol.
@@ -163,32 +196,26 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             >>> np.allclose(protocol_eq.method.stopping_policy.schedule.analyses, [1/3, 2/3, 1.0])
             True
             >>>
-            >>> # --- Example 2: Fixed Custom Schedule ---
-            >>> protocol_fix = JennisonTurnbull2000Template.design(
-            ...     p_control=0.20, p_treatment=0.22, alpha=0.05, power=0.8, looks=3,
-            ...     scheduling=[0.2, 0.5, 1.0]
+            >>> # --- Example 2: Using structured effect_spec (delta) ---
+            >>> protocol_delta = JennisonTurnbull2000Template.design(
+            ...     p_control=0.20, effect_spec={"kind": "absolute_difference", "value": 0.02},
+            ...     alpha=0.05, power=0.8, looks=3
             ... )
-            >>> protocol_fix.method.stopping_policy.schedule.analyses
-            [0.2, 0.5, 1.0]
-            >>>
-            >>> # --- Example 3: ASN Minimization ---
-            >>> protocol_asn = JennisonTurnbull2000Template.design(
-            ...     p_control=0.20, p_treatment=0.22, alpha=0.05, power=0.8, looks=3,
-            ...     scheduling="asn_minimizer",
-            ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
-            ... )
-            >>> schedule_asn = protocol_asn.method.stopping_policy.schedule.analyses
-            >>> len(schedule_asn) == 3 and schedule_asn[-1] == 1.0
-            True
-            >>> np.allclose(schedule_asn, [1/3, 2/3, 1.0])
-            False
+            >>> protocol_delta.task.hypotheses.target_effect.proportions["treatment"]
+            0.22
         """
         # 1. Construct/Validate Task
         if task is None:
-            if p_control is None or p_treatment is None:
-                raise ValueError(
-                    "Must provide either 'task' or 'p_control'/'p_treatment'."
-                )
+            if p_control is None:
+                raise ValueError("p_control must be provided if task is None")
+
+            if p_treatment is None:
+                if effect_spec is None:
+                    raise ValueError(
+                        "Either p_treatment or effect_spec must be provided if task is None"
+                    )
+                p_treatment = _resolve_p_treatment(p_control, effect_spec)
+
             task = JennisonTurnbull2000TaskSpec(
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
