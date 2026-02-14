@@ -284,7 +284,8 @@ class ConditionalPowerAdaptationEngine:
         ):
             inflation_cap = protocol.method.adaptation.inflation_cap
 
-        new_n = min(new_n, int(np.ceil(inflation_cap * n_old_val)))
+        if np.isfinite(inflation_cap):
+            new_n = min(new_n, int(np.ceil(inflation_cap * n_old_val)))
         new_n = max(new_n, n_old_val)
 
         if hasattr(new_protocol.method.stopping_policy.timer, "max_sample_size"):
