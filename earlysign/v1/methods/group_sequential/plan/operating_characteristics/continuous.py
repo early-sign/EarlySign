@@ -29,6 +29,129 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
     """Adapter for operating characteristics of Continuous/Gaussian tests.
 
     Assumes Normal distribution with known variance (sigma^2) for planning purposes.
+
+    Examples:
+        >>> from earlysign.schema.ES3 import GST, Base as ES3_BASE
+        >>> from earlysign.v1.methods.group_sequential.plan.operating_characteristics import (
+        ...     ContinuousOperatingCharacteristicsEvaluator,
+        ... )
+
+        1. Verify I_max calculation for 1-arm and 2-arm continuous designs
+
+        >>> effect = GST.ContinuousEffectSize(
+        ...     means={"control": 0.0, "treatment": 1.0},
+        ...     standard_deviation=2.0,
+        ... )
+        >>> hyp = GST.HypothesisSpec(
+        ...     h_null_description="H0",
+        ...     h_alt_description="H1",
+        ...     test_logic=GST.EqualityHypothesis(),
+        ...     target_effect=effect,
+        ... )
+        >>> timer = GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100)
+        >>> sched = GST.EquidistantSchedule(n_looks=2)
+        >>> strat = GST.OBrienFlemingStrategy(
+        ...     alpha=0.05,
+        ...     sided=GST.Sided.TWO,
+        ...     statistical_model=GST.CanonicalGaussianModel(),
+        ... )
+        >>> policy = GST.StoppingPolicySpec(
+        ...     statistic=GST.TwoArmContinuousZ(
+        ...         variance=GST.TwoArmEstimatedVariance(method=GST.MethodModel.POOLED)
+        ...     ),
+        ...     strategy=strat,
+        ...     timer=timer,
+        ...     schedule=sched,
+        ... )
+        >>> method = GST.MethodSpec(kind="group_sequential", stopping_policy=policy)
+
+        --- 2-Arm Check ---
+
+        >>> task_2arm = GST.TaskSpec(
+        ...     kind="group_sequential",
+        ...     response_type=GST.ResponseType.CONTINUOUS,
+        ...     arms=ES3_BASE.TwoArmComparison(
+        ...         control_arm_name="control", treatment_arm_name="treatment"
+        ...     ),
+        ...     hypotheses=hyp,
+        ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+        ... )
+        >>> protocol_2arm = GST.Protocol(name="Test", task=task_2arm, method=method)
+        >>> eval_2arm = ContinuousOperatingCharacteristicsEvaluator(protocol_2arm)
+        >>> # I_max = N / (4 * sigma^2) = 100 / (4 * 4) = 100 / 16 = 6.25
+        >>> eval_2arm.i_max
+        6.25
+        >>> eval_2arm.arms
+        2
+
+        --- 1-Arm Check ---
+
+        >>> task_1arm = GST.TaskSpec(
+        ...     kind="group_sequential",
+        ...     response_type=GST.ResponseType.CONTINUOUS,
+        ...     arms=ES3_BASE.SingleArm(arm_name="treatment"),
+        ...     hypotheses=hyp,
+        ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+        ... )
+        >>> protocol_1arm = GST.Protocol(name="Test", task=task_1arm, method=method)
+        >>> eval_1arm = ContinuousOperatingCharacteristicsEvaluator(protocol_1arm)
+        >>> # I_max = N / sigma^2 = 100 / 4 = 25.0
+        >>> eval_1arm.i_max
+        25.0
+        >>> eval_1arm.arms
+        1
+
+        2. Verify that power increases with effect size
+
+        >>> effect_power = GST.ContinuousEffectSize(
+        ...     means={"control": 0.0, "treatment": 1.0},
+        ...     standard_deviation=1.0,
+        ... )
+        >>> task_power = GST.TaskSpec(
+        ...     kind="group_sequential",
+        ...     response_type=GST.ResponseType.CONTINUOUS,
+        ...     arms=ES3_BASE.TwoArmComparison(
+        ...         control_arm_name="control", treatment_arm_name="treatment"
+        ...     ),
+        ...     hypotheses=GST.HypothesisSpec(
+        ...         h_null_description="H0",
+        ...         h_alt_description="H1",
+        ...         test_logic=GST.EqualityHypothesis(),
+        ...         target_effect=effect_power,
+        ...     ),
+        ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+        ...     futility=GST.FutilityRequirement(power=0.8),
+        ... )
+        >>> timer_power = GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=200)
+        >>> policy_power = GST.StoppingPolicySpec(
+        ...     statistic=GST.TwoArmContinuousZ(
+        ...         variance=GST.TwoArmEstimatedVariance(method=GST.MethodModel.POOLED)
+        ...     ),
+        ...     strategy=GST.OBrienFlemingStrategy(
+        ...         alpha=0.05,
+        ...         sided=GST.Sided.TWO,
+        ...         statistical_model=GST.CanonicalGaussianModel(),
+        ...     ),
+        ...     timer=timer_power,
+        ...     schedule=GST.EquidistantSchedule(n_looks=1),
+        ... )
+        >>> protocol_power = GST.Protocol(
+        ...     name="Test",
+        ...     task=task_power,
+        ...     method=GST.MethodSpec(kind="group_sequential", stopping_policy=policy_power),
+        ... )
+        >>> evaluator = ContinuousOperatingCharacteristicsEvaluator(protocol_power, n_sims=5000)
+        >>> curve = evaluator.evaluate_metric_at(
+        ...     x_values=[0.0, 0.5, 1.0], metric_type="absolute_diff"
+        ... )
+        >>> # Power at null should be ~ alpha (0.05)
+        >>> abs(curve.results[0].power - 0.05) < 0.02
+        True
+        >>> # Power should be monotonic
+        >>> curve.results[1].power > curve.results[0].power
+        True
+        >>> curve.results[2].power > curve.results[1].power
+        True
     """
 
     def __init__(

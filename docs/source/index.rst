@@ -1,5 +1,5 @@
 Welcome to EarlySign's Documentation
-=====================
+====================================
 
 **Catch the early signs, reach faster conclusions.**
 
@@ -26,9 +26,6 @@ EarlySign is a Python library designed to accelerate decision-making in A/B test
    :maxdepth: 10
    :caption: Chapters
 
-   methods/README
    explanation/README
-   how-to/README
    reference/README
    tutorial/README
-   intl/index

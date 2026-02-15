@@ -682,6 +682,40 @@ class CanonicalJointModel:
             method: Computation method.
             efficacy_spending: Optional override for efficacy spending function.
             futility_spending: Optional override for futility spending function.
+
+        Examples:
+            >>> from earlysign.v1.methods.group_sequential.shared.spending import OBrienFlemingSpending
+            >>> info_times = np.array([0.5, 1.0])
+
+            1. Verify that a ValueError is raised when drift is missing but futility boundaries are requested
+
+            >>> config_err = Config(
+            ...     info_times=info_times,
+            ...     alpha=0.025,
+            ...     power=0.9,
+            ...     efficacy_spending=OBrienFlemingSpending(budget=0.025),
+            ...     futility_spending=OBrienFlemingSpending(budget=0.1),
+            ... )
+            >>> model_err = CanonicalJointModel(config_err)
+            >>> try:
+            ...     model_err.solve_boundaries(drift=None)
+            ... except ValueError as e:
+            ...     print(e)
+            Standardized drift must be provided to solve for futility boundaries from a spending function.
+
+            2. Verify that we can still solve efficacy boundaries without drift if futility is not present
+
+            >>> config_eff = Config(
+            ...     info_times=info_times,
+            ...     alpha=0.025,
+            ...     efficacy_spending=OBrienFlemingSpending(budget=0.025),
+            ... )
+            >>> model_eff = CanonicalJointModel(config_eff)
+            >>> a_eff, b_eff = model_eff.solve_boundaries(drift=None)
+            >>> a_eff is not None
+            True
+            >>> b_eff is None or np.all(b_eff <= -9.0)
+            True
         """
         if (
             self.config.stopping_policy

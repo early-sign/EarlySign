@@ -18,6 +18,7 @@ extensions = [
     "sphinxcontrib.autodoc_pydantic",
     "sphinx_autodoc_typehints",
     "autoapi.extension",
+    "sphinx.ext.viewcode",
 ]
 
 # autodoc_pydantic settings
@@ -98,7 +99,6 @@ autoapi_dirs = ["../../earlysign"]
 autoapi_ignore = [
     "**/docs/**",
     "**/scripts/**",
-    "**/tests/**",
     "**/.venv/**",
     "**/__pycache__/**",
     "**/.poetry/**",

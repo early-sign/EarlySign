@@ -35,8 +35,7 @@ docs-build:
 
 docs-serve:
 	# Serve docs locally with live-reload (requires sphinx-autobuild)
-	poetry run sphinx-autobuild docs/source docs/_build/html --open-browser \
-		--ignore docs/source/autoapi
+	poetry run sphinx-autobuild docs/source docs/_build/html --open-browser --ignore docs/source/autoapi --watch earlysign
 
 # Combined lint, type check, and test command
 lint-type-test:

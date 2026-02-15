@@ -458,6 +458,83 @@ class ProtocolDesigner:
     ) -> GST.MethodSpec:
         """
         Derives a MethodSpec from a TaskSpec effectively serving as a 'Design Strategy'.
+
+        Examples:
+            >>> from earlysign.v1.methods.group_sequential.plan.protocol_design import ProtocolDesigner
+            >>> import earlysign.schema.ES3.Base as ES3_BASE
+            >>> import earlysign.schema.ES3.GST as GST
+            >>> from pydantic import ValidationError
+
+            >>> designer = ProtocolDesigner()
+
+            1. Valid power in task.futility
+
+            >>> task = GST.TaskSpec(
+            ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
+            ...     response_type=GST.ResponseType.BINARY,
+            ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+            ...     futility=GST.FutilityRequirement(power=0.8),
+            ...     hypotheses=GST.HypothesisSpec(
+            ...         h_null_description="null",
+            ...         h_alt_description="alt",
+            ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+            ...         target_effect=GST.BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
+            ...     ),
+            ... )
+            >>> params = {"looks": 2, "spending_function": "obrien_fleming"}
+            >>> method = designer.method_from_task_spec(task, params)
+            >>> method is not None
+            True
+
+            2. Valid power in params
+
+            >>> task_no_fut = GST.TaskSpec(
+            ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
+            ...     response_type=GST.ResponseType.BINARY,
+            ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+            ...     futility=None,
+            ...     hypotheses=GST.HypothesisSpec(
+            ...         h_null_description="null",
+            ...         h_alt_description="alt",
+            ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+            ...         target_effect=GST.BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
+            ...     ),
+            ... )
+            >>> params_with_power = {
+            ...     "looks": 2,
+            ...     "power": 0.8,
+            ...     "spending_function": "obrien_fleming",
+            ... }
+            >>> method = designer.method_from_task_spec(task_no_fut, params_with_power)
+            >>> method is not None
+            True
+
+            3. Invalid missing in both
+
+            >>> params_no_power = {"looks": 2, "spending_function": "obrien_fleming"}
+            >>> try:
+            ...     designer.method_from_task_spec(task_no_fut, params_no_power)
+            ... except ValueError as e:
+            ...     print(e)
+            Statistical 'power' must be provided either in TaskSpec.futility or in 'params' to determine maximum sample size.
+
+            4. Invalid missing looks (Pydantic ValidationError)
+
+            >>> params_no_looks = {"power": 0.8}
+            >>> try:
+            ...     designer.method_from_task_spec(task_no_fut, params_no_looks)
+            ... except ValidationError:
+            ...     print("Caught ValidationError")
+            Caught ValidationError
+
+            5. Invalid looks = 0 (Pydantic ValidationError)
+
+            >>> params_zero_looks = {"looks": 0, "power": 0.8}
+            >>> try:
+            ...     designer.method_from_task_spec(task_no_fut, params_zero_looks)
+            ... except ValidationError:
+            ...     print("Caught ValidationError")
+            Caught ValidationError
         """
         # Validate and extract parameters using Pydantic
         v_params = MethodDesignParams.model_validate(params)
