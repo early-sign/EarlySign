@@ -100,7 +100,7 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.v1.templates.base import TemplateBase
+from earlysign.v1.framework.template import TemplateBase
 
 
 class CuiHungWang1999Protocol(BaseModel):

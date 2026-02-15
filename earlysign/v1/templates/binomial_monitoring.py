@@ -14,7 +14,7 @@ from earlysign.v1.methods.AVI.reporting import (
     BinomialEValueFinalProjector,
     BinomialEValueProgressProjector,
 )
-from earlysign.v1.templates.base import TemplateBase
+from earlysign.v1.framework.template import TemplateBase
 
 # --- ES3 Protocol Manifest ---
 

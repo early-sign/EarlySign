@@ -68,7 +68,7 @@ from earlysign.v1.methods.AVI import GAVIEngine
 from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.v1.templates.base import TemplateBase
+from earlysign.v1.framework.template import TemplateBase
 
 
 class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):

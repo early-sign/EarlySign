@@ -85,7 +85,7 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.v1.templates.base import AutoNameMixin, TemplateBase
+from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
 
 
 class JennisonTurnbull2000TaskSpec(GST.TaskSpec):

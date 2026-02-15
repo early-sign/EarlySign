@@ -25,7 +25,7 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
     FinalProjector,
     ProgressProjector,
 )
-from earlysign.v1.templates.base import AutoNameMixin, TemplateBase
+from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
 
 
 class ClassicTaskSpec(GST.TaskSpec):
