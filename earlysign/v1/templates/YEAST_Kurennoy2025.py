@@ -13,11 +13,11 @@ from earlysign.schema.ES3.YEAST import (
 from earlysign.schema.ES3.YEAST.Log import Boundary as BoundarySchema, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.v1.methods.YEAST.engine import BinomialYEASTEngine, ContinuousYEASTEngine
 from earlysign.v1.methods.YEAST.reporting import FinalProjector, ProgressProjector
-from earlysign.v1.framework.template import TemplateBase
 
 
 class BinomialKurennoy2025TaskSpec(YeastTaskSpec):

@@ -368,7 +368,7 @@ class CanonicalGaussianProcess(GaussianProcess):
                 cov=cov,
                 lower_limit=lower_bound,
                 allow_singular=True,
-                abseps=1e-5,
+                abseps=1e-8,
             )
             return 1.0 - float(prob_within)
         except Exception as e:
@@ -535,7 +535,7 @@ class CanonicalGaussianProcess(GaussianProcess):
                     cov=current_cov,
                     lower_limit=lower_limits_l,
                     allow_singular=True,
-                    abseps=1e-5,
+                    abseps=1e-8,
                 )
                 prob_lower[i] = p
 

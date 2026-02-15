@@ -837,20 +837,34 @@ class CanonicalJointModel:
 
     def compute_rejection_probability(
         self,
-        info_times: Sequence[float],
-        boundaries: Sequence[float],
+        info_times: Sequence[float] | NDArray[np.float64],
+        boundaries: Sequence[float] | NDArray[np.float64],
         drift: float = 0.0,
         tails: Optional[int] = None,
         samples: Optional[np.ndarray] = None,
-        futility_boundaries: Optional[Sequence[float]] = None,
+        futility_boundaries: Optional[Sequence[float] | NDArray[np.float64]] = None,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
     ) -> float:
-        """Compute rejection probability (compatibility wrapper)."""
+        """Compute rejection probability (probability of crossing efficacy bound)."""
         t = np.asarray(info_times)
         u = np.asarray(boundaries)
         target_tails = tails if tails is not None else self.config.tails
         fut_b = (
             np.asarray(futility_boundaries) if futility_boundaries is not None else None
         )
+
+        if method == "numerical_integration":
+            gp = CanonicalGaussianProcess(drift=drift, rng=self._rng)
+            # Rejection probability is the sum of probabilities of stopping at either bound
+            pu, pl = gp.compute_stopping_probabilities(
+                t=t,
+                upper=u,
+                lower=fut_b if target_tails == 1 else -u,
+                method="numerical_integration",
+            )
+            if target_tails == 2:
+                return float(np.sum(pu) + np.sum(pl))
+            return float(np.sum(pu))
 
         if samples is None:
             gp = CanonicalGaussianProcess(drift=drift, rng=self._rng)
@@ -892,36 +906,23 @@ class CanonicalJointModel:
         u = np.asarray(boundaries)
         target_tails = tails if tails is not None else self.config.tails
 
-        if method == "numerical_integration":
-
-            def f(d: float) -> float:
-                return (
-                    self.compute_crossing_probability(
-                        info_times=t,
-                        upper=u,
-                        lower=-u if target_tails == 2 else None,
-                        drift=d,
-                        method="numerical_integration",
-                    )
-                    - target_power
-                )
-
-        else:
+        samples_h0 = None
+        if method == "simulation":
             gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=self._rng)
             samples_h0 = gp_h0.sample(t, self.config.n_sims * 2)
 
-            def f(d: float) -> float:
-                return (
-                    self.compute_rejection_probability(
-                        info_times,
-                        boundaries,
-                        drift=d,
-                        tails=target_tails,
-                        samples=samples_h0,
-                        futility_boundaries=futility_boundaries,
-                    )
-                    - target_power
-                )
+        # Common objective function
+        def f(d: float) -> float:
+            p = self.compute_rejection_probability(
+                info_times=t,
+                boundaries=u,
+                drift=d,
+                tails=target_tails,
+                samples=samples_h0,
+                futility_boundaries=futility_boundaries,
+                method=method,
+            )
+            return float(p - target_power)
 
         res = root_scalar(f, bracket=bracket, xtol=1e-4)
         return float(res.root)

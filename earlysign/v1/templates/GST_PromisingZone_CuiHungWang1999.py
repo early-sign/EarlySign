@@ -63,9 +63,9 @@ Examples:
     >>> # 5. Verify status and SSR trigger
     >>> report = template.report_progress()
     >>> print(f"Status: {report['status']}, Initial Max N: {protocol.method.stopping_policy.timer.max_sample_size}")
-    Status: continue, Initial Max N: 3194
+    Status: continue, Initial Max N: 3167
     >>> print(f"Adapted Max N: {report['max_sample_size']}")
-    Adapted Max N: 3194
+    Adapted Max N: 3167
     >>> # Note: The increase reflects SSR to recover power based on interim results.
     >>> # (CP was calculated and found to be in the promising zone).
 """
@@ -86,6 +86,7 @@ from earlysign.schema.ES3.GST.Log import (
 )
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
 )
@@ -100,7 +101,6 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.v1.framework.template import TemplateBase
 
 
 class CuiHungWang1999Protocol(BaseModel):

@@ -65,6 +65,7 @@ from earlysign.schema.ES3.GST import (
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
@@ -85,7 +86,6 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
 
 
 class JennisonTurnbull2000TaskSpec(GST.TaskSpec):

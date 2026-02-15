@@ -16,6 +16,7 @@ from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.GST.Log import LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 from earlysign.v1.methods.group_sequential.plan.protocol_design import (
@@ -25,7 +26,6 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
     FinalProjector,
     ProgressProjector,
 )
-from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
 
 
 class ClassicTaskSpec(GST.TaskSpec):

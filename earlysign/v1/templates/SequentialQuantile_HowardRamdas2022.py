@@ -10,10 +10,10 @@ from earlysign.schema.ES3.SequentialQuantile import ArmMetrics, ArmStatus, Score
 from earlysign.v1.framework.entity import SimpleSequentialEntity
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI.engines.sequential_quantile import (
     SequentialQuantileEngine,
 )
-from earlysign.v1.framework.template import TemplateBase
 
 
 class SequentialQuantileMetrics(SimpleSequentialEntity[int, ArmMetrics]):

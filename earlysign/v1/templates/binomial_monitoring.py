@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI import BinomialEValueEngine
 from earlysign.v1.methods.AVI.engines.binomial_e_value import (
     EProcessProtocol,
@@ -14,7 +15,6 @@ from earlysign.v1.methods.AVI.reporting import (
     BinomialEValueFinalProjector,
     BinomialEValueProgressProjector,
 )
-from earlysign.v1.framework.template import TemplateBase
 
 # --- ES3 Protocol Manifest ---
 

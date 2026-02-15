@@ -85,6 +85,7 @@ from earlysign.schema.ES3.GST.Log import (
 )
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
 )
@@ -99,7 +100,6 @@ from earlysign.v1.methods.group_sequential.reporting.projectors import (
 from earlysign.v1.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.v1.framework.template import TemplateBase
 
 
 class Hsiao2019Protocol(BaseModel):

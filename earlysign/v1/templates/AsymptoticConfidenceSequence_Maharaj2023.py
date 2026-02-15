@@ -11,11 +11,11 @@ from earlysign.schema.ES3.AVI import (
 from earlysign.schema.ES3.AVI.Log import LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI import GAVIEngine, mSPRTEngine
 from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.v1.framework.template import TemplateBase
 
 
 class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):

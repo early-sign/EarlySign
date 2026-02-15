@@ -64,11 +64,11 @@ from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
 from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
+from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI import GAVIEngine
 from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.v1.framework.template import TemplateBase
 
 
 class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):

@@ -80,6 +80,43 @@ class BinomialGSTEngine:
         """
         Public helper to project a boundary for a given look and information time.
         Useful for design and visualization.
+
+        Example:
+            >>> import earlysign.schema.ES3.Base as ES3_BASE
+            >>> import earlysign.schema.ES3.GST as GST
+            >>> from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
+            >>> protocol = GST.Protocol(
+            ...     name="Example Trial",
+            ...     task=GST.TaskSpec(
+            ...         kind="group_sequential",
+            ...         arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
+            ...         response_type=GST.ResponseType.BINARY,
+            ...         efficacy=GST.EfficacyRequirement(alpha=0.05),
+            ...         hypotheses=GST.HypothesisSpec(
+            ...             h_null_description="p_t <= p_c", h_alt_description="p_t > p_c",
+            ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+            ...             target_effect=GST.BinaryEffectSize(proportions={"control": 0.2, "treatment": 0.3})
+            ...         )
+            ...     ),
+            ...     method=GST.MethodSpec(
+            ...         kind="group_sequential",
+            ...         stopping_policy=GST.StoppingPolicySpec(
+            ...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
+            ...             strategy=GST.AlphaSpendingStrategy(
+            ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
+            ...                 budget=0.05,
+            ...                 sided=GST.Sided.ONE,
+            ...                 statistical_model=GST.CanonicalGaussianModel(),
+            ...             ),
+            ...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+            ...             schedule=GST.FixedSchedule(analyses=[0.5, 1.0])
+            ...         ),
+            ...     )
+            ... )
+            >>> engine = BinomialGSTEngine(protocol=protocol)
+            >>> # Projection of boundary at 50% info time
+            >>> engine.get_boundary_at_look(0, 0.5)
+            2.3261743106419144
         """
         # Note:
         # - Index-based designs (OBF, Pocock, etc.): Anchored to look_index.
