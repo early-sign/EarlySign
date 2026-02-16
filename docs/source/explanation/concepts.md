@@ -26,13 +26,12 @@ Each event in the ledger follows a consistent structure with rich metadata:
 
 **Core Event Fields:**
 - `uuid`: Unique identifier for the event
-- `time_index`: Logical time ordering (e.g., "t001", "t002")
-- `ts`: Physical timestamp (ISO 8601 format)
-- `namespace`: Domain category (obs, stats, criteria, signals, etc.)
-- `kind`: Event type within namespace (registered, updated, emitted)
-- `entity`: Experiment identifier this event belongs to
-- `snapshot_id`: State snapshot identifier
-- `tag`: Semantic labeling for event querying and fusion
+- `type`: Data schema identifier (Pydantic model name)
+- `payload`: JSON-serialized event data
+- `attributes`: JSON labels for logical indexing
+- `timestamp`: Physical timestamp (UTC)
+- `ledger_id`: Dedicated primary grouping identifier (for clustering/performance)
+- `metadata`: System metadata (Trace lineage, Session horizon)
 
 **Event Payload:**
 - `payload_type`: Type identifier for the event data
@@ -279,17 +278,18 @@ The Ledger stores events in a flattened schema, with domain-specific metadata pa
 | `uuid` | String | Unique event identifier (auto-generated) | `550e8400-e29b-41d4-a716-446655440000` |
 | `type` | String | Data schema identifier (Pydantic model name) | `GSTTwoPropDesign`, `LookResult` |
 | `payload` | JSON | Event data serialized as JSON | `{"z": 2.10, "status": "STOP_EFFICACY"}` |
-| `attributes` | JSON | Logical indexing tags (Entity ID, Namespace, Scope) | `{"entity_identity": "exp#42", "namespace": "stats"}` |
+| `attributes` | JSON | Logical indexing tags (Entity ID, Namespace, Scope) | `{"env": "prod", "run_id": "123"}` |
 | `timestamp` | Timestamp | Physical time (UTC) | `2025-09-07T10:00:00Z` |
-| `metadata` | JSON | System metadata (Trace lineage, Package version) | `{"trace": ["parent-uuid-1"], "pkg_version": "0.1.0"}` |
+| `ledger_id` | String | Dedicated primary ID for performance clustering | `exp#42` |
+| `metadata` | JSON | System metadata (Trace, Session horizon) | `{"trace": [...], "session_horizon": "..."}` |
 
 **Sample Event Log:**
 
-| uuid | type | payload | attributes | timestamp |
-|------|------|---------|------------|-----------|
-| ...00 | `GSTTwoPropDesign` | `{"alpha":0.025,"method":"..."}` | `{"entity_identity":"exp#42", "namespace":"design"}` | 2025-09-07T10:00:00Z |
-| ...01 | `BinomialObs` | `{"nA":10,"nB":10,"yA":8,"yB":1}` | `{"entity_identity":"exp#42", "namespace":"obs"}` | 2025-09-07T10:05:00Z |
-| ...02 | `LookResult` | `{"z_stat":2.1,"status":"STOP"}` | `{"entity_identity":"exp#42", "namespace":"stats"}` | 2025-09-07T10:06:00Z |
+| uuid | type | payload | attributes | timestamp | ledger_id |
+|------|------|---------|------------|-----------|-----------|
+| ...00 | `GSTTwoPropDesign` | `{"alpha":0.025,...}` | `{"env":"prod"}` | 2025-09-07T10:00:00Z | `exp#42` |
+| ...01 | `BinomialObs` | `{"nA":10,...}` | `{"look":1}` | 2025-09-07T10:05:00Z | `exp#42` |
+| ...02 | `LookResult` | `{"z_stat":2.1,...}` | `{"is_result":true}` | 2025-09-07T10:06:00Z | `exp#42` |
 
 ---
 
@@ -302,9 +302,9 @@ The Ledger stores events in a flattened schema, with domain-specific metadata pa
 | Purpose       | Store all facts as append-only records with trace lineage.           |
 | Write API     | `ledger.insert(data, attributes=..., metadata=...)`                  |
 | Read API      | `ledger.t` (Ibis Table Expression) for filtering and projection.     |
-| Record Schema | `uuid`, `type`, `payload`, `attributes`, `timestamp`, `metadata`     |
-| Scoping       | `ledger.bind(**attrs)` / `ledger.unbind(*keys)` manage attribute context. |
-| Lineage       | `metadata["trace"]` stores list of parent UUIDs used to derive event.|
+| Record Schema | `uuid`, `type`, `payload`, `attributes`, `timestamp`, `ledger_id`, `metadata` |
+| Scoping       | `Ledger(..., ledger_id=...)` ensures clustering. `bind(**attrs)` manages dynamic context. |
+| Lineage       | `metadata["trace"]` stores list of parent UUIDs; `metadata["session_horizon"]` stores horizon point. |
 
 ---
 

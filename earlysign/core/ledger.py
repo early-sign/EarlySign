@@ -116,10 +116,12 @@ class Ledger:
         connector: Optional[ibis.BaseBackend] = None,
         table_name: str = "events",
         attributes: Optional[Dict[str, Any]] = None,
+        ledger_id: Optional[str] = None,
     ):
         self.connector = connector
         self.table_name = table_name
         self.attributes = attributes if attributes is not None else {}
+        self.ledger_id = ledger_id
 
     # --------- lifecycle ----------
     def set_connector(self, connector: ibis.BaseBackend) -> Self:
@@ -133,7 +135,7 @@ class Ledger:
         """
         return cast(
             Self,
-            Ledger(connector, self.table_name, dict(self.attributes)),
+            Ledger(connector, self.table_name, dict(self.attributes), self.ledger_id),
         )
 
     def use_default_table(self, name: str = "events") -> Self:
@@ -147,7 +149,7 @@ class Ledger:
         """
         return cast(
             Self,
-            Ledger(self.connector, name, dict(self.attributes)),
+            Ledger(self.connector, name, dict(self.attributes), self.ledger_id),
         )
 
     @property
@@ -160,6 +162,7 @@ class Ledger:
                 payload=dt.json,
                 attributes=dt.json,
                 timestamp=dt.timestamp(timezone="UTC"),
+                ledger_id=dt.string,
                 metadata=dt.json,
             )
         )
@@ -174,7 +177,12 @@ class Ledger:
             raise RuntimeError("Ledger connector not set")
         if self.table_name in self.connector.list_tables():
             return
-        self.connector.create_table(self.table_name, schema=self._schema)
+
+        kwargs = {"schema": self._schema}
+        if self.connector.name == "bigquery":
+            kwargs["cluster_by"] = ["ledger_id"]
+
+        self.connector.create_table(self.table_name, **kwargs)
 
     # --------- binding / scoping ----------
     def bind(self, **attributes: Any) -> Self:
@@ -188,7 +196,10 @@ class Ledger:
         """
         merged = dict(self.attributes)
         merged.update(attributes)
-        return cast(Self, Ledger(self.connector, self.table_name, merged))
+        return cast(
+            Self,
+            Ledger(self.connector, self.table_name, merged, self.ledger_id),
+        )
 
     def unbind(self, *patterns: Union[str, Pattern[str]]) -> Self:
         """Return a new Ledger with bound attributes removed if their keys match ANY pattern.
@@ -248,7 +259,10 @@ class Ledger:
             return not any(rx.search(k) for rx in compiled)
 
         remaining = {k: v for k, v in self.attributes.items() if _keep_key(k)}
-        return cast(Self, Ledger(self.connector, self.table_name, remaining))
+        return cast(
+            Self,
+            Ledger(self.connector, self.table_name, remaining, self.ledger_id),
+        )
 
     @property
     def t(self) -> Table:
@@ -256,6 +270,8 @@ class Ledger:
         if self.connector is None:
             raise RuntimeError("Ledger connector not set")
         t = self.connector.table(self.table_name)
+        if self.ledger_id:
+            t = t.filter(t.ledger_id == self.ledger_id)
         for k, v in self.attributes.items():
             t = t.filter(t.attributes[k].str == str(v))
         return t
@@ -308,6 +324,7 @@ class Ledger:
             "payload": payload,
             "attributes": json.dumps(sanitize_for_json(combined_attributes)),
             "timestamp": ts,
+            "ledger_id": self.ledger_id if self.ledger_id else "",
             "metadata": json.dumps(sanitize_for_json(combined_metadata)),
         }
         return row
@@ -392,6 +409,7 @@ class Ledger:
                 payload=dt.string,
                 attributes=dt.string,
                 timestamp=dt.timestamp(timezone="UTC"),
+                ledger_id=dt.string,
                 metadata=dt.string,
             )
         )
