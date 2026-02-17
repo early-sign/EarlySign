@@ -52,7 +52,6 @@ class mSPRTEngine:
 
         s_c = metrics.arms.get(control_key)
         s_t = metrics.arms.get(treatment_key)
-
         if not s_c or not s_t:
             return LookResult(
                 sample_n=0,
@@ -61,9 +60,8 @@ class mSPRTEngine:
                 is_crossed=False,
                 status=DecisionStatus.CONTINUE_,
             )
-
-        n_c = s_c.metrics.n
-        n_t = s_t.metrics.n
+        n_c = s_c.metrics.total
+        n_t = s_t.metrics.total
 
         if n_c == 0 or n_t == 0:
             return LookResult(
@@ -77,17 +75,23 @@ class mSPRTEngine:
         n_total = n_c + n_t
 
         if isinstance(metrics, BinomialScoreboard):
-            val_c = metrics.arms[control_key].metrics.p_hat
-            val_t = metrics.arms[treatment_key].metrics.p_hat
+            # Narrowing for Binomial
+            arm_c = metrics.arms[control_key]
+            arm_t = metrics.arms[treatment_key]
+            val_c = arm_c.metrics.p_hat
+            val_t = arm_t.metrics.p_hat
             # Variance estimation: p(1-p)
             var_c = val_c * (1 - val_c)
             var_t = val_t * (1 - val_t)
         else:
-            val_c = metrics.arms[control_key].metrics.mean
-            val_t = metrics.arms[treatment_key].metrics.mean
+            # Narrowing for Continuous
+            arm_c_cont = metrics.arms[control_key]
+            arm_t_cont = metrics.arms[treatment_key]
+            val_c = arm_c_cont.metrics.mean
+            val_t = arm_t_cont.metrics.mean
             # Continuous sample variance - required for mSPRT
-            var_c = metrics.arms[control_key].metrics.variance
-            var_t = metrics.arms[treatment_key].metrics.variance
+            var_c = arm_c_cont.metrics.variance
+            var_t = arm_t_cont.metrics.variance
             if var_c is None or var_t is None:
                 raise ValueError(
                     "Variance is required for continuous data in mSPRT but is missing in scoreboard."

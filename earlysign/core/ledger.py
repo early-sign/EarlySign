@@ -382,6 +382,9 @@ class Ledger:
 
     def _insert_bigquery(self, rows: list[Dict[str, Any]]) -> None:
         """BigQuery SDK insert for robustness with JSON types."""
+        if self.connector is None:
+            raise RuntimeError("BigQuery connector not set.")
+
         # Client reference is dynamic on the connector
         client = getattr(self.connector, "client", None)
         dataset_id = getattr(self.connector, "dataset_id", None)

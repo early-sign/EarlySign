@@ -320,7 +320,7 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
 
     # 2. Extract Results from Protocol and Re-Solve Boundaries for Verification
     info_times = np.array(protocol.method.stopping_policy.schedule.analyses)
-    n_max = protocol.method.stopping_policy.timer.max_sample_size
+    n_max = sum(protocol.method.stopping_policy.timer.max_sample_size.values())
 
     # Verify policy boundaries using Library Factory
     policy = StoppingPolicyFactory.build_from_spec(protocol.method.stopping_policy)

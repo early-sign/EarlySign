@@ -18,7 +18,7 @@ class PosthocZTrajectoryProjector(Projector[ibis.Expr]):
 
     def __init__(
         self,
-        arm_data_type: str = "ArmData",
+        arm_data_type: str = "BinomialArmData",
         control_arm: Optional[str] = None,
         treatment_arm: Optional[str] = None,
     ):
@@ -67,10 +67,14 @@ class PosthocZTrajectoryProjector(Projector[ibis.Expr]):
         def _get_val(col: str) -> ibis.Expr:
             return _.payload[col].cast("string").re_replace('^"|"$', "")
 
+        from earlysign.core.util.json_ops import extract_json_scalar
+
+        # We use extract_json_scalar here to avoid BigQuery's strict JSON-to-INT64 cast
+        # which can fail on stringified numbers or non-conforming rows in unions.
         arm_data = arm_data.mutate(
             arm=_get_val("arm"),
-            n_val=_get_val("n").cast("int"),
-            s_val=_get_val("success").cast("int"),
+            n_val=extract_json_scalar(arm_data.payload, "total", "int"),
+            s_val=extract_json_scalar(arm_data.payload, "success", "int"),
         )
 
         # 3. Stable ordering and cumulative window

@@ -14,8 +14,11 @@ from typing import (
     List,
     Optional,
     Self,
+    Tuple,
     Type,
     TypeVar,
+    Union,
+    cast,
 )
 
 from pydantic import BaseModel
@@ -107,9 +110,25 @@ class Session:
         mem_buffer = ibis.memtable(self._session_commit_buffer)
         # Cast memtable columns to match ledger schema exactly for backend compatibility
         schema = self.ledger.t.schema()
-        mem_buffer_casted = mem_buffer.select(
-            **{name: mem_buffer[name].cast(schema[name]) for name in schema.names}
-        )
+
+        projections = {}
+        for name in schema.names:
+            col = mem_buffer[name]
+            target_type = schema[name]
+
+            # BigQuery Hack: string -> json cast requires PARSE_JSON
+            if (
+                self.ledger.connector
+                and self.ledger.connector.name == "bigquery"
+                and target_type.is_json()
+            ):
+                from earlysign.core.util.ibis_bigquery import bq_parse_json
+
+                projections[name] = bq_parse_json(col)
+            else:
+                projections[name] = col.cast(target_type)
+
+        mem_buffer_casted = mem_buffer.select(**projections)
         return t.union(mem_buffer_casted)
 
     def read(self, projector: Projector[T]) -> Traced[T]:
@@ -121,8 +140,10 @@ class Session:
         Returns:
             The traced result of the projection.
         """
-        # Execute projection using the unified table view (includes buffer)
-        result = projector.project(self.table)
+        # No automatic filtering here to ensure correct projection for entities that fold over multiple types.
+        # Projectors are responsible for their own filtering within project().
+        table = self.table
+        result = projector.project(table)
 
         # Accumulate trace from the result (Expected to be Traced[T] or ProjectionResult[T])
         if hasattr(result, "trace") and result.trace:
@@ -149,16 +170,21 @@ class Session:
             attributes: Optional additional labels for the ledger.
         """
         target_trace = trace if trace is not None else self.trace
-        combined_attributes = {"horizon": str(self.horizon_ts)}
+        combined_attributes = {}
         if identity:
             combined_attributes["entity_identity"] = identity
         if attributes:
             combined_attributes.update(attributes)
 
+        combined_metadata = {
+            "trace": [str(t) for t in target_trace],
+            "session_horizon": str(self.horizon_ts),
+        }
+
         row = self.ledger.prepare_row(
             data=record,
             attributes=combined_attributes,
-            metadata={"trace": [str(t) for t in target_trace]},
+            metadata=combined_metadata,
         )
         self._session_commit_buffer.append(row)
         return uuidlib.UUID(hex=row["uuid"])
@@ -168,6 +194,7 @@ class Session:
         result_type: Type[Any],
         func: Callable[..., Any],
         *args: Any,
+        identity: Optional[str] = None,
         **kwargs: Any,
     ) -> uuidlib.UUID:
         """
@@ -197,10 +224,102 @@ class Session:
         else:
             record = result_data
 
-        row = self.ledger.prepare_row(
-            data=record,
-            attributes={"is_result": True},
-            metadata={"trace": [str(t) for t in target_trace]},
-        )
-        self._session_commit_buffer.append(row)
-        return uuidlib.UUID(hex=row["uuid"])
+        return self.commit(record, identity=identity, trace=target_trace)
+
+
+class BacktestSession(Session):
+    """
+    Highly optimized Session for backtesting and historical replay.
+
+    Implements transparent read-through caching for projectors. Caches are
+    automatically invalidated upon commit of records that match the projector's
+    declared type_dependencies.
+    """
+
+    def __init__(
+        self,
+        ledger: Ledger,
+        invariant_projectors: Optional[List[Type[Projector[Any]]]] = None,
+    ):
+        """
+        Initializes the BacktestSession.
+
+        Args:
+            ledger: The event ledger.
+            invariant_projectors: Optional list of projector classes whose results
+                should be pinned for the duration of the session (e.g., ProtocolProjector).
+        """
+        super().__init__(ledger)
+        self._invariant_projector_types = invariant_projectors or []
+        # Cache stores: (ProjectorType, Identity) -> (ProjectionResult, dependencies)
+        self._projector_cache: Dict[
+            Tuple[Type[Any], Optional[str]],
+            Tuple[Traced[Any], List[Union[str, Tuple[str, str]]]],
+        ] = {}
+
+    def read(self, projector: Projector[T]) -> Traced[T]:
+        """
+        Read-through cache implementation for backtesting.
+        """
+        cache_key = (type(projector), getattr(projector, "identity", None))
+
+        # 1. Check Cache
+        if cache_key in self._projector_cache:
+            result, _ = self._projector_cache[cache_key]
+            # Maintain implicit session trace context
+            if hasattr(result, "trace") and result.trace:
+                self._session_trace.extend(result.trace)
+            return cast(Traced[T], result)
+
+        # 2. Cache Miss
+        result = super().read(projector)
+
+        # 3. Populate Cache
+        deps = getattr(projector, "type_dependencies", [])
+        self._projector_cache[cache_key] = (result, deps)
+
+        return result
+
+    def commit(
+        self,
+        record: Any,
+        identity: Optional[str] = None,
+        trace: Optional[List[TraceId]] = None,
+        attributes: Optional[Dict[str, Any]] = None,
+    ) -> uuidlib.UUID:
+        # Commit to ledger/buffer
+        record_id = super().commit(record, identity, trace, attributes)
+
+        # Selective Invalidation
+        record_type_name = type(record).__name__
+        self._invalidate_caches(record_type_name, identity)
+
+        return record_id
+
+    def _invalidate_caches(
+        self, committed_type: str, committed_identity: Optional[str]
+    ) -> None:
+        """
+        Invalidates cached results affected by the new commit.
+        """
+        to_remove = []
+        for key, (_, deps) in self._projector_cache.items():
+            proj_type, _ = key
+
+            # Skip invariant projectors
+            if proj_type in self._invariant_projector_types:
+                continue
+
+            # Check if any dependency matches the committed data
+            for dep in deps:
+                if isinstance(dep, tuple):
+                    dep_type, dep_id = dep
+                    if committed_type == dep_type and committed_identity == dep_id:
+                        to_remove.append(key)
+                        break
+                elif committed_type == dep:
+                    to_remove.append(key)
+                    break
+
+        for key in to_remove:
+            del self._projector_cache[key]

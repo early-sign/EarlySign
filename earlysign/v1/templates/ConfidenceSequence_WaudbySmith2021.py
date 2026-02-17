@@ -61,7 +61,7 @@ from earlysign.schema.ES3.AVI import (
 )
 from earlysign.schema.ES3.AVI.Log import LookResult
 from earlysign.schema.ES3.Binomial import BinomialArmData
-from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+from earlysign.schema.ES3.Continuous import ContinuousArmData
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
 from earlysign.v1.framework.template import TemplateBase

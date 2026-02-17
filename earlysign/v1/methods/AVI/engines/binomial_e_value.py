@@ -86,8 +86,8 @@ class BinomialEValueEngine:
         Note: This engine assumes a single aggregated success/n stream
         across all arms if multiple are present, or a specific arm if provided.
         """
-        # Sum across all arms for 1-sample test on total success rate
-        n_total = sum(a.metrics.n for a in metrics.arms.values())
+        # Sum across all arms for 1-sample test on total        # 2. Extract metrics
+        n_total = sum(a.metrics.total for a in metrics.arms.values())
         s_total = sum(a.metrics.successes for a in metrics.arms.values())
 
         res = compute_binomial_e_value(

@@ -130,7 +130,10 @@ class ConditionalPowerAdaptationEngine:
         ...                 alpha=0.05, sided="two",
         ...                 statistical_model=CanonicalGaussianModel()
         ...             ),
-        ...             timer=SampleSizeTimer(unit="individuals", max_sample_size=100),
+        ...             timer=SampleSizeTimer(
+        ...                 unit="individuals",
+        ...                 max_sample_size={"control": 50, "treatment": 50}
+        ...             ),
         ...             schedule=EquidistantSchedule(n_looks=2)
         ...         )
         ...     )
@@ -174,14 +177,18 @@ class ConditionalPowerAdaptationEngine:
             status = PromisingZoneStatus.PROMISING
             rec = "Promising Zone: Consider increasing sample size to recover power"
 
+        # Calculate total original sample size
+        n_max_dict = getattr(
+            protocol.method.stopping_policy.timer, "max_sample_size", {}
+        )
+        original_n = sum(n_max_dict.values()) if isinstance(n_max_dict, dict) else 0
+
         return AdaptationLog(
             look=result.look or 1,
             conditional_power=cp,
             promising_zone_status=status,
             promising_zone_recommendation=rec,
-            original_sample_size=getattr(
-                protocol.method.stopping_policy.timer, "max_sample_size", 0
-            ),
+            original_sample_size=original_n,
         )
 
     @classmethod
@@ -203,8 +210,11 @@ class ConditionalPowerAdaptationEngine:
 
         if log.promising_zone_status == PromisingZoneStatus.PROMISING:
             new_proto = cls.replan_sample_size(protocol, log, result, target_cp)
-            log.recommended_sample_size = getattr(
-                new_proto.method.stopping_policy.timer, "max_sample_size", None
+            new_n_dict = getattr(
+                new_proto.method.stopping_policy.timer, "max_sample_size", {}
+            )
+            log.recommended_sample_size = (
+                sum(new_n_dict.values()) if isinstance(new_n_dict, dict) else None
             )
 
         return log
@@ -241,17 +251,15 @@ class ConditionalPowerAdaptationEngine:
         if t >= 1.0 or theta <= 0:
             return new_protocol
 
-        # Type narrowing: After the `if` check, these are guaranteed to be non-None.
-        # However, mypy might still complain about `Optional[float]` being used as `float`.
-        # Explicitly cast or reassign to ensure type checkers are happy.
+        # Type narrowing
         z_t_val: float = z_t
         t_val: float = t
         c_val: float = c
         n_old_val: int = n_old
 
         # Cui-Hung-Wang / CP Inversion Logic:
-        # We want P(sqrt(t)Z_t + sqrt(1-t)Z_rem\' >= c) = target_cp
-        # Z_rem\' ~ N(theta * sqrt(r(1-t)), 1)
+        # We want P(sqrt(t)Z_t + sqrt(1-t)Z_rem' >= c) = target_cp
+        # Z_rem' ~ N(theta * sqrt(r(1-t)), 1)
         # Solve for r (inflation factor for remaining sample size)
 
         # Z_needed from remaining data (independent of r) to reach c
@@ -289,11 +297,20 @@ class ConditionalPowerAdaptationEngine:
         new_n = max(new_n, n_old_val)
 
         if hasattr(new_protocol.method.stopping_policy.timer, "max_sample_size"):
-            new_protocol.method.stopping_policy.timer.max_sample_size = new_n
+            # Redistribute new_n proportionally
+            n_old_dict = getattr(
+                protocol.method.stopping_policy.timer, "max_sample_size", {}
+            )
+            if isinstance(n_old_dict, dict) and n_old_val > 0:
+                ratio = new_n / n_old_val
+                new_n_dict = {k: int(np.ceil(v * ratio)) for k, v in n_old_dict.items()}
+                new_protocol.method.stopping_policy.timer.max_sample_size = new_n_dict
 
-        # Attach snapshot for Type I error preservation (Weighted Z-Ratio)
+        # Attach snapshot for Type I error preservation
         new_protocol.method.adaptation_snapshot = GST.AdaptationSnapshot(
-            z_t=z_t_val, info_frac=t_val, original_max_sample_size=n_old_val
+            z_t=z_t_val,
+            info_frac=t_val,
+            original_max_sample_size=n_old_val,
         )
 
         return new_protocol

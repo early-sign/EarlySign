@@ -7,7 +7,18 @@ structured scientific contexts with evidentiary traces.
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Generic, Protocol, Type, TypeVar, cast
+from typing import (
+    Any,
+    Dict,
+    Generic,
+    List,
+    Protocol,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import ibis
 from pydantic import BaseModel
@@ -41,6 +52,14 @@ class Projector(Protocol, Generic[T]):
     the resulting state.
     """
 
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        """
+        Declares the data types (and optionally identities) this projector depends on.
+        Used for pre-filtering and intelligent cache invalidation.
+        """
+        ...
+
     def project(self, data: ibis.Expr) -> ProjectionResult[T]:
         """
         Hydrates data from the provided Ibis expression and identifies its trace.
@@ -55,6 +74,10 @@ class ProtocolProjector(Projector[P]):
 
     def __init__(self, protocol_type: Type[P]):
         self.protocol_type = protocol_type
+
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        return [self.protocol_type.__name__]
 
     def project(self, table: ibis.Expr) -> ProjectionResult[P]:
         # Payload type is the class name

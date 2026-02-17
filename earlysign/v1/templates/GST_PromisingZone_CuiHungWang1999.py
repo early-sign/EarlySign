@@ -63,9 +63,9 @@ Examples:
     >>> # 5. Verify status and SSR trigger
     >>> report = template.report_progress()
     >>> print(f"Status: {report['status']}, Initial Max N: {protocol.method.stopping_policy.timer.max_sample_size}")
-    Status: continue, Initial Max N: 3168
+    Status: continue, Initial Max N: {'control': 1584, 'treatment': 1584}
     >>> print(f"Adapted Max N: {report['max_sample_size']}")
-    Adapted Max N: 3168
+    Adapted Max N: {'control': 1584, 'treatment': 1584}
     >>> # Note: The increase reflects SSR to recover power based on interim results.
     >>> # (CP was calculated and found to be in the promising zone).
 """

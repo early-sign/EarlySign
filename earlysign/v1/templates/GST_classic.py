@@ -13,16 +13,22 @@ from pydantic import BaseModel, Field
 import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
-from earlysign.schema.ES3.GST.Log import LookResult
+from earlysign.core.util.logging import get_logger
+from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
+from earlysign.v1.framework.template import (
+    AutoNameMixin,
+    RichDisplayMixin,
+    TemplateBase,
+)
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 from earlysign.v1.methods.group_sequential.plan.protocol_design import (
     ProtocolDesigner,
 )
 from earlysign.v1.methods.group_sequential.reporting.projectors import (
+    BacktestProjector,
     FinalProjector,
     ProgressProjector,
 )
@@ -34,7 +40,7 @@ class ClassicTaskSpec(GST.TaskSpec):
     pass
 
 
-class ClassicProtocol(GST.Protocol, AutoNameMixin):
+class ClassicProtocol(GST.Protocol, AutoNameMixin, RichDisplayMixin):
     """Protocol for Classic GST."""
 
     task: ClassicTaskSpec
@@ -164,8 +170,14 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             {"model": "canonical_joint", "model_params": {"rng_seed": seed}}
         )
 
+        arm_names = (
+            [control_arm_name, treatment_arm_name]
+            if arms == 2
+            else [treatment_arm_name]
+        )
+
         # 3. Design via common logic
-        method_spec, n_max = designer.design_gs_classic(
+        method_spec, n_total = designer.design_gs_classic(
             alpha=alpha,
             power=power,
             delta=calc_delta,
@@ -175,7 +187,7 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             sigma=sigma,
             wang_tsiatis_delta=wang_tsiatis_delta or 0.25,
             tails=tails,
-            arms=arms,
+            arm_names=arm_names,
             rng_seed=seed,
         )
 
@@ -234,3 +246,161 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
         """Returns the final study report."""
         with Session(self.ledger) as sess:
             return sess.read(FinalProjector()).data.model_dump(mode="json")
+
+    def backtest(self, batches: Any) -> Dict[str, Any]:
+        """
+        Historical Analysis: Replays data and stops immediately on a stopping decision.
+
+        Args:
+           batches: Iterator yielding `BinomialArmData` objects or lists of them.
+        """
+        logger = get_logger(__name__)
+        from tqdm import tqdm
+
+        total = len(batches) if hasattr(batches, "__len__") else None
+
+        with tqdm(batches, total=total, desc="Backtesting") as pbar:
+            for i, batch in enumerate(pbar):
+                self.update(batch if isinstance(batch, list) else [batch])
+                prog = self.report_progress()
+
+                pbar.set_postfix(
+                    {"look": prog.get("look"), "status": prog.get("status")}
+                )
+
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at index {i}: {prog.get('status')}"
+                    )
+                    break
+
+        return self.report_result()
+
+    def backtest_from_table(
+        self,
+        table: Any,
+        *,
+        arm_col: str = "arm",
+        n_col: str = "total",
+        success_col: str = "success",
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Historical Analysis from an Ibis table.
+        Replays data from the table and stops immediately on a stopping decision.
+        """
+        from earlysign.schema.ES3.Binomial import BinomialArmData
+
+        # 1. Project and order
+        if order_by:
+            data_table = table.select(
+                arm=table[arm_col],
+                n=table[n_col],
+                success=table[success_col],
+                _order=table[order_by],
+            ).order_by("_order")
+        else:
+            data_table = table.select(
+                arm=table[arm_col],
+                n=table[n_col],
+                success=table[success_col],
+            )
+
+        # 2. Replay & Stop
+        df = data_table.execute()
+        total_rows = len(df)
+        logger = get_logger(__name__)
+        from tqdm import tqdm
+
+        with tqdm(
+            df.iterrows(), total=total_rows, desc="Backtesting from Table"
+        ) as pbar:
+            for i, (_, row) in enumerate(pbar):
+                batch = [
+                    BinomialArmData(
+                        arm=str(row["arm"]),
+                        total=int(row["total"]),
+                        success=int(row["success"]),
+                    )
+                ]
+                self.update(batch)
+                prog = self.report_progress()
+
+                pbar.set_postfix(
+                    {"look": prog.get("look"), "status": prog.get("status")}
+                )
+
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at row {i}: {prog.get('status')}"
+                    )
+                    break
+
+        # Calculate efficiency report
+        with Session(self.ledger) as sess:
+            total_data_points = int(df[n_col].sum())
+            report = sess.read(BacktestProjector(total_samples=total_data_points)).data
+            res = report.model_dump(mode="json")
+            # Flatten final_report for compatibility
+            fr = res.pop("final_report")
+            res.update(fr)
+        return res
+
+    @classmethod
+    def describe_protocol_instance(cls, protocol: ClassicProtocol) -> str:
+        """Summarizes the Classic GST design (Pocock, OBF, etc)."""
+        from string import Template
+
+        tpl = Template(
+            """
+Design: Classic Group Sequential Test ($design_type)
+==================================================
+Task: $task_name
+Response Type: $response_type
+Arms: $arms_desc
+Requirements: Alpha=$alpha, Power=$power
+
+Stopping Policy:
+  Method: $method_kind
+  Looks (K): $looks
+  Analyses: $analyses
+"""
+        )
+
+        task = protocol.task
+        method = protocol.method
+
+        # Extract details
+        design_type = "Unknown"
+        strategy = method.stopping_policy.strategy
+        if hasattr(strategy, "kind"):
+            design_type = strategy.kind.replace("_", " ").title()
+
+        arms_desc = "N/A"
+        if isinstance(task.arms, ES3_BASE.TwoArmComparison):
+            arms_desc = (
+                f"{task.arms.control_arm_name} vs {task.arms.treatment_arm_name}"
+            )
+        elif isinstance(task.arms, ES3_BASE.SingleArm):
+            arms_desc = f"Single Arm: {task.arms.arm_name}"
+
+        policy = method.stopping_policy
+        return tpl.substitute(
+            design_type=design_type,
+            task_name=protocol.name or "Unnamed Classic GST",
+            response_type=task.response_type,
+            arms_desc=arms_desc,
+            alpha=f"{task.efficacy.alpha:.4f}" if task.efficacy else "N/A",
+            power=f"{task.futility.power:.4f}" if task.futility else "N/A",
+            method_kind=method.kind,
+            looks=(
+                len(policy.schedule.analyses)
+                if hasattr(policy.schedule, "analyses")
+                else "N/A"
+            ),
+            analyses=(
+                ", ".join([f"{t:.2f}" for t in policy.schedule.analyses])
+                if hasattr(policy.schedule, "analyses")
+                else "N/A"
+            ),
+        ).strip()

@@ -23,12 +23,7 @@ payload/labels access behaves like Ibis JSON column:
     >>> ledger = Ledger(con, "events")
     >>> ledger.ensure()  # should be a no-op since table exists
 
-Empty select
-^^^^^^^^^^^^
-Empty select should still compile and execute:
-
-.. code-block:: python
-
+    >>> # Empty select should still compile and execute:
     >>> df = ledger.t
     >>> q = df.select(
     ...     df.uuid,
@@ -39,20 +34,13 @@ Empty select should still compile and execute:
     >>> list(out.columns)
     ['uuid', 'x', 'kind']
 
-Insert and Read back
-^^^^^^^^^^^^^^^^^^^^
-Insert a couple of JSON events and read back via JSON accessors:
-
-.. code-block:: python
-
+    >>> # Insert a couple of JSON events and read back via JSON accessors:
     >>> rows = [
     ...     dict(type="", payload={"x":"A"}, attributes={"kind":"k1"}),
     ...     dict(type="", payload={"x":"B"}, attributes={"kind":"k2"}),
     ... ]
-    >>> ledger.insert(data=rows[0]["payload"], attributes=rows[0]["attributes"])
-    UUID(...)
-    >>> ledger.insert(data=rows[1]["payload"], attributes=rows[1]["attributes"])
-    UUID(...)
+    >>> _ = ledger.insert(data=rows[0]["payload"], attributes=rows[0]["attributes"])
+    >>> _ = ledger.insert(data=rows[1]["payload"], attributes=rows[1]["attributes"])
     >>> got = df.select(df.payload["x"].name("x")).execute().to_dict("records")
     >>> sorted(v["x"] for v in got)
     ['A', 'B']
@@ -158,5 +146,58 @@ Simple verification that basic operations work:
     UUID(...)
     >>> len_after = len(L.t.execute())
     >>> len_after > len_before
+    True
+
+JSON Sanitization (BigQuery Safety)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The Ledger must sanitize values like Infinity and NaN to None (JSON null)
+to ensure compatibility with BigQuery.
+
+.. code-block:: python
+
+    >>> import numpy as np
+    >>> from earlysign.core.ledger import Ledger
+    >>> con = ibis.duckdb.connect(":memory:")
+    >>> L = Ledger(con, "sanitization_test")
+    >>> L.ensure()
+
+    >>> # 1. Test Infinity and NaN in payload
+    >>> data = {
+    ...     "inf": float("inf"),
+    ...     "neg_inf": float("-inf"),
+    ...     "nan": float("nan"),
+    ...     "normal": 1.23
+    ... }
+    >>> _ = L.insert(data=data)
+
+    >>> # 2. Read back and verify sanitization
+    >>> row = L.t.order_by(ibis.desc("timestamp")).limit(1).execute().to_dict("records")[0]
+    >>> payload = row["payload"]
+    >>> if isinstance(payload, str):
+    ...     import json
+    ...     payload = json.loads(payload)
+    >>> payload["inf"] is None
+    True
+    >>> payload["neg_inf"] is None
+    True
+    >>> payload["nan"] is None
+    True
+    >>> payload["normal"]
+    1.23
+
+    >>> # 3. Test NumPy Infinity and NaN
+    >>> data_np = {
+    ...     "inf": np.float64(np.inf),
+    ...     "nan": np.float32(np.nan)
+    ... }
+    >>> _ = L.insert(data=data_np)
+    >>> row_np = L.t.order_by(ibis.desc("timestamp")).limit(1).execute().to_dict("records")[0]
+    >>> payload_np = row_np["payload"]
+    >>> if isinstance(payload_np, str):
+    ...     import json
+    ...     payload_np = json.loads(payload_np)
+    >>> payload_np["inf"] is None
+    True
+    >>> payload_np["nan"] is None
     True
 """

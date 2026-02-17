@@ -50,21 +50,38 @@ from typing import Any, Dict, List, Literal, Optional
 
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
+from earlysign.core.util.logging import get_logger
 from earlysign.schema.ES3.AVI import (
+    MethodSpec,
     MSPRTMethodSpec,
-    Protocol,
+    Protocol as Protocol_Schema,
     TaskSpec,
 )
 from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
 from earlysign.schema.ES3.Binomial import BinomialArmData
-from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+from earlysign.schema.ES3.Continuous import ContinuousArmData
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
+from earlysign.v1.framework.template import RichDisplayMixin, TemplateBase
 from earlysign.v1.methods.AVI import mSPRTEngine
-from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
+from earlysign.v1.methods.AVI.reporting import (
+    BacktestProjector,
+    FinalProjector,
+    ProgressProjector,
+)
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
+
+
+class Protocol(Protocol_Schema, RichDisplayMixin):
+    """Protocol for AVI with rich display support."""
+
+    pass
+
+
+# Ensure MethodSpec is available for Pydantic model reconstruction
+assert MethodSpec is not None
+Protocol.model_rebuild()
 
 
 class BinomialJohari2019Template(TemplateBase[Protocol]):
@@ -138,13 +155,25 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
         Historical Analysis: Replays data and stops immediately on a stopping decision.
 
         Args:
-           batches: Iterator yielding `ArmData` objects or lists of them.
+           batches: Iterator yielding `BinomialArmData` objects or lists of them.
         """
-        for i, batch in enumerate(batches):
-            self.update(batch if isinstance(batch, list) else [batch])
-            prog = self.report_progress()
-            if prog.get("status") != DecisionStatus.CONTINUE_:
-                break
+        logger = get_logger(__name__)
+        from tqdm import tqdm
+
+        total = len(batches) if hasattr(batches, "__len__") else None
+
+        with tqdm(batches, total=total, desc="Backtesting (mSPRT)") as pbar:
+            for i, batch in enumerate(pbar):
+                self.update(batch if isinstance(batch, list) else [batch])
+                prog = self.report_progress()
+
+                pbar.set_postfix({"status": prog.get("status")})
+
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at index {i}: {prog.get('status')}"
+                    )
+                    break
 
         return self.report_result()
 
@@ -153,27 +182,17 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
         table: Any,
         *,
         arm_col: str = "arm",
-        n_col: str = "n",
+        n_col: str = "total",
         success_col: str = "success",
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Historical Analysis from an Ibis table.
-        Replays data from the table and stops immediately on a stopping decision.
-
-        Args:
-            table: Ibis table containing historical data.
-            arm_col: Column name for the arm identifier.
-            n_col: Column name for the number of trials.
-            success_col: Column name for the number of successes.
-            order_by: Column name to order the data by.
         """
-        from earlysign.schema.ES3.Binomial import ArmData
+        from earlysign.schema.ES3.Binomial import BinomialArmData
 
         # 1. Project and order
         if order_by:
-            # We must include order_by in our select if we want to order by it,
-            # or just use the original table's column.
             data_table = table.select(
                 arm=table[arm_col],
                 n=table[n_col],
@@ -189,21 +208,91 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
 
         # 2. Replay & Stop
         df = data_table.execute()
+        total_rows = len(df)
+        logger = get_logger(__name__)
+        from tqdm import tqdm
 
-        for _, row in df.iterrows():
-            batch = [
-                ArmData(
-                    arm=str(row["arm"]),
-                    n=int(row["n"]),
-                    success=int(row["success"]),
-                )
-            ]
-            self.update(batch)
-            prog = self.report_progress()
-            if prog.get("status") != DecisionStatus.CONTINUE_:
-                break
+        with tqdm(
+            df.iterrows(), total=total_rows, desc="Backtesting from Table (mSPRT)"
+        ) as pbar:
+            for i, (_, row) in enumerate(pbar):
+                batch = [
+                    BinomialArmData(
+                        arm=str(row["arm"]),
+                        total=int(row["total"]),
+                        success=int(row["success"]),
+                    )
+                ]
+                self.update(batch)
+                prog = self.report_progress()
 
-        return self.report_result()
+                pbar.set_postfix({"status": prog.get("status")})
+
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at row {i}: {prog.get('status')}"
+                    )
+                    break
+
+        # Calculate efficiency report
+        with Session(self.ledger) as sess:
+            total_data_points = int(df[n_col].sum())
+            report = sess.read(BacktestProjector(total_samples=total_data_points)).data
+            res = report.model_dump(mode="json")
+            # Flatten final_report for compatibility
+            fr = res.pop("final_report")
+            res.update(fr)
+            return res
+
+    @classmethod
+    def describe_protocol_instance(cls, protocol: Protocol) -> str:
+        """Summarizes the mSPRT design (Johari 2019)."""
+        from string import Template
+
+        tpl = Template(
+            """
+Design: mSPRT (Always Valid Inference) - Johari 2019
+==================================================
+Task: $task_name
+Response Type: $response_type
+Arms: $arms_desc
+Requirements: Alpha=$alpha (at any time)
+
+Method:
+  Kind: $method_kind
+  Tau (Mixing): $tau
+  Sides: $sides
+"""
+        )
+
+        task = protocol.task
+        method = protocol.method
+
+        arms_desc = "N/A"
+        if isinstance(task.arms, ES3_BASE.TwoArmComparison):
+            arms_desc = (
+                f"{task.arms.control_arm_name} vs {task.arms.treatment_arm_name}"
+            )
+
+        return tpl.substitute(
+            task_name=protocol.name or "Unnamed mSPRT",
+            response_type=task.response_type,
+            arms_desc=arms_desc,
+            alpha=f"{method.alpha:.4f}",
+            method_kind="mSPRT",
+            tau=f"{method.mde:.4f}",
+            sides=method.sides,
+        ).strip()
+
+        return tpl.substitute(
+            task_name=protocol.name or "Unnamed mSPRT",
+            response_type=task.response_type,
+            arms_desc=arms_desc,
+            alpha=f"{method.alpha:.4f}",
+            method_kind="mSPRT",
+            tau=f"{method.mde:.4f}",
+            sides=method.sides,
+        ).strip()
 
 
 class ContinuousJohari2019Template(TemplateBase[Protocol]):
@@ -264,3 +353,8 @@ class ContinuousJohari2019Template(TemplateBase[Protocol]):
     def report_result(self) -> Dict[str, Any]:
         with Session(self.ledger) as sess:
             return sess.read(FinalProjector()).data.model_dump(mode="json")
+
+    @classmethod
+    def describe_protocol_instance(cls, protocol: Protocol) -> str:
+        """Summarizes the mSPRT design (Johari 2019)."""
+        return BinomialJohari2019Template.describe_protocol_instance(protocol)

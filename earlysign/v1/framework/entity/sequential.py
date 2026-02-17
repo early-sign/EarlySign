@@ -12,6 +12,7 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
 )
 
@@ -38,6 +39,11 @@ class LatestStateProjector(Projector[Optional[S]], Generic[Index, S]):
     def __init__(self, entity: "SequentialEntity[Index, S]"):
         self.entity = entity
 
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        """Inherit dependencies from the entity."""
+        return self.entity.type_dependencies
+
     def project(self, table: ibis.Expr) -> ProjectionResult[Optional[S]]:
         """Project only the latest (most recent) state."""
         trajectory = self.entity.project_trajectory(table)
@@ -56,6 +62,11 @@ class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Ind
 
     def __init__(self, entity: "SequentialEntity[Index, S]"):
         self.entity = entity
+
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        """Inherit dependencies from the entity."""
+        return self.entity.type_dependencies
 
     def project(self, table: ibis.Expr) -> ProjectionResult[List[Tuple[Index, S]]]:
         """
@@ -82,12 +93,16 @@ class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Ind
         # Pointwise usually works with specific state records.
         # We rely on the entity identity filtering.
 
-        attributes = table.attributes
+        from earlysign.core.util.json_ops import extract_json_scalar
+
+        identity_expr = extract_json_scalar(
+            table.attributes, "entity_identity", "string"
+        )
         matched = table.filter(
             # Schema type filter
             (table.type == schema_name)
             # Identity filter
-            & (attributes["entity_identity"].str == self.entity.identity)
+            & (identity_expr == self.entity.identity)
         ).order_by("timestamp")
 
         # If the entity has a specific state_type defined (preferred for Pointwise), use it.
@@ -238,6 +253,17 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         """Store one snapshot per index; reconstruct trajectory by collection."""
 
     snapshot_strategy: SnapshotStrategy = SnapshotStrategy.COLLECTIVE
+
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        """
+        Sequential entities depend on their collective snapshots (via super)
+        AND their individual state elements if state_type is defined.
+        """
+        deps = super().type_dependencies
+        if self.state_type:
+            deps.append((self.state_type.__name__, self.identity))
+        return deps
 
     def get_index_expr(self, table: ibis.Expr) -> ibis.Expr:
         """

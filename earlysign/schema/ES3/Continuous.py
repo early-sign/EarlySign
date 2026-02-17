@@ -8,23 +8,12 @@ from pydantic import BaseModel, Field
 from .Base import Log
 
 
-class ArmData(Log):
-    """
-    Raw evidence: aggregated data for a single arm (continuous).
-    """
-
-    n: int = Field(..., description="Sample size.")
-    sum_x: float = Field(..., description="Sum of observations.")
-    sum_x2: float = Field(..., description="Sum of squared observations.")
-    arm: str = Field(..., description="Arm identifier.")
-
-
 class ArmMetrics(BaseModel):
     """
     Standard statistics for a single arm (Continuous).
     """
 
-    n: int
+    total: int
     mean: float
     variance: float
 
@@ -36,6 +25,17 @@ class ArmStatus(BaseModel):
 
     metrics: ArmMetrics
     is_active: bool
+
+
+class ContinuousArmData(Log):
+    """
+    Raw evidence: aggregated data for a single arm (continuous).
+    """
+
+    total: int = Field(..., description="Sample size.")
+    sum_x: float = Field(..., description="Sum of observations.")
+    sum_x2: float = Field(..., description="Sum of squared observations.")
+    arm: str = Field(..., description="Arm identifier.")
 
 
 class Observation(Log):

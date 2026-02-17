@@ -13,7 +13,7 @@ class ArmMetrics(Log):
     Metrics for a single arm in a sequential quantile test.
     """
 
-    n: int = Field(..., description="Sample size n at the time of calculation.")
+    total: int = Field(..., description="Sample size n at the time of calculation.")
     ci_lower: float = Field(
         ..., description="The value of the lower confidence bound (X at rank L_t)."
     )

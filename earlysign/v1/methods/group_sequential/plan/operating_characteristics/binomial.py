@@ -82,18 +82,18 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 2. Derive statistical parameters for Canonical Model
         timer = protocol.method.stopping_policy.timer
-        if not hasattr(timer, "max_sample_size") or timer.max_sample_size is None:
+        if not isinstance(timer, GST.SampleSizeTimer):
             raise ValueError(
-                "Protocol timer must specify 'max_sample_size' for evaluation."
+                f"Protocol timer must be SampleSizeTimer, got {type(timer).__name__}."
             )
-        self.n_max_total = int(timer.max_sample_size)
+        self.n_max_total = sum(timer.max_sample_size.values())
 
         # Variance per arm (assumed balanced for now)
         sigma2 = self.p_control * (1.0 - self.p_control)
         if self.arms == 1:
             # I = N / sigma^2
             self.i_max = self.n_max_total / sigma2
-            self.n_max_per_arm = {self.arm_names[0]: self.n_max_total}
+            self.n_max_per_arm = timer.max_sample_size
         else:
             # I = N_total / (4 * sigma^2) = n_arm / (2 * sigma^2)
             self.i_max = self.n_max_total / (4 * sigma2)

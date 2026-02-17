@@ -8,12 +8,24 @@ interim analyses in a Group Sequential Test.
 from typing import Any, List, Optional, Tuple, Type
 
 import ibis
+from pydantic import BaseModel
 
 from earlysign.schema.ES3.GST.Log import LookResult
 from earlysign.v1.framework.entity import (
     SequentialEntity,
 )
 from earlysign.v1.framework.projector import ProjectionResult
+
+
+class PreComputedBoundaries(BaseModel):
+    """
+    Stored results of a fixed-boundary calculation.
+    """
+
+    constant: float
+    schedule: List[float]
+    policy_name: str
+    drift: Optional[float] = None
 
 
 class InterimAnalyses(SequentialEntity[int, LookResult]):

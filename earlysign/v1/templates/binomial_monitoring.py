@@ -154,36 +154,38 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
             p = protocol_res.data
 
             # 2. Reconstruct History
-            # We need E-values over time (n).
             t = sess.table
             df = t.execute()
 
-        if "n" not in df.columns:
-            # Fallback
+        if "total" not in df.columns:
+            # Fallback for simple display if no history
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.set_title("Monitoring Result (History Unavailable)")
             threshold = 1.0 / p.alpha
             ax.axhline(threshold, color="r", linestyle="--", label="Threshold")
-            ax.plot(final_res["n"], final_res["e_value"], "bo", label="Final E-value")
+            ax.plot(
+                final_res["sample_n"],
+                final_res["trajectory"],
+                "bo",
+                label="Final E-value",
+            )
             return fig
-
-        # Group/Sort
-        # Assuming single stream of updates
-        # Check columns. If 'arm' exists, sum them if 2-sample.
-        # But 'Monitoring' usually implies we use 'n' and 'successes' from the summary accumulators.
-        # The E-value function takes aggregated n, k.
 
         # Sort by arrival
         if "created_at" in df.columns:
             df = df.sort_values("created_at")
 
-        # Calculate cumulative stats
-        df["n_cum"] = df["n"].cumsum()
-        df["s_cum"] = df["successes"].cumsum()
+        # Calculate cumulative stats for the e-process
+        # For our specific E-process template, we assume we want to track 'total' and 'success'
+        if "success" not in df.columns and "successes" in df.columns:
+            df["success"] = df["successes"]
+
+        df["total_cum"] = df["total"].cumsum()
+        df["success_cum"] = df["success"].cumsum()
 
         # Compute E-value trajectory
         history_e = []
-        history_n = []
+        history_total = []
 
         null_p = p.null_p
         alt_p = p.alt_p
@@ -191,14 +193,18 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         threshold = 1.0 / alpha
 
         for idx, row in df.iterrows():
-            n_val = row["n_cum"]
-            s_val = row["s_cum"]
+            total_val = row["total_cum"]
+            success_val = row["success_cum"]
 
             res = compute_binomial_e_value(
-                n=n_val, successes=s_val, null_p=null_p, alt_p=alt_p or 0.0, alpha=alpha
+                n=total_val,
+                successes=success_val,
+                null_p=null_p,
+                alt_p=alt_p or 0.0,
+                alpha=alpha,
             )
             history_e.append(res.e_value)
-            history_n.append(n_val)
+            history_total.append(total_val)
 
         # Plot
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -212,16 +218,15 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         )
 
         # Trajectory
-        ax.plot(history_n, history_e, "g-", label="E-value")
+        ax.plot(history_total, history_e, "g-", label="E-value")
 
         # Scale
-        # E-values can grow huge under H1. Log scale is often better.
         ax.set_yscale("log")
 
         # Final Point
-        ax.scatter([history_n[-1]], [history_e[-1]], color="green", zorder=5)
+        ax.scatter([history_total[-1]], [history_e[-1]], color="green", zorder=5)
 
-        ax.set_xlabel("Sample Size (N)")
+        ax.set_xlabel("Sample Size (Total)")
         ax.set_ylabel("E-value (Log Scale)")
         ax.set_title("Anytime-Valid Monitoring")
         ax.legend()

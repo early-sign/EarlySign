@@ -56,16 +56,22 @@ from pydantic import BaseModel, Field, TypeAdapter
 import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
+from earlysign.core.util.logging import get_logger
 from earlysign.schema.ES3.GST import (
     AbsoluteDifference,
     EffectMeasure,
     OddsRatio,
+    RelativeImprovement,
     RelativeRisk,
 )
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import ProtocolProjector
-from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import AutoNameMixin, TemplateBase
+from earlysign.v1.framework.session import BacktestSession, Session
+from earlysign.v1.framework.template import (
+    AutoNameMixin,
+    RichDisplayMixin,
+    TemplateBase,
+)
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
@@ -80,6 +86,7 @@ from earlysign.v1.methods.group_sequential.plan.protocol_design import (
     ProtocolDesigner,
 )
 from earlysign.v1.methods.group_sequential.reporting.projectors import (
+    BacktestProjector,
     FinalProjector,
     ProgressProjector,
 )
@@ -97,7 +104,7 @@ class JennisonTurnbull2000TaskSpec(GST.TaskSpec):
     hypotheses: GST.HypothesisSpec
 
 
-class JennisonTurnbull2000Protocol(GST.Protocol, AutoNameMixin):
+class JennisonTurnbull2000Protocol(GST.Protocol, AutoNameMixin, RichDisplayMixin):
     task: JennisonTurnbull2000TaskSpec
     method: GST.MethodSpec
     name: str = Field(default="")
@@ -122,6 +129,8 @@ def _resolve_p_treatment(
             return odds_t / (1.0 + odds_t)
         case RelativeRisk(value=rr_val):
             return p_control * rr_val
+        case RelativeImprovement(value=ri_val):
+            return p_control * (1.0 + ri_val)
         case _:
             raise ValueError(f"Unknown effect type: {type(effect_spec)}")
 
@@ -159,6 +168,9 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
         effect_spec: Optional[Union[EffectMeasure, Dict[str, Any]]] = None,
+        control_arm_name: str = "control",
+        treatment_arm_name: str = "treatment",
+        allocation_ratios: Optional[Dict[str, float]] = None,
     ) -> JennisonTurnbull2000Protocol:
         """
         Designs a Binomial A/B protocol.
@@ -216,11 +228,38 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                     )
                 p_treatment = _resolve_p_treatment(p_control, effect_spec)
 
+            if allocation_ratios and len(allocation_ratios) > 1:
+                arms: ES3_BASE.ArmStructure = ES3_BASE.MultiArmComparison(
+                    control_arm_name=control_arm_name,
+                    treatment_arm_names=list(allocation_ratios.keys()),
+                    allocation_ratios=allocation_ratios,
+                )
+                props = {control_arm_name: p_control}
+                props.update({arm: p_treatment for arm in allocation_ratios.keys()})
+            else:
+                ratio = 1.0
+                if allocation_ratios:
+                    ratio = list(allocation_ratios.values())[0]
+
+                # TwoArmComparison using allocation_ratios
+                two_arm_ratios = None
+                if ratio != 1.0:
+                    two_arm_ratios = {treatment_arm_name: ratio}
+                elif allocation_ratios:
+                    two_arm_ratios = allocation_ratios
+
+                arms = ES3_BASE.TwoArmComparison(
+                    control_arm_name=control_arm_name,
+                    treatment_arm_name=treatment_arm_name,
+                    allocation_ratios=two_arm_ratios,
+                )
+                props = {
+                    control_arm_name: p_control,
+                    treatment_arm_name: p_treatment,
+                }
+
             task = JennisonTurnbull2000TaskSpec(
-                arms=ES3_BASE.TwoArmComparison(
-                    control_arm_name="control",
-                    treatment_arm_name="treatment",
-                ),
+                arms=arms,
                 response_type=GST.ResponseType.BINARY,
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
                 futility=GST.FutilityRequirement(power=power),
@@ -228,9 +267,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                     h_null_description="Difference <= 0",
                     h_alt_description=f"Difference > {p_treatment - p_control:.4f}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.BinaryEffectSize(
-                        proportions={"control": p_control, "treatment": p_treatment}
-                    ),
+                    target_effect=GST.BinaryEffectSize(proportions=props),
                 ),
             )
 
@@ -243,7 +280,6 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         proportions = task.hypotheses.target_effect.proportions
         arms = task.arms
 
-        allocation_ratio = 1.0
         allocation_ratios = None
         control_arm_name = "control"
         treatment_arm_name = "treatment"
@@ -251,7 +287,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         if isinstance(arms, ES3_BASE.TwoArmComparison):
             control_arm_name = arms.control_arm_name
             treatment_arm_name = arms.treatment_arm_name
-            allocation_ratio = arms.allocation_ratio
+            allocation_ratios = arms.allocation_ratios
         elif isinstance(arms, ES3_BASE.MultiArmComparison):
             control_arm_name = arms.control_arm_name
             treatment_arm_name = arms.treatment_arm_names[0]
@@ -277,6 +313,9 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             futility_binding=task.futility.binding if task.futility else False,
             tails=1,
             rng_seed=rng_seed,
+            allocation_ratios=allocation_ratios,
+            control_arm_name=control_arm_name,
+            treatment_arm_name=treatment_arm_name,
         )
 
         return JennisonTurnbull2000Protocol(
@@ -284,53 +323,60 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             method=method_spec,
         )
 
-    def update(self, batch: List[BaseModel]) -> None:
+    def update(self, batch: List[BaseModel], session: Optional[Session] = None) -> None:
         """
         Orchestrates a single minibatch update cycle:
         Ingest -> [Read -> Analyze -> Decide -> Snapshot].
         """
         # 1. Ingest Data
-        with Session(self.ledger) as sess:
-            if batch:
-                # Validate arm names
-                protocol_traced = sess.read(
-                    ProtocolProjector(JennisonTurnbull2000Protocol)
-                )
-                arms = protocol_traced.data.task.arms
-                if isinstance(arms, ES3_BASE.TwoArmComparison):
-                    allowed_arms = {arms.control_arm_name, arms.treatment_arm_name}
-                else:
-                    allowed_arms = set()
-                for item in batch:
-                    arm_name = getattr(item, "arm", None)
-                    if arm_name and arm_name not in allowed_arms:
-                        warnings.warn(
-                            f"Received data for unexpected arm '{arm_name}'. "
-                            f"Expected arms: {allowed_arms}",
-                            UserWarning,
-                        )
-                    sess.commit(item, trace=[])
+        # Re-use provided session if available (optimization for backtests)
+        if session is not None:
+            self._update_with_session(session, batch)
+        else:
+            with Session(self.ledger) as sess:
+                self._update_with_session(sess, batch)
 
-            # 2. Analysis & Trigger check
-            # Reconstruct Protocol from Ledger
+    def _update_with_session(self, sess: Session, batch: List[BaseModel]) -> None:
+        """Internal helper for protocol-consistent update logic."""
+        if batch:
+            # Validate arm names
             protocol_traced = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
-            metrics = sess.read(Scoreboard(identity="metrics"))
-            trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
+            arms = protocol_traced.data.task.arms
+            if isinstance(arms, ES3_BASE.TwoArmComparison):
+                allowed_arms = {arms.control_arm_name, arms.treatment_arm_name}
+            else:
+                allowed_arms = set()
+            for item in batch:
+                arm_name = getattr(item, "arm", None)
+                if arm_name and arm_name not in allowed_arms:
+                    warnings.warn(
+                        f"Received data for unexpected arm '{arm_name}'. "
+                        f"Expected arms: {allowed_arms}",
+                        UserWarning,
+                    )
+                sess.commit(item, trace=[])
 
-            # 3. Check if an analysis is "due"
-            trigger = get_pending_look_trigger(protocol_traced, metrics, trajectory)
+        # 2. Analysis & Trigger check
+        # Reconstruct Protocol from Ledger
+        protocol_traced = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
+        metrics = sess.read(Scoreboard(identity="metrics"))
+        trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
 
-            if trigger:
-                # 4. Engine Execution - compute result using trajectory history
-                engine = BinomialGSTEngine(protocol_traced.data)
+        # 3. Check if an analysis is "due"
+        trigger = get_pending_look_trigger(protocol_traced, metrics, trajectory)
 
-                sess.call_and_commit(
-                    LookResult,
-                    engine.run,
-                    metrics=metrics,
-                    history=trajectory,
-                    trigger=trigger,
-                )
+        if trigger:
+            # 4. Engine Execution - compute result using trajectory history
+            engine = BinomialGSTEngine(protocol_traced.data)
+
+            sess.call_and_commit(
+                LookResult,
+                engine.run,
+                identity="interim_analyses",
+                metrics=metrics,
+                history=trajectory,
+                trigger=trigger,
+            )
 
     def report_progress(self) -> Dict[str, Any]:
         """
@@ -350,15 +396,42 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         Historical Analysis: Replays data and stops immediately on a stopping decision.
 
         Args:
-           batches: Iterator yielding `ArmData` objects or lists of them.
-                    Each `ArmData` must have `n`, `success`, and `arm`.
+           batches: Iterator yielding `BinomialArmData` objects or lists of them.
+                    Each `BinomialArmData` must have `total`, `success`, and `arm`.
         """
-        for i, batch in enumerate(batches):
-            self.update(batch if isinstance(batch, list) else [batch])
-            prog = self.report_progress()
-            if prog.get("status") != DecisionStatus.CONTINUE_:
-                break
+        logger = get_logger(__name__)
+        from tqdm import tqdm
 
+        # We don't know the total length if it's an iterator, but often it's a list
+        total = len(batches) if hasattr(batches, "__len__") else None
+
+        # Use BacktestSession for high-performance replay
+        with BacktestSession(
+            self.ledger, invariant_projectors=[ProtocolProjector]
+        ) as sess:
+            with tqdm(batches, total=total, desc="Backtesting") as pbar:
+                for i, batch in enumerate(pbar):
+                    self.update(
+                        batch if isinstance(batch, list) else [batch], session=sess
+                    )
+                    # Report progress is now essentially free (cached)
+                    report = sess.read(ProgressProjector()).data
+                    prog = report.model_dump(mode="json")
+
+                    # Update progress bar with current status
+                    pbar.set_postfix(
+                        {"look": prog.get("look"), "status": prog.get("status")}
+                    )
+
+                    if prog.get("status") != DecisionStatus.CONTINUE_:
+                        logger.info(
+                            f"Stopping criterion met at index {i}: {prog.get('status')}"
+                        )
+                        break
+
+        # Calculate efficiency report
+        # We need total count from batches. If it's an iterator, we might not have it unless we pre-calculated.
+        # But for backtest_from_table, we do.
         return self.report_result()
 
     def backtest_from_table(
@@ -402,21 +475,50 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
 
         # 2. Replay & Stop
         df = data_table.execute()
+        total_rows = len(df)
+        logger = get_logger(__name__)
+        from tqdm import tqdm
 
-        for _, row in df.iterrows():
-            batch = [
-                ArmData(
-                    arm=str(row["arm"]),
-                    n=int(row["n"]),
-                    success=int(row["success"]),
-                )
-            ]
-            self.update(batch)
-            prog = self.report_progress()
-            if prog.get("status") != DecisionStatus.CONTINUE_:
-                break
+        # Use BacktestSession for high-performance replay
+        with BacktestSession(
+            self.ledger, invariant_projectors=[ProtocolProjector]
+        ) as sess:
+            with tqdm(
+                df.iterrows(), total=total_rows, desc="Backtesting from Table"
+            ) as pbar:
+                for i, (_, row) in enumerate(pbar):
+                    batch = [
+                        BinomialArmData(
+                            arm=str(row["arm"]),
+                            total=int(row["total"]),
+                            success=int(row["success"]),
+                        )
+                    ]
+                    self.update(batch, session=sess)
 
-        return self.report_result()
+                    # Performance note: sess.read(ProgressProjector) is cheap here due to caching
+                    report = sess.read(ProgressProjector()).data
+                    prog = report.model_dump(mode="json")
+
+                    pbar.set_postfix(
+                        {"look": prog.get("look"), "status": prog.get("status")}
+                    )
+
+                    if prog.get("status") != DecisionStatus.CONTINUE_:
+                        logger.info(
+                            f"Stopping criterion met at row {i}: {prog.get('status')}"
+                        )
+                        break
+
+            # Calculate efficiency report at the end
+            # We use sum of 'total' for actual sample size efficiency
+            total_data_points = int(df[total_col].sum())
+            report = sess.read(BacktestProjector(total_samples=total_data_points)).data
+            res = report.model_dump(mode="json")
+            # Flatten final_report for compatibility
+            fr = res.pop("final_report")
+            res.update(fr)
+            return res
 
     def plot_result(self) -> Any:
         """
@@ -437,3 +539,77 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
                 title="GST Monitoring",
                 full_history=trajectory.data,
             )
+
+    @classmethod
+    def describe_protocol_instance(cls, protocol: JennisonTurnbull2000Protocol) -> str:
+        """Summarizes the Jennison & Turnbull (2000) design."""
+        from string import Template
+
+        tpl = Template(
+            """
+Design: Jennison & Turnbull (2000) - Binomial Sequential A/B Test
+================================================================
+Task: $task_name
+Arms: $control vs $treatment
+Target Rates: $p_control vs $p_treatment (Delta: $delta)
+Requirements: Alpha=$alpha, Power=$power
+
+Stopping Policy:
+  Method: $method_kind
+  Looks: $looks
+  Analyses (Info Fracs): $analyses
+  Spending: $spending_fn
+"""
+        )
+
+        task = protocol.task
+        method = protocol.method
+
+        # Extract details
+        arms = task.arms
+        ctrl_arm = (
+            arms.control_arm_name
+            if isinstance(arms, ES3_BASE.TwoArmComparison)
+            else "control"
+        )
+        trtm_arm = (
+            arms.treatment_arm_name
+            if isinstance(arms, ES3_BASE.TwoArmComparison)
+            else "treatment"
+        )
+
+        p0 = task.hypotheses.target_effect.proportions.get(ctrl_arm, 0)
+        p1 = task.hypotheses.target_effect.proportions.get(trtm_arm, 0)
+
+        policy = method.stopping_policy
+        strategy = policy.strategy
+
+        # Spending details
+        spending_fn = "Unknown"
+        if hasattr(strategy, "spending_fn"):
+            spending_fn = strategy.spending_fn.family
+        elif hasattr(strategy, "alpha_spending_fn"):
+            spending_fn = f"Alpha: {strategy.alpha_spending_fn.family}, Beta: {strategy.beta_spending_fn.family}"
+
+        return tpl.substitute(
+            task_name=protocol.name or "Unnamed GST",
+            control=ctrl_arm,
+            treatment=trtm_arm,
+            p_control=f"{p0:.4f}",
+            p_treatment=f"{p1:.4f}",
+            delta=f"{p1-p0:.4f}",
+            alpha=f"{task.efficacy.alpha:.4f}" if task.efficacy else "N/A",
+            power=f"{task.futility.power:.4f}" if task.futility else "N/A",
+            method_kind=method.kind,
+            looks=(
+                len(policy.schedule.analyses)
+                if hasattr(policy.schedule, "analyses")
+                else "N/A"
+            ),
+            analyses=(
+                ", ".join([f"{t:.2f}" for t in policy.schedule.analyses])
+                if hasattr(policy.schedule, "analyses")
+                else "N/A"
+            ),
+            spending_fn=spending_fn,
+        ).strip()

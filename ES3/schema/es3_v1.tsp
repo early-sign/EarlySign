@@ -139,6 +139,8 @@ namespace Base {
     kind: "two_arm";
     control_arm_name: string;
     treatment_arm_name: string;
+    /** Mapping of treatment arm name to its ratio relative to control. Key must match treatment_arm_name. */
+    allocation_ratios?: Record<float64>;
   }
 
   /**
@@ -148,6 +150,8 @@ namespace Base {
     kind: "multi_arm";
     control_arm_name: string;
     treatment_arm_names: string[];
+    /** Mapping of treatment arm names to their ratio relative to control (n_treatment / n_control). If None, equal allocation is assumed. */
+    allocation_ratios?: Record<float64>;
   }
 }
 
@@ -155,9 +159,9 @@ namespace Binomial {
   /**
    * Raw evidence: data for a single arm (Binomial).
    */
-  model ArmData extends Base.Log {
+  model BinomialArmData extends Base.Log {
     /** Total number of trials. */
-    n: int32;
+    total: int32;
     /** Total number of successes. */
     success: int32;
     /** The name/id of the arm. */
@@ -169,7 +173,7 @@ namespace Binomial {
    */
   model ArmMetrics {
     /** Total number of trials. */
-    n: int32;
+    total: int32;
     /** Total number of successes. */
     successes: int32;
     /** Success probability estimate (p-hat). */
@@ -206,9 +210,9 @@ namespace Continuous {
   /**
    * Raw evidence: aggregated data for a single arm (continuous).
    */
-  model ArmData extends Base.Log {
+  model ContinuousArmData extends Base.Log {
     /** Sample size. */
-    n: int32;
+    total: int32;
     /** Sum of observations. */
     sum_x: float64;
     /** Sum of squared observations. */
@@ -221,7 +225,7 @@ namespace Continuous {
    * Standard statistics for a single arm (Continuous).
    */
   model ArmMetrics {
-    n: int32;
+    total: int32;
     mean: float64;
     variance: float64;
   }

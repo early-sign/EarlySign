@@ -48,6 +48,10 @@ class MultiArmComparison(ArmStructureBase):
     kind: Literal["multi_arm"] = "multi_arm"
     control_arm_name: str
     treatment_arm_names: list[str]
+    allocation_ratios: dict[str, float] | None = Field(
+        None,
+        description="Mapping of treatment arm names to their ratio relative to control (n_treatment / n_control). If None, equal allocation is assumed.",
+    )
 
 
 class Protocol(BaseModel):
@@ -88,6 +92,10 @@ class TwoArmComparison(ArmStructureBase):
     kind: Literal["two_arm"] = "two_arm"
     control_arm_name: str
     treatment_arm_name: str
+    allocation_ratios: dict[str, float] | None = Field(
+        None,
+        description="Mapping of treatment arm name to its ratio relative to control. Key must match treatment_arm_name.",
+    )
 
 
 ArmStructure = TypeAliasType(

@@ -8,22 +8,12 @@ from pydantic import BaseModel, Field
 from .Base import Log
 
 
-class ArmData(Log):
-    """
-    Raw evidence: data for a single arm (Binomial).
-    """
-
-    n: int = Field(..., description="Total number of trials.")
-    success: int = Field(..., description="Total number of successes.")
-    arm: str = Field(..., description="The name/id of the arm.")
-
-
 class ArmMetrics(BaseModel):
     """
     Standard statistics for a single arm (Bernoulli/Binomial).
     """
 
-    n: int = Field(..., description="Total number of trials.")
+    total: int = Field(..., description="Total number of trials.")
     successes: int = Field(..., description="Total number of successes.")
     p_hat: float = Field(..., description="Success probability estimate (p-hat).")
 
@@ -35,6 +25,16 @@ class ArmStatus(BaseModel):
 
     metrics: ArmMetrics
     is_active: bool
+
+
+class BinomialArmData(Log):
+    """
+    Raw evidence: data for a single arm (Binomial).
+    """
+
+    total: int = Field(..., description="Total number of trials.")
+    success: int = Field(..., description="Total number of successes.")
+    arm: str = Field(..., description="The name/id of the arm.")
 
 
 class Scoreboard(BaseModel):

@@ -36,7 +36,10 @@ Examples:
     ...                 sided=GST.Sided.ONE,
     ...                 statistical_model=GST.CanonicalGaussianModel(),
     ...             ),
-    ...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+    ...             timer=GST.SampleSizeTimer(
+    ...                 unit=GST.Unit.INDIVIDUALS,
+    ...                 max_sample_size={"control": 50, "treatment": 50}
+    ...             ),
     ...             schedule=GST.FixedSchedule(analyses=info_times)
     ...         ),
     ...     )

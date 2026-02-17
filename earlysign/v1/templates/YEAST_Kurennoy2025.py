@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.Binomial import BinomialArmData
-from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+from earlysign.schema.ES3.Continuous import ContinuousArmData
 from earlysign.schema.ES3.YEAST import (
     MethodSpec,
     Protocol,
@@ -197,7 +197,7 @@ class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
         >>> from earlysign.core.ledger import Ledger
         >>> import earlysign.schema.ES3.Base as ES3_BASE
         >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import ContinuousKurennoy2025Template, ContinuousKurennoy2025TaskSpec
-        >>> from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
+        >>> from earlysign.schema.ES3.Continuous import ContinuousArmData
 
         >>> con = ibis.duckdb.connect(":memory:")
         >>> ledger = Ledger(con, "events_cont")
@@ -211,7 +211,7 @@ class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
         >>> protocol = template.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=1.0)
         >>> template.set_protocol(protocol)
 
-        >>> batch = [ContinuousArmData(n=10, sum_x=5.0, sum_x2=10.0, arm="A")]
+        >>> batch = [ContinuousArmData(total=10, sum_x=5.0, sum_x2=10.0, arm="A")]
         >>> template.update(batch)
         >>> res = template.report_progress()
         >>> res["status"]

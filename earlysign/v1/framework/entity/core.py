@@ -25,9 +25,12 @@ from abc import ABC, abstractmethod
 from typing import (
     Any,
     Dict,
+    List,
     Optional,
+    Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
 )
 
@@ -154,6 +157,14 @@ class Entity(BaseEntity[T], ABC):
         """
         ...
 
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        """
+        Declares dependencies for identifiable aggregates.
+        By default, it depends on its own snapshots (data_type + identity).
+        """
+        return [(self.data_type.__name__, self.identity)]
+
     @abstractmethod
     def compute(
         self,
@@ -202,9 +213,13 @@ class Entity(BaseEntity[T], ABC):
         # Snapshots have the same payload_schema as the entity's data_type
         # but are identified by entity_identity label.
         schema_name = self.data_type.__name__
+        from earlysign.core.util.json_ops import extract_json_scalar
+
+        identity_expr = extract_json_scalar(
+            table.attributes, "entity_identity", "string"
+        )
         matched = table.filter(
-            (table.type == schema_name)
-            & (table.attributes["entity_identity"].str == self.identity)
+            (table.type == schema_name) & (identity_expr == self.identity)
         )
 
         # Get the latest one

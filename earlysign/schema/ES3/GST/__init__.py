@@ -31,6 +31,10 @@ class AdaptationSnapshot(BaseModel):
     original_max_sample_size: int = Field(
         ..., description="The maximum sample size before re-planning."
     )
+    use_weighted_statistic: bool | None = Field(
+        True,
+        description="Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error.",
+    )
 
 
 class AdaptationSpec(BaseModel):
@@ -245,12 +249,16 @@ class Protocol(Protocol_1):
     method: MethodSpec = Field(..., description="The GST method specification.")
 
 
+class RelativeImprovement(EffectMeasureBase):
+    kind: Literal["relative_improvement"] = "relative_improvement"
+
+
 class RelativeRisk(EffectMeasureBase):
     kind: Literal["relative_risk"] = "relative_risk"
 
 
 EffectMeasure = TypeAliasType(
-    "EffectMeasure", AbsoluteDifference | OddsRatio | RelativeRisk
+    "EffectMeasure", AbsoluteDifference | OddsRatio | RelativeRisk | RelativeImprovement
 )
 
 
@@ -264,11 +272,11 @@ class SampleSizeReestimationSpec(AdaptationSpec):
     type: Literal["sample_size_reestimation"] = "sample_size_reestimation"
     method: Method
     target_power: float
-    n_range: list[Any]
-    use_weighted_statistic: bool = Field(
+    use_weighted_statistic: bool | None = Field(
         True,
         description="Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error.",
     )
+    n_range: list[Any]
 
 
 class SampleSizeTimer(InformationTimerBase):
@@ -277,9 +285,8 @@ class SampleSizeTimer(InformationTimerBase):
         ...,
         description='"individuals": Count individuals (e.g. n1 + n2).\n"effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).',
     )
-    max_sample_size: int | dict[str, int] = Field(
-        ...,
-        description="The maximum sample size. Can be an integer (total) or a dictionary (per-arm).",
+    max_sample_size: dict[str, int] = Field(
+        ..., description="The maximum sample size (per-arm)."
     )
 
 

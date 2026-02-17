@@ -60,7 +60,7 @@ def get_pending_look_trigger(
     # 2. Calculate current information fraction
     n_max: float = 0.0
     if isinstance(timer, SampleSizeTimer):
-        n_max = timer.max_sample_size
+        n_max = float(sum(timer.max_sample_size.values()))
     elif isinstance(timer, EventCountTimer):
         n_max = timer.max_events
     elif isinstance(timer, FisherInformationTimer):
@@ -68,7 +68,7 @@ def get_pending_look_trigger(
     else:
         return None
 
-    total_n = sum(arm.metrics.n for arm in metrics.data.arms.values())
+    total_n = sum(arm.metrics.total for arm in metrics.data.arms.values())
     current_info_frac = total_n / n_max if n_max > 0 else 0.0
 
     # 3. Identify due looks

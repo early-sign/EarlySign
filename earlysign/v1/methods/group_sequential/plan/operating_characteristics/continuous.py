@@ -48,7 +48,10 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         ...     test_logic=GST.EqualityHypothesis(),
         ...     target_effect=effect,
         ... )
-        >>> timer = GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100)
+        >>> timer = GST.SampleSizeTimer(
+        ...     unit=GST.Unit.INDIVIDUALS,
+        ...     max_sample_size={"control": 50, "treatment": 50}
+        ... )
         >>> sched = GST.EquidistantSchedule(n_looks=2)
         >>> strat = GST.OBrienFlemingStrategy(
         ...     alpha=0.05,
@@ -122,7 +125,10 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
         ...     futility=GST.FutilityRequirement(power=0.8),
         ... )
-        >>> timer_power = GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=200)
+        >>> timer_power = GST.SampleSizeTimer(
+        ...     unit=GST.Unit.INDIVIDUALS,
+        ...     max_sample_size={"control": 100, "treatment": 100}
+        ... )
         >>> policy_power = GST.StoppingPolicySpec(
         ...     statistic=GST.TwoArmContinuousZ(
         ...         variance=GST.TwoArmEstimatedVariance(method=GST.MethodModel.POOLED)
@@ -215,11 +221,11 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 2. Derive statistical parameters for Canonical Model
         timer = protocol.method.stopping_policy.timer
-        if not hasattr(timer, "max_sample_size") or timer.max_sample_size is None:
+        if not isinstance(timer, GST.SampleSizeTimer):
             raise ValueError(
-                "Protocol timer must specify 'max_sample_size' for evaluation."
+                f"Protocol timer must be SampleSizeTimer, got {type(timer).__name__}."
             )
-        self.n_max_total = int(timer.max_sample_size)
+        self.n_max_total = sum(timer.max_sample_size.values())
 
         # Calculate Information I_max
         # I = 1/V_beta
@@ -234,8 +240,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             # Var = 4 * sigma^2 / N
             # I = N / (4 * sigma^2)
             self.i_max = self.n_max_total / (4 * self.sigma2)
-            n_arm = self.n_max_total // 2
-            self.n_max_per_arm = {name: n_arm for name in self.arm_names}
+            self.n_max_per_arm = timer.max_sample_size
 
         # 3. Solve Design Boundaries (Target Drift)
         # theta = delta

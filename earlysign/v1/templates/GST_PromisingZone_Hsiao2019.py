@@ -77,6 +77,7 @@ from pydantic import BaseModel
 import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
+from earlysign.core.util.logging import get_logger
 from earlysign.schema.ES3.GST.Log import (
     AdaptationLog,
     DecisionStatus,
@@ -94,6 +95,7 @@ from earlysign.v1.methods.group_sequential.execution.sample_size_reestimation im
     ConditionalPowerAdaptationEngine as PromisingZoneAdaptationEngine,
 )
 from earlysign.v1.methods.group_sequential.reporting.projectors import (
+    BacktestProjector,
     FinalProjector,
     ProgressProjector,
 )
@@ -324,6 +326,101 @@ class Hsiao2019Template(TemplateBase[Hsiao2019Protocol]):
     def report_result(self) -> Dict[str, Any]:
         with Session(self.ledger) as sess:
             return sess.read(FinalProjector()).data.model_dump(mode="json")
+
+    def backtest(self, batches: Any) -> Dict[str, Any]:
+        """
+        Historical Analysis: Replays data and stops immediately on a stopping decision.
+        """
+        logger = get_logger(__name__)
+        from tqdm import tqdm
+
+        total = len(batches) if hasattr(batches, "__len__") else None
+
+        with tqdm(batches, total=total, desc="Backtesting") as pbar:
+            for i, batch in enumerate(pbar):
+                self.update(batch if isinstance(batch, list) else [batch])
+                prog = self.report_progress()
+
+                pbar.set_postfix(
+                    {"look": prog.get("look"), "status": prog.get("status")}
+                )
+
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at index {i}: {prog.get('status')}"
+                    )
+                    break
+
+        return self.report_result()
+
+    def backtest_from_table(
+        self,
+        table: Any,
+        *,
+        arm_col: str = "arm",
+        n_col: str = "total",
+        success_col: str = "success",
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Historical Analysis from an Ibis table.
+        """
+        from earlysign.schema.ES3.Binomial import BinomialArmData
+
+        # 1. Project and order
+        if order_by:
+            data_table = table.select(
+                arm=table[arm_col],
+                n=table[n_col],
+                success=table[success_col],
+                _order=table[order_by],
+            ).order_by("_order")
+        else:
+            data_table = table.select(
+                arm=table[arm_col],
+                n=table[n_col],
+                success=table[success_col],
+            )
+
+        # 2. Replay & Stop
+        df = data_table.execute()
+        total_rows = len(df)
+        logger = get_logger(__name__)
+        from tqdm import tqdm
+
+        with tqdm(
+            df.iterrows(), total=total_rows, desc="Backtesting from Table"
+        ) as pbar:
+            for i, (_, row) in enumerate(pbar):
+                batch = [
+                    BinomialArmData(
+                        arm=str(row["arm"]),
+                        total=int(row["total"]),
+                        success=int(row["success"]),
+                    )
+                ]
+                self.update(batch)
+                prog = self.report_progress()
+
+                pbar.set_postfix(
+                    {"look": prog.get("look"), "status": prog.get("status")}
+                )
+
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at row {i}: {prog.get('status')}"
+                    )
+                    break
+
+        # Calculate efficiency report
+        with Session(self.ledger) as sess:
+            total_data_points = int(df[n_col].sum())
+            report = sess.read(BacktestProjector(total_samples=total_data_points)).data
+            res = report.model_dump(mode="json")
+            # Flatten final_report for compatibility
+            fr = res.pop("final_report")
+            res.update(fr)
+            return res
 
     def plot_result(self) -> Any:
         with Session(self.ledger) as sess:

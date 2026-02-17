@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import ibis
 import pandas as pd
@@ -36,6 +36,16 @@ class FinalReport(BaseModel):
     is_rejected: bool
     final_status: Union[DecisionStatus, str]
     arms: Dict[str, Any] = {}
+
+
+class BacktestReport(BaseModel):
+    """Report for historical backtesting (AVI)."""
+
+    final_report: FinalReport
+    efficiency: float
+    samples_used: int
+    total_samples: int
+    stopping_reason: str
 
 
 class ProgressProjector(Projector[ProgressReport]):
@@ -104,6 +114,10 @@ class FinalProjector(Projector[FinalReport]):
     Projector for AVI final study summary.
     """
 
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        return ["LookResult", "Protocol", "Scoreboard"]
+
     def project(self, table: ibis.Expr) -> ProjectionResult[FinalReport]:
         # 1. Read the latest LookResult
         results_df = table.filter(table.type == "LookResult").execute()
@@ -150,6 +164,37 @@ class FinalProjector(Projector[FinalReport]):
         return ProjectionResult(data=report, trace=metrics_traced.trace)
 
 
+class BacktestProjector(Projector[BacktestReport]):
+    """
+    Projector for AVI backtesting results.
+    """
+
+    def __init__(self, total_samples: int):
+        self.total_samples = total_samples
+
+    def project(self, table: ibis.Expr) -> ProjectionResult[BacktestReport]:
+        # 1. Get Final Report
+        final_traced = FinalProjector().project(table)
+        final_report = final_traced.data
+
+        # 2. Calculate Efficiency
+        efficiency = (
+            final_report.sample_n / self.total_samples
+            if self.total_samples > 0
+            else 1.0
+        )
+
+        report = BacktestReport(
+            final_report=final_report,
+            efficiency=efficiency,
+            samples_used=final_report.sample_n,
+            total_samples=self.total_samples,
+            stopping_reason=str(final_report.final_status),
+        )
+
+        return ProjectionResult(data=report, trace=final_traced.trace)
+
+
 class BinomialEValueProgressProjector(Projector[ProgressReport]):
     """
     Projector for 1-sample binomial e-value monitoring.
@@ -170,14 +215,14 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
         # 2. Read Metrics
         metrics_traced = BinomialScoreboard(identity="metrics").project(table)
         metrics = metrics_traced.data
-        n_total = sum(a.metrics.n for a in metrics.arms.values())
+        n_total = sum(a.metrics.total for a in metrics.arms.values())
         s_total = sum(a.metrics.successes for a in metrics.arms.values())
         p_total = s_total / n_total if n_total > 0 else 0.0
-        s = ArmMetrics(n=n_total, successes=s_total, p_hat=p_total)
+        s = ArmMetrics(total=n_total, successes=s_total, p_hat=p_total)
 
         # 3. Compute e-value
         res = compute_binomial_e_value(
-            n=s.n,
+            n=s.total,
             successes=s.successes,
             null_p=p.null_p,
             alt_p=p.alt_p,
@@ -189,7 +234,7 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
             status = DecisionStatus.STOP_EFFICACY
 
         report = ProgressReport(
-            sample_n=s.n,
+            sample_n=s.total,
             trajectory=res.e_value,
             boundary=1.0 / p.alpha,
             status=status,
@@ -219,7 +264,7 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
         # 2. Read Metrics
         metrics_traced = BinomialScoreboard(identity="metrics").project(table)
         metrics = metrics_traced.data
-        n_total = sum(a.metrics.n for a in metrics.arms.values())
+        n_total = sum(a.metrics.total for a in metrics.arms.values())
         s_total = sum(a.metrics.successes for a in metrics.arms.values())
 
         # 3. Compute e-value
@@ -253,6 +298,10 @@ class TrajectoryProjector(Projector[pd.DataFrame]):
     Projector that reconstructs the history of LookResults from the ledger.
     Useful for plotting trajectories of e-values or confidence sequences.
     """
+
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        return ["LookResult"]
 
     def project(self, table: ibis.Expr) -> ProjectionResult[pd.DataFrame]:
         # 1. Filter for LookResult facts

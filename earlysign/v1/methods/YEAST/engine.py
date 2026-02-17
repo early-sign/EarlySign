@@ -131,16 +131,19 @@ class ContinuousYEASTEngine:
             )
 
         default_arm = ContinuousArmStatus(
-            metrics=ContinuousArmMetrics(n=0, mean=0.0, variance=0.0), is_active=True
+            metrics=ContinuousArmMetrics(total=0, mean=0.0, variance=0.0),
+            is_active=True,
         )
         summary_c = metrics.arms.get(control_key, default_arm).metrics
         summary_t = metrics.arms.get(treatment_key, default_arm).metrics
 
-        cumulative_n = summary_c.n + summary_t.n
-        raw_diff = (summary_t.mean * summary_t.n) - (summary_c.mean * summary_c.n)
+        cumulative_n = summary_c.total + summary_t.total
+        raw_diff = (summary_t.mean * summary_t.total) - (
+            summary_c.mean * summary_c.total
+        )
 
-        if summary_c.n > 0 and summary_t.n > 0:
-            n_eff = 2.0 / (1.0 / summary_c.n + 1.0 / summary_t.n)
+        if summary_c.total > 0 and summary_t.total > 0:
+            n_eff = 2.0 / (1.0 / summary_c.total + 1.0 / summary_t.total)
             trajectory = raw_diff / (n_eff**0.5)
         else:
             trajectory = 0.0

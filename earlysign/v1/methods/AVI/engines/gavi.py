@@ -56,9 +56,7 @@ class GAVIEngine:
         # Extract metrics
         s_c = metrics.arms.get(control_key)
         s_t = metrics.arms.get(treatment_key)
-
         if not s_c or not s_t:
-            # Not enough data yet
             return LookResult(
                 sample_n=0,
                 trajectory=0.0,
@@ -66,9 +64,8 @@ class GAVIEngine:
                 is_crossed=False,
                 status=DecisionStatus.CONTINUE_,
             )
-
-        n_c = s_c.metrics.n
-        n_t = s_t.metrics.n
+        n_c = s_c.metrics.total
+        n_t = s_t.metrics.total
 
         if n_c == 0 or n_t == 0:
             return LookResult(
@@ -79,9 +76,11 @@ class GAVIEngine:
                 status=DecisionStatus.CONTINUE_,
             )
 
+        n_total = n_c + n_t
+
         # Baseline GAVI uses the arm-level sample size (number of pairs)
         # to drive the anytime-valid clock.
-        n = (n_c + n_t) / 2.0
+        n = n_total / 2.0
 
         # Calculate trajectory (Estimated effect size)
         if isinstance(metrics, BinomialScoreboard):

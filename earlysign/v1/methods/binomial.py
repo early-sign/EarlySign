@@ -1,11 +1,13 @@
-from typing import Optional
+from typing import List, Optional, Tuple, Union
 
 import ibis
 import numpy as np
 
+from earlysign.core.util.ibis_ops import type_filter
 from earlysign.schema.ES3.Binomial import (
     ArmMetrics,
     ArmStatus,
+    BinomialArmData,
     Scoreboard as ScoreboardSchema,
 )
 from earlysign.v1.framework.entity import Entity, Snapshot
@@ -24,6 +26,17 @@ class Scoreboard(Entity[ScoreboardSchema]):
     """
 
     data_type = ScoreboardSchema
+
+    def __init__(self, identity: str, record_type: type = BinomialArmData):
+        super().__init__(identity)
+        self.record_type = record_type
+
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        """Scoreboard depends on its own snapshots + raw ArmData records."""
+        deps = super().type_dependencies
+        deps.append(self.record_type.__name__)
+        return deps
 
     @property
     def initial_value(self) -> ScoreboardSchema:
@@ -50,22 +63,27 @@ class Scoreboard(Entity[ScoreboardSchema]):
         current_arms = current_state.arms.copy()
 
         # 2. Process Delta: Data Ingestion
-        # Look for both 'Observation' and 'ArmData' (and legacy BinomialData)
-        batch_table = delta_expr.filter(
-            (delta_expr.type == "ArmData")
-            | (delta_expr.type == "BinomialData")
-            | (delta_expr.type == "Observation")
-        )
+        batch_table = type_filter(delta_expr, self.record_type)
 
-        is_arm_data = (batch_table.type == "ArmData") | (
-            batch_table.type == "BinomialData"
-        )
+        is_arm_data = batch_table.type == "BinomialArmData"
         # Simple iteration for prototype:
+        from earlysign.core.util.json_ops import extract_json_scalar
+
+        # NOTE on BigQuery Robustness:
+        # We use ifelse() combined with extract_json_scalar() to guard against
+        # BigQuery's non-deterministic evaluation order. Even if a row is filtered
+        # out by a WHERE clause later, BigQuery may attempt to evaluate CAST(JSON AS INT)
+        # on non-conforming rows (like Protocol records), causing a crash.
+        # ifelse() provides guaranteed short-circuiting in BigQuery.
         batch_df = batch_table.select(
             "uuid",
             "payload",
-            n=is_arm_data.ifelse(batch_table.payload["n"], 1).cast("int"),
-            success=batch_table.payload["success"].cast("int"),
+            total=is_arm_data.ifelse(
+                extract_json_scalar(batch_table.payload, "total", "int"), 1
+            ),
+            success=is_arm_data.ifelse(
+                extract_json_scalar(batch_table.payload, "success", "int"), 0
+            ),
         ).execute()
 
         # 3. Aggregate deltas into current_arms
@@ -73,15 +91,15 @@ class Scoreboard(Entity[ScoreboardSchema]):
             arm_name = row["payload"]["arm"]
             if arm_name not in current_arms:
                 current_arms[arm_name] = ArmStatus(
-                    metrics=ArmMetrics(n=0, successes=0, p_hat=0.0),
+                    metrics=ArmMetrics(total=0, successes=0, p_hat=0.0),
                     is_active=True,
                 )
 
             status = current_arms[arm_name]
-            status.metrics.n += int(row["n"])
+            status.metrics.total += int(row["total"])
             status.metrics.successes += int(row["success"])
-            if status.metrics.n > 0:
-                status.metrics.p_hat = status.metrics.successes / status.metrics.n
+            if status.metrics.total > 0:
+                status.metrics.p_hat = status.metrics.successes / status.metrics.total
 
         # 4. Lineage Management
         tracked_uuids = [TraceId(str(uid)) for uid in batch_df["uuid"].tolist()]
@@ -97,7 +115,7 @@ def calculate_binomial_z_statistic(control: ArmMetrics, treatment: ArmMetrics) -
     """
     Computes the standard Z-statistic for two binomial proportions.
     """
-    n_c, n_t = control.n, treatment.n
+    n_c, n_t = control.total, treatment.total
     cumulative_n = n_c + n_t
 
     if n_c < 2 or n_t < 2:

@@ -113,3 +113,8 @@ Its schema is shown in Table 1.
 ## Standardized Schema: EarlySign Standard Schema (ES3)
 We also provide a standardized schema for sequential analysis methods.
 As a platform for implementing various sequential statistical methods, we provide a standardized schema.
+
+## Controller
+
+Controller is a class that aggregates commands and queries to the ledger (some of which are both, for convenience).
+It is the main console of operations such as generating protocols, declaring protocols, recording observations, modifying protocols, recording offline decisions, executing ad-hoc analysis, starting trigger-based analysis, reporting results, and outputting progress reports.

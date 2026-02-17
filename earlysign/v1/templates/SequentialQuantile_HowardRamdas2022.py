@@ -54,7 +54,7 @@ class SequentialQuantileScoreboard:
                 # Initial state for missing arms
                 arms[aid] = ArmStatus(
                     metrics=ArmMetrics(
-                        n=0, ci_lower=0.0, ci_upper=0.0, quantile_estimate=0.0
+                        total=0, ci_lower=0.0, ci_upper=0.0, quantile_estimate=0.0
                     ),
                     is_active=True,
                 )
@@ -130,7 +130,9 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
         n = int(n_res) if n_res is not None else 0
 
         if n == 0:
-            return ArmMetrics(n=0, ci_lower=0.0, ci_upper=0.0, quantile_estimate=0.0)
+            return ArmMetrics(
+                total=0, ci_lower=0.0, ci_upper=0.0, quantile_estimate=0.0
+            )
 
         # 2. Get values at ranks
         # Ranks are 1-indexed. Ibis order_by + offset is 0-indexed.
@@ -149,7 +151,7 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
         q_est = sorted_table.limit(1, offset=q_idx).execute().iloc[0]["val"]
 
         return ArmMetrics(
-            n=n,
+            total=n,
             ci_lower=float(ci_lower),
             ci_upper=float(ci_upper),
             quantile_estimate=float(q_est),

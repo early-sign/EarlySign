@@ -44,11 +44,36 @@ class FinalReport(BaseModel):
     arms: Dict[str, Any] = {}
 
 
+class BacktestReport(BaseModel):
+    """Report for historical backtesting."""
+
+    final_report: FinalReport
+    efficiency: float = Field(
+        ..., description="Percentage of total data used (lower is better)."
+    )
+    samples_used: int
+    total_samples: int
+    stopping_reason: str
+
+
 class ProgressProjector(Projector[ProgressReport]):
     """
     Generic Projector for interim monitoring.
     Reads the latest LookResult and Scoreboard from the ledger.
     """
+
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        # Progress report depends on:
+        # - Latest LookResult
+        # - Scoreboard (which needs its own snapshots + ArmData)
+        # - The Protocol definition
+        return [
+            "LookResult",
+            ("Scoreboard", "metrics"),
+            "BinomialArmData",
+            "BinomialGSTProtocol",
+        ]
 
     def project(self, table: ibis.Expr) -> ProjectionResult[ProgressReport]:
         # 1. Read the latest Scoreboard (always up-to-date real-time metrics)
@@ -205,6 +230,10 @@ class FinalProjector(Projector[FinalReport]):
     Generic Projector for final study summary.
     """
 
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        return ["LookResult", ("Scoreboard", "metrics"), "BinomialArmData"]
+
     def project(self, table: ibis.Expr) -> ProjectionResult[FinalReport]:
         # 1. Read the latest LookResult
         results_df = table.filter(table.type == "LookResult").execute()
@@ -235,3 +264,39 @@ class FinalProjector(Projector[FinalReport]):
         )
 
         return ProjectionResult(data=report, trace=metrics_traced.trace)
+
+
+class BacktestProjector(Projector[BacktestReport]):
+    """
+    Projector for backtesting results.
+    Calculates efficiency based on the final LookResult and total data points.
+    """
+
+    def __init__(self, total_samples: int):
+        self.total_samples = total_samples
+
+    @property
+    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
+        return ["LookResult", ("Scoreboard", "metrics"), "BinomialArmData"]
+
+    def project(self, table: ibis.Expr) -> ProjectionResult[BacktestReport]:
+        # 1. Get Final Report
+        final_traced = FinalProjector().project(table)
+        final_report = final_traced.data
+
+        # 2. Calculate Efficiency
+        efficiency = (
+            final_report.sample_n / self.total_samples
+            if self.total_samples > 0
+            else 1.0
+        )
+
+        report = BacktestReport(
+            final_report=final_report,
+            efficiency=efficiency,
+            samples_used=final_report.sample_n,
+            total_samples=self.total_samples,
+            stopping_reason=str(final_report.final_status),
+        )
+
+        return ProjectionResult(data=report, trace=final_traced.trace)

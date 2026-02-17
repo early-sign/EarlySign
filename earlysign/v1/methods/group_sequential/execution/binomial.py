@@ -58,20 +58,63 @@ class BinomialGSTEngine:
         self.n_max = 0
         timer = method.stopping_policy.timer
         if isinstance(timer, GST.SampleSizeTimer):
-            self.n_max = timer.max_sample_size
+            if isinstance(timer.max_sample_size, dict):
+                self.n_max = sum(timer.max_sample_size.values())
+            else:
+                self.n_max = timer.max_sample_size
 
-        # Initialize Canonical Model and pre-calculate boundaries
+        # Initialize Canonical Model
         self.canonical_model = CanonicalJointModel.from_spec(protocol)
+        self._efficacy_boundaries: Optional[np.ndarray] = None
+        self._futility_boundaries: Optional[np.ndarray] = None
 
-        try:
-            drift = get_standardized_drift(protocol)
-        except ValueError:
-            # For designs where drift isn't strictly required at this stage (e.g. efficacy only)
-            # we allow a None drift, but CanonicalJointModel will raise if it's needed for futility.
-            drift = None
+    @property
+    def info_times(self) -> np.ndarray:
+        """Required by BoundarySolver protocol."""
+        return np.asarray(self._points, dtype=float)
 
-        self.efficacy_boundaries, self.futility_boundaries = (
-            self.canonical_model.solve_boundaries(drift=drift)
+    @property
+    def tails(self) -> int:
+        """Required by BoundarySolver protocol."""
+        method = self.protocol.method
+        strategy = method.stopping_policy.strategy
+        if hasattr(strategy, "sided"):
+            return 1 if strategy.sided == GST.Sided.ONE else 2
+        return 1  # Default to 1-sided if not specified
+
+    def find_critical_value(
+        self, shape: np.ndarray, alpha: float, tails: Optional[int] = None
+    ) -> float:
+        """Required by BoundarySolver protocol. Proxies to the canonical model."""
+        return self.canonical_model.find_critical_value(
+            shape=shape, alpha=alpha, tails=tails or self.tails
+        )
+
+    @property
+    def efficacy_boundaries(self) -> Optional[np.ndarray]:
+        """Lazy access to pre-calculated efficacy boundaries."""
+        if self._efficacy_boundaries is None:
+            self.solve_all_boundaries()
+        return self._efficacy_boundaries
+
+    @property
+    def futility_boundaries(self) -> Optional[np.ndarray]:
+        """Lazy access to pre-calculated futility boundaries."""
+        if self._futility_boundaries is None:
+            self.solve_all_boundaries()
+        return self._futility_boundaries
+
+    def solve_all_boundaries(self) -> None:
+        """
+        Triggers solving for all boundaries at once.
+        Useful for fixed-shape designs or to seed the cache.
+        """
+        # Spending function designs are typically solved step-by-step in run()
+        if isinstance(self.stopping_policy, SpendingFunctionStoppingPolicy):
+            return
+
+        self._efficacy_boundaries, self._futility_boundaries = (
+            self.stopping_policy.solve(self)
         )
 
     def get_boundary_at_look(
@@ -108,7 +151,10 @@ class BinomialGSTEngine:
             ...                 sided=GST.Sided.ONE,
             ...                 statistical_model=GST.CanonicalGaussianModel(),
             ...             ),
-            ...             timer=GST.SampleSizeTimer(unit=GST.Unit.INDIVIDUALS, max_sample_size=100),
+            ...             timer=GST.SampleSizeTimer(
+            ...                 unit=GST.Unit.INDIVIDUALS,
+            ...                 max_sample_size={"control": 50, "treatment": 50}
+            ...             ),
             ...             schedule=GST.FixedSchedule(analyses=[0.5, 1.0])
             ...         ),
             ...     )
@@ -168,12 +214,12 @@ class BinomialGSTEngine:
 
         # Default empty metrics if arm not present
         default_arm = ArmStatus(
-            metrics=ArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
+            metrics=ArmMetrics(total=0, successes=0, p_hat=0.0), is_active=True
         )
         summary_c = metrics.arms.get(control_key, default_arm).metrics
         summary_t = metrics.arms.get(treatment_key, default_arm).metrics
 
-        n_c, n_t = summary_c.n, summary_t.n
+        n_c, n_t = summary_c.total, summary_t.total
         cumulative_n = n_c + n_t
 
         if self.n_max > 0:

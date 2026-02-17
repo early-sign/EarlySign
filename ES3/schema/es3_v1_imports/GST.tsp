@@ -289,10 +289,15 @@ model RelativeRisk extends EffectMeasureBase {
     kind: "relative_risk" = "relative_risk";
 }
 
+model RelativeImprovement extends EffectMeasureBase {
+    kind: "relative_improvement" = "relative_improvement";
+}
+
 union EffectMeasure {
   AbsoluteDifference,
   OddsRatio,
   RelativeRisk,
+  RelativeImprovement,
 }
 
 /**
@@ -396,7 +401,8 @@ model SampleSizeTimer extends InformationTimerBase {
    * "effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).
    */
   unit: "individuals" | "effective_size" = "individuals"; 
-  max_sample_size: int32; 
+  /** The maximum sample size (per-arm). */
+  max_sample_size: Record<int32>; 
 }
 
 model FisherInformationTimer extends InformationTimerBase {
@@ -634,6 +640,8 @@ model SampleSizeReestimationSpec extends AdaptationSpec {
   type: "sample_size_reestimation";
   method: "conditional_power" | "predictive_power";
   target_power: float64;
+  /** Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error. */
+  use_weighted_statistic?: boolean = true;
   n_range: [uint32, uint32]; 
 }
 
@@ -687,6 +695,6 @@ model AdaptationSnapshot {
   info_frac: float64;
   /** The maximum sample size before re-planning. */
   original_max_sample_size: int32;
-  /** Whether to use the Cui-Hung-Wang weighted statistic (defaults to true). */
+  /** Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error. */
   use_weighted_statistic?: boolean = true;
 }

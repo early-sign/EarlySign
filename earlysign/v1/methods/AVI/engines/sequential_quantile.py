@@ -99,7 +99,7 @@ class SequentialQuantileEngine:
             status = DecisionStatus.STOP_EFFICACY
 
         # Check for max_n (horizon) if defined
-        total_n = ctrl.n + treat.n
+        total_n = ctrl.total + treat.total
         if (
             method.max_n
             and total_n >= method.max_n
