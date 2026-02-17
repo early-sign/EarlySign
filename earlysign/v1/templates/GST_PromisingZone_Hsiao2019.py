@@ -26,7 +26,7 @@ Examples:
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.GST_PromisingZone_Hsiao2019 import Hsiao2019Template
     >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.schema.ES3.Binomial import ArmData
+    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>>
     >>> # 1. Setup
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -57,8 +57,8 @@ Examples:
     >>> # If observed is roughly congruent or slightly less, CP might be moderate.
     >>> # For doctest simplicity, we manually inject data to hit the zone.
     >>> batch = [
-    ...     ArmData(n=300, success=30, arm="control"),
-    ...     ArmData(n=300, success=48, arm="treatment") # 16% -> +6% benefit observed
+    ...     BinomialArmData(total=300, success=30, arm="control"),
+    ...     BinomialArmData(total=300, success=48, arm="treatment") # 16% -> +6% benefit observed
     ... ]
     >>> template.update(batch)
     >>>
@@ -147,6 +147,8 @@ class Hsiao2019Template(TemplateBase[Hsiao2019Protocol]):
         # Binomial params (convenience)
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
+        control_arm_name: str = "control",
+        treatment_arm_name: str = "treatment",
     ) -> Hsiao2019Protocol:
         """
         Designs the protocol.
@@ -170,8 +172,8 @@ class Hsiao2019Template(TemplateBase[Hsiao2019Protocol]):
             delta = p_treatment - p_control
             task = GST.TaskSpec(
                 arms=ES3_BASE.TwoArmComparison(
-                    control_arm_name="control",
-                    treatment_arm_name="treatment",
+                    control_arm_name=control_arm_name,
+                    treatment_arm_name=treatment_arm_name,
                 ),
                 response_type=GST.ResponseType.BINARY,
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
@@ -181,7 +183,10 @@ class Hsiao2019Template(TemplateBase[Hsiao2019Protocol]):
                     h_alt_description=f"diff > {delta}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.BinaryEffectSize(
-                        proportions={"control": p_control, "treatment": p_treatment}
+                        proportions={
+                            control_arm_name: p_control,
+                            treatment_arm_name: p_treatment,
+                        }
                     ),
                 ),
             )

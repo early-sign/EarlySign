@@ -5,10 +5,10 @@ This module provides projectors that transform ledger facts (LookResult, Scorebo
 into human-readable or UI-ready report objects.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import ibis
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 from earlysign.v1.framework.projector import (
@@ -54,7 +54,7 @@ class ProgressProjector(Projector[ProgressReport]):
         # 1. Read the latest Scoreboard (always up-to-date real-time metrics)
         metrics_traced = Scoreboard(identity="metrics").project(table)
         metrics = metrics_traced.data
-        total_n = sum(arm.metrics.n for arm in metrics.arms.values())
+        total_n = sum(arm.metrics.total for arm in metrics.arms.values())
 
         # 2. Read the latest LookResult (analytical facts / milestones)
         latest_look_traced = (
@@ -153,10 +153,15 @@ class ProgressProjector(Projector[ProgressReport]):
         curr_info_frac = 0.0
 
         if n_max:
-            curr_info_frac = total_n / n_max if n_max > 0 else 0.0
+            if isinstance(n_max, dict):
+                n_max_total = float(sum(n_max.values()))
+            else:
+                n_max_total = float(n_max)
+
+            curr_info_frac = total_n / n_max_total if n_max_total > 0 else 0.0
             for t in schedule:
                 if t > curr_info_frac + 0.001:
-                    next_milestone_n = int(t * n_max)
+                    next_milestone_n = int(t * n_max_total)
                     break
 
         if latest_look:

@@ -175,16 +175,16 @@ Entities are special aggregates with identity. `Entity` supports differential fo
 .. code-block:: python
 
     >>> from earlysign.v1.methods.binomial import Scoreboard
-    >>> from earlysign.schema.ES3.Binomial import ArmData
+    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>> fact = Scoreboard(identity="metrics")
     >>> # Pre-populate data in a separate session so it's visible in the next horizon
     >>> with Session(ledger) as sess:
-    ...     sess.commit(ArmData(n=10, success=2, arm="A"))
+    ...     sess.commit(BinomialArmData(total=10, success=2, arm="A"))
     UUID(...)
 
     >>> with Session(ledger) as sess:
     ...     state = sess.read(fact)
-    >>> state.data.arms["A"].metrics.n
+    >>> state.data.arms["A"].metrics.total
     10
 
 Sequential Entity

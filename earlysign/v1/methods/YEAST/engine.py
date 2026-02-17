@@ -57,19 +57,19 @@ class BinomialYEASTEngine:
             )
 
         default_arm = BinomialArmStatus(
-            metrics=BinomialArmMetrics(n=0, successes=0, p_hat=0.0), is_active=True
+            metrics=BinomialArmMetrics(total=0, successes=0, p_hat=0.0), is_active=True
         )
         summary_c = metrics.arms.get(control_key, default_arm).metrics
         summary_t = metrics.arms.get(treatment_key, default_arm).metrics
 
-        cumulative_n = summary_c.n + summary_t.n
+        cumulative_n = summary_c.total + summary_t.total
         raw_diff = float(summary_t.successes - summary_c.successes)
 
         # Standardized trajectory: S_n / sqrt(n_effective)
         # where n_effective = 2 / (1/n_c + 1/n_t)
         # For equal n, n_effective = n_per_arm.
-        if summary_c.n > 0 and summary_t.n > 0:
-            n_eff = 2.0 / (1.0 / summary_c.n + 1.0 / summary_t.n)
+        if summary_c.total > 0 and summary_t.total > 0:
+            n_eff = 2.0 / (1.0 / summary_c.total + 1.0 / summary_t.total)
             trajectory = raw_diff / (n_eff**0.5)
         else:
             trajectory = 0.0

@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Literal
 
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.core.ledger import Ledger
-from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 from earlysign.schema.ES3.YEAST import (
     MethodSpec,
@@ -53,7 +53,7 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
         >>> from earlysign.core.ledger import Ledger
         >>> import earlysign.schema.ES3.Base as ES3_BASE
         >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import BinomialKurennoy2025Template, BinomialKurennoy2025TaskSpec
-        >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+        >>> from earlysign.schema.ES3.Binomial import BinomialArmData
 
         >>> # Setup
         >>> conn = ibis.connect("duckdb://:memory:")
@@ -72,7 +72,7 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
         >>> template.set_protocol(protocol)
 
         >>> # 2. Update
-        >>> batch = [BinomialArmData(n=100, success=20, arm="A"), BinomialArmData(n=100, success=25, arm="B")]
+        >>> batch = [BinomialArmData(total=100, success=20, arm="A"), BinomialArmData(total=100, success=25, arm="B")]
         >>> template.update(batch)
 
         >>> # 3. Report

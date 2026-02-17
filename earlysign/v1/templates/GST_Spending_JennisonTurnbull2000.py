@@ -242,12 +242,27 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         # 3. Design Strategy Components using common ProtocolDesigner
         proportions = task.hypotheses.target_effect.proportions
         arms = task.arms
-        if not isinstance(arms, ES3_BASE.TwoArmComparison):
+
+        allocation_ratio = 1.0
+        allocation_ratios = None
+        control_arm_name = "control"
+        treatment_arm_name = "treatment"
+
+        if isinstance(arms, ES3_BASE.TwoArmComparison):
+            control_arm_name = arms.control_arm_name
+            treatment_arm_name = arms.treatment_arm_name
+            allocation_ratio = arms.allocation_ratio
+        elif isinstance(arms, ES3_BASE.MultiArmComparison):
+            control_arm_name = arms.control_arm_name
+            treatment_arm_name = arms.treatment_arm_names[0]
+            allocation_ratios = arms.allocation_ratios
+        else:
             raise NotImplementedError(
                 f"GST on {type(arms).__name__} is not yet supported in this template. "
-                "Currently, only TwoArmComparison is supported."
+                "Currently, only TwoArmComparison or MultiArmComparison is supported."
             )
-        arm_0, arm_1 = arms.control_arm_name, arms.treatment_arm_name
+
+        arm_0, arm_1 = control_arm_name, treatment_arm_name
 
         method_spec, _ = designer.design_gs_binomial(
             alpha=task.efficacy.alpha,
@@ -351,7 +366,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
         table: Any,
         *,
         arm_col: str = "arm",
-        n_col: str = "n",
+        total_col: str = "total",
         success_col: str = "success",
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -366,7 +381,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             success_col: Column name for the number of successes.
             order_by: Column name to order the data by.
         """
-        from earlysign.schema.ES3.Binomial import ArmData
+        from earlysign.schema.ES3.Binomial import BinomialArmData
 
         # 1. Project and order
         if order_by:
@@ -374,14 +389,14 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             # or just use the original table's column.
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
                 _order=table[order_by],
             ).order_by("_order")
         else:
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
             )
 

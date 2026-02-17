@@ -43,7 +43,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
-        >>> from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+        >>> from earlysign.schema.ES3.Binomial import BinomialArmData
         >>> import earlysign.schema.ES3.Base as ES3_BASE
         >>> from earlysign.v1.templates.AsymptoticConfidenceSequence_Maharaj2023 import AsymptoticConfidenceSequenceMaharaj2023Template
         >>>
@@ -67,8 +67,8 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>> template.set_protocol(protocol)
         >>>
         >>> # 2. Simulate Data Update
-        >>> batch = [BinomialArmData(n=800, success=400, arm="control"),
-        ...          BinomialArmData(n=800, success=480, arm="treatment")]
+        >>> batch = [BinomialArmData(total=800, success=400, arm="control"),
+        ...          BinomialArmData(total=800, success=480, arm="treatment")]
         >>> template.update(batch)
         >>> report = template.report_progress()
         >>> print(f"Diff: {report['trajectory']:.3f}, Boundary: {report['boundary']:.3f}, Status: {report['status']}")

@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import Iterator, List, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 
 import numpy as np
 
-from earlysign.schema.ES3.Binomial import ArmData
+from earlysign.schema.ES3.Binomial import BinomialArmData
 
 
 class BinomialStream:
@@ -14,7 +14,7 @@ class BinomialStream:
         n_per_batch: Number of samples per arm in each batch.
         arms: Dictionary mapping arm name to its true conversion rate.
               Example: {"control": 0.20, "treatment": 0.25}
-        n_max: Maximum number of samples (per arm) to generate. If None, infinite.
+        n_max: Maximum number of samples (per arm) to generate.
         seed: Random seed for reproducibility.
 
     Examples:
@@ -28,53 +28,39 @@ class BinomialStream:
         >>> batch = next(stream)
         >>> len(batch)
         2
-        >>> batch[0].arm
-        'control'
-
-        >>> # Multi-arm bandit scenario
-        >>> stream = BinomialStream(
-        ...     n_per_batch=50,
-        ...     arms={"A": 0.10, "B": 0.15, "C": 0.12},
-        ...     seed=123
-        ... )
     """
 
     def __init__(
         self,
         n_per_batch: int,
-        arms: dict[str, float],
-        n_max: Optional[int] = None,
-        seed: int = 42,
+        arms: Dict[str, float],
+        n_max: int,
+        seed: Optional[int] = None,
     ):
         self.n_per_batch = n_per_batch
         self.arms = arms
         self.n_max = n_max
-        self.current_n = 0
+        self.n_total = 0
         self.rng = np.random.default_rng(seed)
 
-    def __iter__(self) -> Iterator[List[ArmData]]:
+    def __iter__(self) -> Iterator[List[BinomialArmData]]:
         return self
 
-    def __next__(self) -> List[ArmData]:
-        if self.n_max is not None and self.current_n >= self.n_max:
+    def __next__(self) -> List[BinomialArmData]:
+        if self.n_total >= self.n_max:
             raise StopIteration
 
-        # Determine actual batch size (handle remaining samples)
-        if self.n_max is not None:
-            batch_size = min(self.n_per_batch, self.n_max - self.current_n)
-        else:
-            batch_size = self.n_per_batch
+        batch = []
+        batch_size = min(self.n_per_batch, self.n_max - self.n_total)
 
         if batch_size <= 0:
             raise StopIteration
 
-        # Generate data for each arm
-        batch = []
         for arm_name, p in self.arms.items():
             k = self.rng.binomial(batch_size, p)
-            batch.append(ArmData(n=batch_size, success=k, arm=arm_name))
+            batch.append(BinomialArmData(total=batch_size, success=k, arm=arm_name))
 
-        self.current_n += batch_size
+        self.n_total += batch_size
         return batch
 
 

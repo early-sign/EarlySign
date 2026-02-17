@@ -27,7 +27,7 @@ Examples:
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Template
     >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.schema.ES3.Binomial import ArmData
+    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>>
     >>> # 1. Setup
@@ -55,17 +55,17 @@ Examples:
     >>> # Control: 50/500 (10%), Treatment: 65/500 (13%) -> Z ~ 1.5
     >>> # This should fall into the promising zone if configured right.
     >>> batch = [
-    ...     ArmData(n=500, success=50, arm="control"),
-    ...     ArmData(n=500, success=65, arm="treatment")
+    ...     BinomialArmData(total=500, success=50, arm="control"),
+    ...     BinomialArmData(total=500, success=65, arm="treatment")
     ... ]
     >>> template.update(batch)
     >>>
     >>> # 5. Verify status and SSR trigger
     >>> report = template.report_progress()
     >>> print(f"Status: {report['status']}, Initial Max N: {protocol.method.stopping_policy.timer.max_sample_size}")
-    Status: continue, Initial Max N: 3167
+    Status: continue, Initial Max N: 3168
     >>> print(f"Adapted Max N: {report['max_sample_size']}")
-    Adapted Max N: 3167
+    Adapted Max N: 3168
     >>> # Note: The increase reflects SSR to recover power based on interim results.
     >>> # (CP was calculated and found to be in the promising zone).
 """

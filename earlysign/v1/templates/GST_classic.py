@@ -71,6 +71,8 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
         tails: int = 2,
         arms: int = 2,
         seed: int = 42,
+        control_arm_name: str = "control",
+        treatment_arm_name: str = "treatment",
     ) -> ClassicProtocol:
         """Designs a Classic GST Protocol.
 
@@ -106,7 +108,9 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
                 calc_delta = pt - pc
                 response_type = GST.ResponseType.BINARY
                 eff_props = (
-                    {"control": pc, "treatment": pt} if arms == 2 else {"treatment": pt}
+                    {control_arm_name: pc, treatment_arm_name: pt}
+                    if arms == 2
+                    else {treatment_arm_name: pt}
                 )
                 eff_size = GST.BinaryEffectSize(proportions=eff_props)
 
@@ -116,7 +120,9 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
                 pt = pc + d
                 response_type = GST.ResponseType.BINARY
                 eff_props = (
-                    {"control": pc, "treatment": pt} if arms == 2 else {"treatment": pt}
+                    {control_arm_name: pc, treatment_arm_name: pt}
+                    if arms == 2
+                    else {treatment_arm_name: pt}
                 )
                 eff_size = GST.BinaryEffectSize(proportions=eff_props)
 
@@ -140,7 +146,9 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
                     )
 
                 means = (
-                    {"control": mc, "treatment": mt} if arms == 2 else {"treatment": mt}
+                    {control_arm_name: mc, treatment_arm_name: mt}
+                    if arms == 2
+                    else {treatment_arm_name: mt}
                 )
                 eff_size = GST.ContinuousEffectSize(means=means, standard_deviation=s)
 
@@ -176,7 +184,7 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             task_arms = ES3_BASE.SingleArm(arm_name="treatment")
         else:
             task_arms = ES3_BASE.TwoArmComparison(
-                control_arm_name="control", treatment_arm_name="treatment"
+                control_arm_name=control_arm_name, treatment_arm_name=treatment_arm_name
             )
 
         task = ClassicTaskSpec(

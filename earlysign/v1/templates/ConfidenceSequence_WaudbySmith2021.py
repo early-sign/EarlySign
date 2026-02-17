@@ -17,7 +17,7 @@ Examples:
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.v1.templates.ConfidenceSequence_WaudbySmith2021 import BinomialConfidenceSequenceWaudbySmith2021Template
     >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.schema.ES3.Binomial import ArmData
+    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
 
     >>> conn = ibis.connect("duckdb://:memory:")
     >>> ledger = Ledger(conn, "events")
@@ -36,14 +36,14 @@ Examples:
     >>> template.set_protocol(protocol)
     >>>
     >>> # Update (Batch 1: Low data)
-    >>> batch = [ArmData(n=50, success=10, arm="control"), ArmData(n=50, success=15, arm="treatment")]
+    >>> batch = [BinomialArmData(total=50, success=10, arm="control"), BinomialArmData(total=50, success=15, arm="treatment")]
     >>> template.update(batch)
     >>> res1 = template.report_progress()
     >>> print(f"Diff: {res1['trajectory']:.3f}, Boundary: {res1['boundary']:.4f}, Status: {res1['status']}")
     Diff: 0.100, Boundary: 0.3337, Status: continue
     >>>
     >>> # Update (Batch 2: High data crossing threshold)
-    >>> batch2 = [ArmData(n=500, success=100, arm="control"), ArmData(n=500, success=250, arm="treatment")]
+    >>> batch2 = [BinomialArmData(total=500, success=100, arm="control"), BinomialArmData(total=500, success=250, arm="treatment")]
     >>> template.update(batch2)
     >>> res2 = template.report_progress()
     >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.4f}, Status: {res2['status']}")
@@ -60,7 +60,7 @@ from earlysign.schema.ES3.AVI import (
     TaskSpec,
 )
 from earlysign.schema.ES3.AVI.Log import LookResult
-from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session

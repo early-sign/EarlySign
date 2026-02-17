@@ -13,7 +13,7 @@ Examples:
     >>> from earlysign.core.ledger import Ledger
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.v1.templates.mSPRT_Johari2019 import BinomialJohari2019Template
-    >>> from earlysign.schema.ES3.Binomial import ArmData
+    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
 
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -31,17 +31,15 @@ Examples:
     ... )
     >>> template.set_protocol(protocol)
     >>>
-    >>> # Update with data
-    >>> batch = [ArmData(n=100, success=20, arm="control"), ArmData(n=100, success=30, arm="treatment")]
+    >>> # Update (Batch 1: Low data)
+    >>> batch = [BinomialArmData(total=100, success=20, arm="control"), BinomialArmData(total=100, success=30, arm="treatment")]
     >>> template.update(batch)
+    >>> res1 = template.report_progress()
+    >>> print(f"Diff: {res1['trajectory']:.3f}, Status: {res1['status']}")
+    Diff: 0.100, Status: continue
     >>>
-    >>> # Check Report (Batch 1)
-    >>> res = template.report_progress()
-    >>> print(f"Diff: {res['trajectory']:.3f}, Boundary: {res['boundary']:.3f}, Status: {res['status']}")
-    Diff: 0.100, Boundary: 0.192, Status: continue
-    >>>
-    >>> # Update with more data (Batch 2)
-    >>> batch2 = [ArmData(n=1000, success=200, arm="control"), ArmData(n=1000, success=300, arm="treatment")]
+    >>> # Update (Batch 2: High data crossing threshold)
+    >>> batch2 = [BinomialArmData(total=1000, success=200, arm="control"), BinomialArmData(total=1000, success=300, arm="treatment")]
     >>> template.update(batch2)
     >>> res2 = template.report_progress()
     >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.3f}, Status: {res2['status']}")
@@ -58,7 +56,7 @@ from earlysign.schema.ES3.AVI import (
     TaskSpec,
 )
 from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
-from earlysign.schema.ES3.Binomial import ArmData as BinomialArmData
+from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ArmData as ContinuousArmData
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
