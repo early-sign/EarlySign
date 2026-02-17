@@ -136,3 +136,92 @@ suppress_warnings = [
     "autoapi.python_import_resolution",
     "autodoc.import_object",
 ]
+
+
+def generate_schema_rst(app):
+    """
+    Dynamically generates the ES3 Schema Reference page (schema.rst).
+    Scans the ES3/schema directory for all .tsp files and creates literalinclude sections.
+    """
+    docs_source_dir = app.srcdir
+    repo_root = os.path.abspath(os.path.join(docs_source_dir, "..", ".."))
+    schema_dir = os.path.join(repo_root, "ES3", "schema")
+    output_file = os.path.join(docs_source_dir, "reference", "schema.rst")
+
+    if not os.path.exists(schema_dir):
+        return
+
+    # Collect all .tsp files in root and imports subdir
+    tsp_files = []
+    # Root .tsp files
+    for f in sorted(os.listdir(schema_dir)):
+        if f.endswith(".tsp"):
+            tsp_files.append(os.path.join(schema_dir, f))
+
+    # Imports subdir
+    imports_dir = os.path.join(schema_dir, "es3_v1_imports")
+    if os.path.exists(imports_dir):
+        for f in sorted(os.listdir(imports_dir)):
+            if f.endswith(".tsp"):
+                tsp_files.append(os.path.join(imports_dir, f))
+
+    content = [
+        "ES3 Schema Reference",
+        "====================",
+        "",
+        "**ES3 (EarlySign Static Schema)** is the formal specification for all data structures",
+        "used throughout the EarlySign framework. It ensures consistency across different",
+        "components and provides a language-neutral definition of our data models.",
+        "",
+        "TypeSpec Origin",
+        "---------------",
+        "",
+        "The authoritative source for these schemas is defined in **TypeSpec** (formerly ADL).",
+        "These definitions serve as the primary source of truth, from which Pydantic models",
+        "are automatically generated for the Python implementation.",
+        "",
+        "The source files are located in the ``ES3/schema`` directory of the repository.",
+        "",
+    ]
+
+    for tsp_path in tsp_files:
+        rel_path = os.path.relpath(tsp_path, os.path.join(docs_source_dir, "reference"))
+        filename = os.path.basename(tsp_path)
+
+        # Better title based on filename
+        title = filename.replace(".tsp", "").replace("es3_v1", "Manifest")
+        if title == "Manifest":
+            title = "Core Manifest"
+        elif title.upper() in ["GST", "AVI", "YEAST"]:
+            title = title.upper()
+        # If it's already PascalCase, just replace underscores if any
+        else:
+            title = title.replace("_", " ")
+
+        content.extend(
+            [
+                f"{title}",
+                f"{'-' * len(title)}",
+                "",
+                f".. literalinclude:: {rel_path}",
+                "   :language: typescript",
+                "   :linenos:",
+                f"   :caption: {filename}",
+                "",
+            ]
+        )
+
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    new_content = "\n".join(content)
+
+    if os.path.exists(output_file):
+        with open(output_file, "r") as f:
+            if f.read() == new_content:
+                return
+
+    with open(output_file, "w") as f:
+        f.write(new_content)
+
+
+def setup(app):
+    app.connect("builder-inited", generate_schema_rst)
