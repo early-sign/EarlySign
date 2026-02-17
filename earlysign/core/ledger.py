@@ -304,7 +304,16 @@ class Ledger:
         if attributes:
             combined_attributes.update(attributes)
 
+        # Extract ES3_version if present in data or payload
+        es3_version = None
+        if hasattr(data, "ES3_version"):
+            es3_version = data.ES3_version
+        elif isinstance(data, dict) and "ES3_version" in data:
+            es3_version = data["ES3_version"]
+
         combined_metadata: Dict[str, Any] = {"pkg_version": f"earlysign=={__version__}"}
+        if es3_version:
+            combined_metadata["ES3_version"] = es3_version
         if metadata:
             combined_metadata.update(metadata)
 

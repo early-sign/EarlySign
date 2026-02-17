@@ -191,8 +191,17 @@ class BinomialGSTEngine:
 
         # 1.1 Support Weighted Z-Ratio (Cui-Hung-Wang) if adaptation occurred
         snapshot = self.protocol.method.adaptation_snapshot
+
+        # Check if weighting is enabled in the design spec
+        use_weighted = True
+        if self.protocol.method.adaptation and hasattr(
+            self.protocol.method.adaptation, "use_weighted_statistic"
+        ):
+            use_weighted = self.protocol.method.adaptation.use_weighted_statistic
+
         if (
             snapshot
+            and use_weighted
             and cumulative_n > snapshot.info_frac * snapshot.original_max_sample_size
         ):
             t = snapshot.info_frac

@@ -687,4 +687,6 @@ model AdaptationSnapshot {
   info_frac: float64;
   /** The maximum sample size before re-planning. */
   original_max_sample_size: int32;
+  /** Whether to use the Cui-Hung-Wang weighted statistic (defaults to true). */
+  use_weighted_statistic?: boolean = true;
 }

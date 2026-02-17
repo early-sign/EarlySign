@@ -203,7 +203,10 @@ class Hsiao2019Template(TemplateBase[Hsiao2019Protocol]):
 
         # Attach AdaptationSpec with target power for reference
         method.adaptation = GST.SampleSizeReestimationSpec(
-            n_range=[0, 1000000], target_power=target_cp, method="conditional_power"
+            n_range=[0, 1000000],
+            target_power=target_cp,
+            method="conditional_power",
+            use_weighted_statistic=False,
         )
 
         # Create Protocol
@@ -288,12 +291,6 @@ class Hsiao2019Template(TemplateBase[Hsiao2019Protocol]):
                     new_protocol = adapter.replan_sample_size(
                         gst_protocol, adaptation_log, look_result, target_cp
                     )
-
-                    # CRITICAL: Force Unweighted Statistic for Hsiao/Promising Zone
-                    if new_protocol.method.adaptation_snapshot:
-                        new_protocol.method.adaptation_snapshot.use_weighted_statistic = (
-                            False
-                        )
 
                     updated_hsiao_protocol = Hsiao2019Protocol(
                         task=new_protocol.task,

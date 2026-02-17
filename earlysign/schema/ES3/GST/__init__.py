@@ -265,6 +265,10 @@ class SampleSizeReestimationSpec(AdaptationSpec):
     method: Method
     target_power: float
     n_range: list[Any]
+    use_weighted_statistic: bool = Field(
+        True,
+        description="Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error.",
+    )
 
 
 class SampleSizeTimer(InformationTimerBase):
@@ -273,7 +277,10 @@ class SampleSizeTimer(InformationTimerBase):
         ...,
         description='"individuals": Count individuals (e.g. n1 + n2).\n"effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).',
     )
-    max_sample_size: int
+    max_sample_size: int | dict[str, int] = Field(
+        ...,
+        description="The maximum sample size. Can be an integer (total) or a dictionary (per-arm).",
+    )
 
 
 InformationTimer = TypeAliasType(
