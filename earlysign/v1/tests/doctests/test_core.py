@@ -72,12 +72,13 @@ Delegation check: these methods must return Ibis TableExpr unmodified:
     True
     >>> df  # the underlying ibis table
     DatabaseTable: events
-      uuid      string
-      type      string
-      payload   json
-      attributes    json
-      timestamp timestamp('UTC', 6)
-      metadata  json
+      uuid       string
+      type       string
+      payload    json
+      attributes json
+      timestamp  timestamp('UTC', 6)
+      ledger_id  string
+      metadata   json
 
 Ledger Setup
 ^^^^^^^^^^^^
