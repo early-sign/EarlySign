@@ -75,8 +75,6 @@ namespace Base {
    * Defines the high-level structure of any EarlySign protocol.
    */
   model Protocol {
-    /** Schema version */
-    ES3_version?: string = ES3_VERSION;
     /** The name of the protocol. */
     name: string;
     /** The problem definition. */
@@ -107,8 +105,6 @@ namespace Base {
    * Base log/event model for metadata inclusion.
    */
   model Log {
-    /** Schema version */
-    ES3_version?: string = ES3_VERSION;
   }
 
   /**

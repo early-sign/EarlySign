@@ -89,6 +89,7 @@ from ibis.expr.types import Table
 
 from earlysign import __version__
 from earlysign.core.util.sanitize_for_json import sanitize_for_json
+from earlysign.schema.ES3.Base import Metadata as ES3Metadata
 
 T = TypeVar("T")
 
@@ -122,6 +123,7 @@ class Ledger:
         self.table_name = table_name
         self.attributes = attributes if attributes is not None else {}
         self.ledger_id = ledger_id
+        self._bq_columns_cache: Optional[set[str]] = None
 
     # --------- lifecycle ----------
     def set_connector(self, connector: ibis.BaseBackend) -> Self:
@@ -304,16 +306,13 @@ class Ledger:
         if attributes:
             combined_attributes.update(attributes)
 
-        # Extract ES3_version if present in data or payload
-        es3_version = None
-        if hasattr(data, "ES3_version"):
-            es3_version = data.ES3_version
-        elif isinstance(data, dict) and "ES3_version" in data:
-            es3_version = data["ES3_version"]
+        # Source version from the schema Metadata default
+        schema_version = ES3Metadata.model_fields["ES3_version"].default
 
-        combined_metadata: Dict[str, Any] = {"pkg_version": f"earlysign=={__version__}"}
-        if es3_version:
-            combined_metadata["ES3_version"] = es3_version
+        combined_metadata: Dict[str, Any] = {
+            "pkg_version": f"earlysign=={__version__}",
+            "ES3_version": schema_version,
+        }
         if metadata:
             combined_metadata.update(metadata)
 
@@ -324,7 +323,7 @@ class Ledger:
         else:
             payload_obj = sanitize_for_json(data)
 
-        payload = json.dumps(payload_obj)
+        payload = json.dumps(sanitize_for_json(payload_obj))
 
         ts = datetime.now(timezone.utc)
         row = {
@@ -396,11 +395,17 @@ class Ledger:
         table_id = f"{project_id}.{dataset_id}.{self.table_name}"
 
         # Convert rows to strict format for JSON API
+        # Prune fields not present in the BigQuery table to handle schema mismatch
+        if self._bq_columns_cache is None:
+            self._bq_columns_cache = set(self.connector.table(self.table_name).columns)
+
+        allowed_cols = self._bq_columns_cache
+
         api_rows = []
         for row in rows:
-            api_row = row.copy()
+            api_row = {k: v for k, v in row.items() if k in allowed_cols}
             # Timestamp must be ISO string
-            if isinstance(api_row["timestamp"], datetime):
+            if "timestamp" in api_row and isinstance(api_row["timestamp"], datetime):
                 api_row["timestamp"] = api_row["timestamp"].isoformat()
             api_rows.append(api_row)
 

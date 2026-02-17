@@ -18,8 +18,6 @@ class Log(BaseModel):
     Base log/event model for metadata inclusion.
     """
 
-    ES3_version: str | None = Field("v1.0.0", description="Schema version")
-
 
 class Metadata(BaseModel):
     """
@@ -60,7 +58,6 @@ class Protocol(BaseModel):
     Defines the high-level structure of any EarlySign protocol.
     """
 
-    ES3_version: str | None = Field("v1.0.0", description="Schema version")
     name: str = Field(..., description="The name of the protocol.")
     task: TaskSpec = Field(..., description="The problem definition.")
     method: MethodSpec = Field(..., description="The operational method.")
