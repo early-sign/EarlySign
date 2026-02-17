@@ -1,6 +1,6 @@
-"""Classic Group Sequential Testing Template.
+"""Classic Group Sequential Testing Controller.
 
-This module provides a template for "Classic" Group Sequential Tests (GST) based on
+This module provides a controller for "Classic" Group Sequential Tests (GST) based on
 standard boundary shapes like Pocock, O'Brien-Fleming, and Wang-Tsiatis power
 families. Unlike the Alpha-Spending approach, these designs use fixed boundary
 shape constants determined by the total number of looks and alpha/power requirements.
@@ -15,13 +15,13 @@ import earlysign.schema.ES3.GST as GST
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
+from earlysign.v1.framework.controller import (
+    AutoNameMixin,
+    Controller,
+    RichDisplayMixin,
+)
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import (
-    AutoNameMixin,
-    RichDisplayMixin,
-    TemplateBase,
-)
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import BinomialGSTEngine
 from earlysign.v1.methods.group_sequential.plan.protocol_design import (
@@ -48,10 +48,10 @@ class ClassicProtocol(GST.Protocol, AutoNameMixin, RichDisplayMixin):
     name: str = Field(default="")
 
 
-class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
+class ClassicGSTController(Controller[ClassicProtocol]):
     """Orchestrator for Classic Group Sequential Tests (Pocock, OBF, Wang-Tsiatis).
 
-    This template supports designs that are defined by a fixed boundary shape
+    This controller supports designs that are defined by a fixed boundary shape
     parameter (Delta for Wang-Tsiatis) rather than an Alpha Spending Function.
     """
 
@@ -226,8 +226,6 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
             protocol = sess.read(ProtocolProjector(ClassicProtocol))
             metrics = sess.read(Scoreboard(identity="metrics"))
 
-            # NOTE: Currently we only support Binomial Execution in this template for simplicity
-            # To support Continuous, we would need to inspect protocol.task.response_type
             if protocol.task.response_type == GST.ResponseType.BINARY:
                 engine = BinomialGSTEngine(protocol.data)
                 sess.call_and_commit(LookResult, engine.run, metrics=metrics)
@@ -349,9 +347,9 @@ class ClassicGSTTemplate(TemplateBase[ClassicProtocol]):
     @classmethod
     def describe_protocol_instance(cls, protocol: ClassicProtocol) -> str:
         """Summarizes the Classic GST design (Pocock, OBF, etc)."""
-        from string import Template
+        from string import Controller
 
-        tpl = Template(
+        tpl = Controller(
             """
 Design: Classic Group Sequential Test ($design_type)
 ==================================================

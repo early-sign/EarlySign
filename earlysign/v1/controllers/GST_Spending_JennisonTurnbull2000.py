@@ -1,6 +1,6 @@
-"""Binomial A/B Testing Template.
+"""Binomial A/B Testing Controller.
 
-This module provides a standard template for running sequential A/B tests with
+This module provides a standard controller for running sequential A/B tests with
 binary outcomes using Alpha Spending functions.
 
 Reference:
@@ -10,7 +10,7 @@ Reference:
 Example:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.v1.templates.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Template, JennisonTurnbull2000TaskSpec
+    >>> from earlysign.v1.controllers.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Controller, JennisonTurnbull2000TaskSpec
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
@@ -24,18 +24,18 @@ Example:
     >>> ledger = ledger.bind(experiment_id="example_001")
     >>>
     >>> # Design
-    >>> protocol = JennisonTurnbull2000Template.design(
+    >>> protocol = JennisonTurnbull2000Controller.design(
     ...     p_control=0.20, p_treatment=0.25, alpha=0.05, power=0.8, looks=2
     ... )
     >>>
     >>> # Initialize and Run
-    >>> template = JennisonTurnbull2000Template(ledger)
-    >>> template.set_protocol(protocol)
+    >>> controller = JennisonTurnbull2000Controller(ledger)
+    >>> controller.set_protocol(protocol)
     >>>
     >>> stream = BinomialStream(n_per_batch=600, arms={"control": 0.20, "treatment": 0.25}, n_max=13000, seed=42)
     >>> for batch in stream:
-    ...     template.update(batch)
-    ...     prog = template.report_progress()
+    ...     controller.update(batch)
+    ...     prog = controller.report_progress()
     ...     if prog['is_milestone']:
     ...         print(f"Look {prog['look']}: Z={prog['z_stat']:.2f}, Boundary={prog['efficacy_boundary']:.2f}")
     ...     if prog['status'] != DecisionStatus.CONTINUE_:
@@ -43,7 +43,7 @@ Example:
     Look 1: Z=0.70, Boundary=1.92
     Look 2: Z=1.89, Boundary=1.75
     >>>
-    >>> final = template.report_result()
+    >>> final = controller.report_result()
     >>> print(f"Final Status: {final['final_status']}")
     Final Status: stop_efficacy
 """
@@ -65,13 +65,13 @@ from earlysign.schema.ES3.GST import (
     RelativeRisk,
 )
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
+from earlysign.v1.framework.controller import (
+    AutoNameMixin,
+    Controller,
+    RichDisplayMixin,
+)
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import BacktestSession, Session
-from earlysign.v1.framework.template import (
-    AutoNameMixin,
-    RichDisplayMixin,
-    TemplateBase,
-)
 from earlysign.v1.methods.binomial import Scoreboard
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
@@ -135,7 +135,7 @@ def _resolve_p_treatment(
             raise ValueError(f"Unknown effect type: {type(effect_spec)}")
 
 
-class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
+class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
     """Standard orchestrator for Binomial A/B tests (Jennison & Turnbull 2000).
 
     Provides high-level methods for designing, Updating, and reporting
@@ -197,11 +197,11 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
 
         Examples:
             >>> import numpy as np
-            >>> from earlysign.v1.templates.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Template
+            >>> from earlysign.v1.controllers.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Controller
             >>> import earlysign.schema.ES3.Base as ES3_BASE
             >>>
             >>> # --- Example 1: Standard Equidistant Schedule ---
-            >>> protocol_eq = JennisonTurnbull2000Template.design(
+            >>> protocol_eq = JennisonTurnbull2000Controller.design(
             ...     p_control=0.20, p_treatment=0.22, alpha=0.05, power=0.8, looks=3,
             ...     scheduling="equidistant"
             ... )
@@ -209,7 +209,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             True
             >>>
             >>> # --- Example 2: Using structured effect_spec (delta) ---
-            >>> protocol_delta = JennisonTurnbull2000Template.design(
+            >>> protocol_delta = JennisonTurnbull2000Controller.design(
             ...     p_control=0.20, effect_spec={"kind": "absolute_difference", "value": 0.02},
             ...     alpha=0.05, power=0.8, looks=3
             ... )
@@ -294,7 +294,7 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
             allocation_ratios = arms.allocation_ratios
         else:
             raise NotImplementedError(
-                f"GST on {type(arms).__name__} is not yet supported in this template. "
+                f"GST on {type(arms).__name__} is not yet supported in this controller. "
                 "Currently, only TwoArmComparison or MultiArmComparison is supported."
             )
 
@@ -543,9 +543,9 @@ class JennisonTurnbull2000Template(TemplateBase[JennisonTurnbull2000Protocol]):
     @classmethod
     def describe_protocol_instance(cls, protocol: JennisonTurnbull2000Protocol) -> str:
         """Summarizes the Jennison & Turnbull (2000) design."""
-        from string import Template
+        from string import Controller
 
-        tpl = Template(
+        tpl = Controller(
             """
 Design: Jennison & Turnbull (2000) - Binomial Sequential A/B Test
 ================================================================

@@ -7,10 +7,10 @@ from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import Protocol, SequentialQuantileMethodSpec, TaskSpec
 from earlysign.schema.ES3.AVI.Log import SequentialQuantileLookResult
 from earlysign.schema.ES3.SequentialQuantile import ArmMetrics, ArmStatus, Scoreboard
+from earlysign.v1.framework.controller import Controller
 from earlysign.v1.framework.entity import SimpleSequentialEntity
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI.engines.sequential_quantile import (
     SequentialQuantileEngine,
 )
@@ -62,8 +62,8 @@ class SequentialQuantileScoreboard:
         return ProjectionResult(data=Scoreboard(arms=arms), trace=all_trace)
 
 
-class HowardRamdas2022Template(TemplateBase[Protocol]):
-    """Template for Howard & Ramdas (2022) Sequential Quantile A/B Testing.
+class HowardRamdas2022Controller(Controller[Protocol]):
+    """Controller for Howard & Ramdas (2022) Sequential Quantile A/B Testing.
 
     Based on the method described in:
         Howard, S. R., & Ramdas, A. (2022). Sequential estimation of quantiles
@@ -75,19 +75,19 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
     >>> import duckdb
     >>> from earlysign.core.ledger import Ledger
     >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.v1.templates.SequentialQuantile_HowardRamdas2022 import HowardRamdas2022Template
+    >>> from earlysign.v1.controllers.SequentialQuantile_HowardRamdas2022 import HowardRamdas2022Controller
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events_sq"); ledger.ensure()
-    >>> template = HowardRamdas2022Template(ledger)
-    >>> protocol = template.design(
+    >>> controller = HowardRamdas2022Controller(ledger)
+    >>> protocol = controller.design(
     ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
     ...     quantile=0.5,
     ...     alpha=0.05
     ... )
-    >>> template.set_protocol(protocol)
+    >>> controller.set_protocol(protocol)
     >>> t = con.create_table("raw_data_sq", {"arm": ["A", "A", "B", "B"], "val": [1.0, 2.0, 10.0, 11.0]})
-    >>> template.update({"A": t.filter(t.arm == "A"), "B": t.filter(t.arm == "B")})
-    >>> res = template.report_result()
+    >>> controller.update({"A": t.filter(t.arm == "A"), "B": t.filter(t.arm == "B")})
+    >>> res = controller.report_result()
     >>> print(f"Est: {res['estimated_quantile']:.2f}, CI: [{res['interval_lower']:.2f}, {res['interval_upper']:.2f}]")
     Est: 11.00, CI: [10.00, 11.00]
     >>> print(f"Status: {res['status']}")
@@ -177,7 +177,7 @@ class HowardRamdas2022Template(TemplateBase[Protocol]):
             arms = protocol.task.arms
             if not isinstance(arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
-                    f"SequentialQuantile on {type(arms).__name__} is not yet supported in this template. "
+                    f"SequentialQuantile on {type(arms).__name__} is not yet supported in this controller. "
                     "Currently, only TwoArmComparison is supported."
                 )
             arm_ids = [arms.control_arm_name, arms.treatment_arm_name]

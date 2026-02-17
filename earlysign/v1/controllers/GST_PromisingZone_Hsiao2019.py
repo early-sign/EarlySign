@@ -1,4 +1,4 @@
-"""Optimal Promising Zone Design Template (Hsiao et al., 2019).
+"""Optimal Promising Zone Design Controller (Hsiao et al., 2019).
 
 This template implements the "Optimal Promising Zone" adaptive design for Binomial A/B testing
 based on the method described in:
@@ -24,7 +24,7 @@ References:
 Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.v1.templates.GST_PromisingZone_Hsiao2019 import Hsiao2019Template
+    >>> from earlysign.v1.controllers.GST_PromisingZone_Hsiao2019 import Hsiao2019Controller
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>>
@@ -36,7 +36,7 @@ Examples:
     >>>
     >>> # 2. Design "Optimal Promising Zone"
     >>> # 2 Looks, Unfavorable zone < 0.5 CP, Promising [0.5, 0.9], Favorable > 0.9
-    >>> protocol = Hsiao2019Template.design(
+    >>> protocol = Hsiao2019Controller.design(
     ...     p_control=0.10,
     ...     p_treatment=0.14,  # delta=0.04
     ...     alpha=0.025,
@@ -46,8 +46,8 @@ Examples:
     ...     cp_max=0.9,        # Upper bound of promising zone
     ...     target_cp=0.9,     # Target CP for resizing
     ... )
-    >>> template = Hsiao2019Template(ledger)
-    >>> template.set_protocol(protocol)
+    >>> controller = Hsiao2019Controller(ledger)
+    >>> controller.set_protocol(protocol)
     >>>
     >>> # 3. Update with "Promising" data
     >>> # Control: 30/300 (10%), Treatment: 42/300 (14%) -> Null diff
@@ -60,10 +60,10 @@ Examples:
     ...     BinomialArmData(total=300, success=30, arm="control"),
     ...     BinomialArmData(total=300, success=48, arm="treatment") # 16% -> +6% benefit observed
     ... ]
-    >>> template.update(batch)
+    >>> controller.update(batch)
     >>>
     >>> # 4. Report
-    >>> report = template.report_progress()
+    >>> report = controller.report_progress()
     >>> # Check if adaptation happened (max_sample_size might increase)
     >>> # original N approx 780 per arm? Total ~1500?
     >>> # If CP is promising, N should increase.
@@ -84,9 +84,9 @@ from earlysign.schema.ES3.GST.Log import (
     LookResult,
     PromisingZoneStatus,
 )
+from earlysign.v1.framework.controller import Controller
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
 )
@@ -119,7 +119,7 @@ class Hsiao2019Protocol(BaseModel):
 Hsiao2019Protocol.model_rebuild()
 
 
-class Hsiao2019Template(TemplateBase[Hsiao2019Protocol]):
+class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
     """Orchestrator for Optimal Promising Zone Designs (Hsiao et al., 2019).
 
     This implementation uses the **Unweighted** test statistic for the final analysis,

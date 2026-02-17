@@ -11,9 +11,9 @@ from earlysign.schema.ES3.YEAST import (
     TaskSpec as YeastTaskSpec,
 )
 from earlysign.schema.ES3.YEAST.Log import Boundary as BoundarySchema, LookResult
+from earlysign.v1.framework.controller import Controller
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.v1.methods.YEAST.engine import BinomialYEASTEngine, ContinuousYEASTEngine
@@ -38,8 +38,8 @@ class ContinuousKurennoy2025TaskSpec(YeastTaskSpec):
     hypotheses: Dict[str, Any]
 
 
-class BinomialKurennoy2025Template(TemplateBase[Protocol]):
-    """Template for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
+class BinomialKurennoy2025Controller(Controller[Protocol]):
+    """Controller for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
 
     Based on the method described in:
         Kurennoy, A., Dodin, M., Gurbanov, T., & Ramallo, A. P. (2025, October 29).
@@ -52,7 +52,7 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
         >>> import earlysign.schema.ES3.Base as ES3_BASE
-        >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import BinomialKurennoy2025Template, BinomialKurennoy2025TaskSpec
+        >>> from earlysign.v1.controllers.YEAST_Kurennoy2025 import BinomialKurennoy2025Controller, BinomialKurennoy2025TaskSpec
         >>> from earlysign.schema.ES3.Binomial import BinomialArmData
 
         >>> # Setup
@@ -60,23 +60,22 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
         >>> ledger = Ledger(conn, "events")
         >>> ledger.ensure()
         >>> ledger = ledger.bind(experiment_id="doctest_yeast_bin")
-        >>> template = BinomialKurennoy2025Template(ledger)
+        >>> controller = BinomialKurennoy2025Controller(ledger)
 
-        >>> # 1. Design with estimated variance (for Binomial, variance relates to p(1-p))
-        >>> # If we don't know it, we might estimate conservative 0.25max or from pilot.
+        >>> # 1. Design
         >>> task = BinomialKurennoy2025TaskSpec(
         ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
         ...     hypotheses={}
         ... )
-        >>> protocol = template.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=0.25)
-        >>> template.set_protocol(protocol)
+        >>> protocol = controller.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=0.25)
+        >>> controller.set_protocol(protocol)
 
         >>> # 2. Update
         >>> batch = [BinomialArmData(total=100, success=20, arm="A"), BinomialArmData(total=100, success=25, arm="B")]
-        >>> template.update(batch)
+        >>> controller.update(batch)
 
         >>> # 3. Report
-        >>> res = template.report_progress()
+        >>> res = controller.report_progress()
         >>> print(f"Evidence (Trajectory): {res['trajectory']:.4f}")
         Evidence (Trajectory): 0.5000
         >>> # Boundary is calculated on the fly by the engine if not in protocol
@@ -186,8 +185,8 @@ class BinomialKurennoy2025Template(TemplateBase[Protocol]):
             return sess.read(FinalProjector()).data.model_dump(mode="json")
 
 
-class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
-    """Template for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
+class ContinuousKurennoy2025Controller(Controller[Protocol]):
+    """Controller for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
 
     Based on:
         Kurennoy, A., Dodin, M., Gurbanov, T., & Ramallo, A. P. (2025). YEAST: Yet another sequential test.
@@ -196,24 +195,24 @@ class ContinuousKurennoy2025Template(TemplateBase[Protocol]):
         >>> import ibis
         >>> from earlysign.core.ledger import Ledger
         >>> import earlysign.schema.ES3.Base as ES3_BASE
-        >>> from earlysign.v1.templates.YEAST_Kurennoy2025 import ContinuousKurennoy2025Template, ContinuousKurennoy2025TaskSpec
+        >>> from earlysign.v1.controllers.YEAST_Kurennoy2025 import ContinuousKurennoy2025Controller, ContinuousKurennoy2025TaskSpec
         >>> from earlysign.schema.ES3.Continuous import ContinuousArmData
 
         >>> con = ibis.duckdb.connect(":memory:")
         >>> ledger = Ledger(con, "events_cont")
         >>> ledger.ensure()
-        >>> template = ContinuousKurennoy2025Template(ledger)
+        >>> controller = ContinuousKurennoy2025Controller(ledger)
 
         >>> task = ContinuousKurennoy2025TaskSpec(
         ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
         ...     hypotheses={}
         ... )
-        >>> protocol = template.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=1.0)
-        >>> template.set_protocol(protocol)
+        >>> protocol = controller.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=1.0)
+        >>> controller.set_protocol(protocol)
 
         >>> batch = [ContinuousArmData(total=10, sum_x=5.0, sum_x2=10.0, arm="A")]
-        >>> template.update(batch)
-        >>> res = template.report_progress()
+        >>> controller.update(batch)
+        >>> res = controller.report_progress()
         >>> res["status"]
         'continue'
     """

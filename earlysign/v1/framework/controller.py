@@ -40,10 +40,11 @@ class RichDisplayMixin:
         )
 
 
-class TemplateBase(ABC, Generic[TProtocol]):
-    """Base class for all Orchestration Templates.
+class Controller(ABC, Generic[TProtocol]):
+    """Base class for all Orchestration Controllers.
 
     Provides common functionality for Ledger initialization and Protocol registration.
+    A Controller is an interface for executing commands and queries against the Ledger.
     """
 
     @property

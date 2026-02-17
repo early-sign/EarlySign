@@ -1,4 +1,4 @@
-"""Promising Zone Adaptive Design Template (Cui-Hung-Wang).
+"""Promising Zone Adaptive Design Controller (Cui-Hung-Wang).
 
 This template implements a "Promising Zone" adaptive design for Binomial A/B testing
 based on the method described in:
@@ -20,12 +20,12 @@ References:
     group sequential clinical trials. Biometrics, 55(3), 853–857.
 
     In practice, each iteration may run in a different process.
-    To support this use case, the Template object can be destroyed after each iteration and re-instantiated.
+    To support this use case, the Controller object can be destroyed after each iteration and re-instantiated.
 
 Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.v1.templates.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Template
+    >>> from earlysign.v1.controllers.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Controller
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
@@ -38,7 +38,7 @@ Examples:
     >>>
     >>> # 2. Design with Promising Zone
     >>> # 2 Looks, initial N=1000.
-    >>> protocol = CuiHungWang1999Template.design(
+    >>> protocol = CuiHungWang1999Controller.design(
     ...     p_control=0.10,
     ...     p_treatment=0.13,
     ...     alpha=0.025,
@@ -47,8 +47,8 @@ Examples:
     ...     spending_function="obrien_fleming",
     ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
-    >>> template = CuiHungWang1999Template(ledger)
-    >>> template.set_protocol(protocol)
+    >>> controller = CuiHungWang1999Controller(ledger)
+    >>> controller.set_protocol(protocol)
     >>>
     >>> # 3. Update with "Promising" data (Conditional Power ~ 0.6)
     >>> # Need roughly half the data.
@@ -58,10 +58,10 @@ Examples:
     ...     BinomialArmData(total=500, success=50, arm="control"),
     ...     BinomialArmData(total=500, success=65, arm="treatment")
     ... ]
-    >>> template.update(batch)
+    >>> controller.update(batch)
     >>>
     >>> # 5. Verify status and SSR trigger
-    >>> report = template.report_progress()
+    >>> report = controller.report_progress()
     >>> print(f"Status: {report['status']}, Initial Max N: {protocol.method.stopping_policy.timer.max_sample_size}")
     Status: continue, Initial Max N: {'control': 1584, 'treatment': 1584}
     >>> print(f"Adapted Max N: {report['max_sample_size']}")
@@ -84,9 +84,9 @@ from earlysign.schema.ES3.GST.Log import (
     LookResult,
     PromisingZoneStatus,
 )
+from earlysign.v1.framework.controller import Controller
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.group_sequential.execution.binomial import (
     BinomialGSTEngine,
 )
@@ -113,7 +113,7 @@ class CuiHungWang1999Protocol(BaseModel):
 CuiHungWang1999Protocol.model_rebuild()
 
 
-class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
+class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
     """Orchestrator for Promising Zone Adaptive Designs (Cui-Hung-Wang).
 
     Logic:
@@ -216,7 +216,7 @@ class CuiHungWang1999Template(TemplateBase[CuiHungWang1999Protocol]):
                 arms = protocol_traced.data.task.arms
                 if not isinstance(arms, ES3_BASE.TwoArmComparison):
                     raise NotImplementedError(
-                        f"GST on {type(arms).__name__} is not yet supported in this template. "
+                        f"GST on {type(arms).__name__} is not yet supported in this controller. "
                         "Currently, only TwoArmComparison is supported."
                     )
                 allowed_arms = {arms.control_arm_name, arms.treatment_arm_name}

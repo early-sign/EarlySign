@@ -108,14 +108,14 @@ model GSTProtocol {
 
 ---
 
-## 3. Design Idea C: Template-Centric Schema (Decentralized)
+## 3. Design Idea C: Controller-Centric Schema (Decentralized)
 
 **Definition**: [ES3 v1 (EarlySign Standard Schema)](./es3_v1.tsp)
 
-**Core Concept**: There is no single "Universal GST Protocol" class. Instead, each **Template** defines and owns the specific Protocol schema it requires.
+**Core Concept**: There is no single "Universal GST Protocol" class. Instead, each **Controller** defines and owns the specific Protocol schema it requires.
 
 ### Philosophy
--   **Template Authority**: The `BinomialABTemplate` defines `BinomialABProtocol`. A `MAMS_Template` defines `MAMSProtocol`.
+-   **Controller Authority**: The `BinomialABController` defines `BinomialABProtocol`. A `MAMS_Controller` defines `MAMSProtocol`.
 -   **Standardization via Composition**: While Protocols are specific, they are composed of standard, reusable **Parts** (e.g., `StandardBoundarySpec`, `ScheduleSpec`) produced by generic `Designers`.
 -   **Evolution via Isolation**: Adding a complex MAMS design does not require changing the schema used by simple A/B tests.
 
@@ -125,12 +125,12 @@ The system is layered so that complexity is "peeled off" as we go deeper.
 
 1.  **Producer (`SequentialDesignPlanner`)**:
     -   Generates the "Standard Parts" (e.g., calculates OBF boundaries and returns a `StandardBoundarySpec`).
-    -   It does not need to know about the full Template context, only the math.
+    -   It does not need to know about the full Controller context, only the math.
 
-2.  **Orchestrator (`Template`)**:
-    -   Holds the full **Template-Specific Protocol** (e.g., embedding the `StandardBoundarySpec` along with other template settings like `n_max`).
+2.  **Orchestrator (`Controller`)**:
+    -   Holds the full **Controller-Specific Protocol** (e.g., embedding the `StandardBoundarySpec` along with other controller settings like `n_max`).
     -   In `update()`, it selects the appropriate **Engine** based on its protocol data.
-    -   *Example*: `BinomialABTemplate` sees `n_max` changed, calls Planner to get new `BoundarySpec`, updates internal `BinomialABProtocol`.
+    -   *Example*: `BinomialABController` sees `n_max` changed, calls Planner to get new `BoundarySpec`, updates internal `BinomialABProtocol`.
 
 3.  **Consumer (`Engine`)**:
     -   The `Engine` (e.g., `BinomialEngine`) accepts the Protocol (or a subset of it).
@@ -156,19 +156,19 @@ model StandardBoundarySpec {
 
 model ScheduleSpec { ... }
 
-// --- Template-Specific Protocols ---
+// --- Controller-Specific Protocols ---
 
-// 1. Simple Binomial A/B (Template 1)
+// 1. Simple Binomial A/B (Controller 1)
 model BinomialABProtocol {
   // Embeds standard parts
   boundary: StandardBoundarySpec;
   schedule: ScheduleSpec;
   
-  // Template specific
+  // Controller specific
   arm_names: string[];
 }
 
-// 2. Complex Asynchronous Monitor (Template 2)
+// 2. Complex Asynchronous Monitor (Controller 2)
 model AsyncMonitorProtocol {
   // Does NOT use StandardBoundarySpec
   // Defines its own custom structure
@@ -178,9 +178,9 @@ model AsyncMonitorProtocol {
 ```
 
 ### Evaluation against Stress Tests
-*   **J&T Coverage**: `BinomialABTemplate` uses a protocol embedding standard `Design/Schedule/Boundary` specs. Perfect fit.
-*   **Scenario X (Async)**: A new `AsyncMonitoringTemplate` is created with a custom schema. It doesn't fight with the `BinomialABProtocol`.
-*   **Scenario Z (Logic Switch)**: The Template's `update()` method detects the condition and swaps the `Engine` or modifies the Protocol state explicitly.
+*   **J&T Coverage**: `BinomialABController` uses a protocol embedding standard `Design/Schedule/Boundary` specs. Perfect fit.
+*   **Scenario X (Async)**: A new `AsyncMonitoringController` is created with a custom schema. It doesn't fight with the `BinomialABProtocol`.
+*   **Scenario Z (Logic Switch)**: The Controller's `update()` method detects the condition and swaps the `Engine` or modifies the Protocol state explicitly.
 
 ---
 
@@ -190,33 +190,33 @@ model AsyncMonitorProtocol {
 *   **Requirement**: "Check Efficacy every patient, but Futility only at N=200, 400."
 *   **Evaluation**:
     *   **Idea A**: **Fails** (or requires complex recursion). `ScheduleSpec` implies a global clock.
-    *   **Idea C**: **Passes**. `AsyncMonitoringTemplate` defines a protocol with `efficacy_schedule` and `futility_schedule` properties.
+    *   **Idea C**: **Passes**. `AsyncMonitoringController` defines a protocol with `efficacy_schedule` and `futility_schedule` properties.
 
 ### Scenario Y: Hybrid Metrics (Scale Mixing)
 *   **Requirement**: "Efficacy on Bayesian Posterior > 0.98, Futility on Z-score < -1.5."
 *   **Evaluation**:
     *   **Idea A**: **Weak**. `BoundarySpec` assumes a single statistic scale.
-    *   **Idea C**: **Passes**. `HybridTemplate` defines a protocol where `efficacy_rule` uses posterior and `futility_rule` uses Z-score.
+    *   **Idea C**: **Passes**. `HybridController` defines a protocol where `efficacy_rule` uses posterior and `futility_rule` uses Z-score.
 
 ### Scenario Z: State-Dependent Logic Switch
 *   **Requirement**: "If Z > 2.5 at Interim 1, switch spending function from OBF to Pocock."
 *   **Evaluation**:
     *   **Idea A**: **Impossible**.
-    *   **Idea C**: **Passes**. `Template.update()` explicitly modifies the Protocol's state or switches the Engine strategy.
+    *   **Idea C**: **Passes**. `Controller.update()` explicitly modifies the Protocol's state or switches the Engine strategy.
 
 ---
 
 ## 5. Comparative Conclusion
 
-| Feature | Idea A (Universal Union) | Idea C (Template-Centric) |
+| Feature | Idea A (Universal Union) | Idea C (Controller-Centric) |
 | :--- | :--- | :--- |
 | **Complexity** | High (Giant Union of all possibilities) | Low (Decentralized Simplicity) |
-| **Flexibility** | Limited by monolithic schema | Infinite (New Template = New Schema) |
-| **Coordination** | Hard (One size fits all) | Natural (Template Orchestration) |
+| **Flexibility** | Limited by monolithic schema | Infinite (New Controller = New Schema) |
+| **Coordination** | Hard (One size fits all) | Natural (Controller Orchestration) |
 
 **Recommendation**: **Idea C** aligns perfectly with the "Peeling" architecture.
 -   **Planner** produces math (Parts).
--   **Template** owns the Protocol (Structure).
+-   **Controller** owns the Protocol (Structure).
 -   **Engine** consumes the Protocol (Execution).
 
 
@@ -280,9 +280,9 @@ We use **Composition** to reuse standard structures without enforcing inheritanc
     -   Bundles the J&T essentials: `TaskSpec`, `ScheduleSpec`, `BoundarySpec`.
     -   Can be used standalone or embedded.
 
-2.  **`*Protocol` (The Template Manifest)**:
+2.  **`*Protocol` (The Controller Manifest)**:
     -   Embeds `StandardGSTProtocol` as a field (e.g., `engine_protocol`).
-    -   Adds template-specific context (e.g., `arms`).
+    -   Adds controller-specific context (e.g., `arms`).
 
     ```typespec
     // Reusable Standard Block
@@ -293,10 +293,10 @@ We use **Composition** to reuse standard structures without enforcing inheritanc
       adaptation?: AdaptationSpec; // SSR, Drop-the-loser, etc.
     }
 
-    // Template-Specific Manifest
+    // Controller-Specific Manifest
     model BinomialABProtocol {
       // 1. Context Information
-      template: "BinomialAB";
+      controller: "BinomialAB";
       arms: string[];
       
       // 2. The Core Mathematical Design (Embedded)

@@ -135,34 +135,34 @@ Components coordinate through **event-driven messaging**:
 - **Error handling**: Captures failures as events for debugging and recovery
 - **Resource management**: Coordinates backend resources and manages computational state
 
-### 3.4 Custom Templates for Domain-Specific Workflows
+### 3.4 Custom Controllers for Domain-Specific Workflows
 
-When you need a **custom combination** of parameters, effect size definitions, statistics, or stopping rules that isn't covered by the built-in templates, you can create your own **custom Template** by inheriting from the base class.
+When you need a **custom combination** of parameters, effect size definitions, statistics, or stopping rules that isn't covered by the built-in controllers, you can create your own **custom Controller** by inheriting from the base class.
 
-**Why Create Custom Templates?**
+**Why Create Custom Controllers?**
 
 - **Domain-specific requirements**: Your field may have specialized effect size definitions (e.g., clinical meaningful difference, business impact metrics, survival hazards)
 - **Custom statistics**: You might need non-standard test statistics (e.g., rank-based tests, variance-weighted combinations, Bayesian posteriors)
 - **Specialized stopping rules**: Your experimental context may require unique stopping logic (e.g., regulatory constraints, multi-arm rules, futility boundaries with specific thresholds)
-- **Team standardization**: Encode your organization's experimental protocols into reusable, shareable templates
+- **Team standardization**: Encode your organization's experimental protocols into reusable, shareable controllers
 
-**Benefits of Custom Templates:**
+**Benefits of Custom Controllers:**
 
-1. **Portability**: Templates are self-contained files that can be shared across teams and projects
+1. **Portability**: Controllers are self-contained files that can be shared across teams and projects
 2. **Reproducibility**: Complete experimental protocol is captured in code, ensuring consistent execution
-3. **Backend agnostic**: Same template works with DuckDB, Polars, or any other ibis-supported backend
-4. **Version control**: Templates can be versioned, reviewed, and stored in Git repositories
-5. **Auditability**: Template definitions are part of the event log, ensuring complete experimental traceability
+3. **Backend agnostic**: Same controller works with DuckDB, Polars, or any other ibis-supported backend
+4. **Version control**: Controllers can be versioned, reviewed, and stored in Git repositories
+5. **Auditability**: Controller definitions are part of the event log, ensuring complete experimental traceability
 
-**Template Structure:**
+**Controller Structure:**
 
-A custom template typically inherits from `ExperimentTemplate` and implements:
+A custom controller typically inherits from `ExperimentController` and implements:
 
 ```python
-from earlysign.templates.base import ExperimentTemplate
+from earlysign.controllers.base import ExperimentController
 
-class MyCustomTemplate(ExperimentTemplate):
-    """Custom template for domain-specific sequential testing."""
+class MyCustomController(ExperimentController):
+    """Custom controller for domain-specific sequential testing."""
 
     def setup(self, ledger, design_params):
         """
@@ -198,7 +198,7 @@ class MyCustomTemplate(ExperimentTemplate):
 **Example Use Case: Clinical Trial with Custom Endpoints**
 
 ```python
-class ClinicalTrialWithQALY(ExperimentTemplate):
+class ClinicalTrialWithQALY(ExperimentController):
     """
     Sequential testing for quality-adjusted life years (QALY).
 
@@ -229,23 +229,23 @@ class ClinicalTrialWithQALY(ExperimentTemplate):
 
 **Sharing and Reusability:**
 
-Once created, your custom template becomes a **portable experimental protocol**:
+Once created, your custom controller becomes a **portable experimental protocol**:
 
 ```python
-# Team member A creates template
-template = ClinicalTrialWithQALY()
+# Team member A creates controller
+controller = ClinicalTrialWithQALY()
 
-# Team member B uses same template on different backend
+# Team member B uses same controller on different backend
 import ibis
 conn_duckdb = ibis.connect("duckdb://data.db")
 conn_polars = ibis.polars.connect()
 
-# Same template, different backends
+# Same controller, different backends
 ledger_duck = Ledger(conn_duckdb, "clinical_trial_001")
 ledger_polars = Ledger(conn_polars, "clinical_trial_002")
 
-template.setup(ledger_duck, alpha=0.025, beta=0.10, cmd=0.5)
-template.setup(ledger_polars, alpha=0.025, beta=0.10, cmd=0.5)
+controller.setup(ledger_duck, alpha=0.025, beta=0.10, cmd=0.5)
+controller.setup(ledger_polars, alpha=0.025, beta=0.10, cmd=0.5)
 ```
 
 **Best Practices:**
@@ -253,8 +253,8 @@ template.setup(ledger_polars, alpha=0.025, beta=0.10, cmd=0.5)
 1. **Document thoroughly**: Include docstrings explaining the statistical rationale and domain assumptions
 2. **Validate inputs**: Check parameter constraints and raise informative errors
 3. **Use typed payloads**: Define clear payload schemas for your custom event types
-4. **Test across backends**: Verify your template works with multiple ibis backends
-5. **Version your templates**: Use semantic versioning for template definitions stored in the ledger
+4. **Test across backends**: Verify your controller works with multiple ibis backends
+5. **Version your controllers**: Use semantic versioning for controller definitions stored in the ledger
 
 ## 4. Event Store Implementation
 

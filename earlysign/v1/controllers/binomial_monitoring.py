@@ -4,8 +4,8 @@ from pydantic import BaseModel
 
 from earlysign.core.ledger import Ledger
 from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
+from earlysign.v1.framework.controller import Controller
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI import BinomialEValueEngine
 from earlysign.v1.methods.AVI.engines.binomial_e_value import (
     EProcessProtocol,
@@ -30,15 +30,15 @@ class DecisionRecord(BaseModel):
     e_value: float
 
 
-class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
-    """Template for real-time monitoring of a Binomial A/B test using e-processes.
+class BinomialMonitoringController(Controller[EProcessProtocol]):
+    """Controller for real-time monitoring of a Binomial A/B test using e-processes.
 
     Examples:
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.Binomial import BinomialArmData
         >>> from earlysign.v1.methods.AVI.engines.binomial_e_value import EProcessProtocol
-        >>> from earlysign.v1.templates.binomial_monitoring import BinomialMonitoringTemplate
+        >>> from earlysign.v1.controllers.binomial_monitoring import BinomialMonitoringController
         >>>
         >>> # Setup
         >>> conn = ibis.connect("duckdb://:memory:")
@@ -48,23 +48,23 @@ class BinomialMonitoringTemplate(TemplateBase[EProcessProtocol]):
         >>>
         >>> # 1. Design: H0: p=0.5, H1: p=0.7, Alpha=0.05
         >>> protocol = EProcessProtocol(null_p=0.5, alt_p=0.7, alpha=0.05)
-        >>> template = BinomialMonitoringTemplate(ledger)
-        >>> template.set_protocol(protocol)
+        >>> controller = BinomialMonitoringController(ledger)
+        >>> controller.set_protocol(protocol)
         >>>
         >>> # 2. Update with H0-like data (p=0.5, success=50/100)
         >>> batch1 = BinomialArmData(total=100, success=50, arm="control")
-        >>> template.update([batch1])
-        >>> report1 = template.report_progress()
+        >>> controller.update([batch1])
+        >>> report1 = controller.report_progress()
         >>> print(f"E-value: {report1['trajectory']:.2f}, Status: {report1['status']}")
         E-value: 0.00, Status: continue
         >>>
         >>> # 3. Update with H1-like data (p=0.7, success=650/900 more samples)
         >>> batch2 = BinomialArmData(total=900, success=650, arm="control")
-        >>> template.update([batch2])
-        >>> report2 = template.report_progress()
+        >>> controller.update([batch2])
+        >>> report2 = controller.report_progress()
         >>> print(f"E-value: {report2['trajectory']:.2f}, Status: {report2['status']}")
         E-value: 543250443896186605971754527833980928.00, Status: stop_efficacy
-        >>> final_report = template.report_result()
+        >>> final_report = controller.report_result()
         >>> print(f"Is Rejected: {final_report['is_rejected']}")
         Is Rejected: True
     """

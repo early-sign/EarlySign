@@ -12,7 +12,7 @@ Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.v1.templates.mSPRT_Johari2019 import BinomialJohari2019Template
+    >>> from earlysign.v1.controllers.mSPRT_Johari2019 import BinomialJohari2019Controller
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
 
@@ -22,26 +22,26 @@ Examples:
     >>> ledger = ledger.bind(experiment_id="doctest_msprt")
     >>>
     >>> # Design mSPRT (Binomial)
-    >>> template = BinomialJohari2019Template(ledger)
-    >>> protocol = template.design(
+    >>> controller = BinomialJohari2019Controller(ledger)
+    >>> protocol = controller.design(
     ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
     ...     alpha=0.05,
     ...     tau=0.1,  # Mixing parameter ~ MDE
     ...     sides="two"
     ... )
-    >>> template.set_protocol(protocol)
+    >>> controller.set_protocol(protocol)
     >>>
     >>> # Update (Batch 1: Low data)
     >>> batch = [BinomialArmData(total=100, success=20, arm="control"), BinomialArmData(total=100, success=30, arm="treatment")]
-    >>> template.update(batch)
-    >>> res1 = template.report_progress()
+    >>> controller.update(batch)
+    >>> res1 = controller.report_progress()
     >>> print(f"Diff: {res1['trajectory']:.3f}, Status: {res1['status']}")
     Diff: 0.100, Status: continue
     >>>
     >>> # Update (Batch 2: High data crossing threshold)
     >>> batch2 = [BinomialArmData(total=1000, success=200, arm="control"), BinomialArmData(total=1000, success=300, arm="treatment")]
-    >>> template.update(batch2)
-    >>> res2 = template.report_progress()
+    >>> controller.update(batch2)
+    >>> res2 = controller.report_progress()
     >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.3f}, Status: {res2['status']}")
     Diff: 0.100, Boundary: 0.057, Status: stop_efficacy
 """
@@ -60,9 +60,9 @@ from earlysign.schema.ES3.AVI import (
 from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
 from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ContinuousArmData
+from earlysign.v1.framework.controller import Controller, RichDisplayMixin
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import RichDisplayMixin, TemplateBase
 from earlysign.v1.methods.AVI import mSPRTEngine
 from earlysign.v1.methods.AVI.reporting import (
     BacktestProjector,
@@ -84,8 +84,8 @@ assert MethodSpec is not None
 Protocol.model_rebuild()
 
 
-class BinomialJohari2019Template(TemplateBase[Protocol]):
-    """Template for Binomial mSPRT (Johari 2019)."""
+class BinomialJohari2019Controller(Controller[Protocol]):
+    """Controller for Binomial mSPRT (Johari 2019)."""
 
     _protocol_class = Protocol
 
@@ -134,7 +134,7 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
-                    f"mSPRT (Binomial) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    f"mSPRT (Binomial) on {type(protocol.task.arms).__name__} is not yet supported in this controller. "
                     "Currently, only TwoArmComparison is supported."
                 )
 
@@ -247,9 +247,9 @@ class BinomialJohari2019Template(TemplateBase[Protocol]):
     @classmethod
     def describe_protocol_instance(cls, protocol: Protocol) -> str:
         """Summarizes the mSPRT design (Johari 2019)."""
-        from string import Template
+        from string import Controller
 
-        tpl = Template(
+        tpl = Controller(
             """
 Design: mSPRT (Always Valid Inference) - Johari 2019
 ==================================================
@@ -295,8 +295,8 @@ Method:
         ).strip()
 
 
-class ContinuousJohari2019Template(TemplateBase[Protocol]):
-    """Template for Continuous mSPRT (Johari 2019)."""
+class ContinuousJohari2019Controller(Controller[Protocol]):
+    """Controller for Continuous mSPRT (Johari 2019)."""
 
     _protocol_class = Protocol
 
@@ -339,7 +339,7 @@ class ContinuousJohari2019Template(TemplateBase[Protocol]):
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
-                    f"mSPRT (Continuous) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    f"mSPRT (Continuous) on {type(protocol.task.arms).__name__} is not yet supported in this controller. "
                     "Currently, only TwoArmComparison is supported."
                 )
 
@@ -357,4 +357,4 @@ class ContinuousJohari2019Template(TemplateBase[Protocol]):
     @classmethod
     def describe_protocol_instance(cls, protocol: Protocol) -> str:
         """Summarizes the mSPRT design (Johari 2019)."""
-        return BinomialJohari2019Template.describe_protocol_instance(protocol)
+        return BinomialJohari2019Controller.describe_protocol_instance(protocol)

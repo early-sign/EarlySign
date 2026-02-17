@@ -242,10 +242,10 @@ def given_total_n(n_max: str, design_params: Dict[str, Any]) -> None:
 @when("I compute the binomial sequential design", target_fixture="results")
 @when("I compute the log-rank sequential design", target_fixture="results")
 def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
+    from earlysign.v1.controllers.GST_classic import ClassicGSTController
     from earlysign.v1.methods.group_sequential.execution.stopping_policy import (
         StoppingPolicyFactory,
     )
-    from earlysign.v1.templates.GST_classic import ClassicGSTTemplate
 
     t = design_params.get("type", "normal-mean")
     alpha = design_params.get("alpha", 0.05)
@@ -254,9 +254,9 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
     k = design_params.get("k", 5)
     spending_family = design_params.get("spending_family", "obrien_fleming")
 
-    # Map 'spending_family' string to 'type' argument for ClassicGSTTemplate
+    # Map 'spending_family' string to 'type' argument for ClassicGSTController
     # The feature file uses "Pocock", "O'Brien-Fleming", "Wang-Tsiatis"
-    # Template expects "pocock", "obrien_fleming", "wang_tsiatis"
+    # Controller expects "pocock", "obrien_fleming", "wang_tsiatis"
     map_type = {
         "Pocock": "pocock",
         "O'Brien-Fleming": "obrien_fleming",
@@ -293,7 +293,7 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
 
     if "crossover" in t_lower:
         # In this feature suite, crossover assumes I = 2n/s2 => n = I*s2/2
-        # Template arms=1 assumes n = I*sigma_eff^2
+        # Controller arms=1 assumes n = I*sigma_eff^2
         # So sigma_eff = sigma / sqrt(2)
         sigma /= np.sqrt(2.0)
 
@@ -302,9 +302,9 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
     # Override tails if implicit in test type? (e.g. 1-sided in text vs 2-sided default)
     tails = design_params.get("tails", 2)
 
-    # 1. Use Template to Design Protocol
+    # 1. Use Controller to Design Protocol
     # We pass a dummy ledger as we only need the Protocol object, which is returned by classmethod
-    protocol = ClassicGSTTemplate.design(
+    protocol = ClassicGSTController.design(
         type=design_type,
         alpha=alpha,
         power=power,

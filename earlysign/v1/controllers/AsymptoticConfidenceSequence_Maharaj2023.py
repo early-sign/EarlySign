@@ -9,17 +9,17 @@ from earlysign.schema.ES3.AVI import (
     TaskSpec,
 )
 from earlysign.schema.ES3.AVI.Log import LookResult
+from earlysign.v1.framework.controller import Controller
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI import GAVIEngine, mSPRTEngine
 from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 
 
-class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
-    r"""Template for Asymptotic Confidence Sequences (Maharaj et al. 2023).
+class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[Protocol]):
+    r"""Controller for Asymptotic Confidence Sequences (Maharaj et al. 2023).
 
     This template implements the practical, variance-adaptive approaches described
     in Maharaj et al. (2023) for constructing Asymptotic Confidence Sequences (CS).
@@ -45,7 +45,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
         >>> from earlysign.schema.ES3.Binomial import BinomialArmData
         >>> import earlysign.schema.ES3.Base as ES3_BASE
-        >>> from earlysign.v1.templates.AsymptoticConfidenceSequence_Maharaj2023 import AsymptoticConfidenceSequenceMaharaj2023Template
+        >>> from earlysign.v1.controllers.AsymptoticConfidenceSequence_Maharaj2023 import AsymptoticConfidenceSequenceMaharaj2023Controller
         >>>
         >>> # Setup ledger
         >>> conn = ibis.connect("duckdb://:memory:")
@@ -54,23 +54,23 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
         >>> ledger = ledger.bind(experiment_id="maharaj_test_001")
         >>>
         >>> # Initialize template
-        >>> template = AsymptoticConfidenceSequenceMaharaj2023Template(ledger)
+        >>> controller = AsymptoticConfidenceSequenceMaharaj2023Controller(ledger)
         >>>
         >>> # 1. Design from BUDGET (optimizing for max_n=1000)
-        >>> protocol = template.design_from_budget(
+        >>> protocol = controller.design_from_budget(
         ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
         ...     alpha=0.05,
         ...     max_n=1000,
         ...     variance=None, # Estimated from data
         ...     sides="two"
         ... )
-        >>> template.set_protocol(protocol)
+        >>> controller.set_protocol(protocol)
         >>>
         >>> # 2. Simulate Data Update
         >>> batch = [BinomialArmData(total=800, success=400, arm="control"),
         ...          BinomialArmData(total=800, success=480, arm="treatment")]
-        >>> template.update(batch)
-        >>> report = template.report_progress()
+        >>> controller.update(batch)
+        >>> report = controller.report_progress()
         >>> print(f"Diff: {report['trajectory']:.3f}, Boundary: {report['boundary']:.3f}, Status: {report['status']}")
         Diff: 0.100, Boundary: 0.053, Status: stop_efficacy
     """
@@ -210,7 +210,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Template(TemplateBase[Protocol]):
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
-                    f"Asymptotic CS on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    f"Asymptotic CS on {type(protocol.task.arms).__name__} is not yet supported in this controller. "
                     "Currently, only TwoArmComparison is supported."
                 )
 

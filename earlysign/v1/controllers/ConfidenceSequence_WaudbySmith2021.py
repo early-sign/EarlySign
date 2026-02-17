@@ -15,7 +15,7 @@ Reference:
 Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
-    >>> from earlysign.v1.templates.ConfidenceSequence_WaudbySmith2021 import BinomialConfidenceSequenceWaudbySmith2021Template
+    >>> from earlysign.v1.controllers.ConfidenceSequence_WaudbySmith2021 import BinomialConfidenceSequenceWaudbySmith2021Controller
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
 
@@ -23,29 +23,29 @@ Examples:
     >>> ledger = Ledger(conn, "events")
     >>> ledger.ensure()
     >>> ledger = ledger.bind(experiment_id="doctest_cs_ws2021")
-    >>> template = BinomialConfidenceSequenceWaudbySmith2021Template(ledger)
+    >>> controller = BinomialConfidenceSequenceWaudbySmith2021Controller(ledger)
     >>>
     >>> # Design CS
-    >>> protocol = template.design(
+    >>> protocol = controller.design(
     ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
     ...     alpha=0.05,
     ...     variance=0.25, # Max variance for Bernoulli
     ...     sides="two",
     ...     max_n=1000
     ... )
-    >>> template.set_protocol(protocol)
+    >>> controller.set_protocol(protocol)
     >>>
     >>> # Update (Batch 1: Low data)
     >>> batch = [BinomialArmData(total=50, success=10, arm="control"), BinomialArmData(total=50, success=15, arm="treatment")]
-    >>> template.update(batch)
-    >>> res1 = template.report_progress()
+    >>> controller.update(batch)
+    >>> res1 = controller.report_progress()
     >>> print(f"Diff: {res1['trajectory']:.3f}, Boundary: {res1['boundary']:.4f}, Status: {res1['status']}")
     Diff: 0.100, Boundary: 0.3337, Status: continue
     >>>
     >>> # Update (Batch 2: High data crossing threshold)
     >>> batch2 = [BinomialArmData(total=500, success=100, arm="control"), BinomialArmData(total=500, success=250, arm="treatment")]
-    >>> template.update(batch2)
-    >>> res2 = template.report_progress()
+    >>> controller.update(batch2)
+    >>> res2 = controller.report_progress()
     >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.4f}, Status: {res2['status']}")
     Diff: 0.282, Boundary: 0.0655, Status: stop_efficacy
 """
@@ -62,17 +62,17 @@ from earlysign.schema.ES3.AVI import (
 from earlysign.schema.ES3.AVI.Log import LookResult
 from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ContinuousArmData
+from earlysign.v1.framework.controller import Controller
 from earlysign.v1.framework.projector import ProtocolProjector
 from earlysign.v1.framework.session import Session
-from earlysign.v1.framework.template import TemplateBase
 from earlysign.v1.methods.AVI import GAVIEngine
 from earlysign.v1.methods.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.v1.methods.binomial import Scoreboard as BinomialScoreboard
 from earlysign.v1.methods.continuous import Scoreboard as ContinuousScoreboard
 
 
-class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):
-    """Template for Binomial Confidence Sequence (Waudby-Smith 2021).
+class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[Protocol]):
+    """Controller for Binomial Confidence Sequence (Waudby-Smith 2021).
 
     Uses GAVI framework with Known/Bounded Variance.
     """
@@ -115,7 +115,7 @@ class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
-                    f"ConfidenceSequence (Binomial) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    f"ConfidenceSequence (Binomial) on {type(protocol.task.arms).__name__} is not yet supported in this controller. "
                     "Currently, only TwoArmComparison is supported."
                 )
 
@@ -132,8 +132,8 @@ class BinomialConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):
             return sess.read(FinalProjector()).data.model_dump(mode="json")
 
 
-class ContinuousConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]):
-    """Template for Continuous Confidence Sequence (Waudby-Smith 2021).
+class ContinuousConfidenceSequenceWaudbySmith2021Controller(Controller[Protocol]):
+    """Controller for Continuous Confidence Sequence (Waudby-Smith 2021).
 
     Uses GAVI framework with Known Variance.
     """
@@ -175,7 +175,7 @@ class ContinuousConfidenceSequenceWaudbySmith2021Template(TemplateBase[Protocol]
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
-                    f"ConfidenceSequence (Continuous) on {type(protocol.task.arms).__name__} is not yet supported in this template. "
+                    f"ConfidenceSequence (Continuous) on {type(protocol.task.arms).__name__} is not yet supported in this controller. "
                     "Currently, only TwoArmComparison is supported."
                 )
 
