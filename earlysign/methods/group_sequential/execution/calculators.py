@@ -1,7 +1,5 @@
 from typing import Any, Dict, Optional, Protocol as TypingProtocol
 
-import numpy as np
-
 import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
 

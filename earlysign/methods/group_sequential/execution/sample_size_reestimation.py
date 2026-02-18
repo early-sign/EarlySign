@@ -146,8 +146,8 @@ class ConditionalPowerAdaptationEngine:
         ...             ),
         ...             schedule=EquidistantSchedule(n_looks=2)
         ...         ),
-        ...         adaptation=AdaptationSpec(
-        ...             sample_size_reestimation=SampleSizeReestimationSpec(
+        ...         adaptation={
+        ...             "sample_size_reestimation": SampleSizeReestimationSpec(
         ...                 type="sample_size_reestimation",
         ...                 method="conditional_power",
         ...                 target_power=0.8,
@@ -159,7 +159,7 @@ class ConditionalPowerAdaptationEngine:
         ...                     target_conditional_power=0.9
         ...                 )
         ...             )
-        ...         )
+        ...         }
         ...     )
         ... )
         >>> # Logic test
