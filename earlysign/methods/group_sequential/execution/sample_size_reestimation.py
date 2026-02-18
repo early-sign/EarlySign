@@ -110,7 +110,8 @@ class ConditionalPowerAdaptationEngine:
         ...     Protocol, MethodSpec, StoppingPolicySpec, OBrienFlemingStrategy,
         ...     TaskSpec, HypothesisSpec, BinaryEffectSize, EquidistantSchedule,
         ...     TwoArmBinomialZ, SampleSizeTimer, EqualityHypothesis,
-        ...     CanonicalGaussianModel, SampleSizeReestimationSpec, PromisingZoneSpec
+        ...     CanonicalGaussianModel, SampleSizeReestimationSpec, PromisingZoneSpec,
+        ...     AdaptationSpec
         ... )
         >>> from earlysign.methods.group_sequential.execution.sample_size_reestimation import ConditionalPowerAdaptationEngine
         >>> from earlysign.schema.ES3.GST.Log import LookResult
@@ -145,16 +146,18 @@ class ConditionalPowerAdaptationEngine:
         ...             ),
         ...             schedule=EquidistantSchedule(n_looks=2)
         ...         ),
-        ...         adaptation=SampleSizeReestimationSpec(
-        ...             type="sample_size_reestimation",
-        ...             method="conditional_power",
-        ...             target_power=0.8,
-        ...             use_weighted_statistic=True,
-        ...             n_range=[0, 1000],
-        ...             promising_zone=PromisingZoneSpec(
-        ...                 conditional_power_threshold_min=0.5,
-        ...                 conditional_power_threshold_max=0.9,
-        ...                 target_conditional_power=0.9
+        ...         adaptation=AdaptationSpec(
+        ...             sample_size_reestimation=SampleSizeReestimationSpec(
+        ...                 type="sample_size_reestimation",
+        ...                 method="conditional_power",
+        ...                 target_power=0.8,
+        ...                 use_weighted_statistic=True,
+        ...                 n_range=[0, 1000],
+        ...                 promising_zone=PromisingZoneSpec(
+        ...                     conditional_power_threshold_min=0.5,
+        ...                     conditional_power_threshold_max=0.9,
+        ...                     target_conditional_power=0.9
+        ...                 )
         ...             )
         ...         )
         ...     )
