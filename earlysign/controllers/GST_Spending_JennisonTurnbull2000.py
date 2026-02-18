@@ -209,12 +209,14 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             >>> from earlysign.controllers.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Controller
             >>> import earlysign.schema.ES3.Base as ES3_BASE
             >>>
+            >>> from earlysign.methods.group_sequential.shared.design_utils import get_info_times
+            >>>
             >>> # --- Example 1: Standard Equidistant Schedule ---
             >>> protocol_eq = JennisonTurnbull2000Controller.design(
             ...     p_control=0.20, p_treatment=0.22, alpha=0.05, power=0.8, looks=3,
             ...     scheduling="equidistant"
             ... )
-            >>> np.allclose(protocol_eq.method.stopping_policy.schedule.analyses, [1/3, 2/3, 1.0])
+            >>> np.allclose(get_info_times(protocol_eq.method.stopping_policy.schedule), [1/3, 2/3, 1.0])
             True
             >>>
             >>> # --- Example 2: Using structured effect_spec (delta) ---

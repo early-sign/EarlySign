@@ -57,19 +57,24 @@ def get_standardized_drift(protocol: GST.Protocol) -> float:
     raise ValueError(f"Unsupported effect size type: {type(effect)}")
 
 
+def get_info_times(schedule: GST.ScheduleSpec) -> np.ndarray:
+    """
+    Returns the array of information fractions (0 < t <= 1) defined by the Schedule.
+    """
+    if isinstance(schedule, GST.FixedSchedule):
+        return np.array(schedule.analyses)
+    elif isinstance(schedule, GST.EquidistantSchedule):
+        return np.linspace(1.0 / schedule.n_looks, 1.0, schedule.n_looks)
+    return np.array([1.0])
+
+
 def get_final_efficacy_boundary(protocol: GST.Protocol) -> float:
     """
     Calculates the efficacy boundary (Z-scale) at the final analysis (t=1.0).
     """
     spec = protocol.method.stopping_policy
     schedule = spec.schedule
-
-    if isinstance(schedule, GST.FixedSchedule):
-        info_times = np.array(schedule.analyses)
-    elif isinstance(schedule, GST.EquidistantSchedule):
-        info_times = np.linspace(1.0 / schedule.n_looks, 1.0, schedule.n_looks)
-    else:
-        info_times = np.array([1.0])
+    info_times = get_info_times(schedule)
 
     # Ensure 1.0 is in there for the "final" look
     if not np.any(np.isclose(info_times, 1.0)):

@@ -1,14 +1,11 @@
 from typing import Any, List, Optional, Tuple
 
-import numpy as np
-
 from earlysign.framework.trace import Traced, extract_traces
+from earlysign.methods.group_sequential.shared.design_utils import get_info_times
 from earlysign.schema.ES3.GST import (
     DueLookTrigger,
-    EquidistantSchedule,
     EventCountTimer,
     FisherInformationTimer,
-    FixedSchedule,
     Protocol,
     SampleSizeTimer,
 )
@@ -47,14 +44,7 @@ def get_pending_look_trigger(
     timer = policy.timer
 
     # 1. Determine planned points (informational times t_1, ..., t_K)
-    if isinstance(schedule, FixedSchedule):
-        planned_points = schedule.analyses
-    elif isinstance(schedule, EquidistantSchedule):
-        planned_points = np.linspace(
-            1.0 / schedule.n_looks, 1.0, schedule.n_looks
-        ).tolist()
-    else:
-        return None
+    planned_points = get_info_times(schedule).tolist()
 
     # 2. Calculate current information fraction
     n_max: float = 0.0
