@@ -255,16 +255,8 @@ class ClassicGSTController(Controller[ClassicProtocol]):
                 if protocol.data.task.response_type == GST.ResponseType.BINARY:
                     engine = GroupSequentialEngine(protocol.data)
                 else:
-                    # Note: We can reuse GroupSequentialEngine for Continuous as long as
-                    # its Z-stat calculation is either abstracted or we specialize it.
-                    # Currently GroupSequentialEngine has a hardcoded Z-stat for binomial.
-                    # I should probably create ContinuousGSTEngine or make GroupSequentialEngine
-                    # polymorphic.
-                    from earlysign.methods.group_sequential.execution.engine import (
-                        GroupSequentialEngine as ContinuousGSTEngine,
-                    )
-
-                    engine = ContinuousGSTEngine(protocol.data)
+                    # GroupSequentialEngine is polymorphic and handles Continuous types
+                    engine = GroupSequentialEngine(protocol.data)
 
                 sess.call_and_commit(
                     LookResult,
