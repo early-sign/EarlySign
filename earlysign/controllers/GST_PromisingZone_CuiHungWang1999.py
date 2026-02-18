@@ -1,6 +1,6 @@
-"""Promising Zone Adaptive Design Controller (Cui-Hung-Wang).
+"""Promising Zone Adaptive Design Controller (Cui, Hung & Wang 1999).
 
-This template implements a "Promising Zone" adaptive design for Binomial A/B testing
+This controller implements a "Promising Zone" adaptive design for Binomial A/B testing
 based on the method described in:
 
     Cui, L., Hung, H. M., & Wang, S. J. (1999). Modification of sample size in
@@ -81,8 +81,8 @@ from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
-from earlysign.methods.group_sequential.execution.binomial import (
-    BinomialGSTEngine,
+from earlysign.methods.group_sequential.execution.engine import (
+    GroupSequentialEngine,
 )
 from earlysign.methods.group_sequential.execution.entities import InterimAnalyses
 from earlysign.methods.group_sequential.execution.sample_size_reestimation import (
@@ -140,6 +140,10 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
+        # Promising Zone Parameters
+        conditional_power_min: float = 0.5,
+        conditional_power_max: float = 0.9,
+        target_conditional_power: float = 0.9,
         # Binomial params (convenience)
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
@@ -197,6 +201,17 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
                 "ssr_method": "cui_hung_wang",
             },
         )
+
+        if method.adaptation and method.adaptation.sample_size_reestimation:
+            promising_spec = GST.PromisingZoneSpec(
+                conditional_power_threshold_min=conditional_power_min,
+                conditional_power_threshold_max=conditional_power_max,
+                target_conditional_power=target_conditional_power,
+            )
+
+            # Assign PromisingZoneSpec to the SSR spec within the container
+            method.adaptation.sample_size_reestimation.promising_zone = promising_spec
+
         return CuiHungWang1999Protocol(task=task, method=method)
 
     def update(self, batch: List[BaseModel]) -> None:
@@ -241,7 +256,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
                 task=protocol_traced.data.task,
                 method=protocol_traced.data.method,
             )
-            engine = BinomialGSTEngine(gst_protocol)
+            engine = GroupSequentialEngine(gst_protocol)
 
             sess.call_and_commit(
                 LookResult,
@@ -280,7 +295,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             report = sess.read(ProgressProjector()).data.model_dump(mode="json")
             protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
             # Enrich with current trial constraints
-            from earlysign.methods.group_sequential.shared.timer import SampleSizeTimer
+            from earlysign.schema.ES3.GST import SampleSizeTimer
 
             timer = protocol.method.stopping_policy.timer
             if isinstance(timer, SampleSizeTimer):

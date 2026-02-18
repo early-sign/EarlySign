@@ -14,11 +14,9 @@ from earlysign.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
 )
-from earlysign.methods.group_sequential.shared.entities import (
+from earlysign.schema.ES3.GST import (
     EquidistantSchedule,
     FixedSchedule,
-)
-from earlysign.methods.group_sequential.shared.timer import (
     SampleSizeTimer,
 )
 from earlysign.stats.gaussian_process import CanonicalGaussianProcess
@@ -328,9 +326,12 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
     # 2. Extract Results from Protocol and Re-Solve Boundaries for Verification
     schedule = protocol.method.stopping_policy.schedule
     if isinstance(schedule, EquidistantSchedule):
-        info_times = np.array(schedule.analyses)
+        n_looks = schedule.n_looks
+        info_times = np.linspace(1.0 / n_looks, 1.0, n_looks)
+    elif isinstance(schedule, FixedSchedule):
+        info_times = np.array(schedule.analyses, dtype=float)
     else:
-        info_times = np.array(cast(FixedSchedule, schedule).analyses)
+        raise ValueError(f"Unsupported schedule type: {type(schedule)}")
 
     timer = protocol.method.stopping_policy.timer
     if isinstance(timer, SampleSizeTimer):

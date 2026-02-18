@@ -1,9 +1,11 @@
-from typing import Any, Optional
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
-import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
+from earlysign.methods.group_sequential.execution.calculators import (
+    ZStatisticCalculatorFactory,
+)
 from earlysign.methods.group_sequential.execution.stopping_policy import (
     SpendingFunctionStoppingPolicy,
     StoppingPolicy,
@@ -15,18 +17,18 @@ from earlysign.methods.group_sequential.shared.canonical_joint_model import (
 from earlysign.methods.group_sequential.shared.design_utils import (
     get_standardized_drift,
 )
-from earlysign.schema.ES3.Binomial import ArmMetrics, ArmStatus, Scoreboard
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult, ScheduleTrigger
 
 
-class BinomialGSTEngine:
+class GroupSequentialEngine:
     """
-    Orchestrator for Binomial Group Sequential Testing.
+    Architecture-Neutral Orchestrator for Group Sequential Testing.
 
     Responsibilities:
-    1. Computes Z-statistics from summary data.
-    2. Evaluates stopping criteria using StoppingPolicySpec.
-    3. Returns LookResult with boundary crossings and status.
+    1. Orchestrates sequential state (milestones, boundaries, spending) on the universal Z-scale.
+    2. Delegates domain-specific statistical calculations (e.g. Binomial Z) to ZStatisticCalculator.
+    3. Evaluates stopping criteria for one or more treatment arms (MAMS-ready).
+    4. Returns LookResult with explicit handling of missing data (None).
     """
 
     _schedule: GST.FixedSchedule | GST.EquidistantSchedule
@@ -44,7 +46,10 @@ class BinomialGSTEngine:
             method.stopping_policy
         )
 
-        # Schedule
+        # 2. Build Statistic Calculator
+        self.calculator = ZStatisticCalculatorFactory.build(protocol)
+
+        # 3. Resolve Schedule
         self._schedule = schedule
         schedule_inner = self._schedule
         self._points = []
@@ -53,6 +58,8 @@ class BinomialGSTEngine:
         elif isinstance(schedule_inner, GST.EquidistantSchedule):
             k = schedule_inner.n_looks
             self._points = list(np.linspace(1 / k, 1.0, k))
+        else:
+            raise ValueError(f"Unsupported schedule type: {type(schedule_inner)}")
 
         # Max Sample Size
         self.n_max = 0
@@ -80,7 +87,7 @@ class BinomialGSTEngine:
         strategy = method.stopping_policy.strategy
         if hasattr(strategy, "sided"):
             return 1 if strategy.sided == GST.Sided.ONE else 2
-        return 1  # Default to 1-sided if not specified
+        return 1
 
     def find_critical_value(
         self, shape: np.ndarray, alpha: float, tails: Optional[int] = None
@@ -92,27 +99,19 @@ class BinomialGSTEngine:
 
     @property
     def efficacy_boundaries(self) -> Optional[np.ndarray]:
-        """Lazy access to pre-calculated efficacy boundaries."""
         if self._efficacy_boundaries is None:
             self.solve_all_boundaries()
         return self._efficacy_boundaries
 
     @property
     def futility_boundaries(self) -> Optional[np.ndarray]:
-        """Lazy access to pre-calculated futility boundaries."""
         if self._futility_boundaries is None:
             self.solve_all_boundaries()
         return self._futility_boundaries
 
     def solve_all_boundaries(self) -> None:
-        """
-        Triggers solving for all boundaries at once.
-        Useful for fixed-shape designs or to seed the cache.
-        """
-        # Spending function designs are typically solved step-by-step in run()
         if isinstance(self.stopping_policy, SpendingFunctionStoppingPolicy):
             return
-
         self._efficacy_boundaries, self._futility_boundaries = (
             self.stopping_policy.solve(self)
         )
@@ -120,59 +119,8 @@ class BinomialGSTEngine:
     def get_boundary_at_look(
         self, look_index: int, info_time: float, rule_type: str = "efficacy"
     ) -> Optional[float]:
-        """
-        Public helper to project a boundary for a given look and information time.
-        Useful for design and visualization.
-
-        Example:
-            >>> import earlysign.schema.ES3.Base as ES3_BASE
-            >>> import earlysign.schema.ES3.GST as GST
-            >>> from earlysign.methods.group_sequential.execution.binomial import BinomialGSTEngine
-            >>> protocol = GST.Protocol(
-            ...     name="Example Trial",
-            ...     task=GST.TaskSpec(
-            ...         kind="group_sequential",
-            ...         arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
-            ...         response_type=GST.ResponseType.BINARY,
-            ...         efficacy=GST.EfficacyRequirement(alpha=0.05),
-            ...         hypotheses=GST.HypothesisSpec(
-            ...             h_null_description="p_t <= p_c", h_alt_description="p_t > p_c",
-            ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-            ...             target_effect=GST.BinaryEffectSize(proportions={"control": 0.2, "treatment": 0.3})
-            ...         )
-            ...     ),
-            ...     method=GST.MethodSpec(
-            ...         kind="group_sequential",
-            ...         stopping_policy=GST.StoppingPolicySpec(
-            ...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
-            ...             strategy=GST.AlphaSpendingStrategy(
-            ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
-            ...                 budget=0.05,
-            ...                 sided=GST.Sided.ONE,
-            ...                 statistical_model=GST.CanonicalGaussianModel(),
-            ...             ),
-            ...             timer=GST.SampleSizeTimer(
-            ...                 unit=GST.Unit.INDIVIDUALS,
-            ...                 max_sample_size={"control": 50, "treatment": 50}
-            ...             ),
-            ...             schedule=GST.FixedSchedule(analyses=[0.5, 1.0])
-            ...         ),
-            ...     )
-            ... )
-            >>> engine = BinomialGSTEngine(protocol=protocol)
-            >>> # Projection of boundary at 50% info time
-            >>> engine.get_boundary_at_look(0, 0.5)
-            2.3261743106419144
-        """
-        # Note:
-        # - Index-based designs (OBF, Pocock, etc.): Anchored to look_index.
-        #   Assumes equidistant looks as per standard software defaults.
-        # - Time-based designs (Spending, Whitehead): Follow actual info_time.
-        #   Maintains statistical integrity if analysis timing varies.
-
         if look_index < 0:
             return None
-
         return self.stopping_policy.get_boundary(
             model=self,
             look_index=look_index,
@@ -182,86 +130,42 @@ class BinomialGSTEngine:
 
     def run(
         self,
-        metrics: Scoreboard,
-        history: list[tuple[int, LookResult]],
+        metrics: Any,
+        history: List[Tuple[int, LookResult]],
         trigger: Optional[ScheduleTrigger] = None,
         **kwargs: Any,
     ) -> LookResult:
         """
-        Computes the test result given current summary statistics and trajectory history.
-
-        Zero-State Principle: This method derives the decision state solely from the
-        provided metrics, history, and protocol definition.
-
-        Args:
-            metrics: Scoreboard containing the aggregated metrics for all arms.
-            history: Trajectory of previous LookResult objects from the ledger.
-            trigger: The trigger that prompted this analysis (contains look index).
-            **kwargs: Additional keyword arguments.
-
-        Returns:
-            LookResult containing the test statistic, boundaries, and decision status.
+        Computes the test result using the strategy-based calculator and sequential engine.
         """
-        # Extract arm names from protocol's explicit roles
-        arms = self.protocol.task.arms
-        if not isinstance(arms, ES3_BASE.TwoArmComparison):
-            raise ValueError(
-                f"BinomialGSTEngine requires a TwoArmComparison arm structure, but got {type(arms).__name__}."
-            )
+        # 1. Calculate Z-statistics (Vectorized/Mapped)
+        # Returns Dict[arm_name, z_score] or None if critical data missing
+        z_scores = self.calculator.calculate(metrics, self.protocol)
 
-        control_key = arms.control_arm_name
-        treatment_key = arms.treatment_arm_name
-
-        # Default empty metrics if arm not present
-        default_arm = ArmStatus(
-            metrics=ArmMetrics(total=0, successes=0, p_hat=0.0), is_active=True
-        )
-        summary_c = metrics.arms.get(control_key, default_arm).metrics
-        summary_t = metrics.arms.get(treatment_key, default_arm).metrics
-
-        n_c, n_t = summary_c.total, summary_t.total
-        cumulative_n = n_c + n_t
+        # Determine total sample size
+        # We assume total_n is readily available in Scoreboard (aggregated across arms if needed)
+        # For Consistency, we calculate it here.
+        cumulative_n = sum(arm.metrics.total for arm in metrics.arms.values())
 
         if self.n_max > 0:
             info_frac = min(cumulative_n / self.n_max, 1.0)
         else:
             info_frac = 0.0
 
-        # 1. Calculate Z-statistic
-        z_stat = 0.0
-        if n_c >= 2 and n_t >= 2:
-            p_pool = (summary_c.successes + summary_t.successes) / cumulative_n
-            se = np.sqrt(p_pool * (1 - p_pool) * (1 / n_c + 1 / n_t))
-            if se > 0:
-                z_stat = (summary_t.p_hat - summary_c.p_hat) / se
-
-        # 1.1 Support Weighted Z-Ratio (Cui-Hung-Wang) if adaptation occurred
-        snapshot = self.protocol.method.adaptation_snapshot
-
-        # Check if weighting is enabled in the design spec
-        use_weighted = True
-        if self.protocol.method.adaptation and hasattr(
-            self.protocol.method.adaptation, "use_weighted_statistic"
-        ):
-            use_weighted = self.protocol.method.adaptation.use_weighted_statistic
-
-        if (
-            snapshot
-            and use_weighted
-            and cumulative_n > snapshot.info_frac * snapshot.original_max_sample_size
-        ):
-            t = snapshot.info_frac
-            n_look_t = t * snapshot.original_max_sample_size
-            z_t = snapshot.z_t
-
-            if cumulative_n > n_look_t:
-                # Z_rem = (Z_total * sqrt(n_total) - Z_t * sqrt(n_t)) / sqrt(n_total - n_t)
-                # Weighted Z = sqrt(t)*Z_t + sqrt(1-t)*Z_rem
-                z_rem = (
-                    z_stat * np.sqrt(cumulative_n) - z_t * np.sqrt(n_look_t)
-                ) / np.sqrt(cumulative_n - n_look_t)
-                z_weighted = np.sqrt(t) * z_t + np.sqrt(1 - t) * z_rem
-                z_stat = z_weighted
+        # If data is missing for required arms, return a CONTINUE result without Z-stat.
+        # This prevents STOP decisions based on silent 0.0 defaults.
+        if z_scores is None:
+            return LookResult(
+                look=trigger.index if trigger else None,
+                trigger=trigger,
+                sample_n=int(cumulative_n),
+                info_frac=info_frac,
+                z_stat=0.0,  # Schema requires float
+                z_stats=None,
+                status=DecisionStatus.CONTINUE_,
+                is_efficacy_crossed=False,
+                is_futility_crossed=False,
+            )
 
         # 2. Determine Look and Boundaries
         look_num = trigger.index if trigger else None
@@ -271,12 +175,8 @@ class BinomialGSTEngine:
         futility_boundary = None
         alpha_spent = None
         beta_spent = None
-        is_efficacy_crossed = False
-        is_futility_crossed = False
-        status = DecisionStatus.CONTINUE_
 
         if look_num is not None:
-            # 3. Resolve boundaries
             (
                 efficacy_boundary,
                 futility_boundary,
@@ -284,17 +184,32 @@ class BinomialGSTEngine:
                 beta_spent,
             ) = self._resolve_current_boundaries(look_idx, info_frac, history)
 
-            # 4. Evaluate Stopping
-            if efficacy_boundary is not None and z_stat > efficacy_boundary:
-                is_efficacy_crossed = True
-                status = DecisionStatus.STOP_EFFICACY
+        # 3. Evaluate Stopping Logic (MAMS-aware)
+        # Representative Z-stat is max across all arms for efficacy
+        representative_z = float(max(z_scores.values())) if z_scores else 0.0
 
-            if futility_boundary is not None and z_stat < futility_boundary:
-                is_futility_crossed = True
-                if status == DecisionStatus.CONTINUE_:
+        is_efficacy_crossed = False
+        is_futility_crossed = False
+        status = DecisionStatus.CONTINUE_
+
+        if look_num is not None:
+            # Efficacy: STOP if ANY arm crosses boundary
+            if efficacy_boundary is not None:
+                is_efficacy_crossed = any(
+                    z > efficacy_boundary for z in z_scores.values()
+                )
+                if is_efficacy_crossed:
+                    status = DecisionStatus.STOP_EFFICACY
+
+            # Futility: STOP if ALL arms cross futility boundary
+            if futility_boundary is not None and status == DecisionStatus.CONTINUE_:
+                is_futility_crossed = all(
+                    z < futility_boundary for z in z_scores.values()
+                )
+                if is_futility_crossed:
                     status = DecisionStatus.STOP_FUTILITY
 
-            # Final Look check
+            # Plan End Reached
             if look_idx == len(self._points) - 1:
                 if status == DecisionStatus.CONTINUE_:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
@@ -304,7 +219,8 @@ class BinomialGSTEngine:
             trigger=trigger,
             sample_n=int(cumulative_n),
             info_frac=info_frac,
-            z_stat=float(z_stat),
+            z_stat=representative_z,
+            z_stats=z_scores,
             efficacy_boundary=efficacy_boundary,
             is_efficacy_crossed=is_efficacy_crossed,
             futility_boundary=futility_boundary,
@@ -318,8 +234,8 @@ class BinomialGSTEngine:
         self,
         look_idx: int,
         info_frac: float,
-        history: list[tuple[int, LookResult]],
-    ) -> tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
+        history: List[Tuple[int, LookResult]],
+    ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
         """Resolves efficacy and futility boundaries for the current look."""
         efficacy_boundary = None
         futility_boundary = None
@@ -367,7 +283,6 @@ class BinomialGSTEngine:
                     np.array([info_frac])
                 )
                 beta_spent = float(beta_spent_arr[0])
-                # For beta spending, the standardized drift (H1 effect) must be known.
                 try:
                     drift = get_standardized_drift(self.protocol)
                 except ValueError as e:
@@ -393,3 +308,7 @@ class BinomialGSTEngine:
             )
 
         return efficacy_boundary, futility_boundary, alpha_spent, beta_spent
+
+
+# Alias for backward compatibility during transition if needed
+GroupSequentialEngine = GroupSequentialEngine

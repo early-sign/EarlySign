@@ -1,6 +1,6 @@
-"""Optimal Promising Zone Design Controller (Hsiao et al., 2019).
+"""Optimal Promising Zone Adaptive Design Controller (Hsiao 2019).
 
-This template implements the "Optimal Promising Zone" adaptive design for Binomial A/B testing
+This controller implements the "Optimal Promising Zone" adaptive design for Binomial A/B testing
 based on the method described in:
 
     Hsiao, S. T., Liu, L., & Mehta, C. R. (2019). Optimal promising zone designs.
@@ -42,9 +42,9 @@ Examples:
     ...     alpha=0.025,
     ...     power=0.8,
     ...     looks=2,
-    ...     cp_min=0.5,        # Lower bound of promising zone
-    ...     cp_max=0.9,        # Upper bound of promising zone
-    ...     target_cp=0.9,     # Target CP for resizing
+    ...     conditional_power_min=0.5,        # Lower bound of promising zone
+    ...     conditional_power_max=0.9,        # Upper bound of promising zone
+    ...     target_conditional_power=0.9,     # Target CP for resizing
     ... )
     >>> controller = Hsiao2019Controller(ledger)
     >>> controller.set_protocol(protocol)
@@ -81,8 +81,8 @@ from earlysign.core.util.logging import get_logger
 from earlysign.framework.controller import Controller
 from earlysign.framework.projector import ProjectionResult, ProtocolProjector
 from earlysign.framework.session import Session
-from earlysign.methods.group_sequential.execution.binomial import (
-    BinomialGSTEngine,
+from earlysign.methods.group_sequential.execution.engine import (
+    GroupSequentialEngine,
 )
 from earlysign.methods.group_sequential.execution.entities import InterimAnalyses
 from earlysign.methods.group_sequential.execution.sample_size_reestimation import (
@@ -96,16 +96,16 @@ from earlysign.methods.group_sequential.reporting.projectors import (
 from earlysign.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.schema.ES3.GST import Method
+from earlysign.schema.ES3.GST import (
+    Method,
+    PromisingZoneSpec,
+    SampleSizeReestimationSpec,
+)
 from earlysign.schema.ES3.GST.Log import (
     AdaptationLog,
     DecisionStatus,
     LookResult,
     PromisingZoneStatus,
-)
-from earlysign.schema.ES3.GST.Protocol import (
-    PromisingZoneSpec,
-    SampleSizeReestimationSpec,
 )
 
 
@@ -116,9 +116,9 @@ class Hsiao2019Protocol(BaseModel):
     method: GST.MethodSpec
 
     # Specific configuration for Hsiao methodology
-    cp_min: float = 0.5
-    cp_max: float = 0.9
-    target_cp: float = 0.9
+    conditional_power_min: float = 0.5
+    conditional_power_max: float = 0.9
+    target_conditional_power: float = 0.9
 
 
 Hsiao2019Protocol.model_rebuild()
@@ -140,7 +140,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
     def describe_protocol_instance(cls, protocol: BaseModel) -> str:
         if not isinstance(protocol, Hsiao2019Protocol):
             raise TypeError("Protocol must be an instance of Hsiao2019Protocol")
-        return f"Hsiao2019 Optimal Promising Zone Design (CP: [{protocol.cp_min}, {protocol.cp_max}], Target CP: {protocol.target_cp})"
+        return f"Hsiao2019 Optimal Promising Zone Design (CP: [{protocol.conditional_power_min}, {protocol.conditional_power_max}], Target CP: {protocol.target_conditional_power})"
 
     @classmethod
     def design(
@@ -150,9 +150,9 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         power: float,
         task: Optional[GST.TaskSpec] = None,
         # Promising Zone Parameters
-        cp_min: float = 0.5,
-        cp_max: float = 0.9,
-        target_cp: float = 0.9,
+        conditional_power_min: float = 0.5,
+        conditional_power_max: float = 0.9,
+        target_conditional_power: float = 0.9,
         # max_sample_size_cap: float = 2.0, # Not strictly enforced in protocol schema yet
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
@@ -167,9 +167,9 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         Designs the protocol.
 
         Args:
-             cp_min: Minimum Conditional Power to be considered "Promising".
-             cp_max: Maximum Conditional Power to be considered "Promising" (above this is "Favorable").
-             target_cp: Target Conditional Power to achieve when increasing sample size.
+             conditional_power_min: Minimum Conditional Power to be considered "Promising".
+             conditional_power_max: Maximum Conditional Power to be considered "Promising" (above this is "Favorable").
+             target_conditional_power: Target Conditional Power to achieve when increasing sample size.
         """
         from earlysign.methods.group_sequential.plan.protocol_design import (
             ProtocolDesigner,
@@ -221,33 +221,32 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
 
         # Attach AdaptationSpec with target power for reference
         promising_spec = PromisingZoneSpec(
-            cp_threshold_min=cp_min,
-            cp_threshold_max=cp_max,
-            target_cp=target_cp,
+            conditional_power_threshold_min=conditional_power_min,
+            conditional_power_threshold_max=conditional_power_max,
+            target_conditional_power=target_conditional_power,
         )
-        if method.adaptation and hasattr(method.adaptation, "design"):
-            method.adaptation = SampleSizeReestimationSpec(
-                method=Method.CONDITIONAL_POWER,
-                design=method.adaptation.design,  # Keep original design
-                promising_zone=promising_spec,
-                use_weighted_statistic=False,
-                n_range=[0, 1000000],  # Added missing n_range
-                target_power=target_cp,  # Added missing target_power
-            )
-        else:
-            # Fallback if adaptation wasn't initialized correctly
-            method.adaptation = SampleSizeReestimationSpec(
-                method=Method.CONDITIONAL_POWER,
-                design=None,  # Or some default
-                promising_zone=promising_spec,
-                use_weighted_statistic=False,
-                n_range=[0, 1000000],
-                target_power=target_cp,
-            )
+
+        ssr_spec = SampleSizeReestimationSpec(
+            method=Method.CONDITIONAL_POWER,
+            promising_zone=promising_spec,
+            use_weighted_statistic=False,
+            n_range=[0, 1000000],
+            target_power=target_conditional_power,
+        )
+
+        if method.adaptation is None:
+            method.adaptation = GST.AdaptationSpec()
+
+        # Assign SSR spec to the composition container
+        method.adaptation.sample_size_reestimation = ssr_spec
 
         # Create Protocol
         protocol = Hsiao2019Protocol(
-            task=task, method=method, cp_min=cp_min, cp_max=cp_max, target_cp=target_cp
+            task=task,
+            method=method,
+            conditional_power_min=conditional_power_min,
+            conditional_power_max=conditional_power_max,
+            target_conditional_power=target_conditional_power,
         )
 
         return protocol
@@ -292,7 +291,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
                 task=current_protocol.task,
                 method=current_protocol.method,
             )
-            engine = BinomialGSTEngine(gst_protocol)
+            engine = GroupSequentialEngine(gst_protocol)
 
             sess.call_and_commit(
                 LookResult,
@@ -310,16 +309,14 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
 
             if look_result.status == DecisionStatus.CONTINUE_:
                 # Use Hsiao parameters from protocol
-                cp_min = current_protocol.cp_min
-                cp_max = current_protocol.cp_max
-                target_cp = current_protocol.target_cp
+                cp_min = current_protocol.conditional_power_min
+                cp_max = current_protocol.conditional_power_max
+                target_conditional_power = current_protocol.target_conditional_power
 
                 adapter = PromisingZoneAdaptationEngine()
                 adaptation_log = adapter.check_and_adapt(
                     look_result,
                     gst_protocol,
-                    cp_threshold_min=cp_min,
-                    cp_threshold_max=cp_max,
                 )
 
                 sess.commit(adaptation_log)
@@ -331,15 +328,18 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
                 ):
                     # APPLY ADAPTATION: Update Protocol
                     new_protocol = adapter.replan_sample_size(
-                        gst_protocol, adaptation_log, look_result, target_cp
+                        gst_protocol,
+                        adaptation_log,
+                        look_result,
+                        target_conditional_power,
                     )
 
                     updated_hsiao_protocol = Hsiao2019Protocol(
                         task=new_protocol.task,
                         method=new_protocol.method,
-                        cp_min=cp_min,
-                        cp_max=cp_max,
-                        target_cp=target_cp,
+                        conditional_power_min=cp_min,
+                        conditional_power_max=cp_max,
+                        target_conditional_power=target_conditional_power,
                     )
 
                     sess.commit(updated_hsiao_protocol)
@@ -351,7 +351,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
             report = report_data.model_dump(mode="json")
             protocol_wrapper = sess.read(ProtocolProjector(Hsiao2019Protocol)).data
 
-            from earlysign.methods.group_sequential.shared.timer import SampleSizeTimer
+            from earlysign.schema.ES3.GST import SampleSizeTimer
 
             timer = protocol_wrapper.method.stopping_policy.timer
             if isinstance(timer, SampleSizeTimer):
@@ -359,8 +359,8 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
 
             # Add Hsiao specific info
             report["promising_zone"] = [
-                protocol_wrapper.cp_min,
-                protocol_wrapper.cp_max,
+                protocol_wrapper.conditional_power_min,
+                protocol_wrapper.conditional_power_max,
             ]
             return report
 
@@ -373,24 +373,16 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         Historical Analysis: Replays data and stops immediately on a stopping decision.
         """
         logger = get_logger(__name__)
-        from tqdm import tqdm
 
-        total = len(batches) if hasattr(batches, "__len__") else None
+        for i, batch in enumerate(batches):
+            self.update(batch if isinstance(batch, list) else [batch])
+            prog = self.report_progress()
 
-        with tqdm(batches, total=total, desc="Backtesting") as pbar:
-            for i, batch in enumerate(pbar):
-                self.update(batch if isinstance(batch, list) else [batch])
-                prog = self.report_progress()
-
-                pbar.set_postfix(
-                    {"look": prog.get("look"), "status": prog.get("status")}
+            if prog.get("status") != DecisionStatus.CONTINUE_:
+                logger.info(
+                    f"Stopping criterion met at index {i}: {prog.get('status')}"
                 )
-
-                if prog.get("status") != DecisionStatus.CONTINUE_:
-                    logger.info(
-                        f"Stopping criterion met at index {i}: {prog.get('status')}"
-                    )
-                    break
+                break
 
         return self.report_result()
 
@@ -399,7 +391,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         table: Any,
         *,
         arm_col: str = "arm",
-        n_col: str = "total",
+        total_col: str = "total",
         success_col: str = "success",
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -412,50 +404,39 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         if order_by:
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
                 _order=table[order_by],
             ).order_by("_order")
         else:
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
             )
 
         # 2. Replay & Stop
         df = data_table.execute()
-        total_rows = len(df)
         logger = get_logger(__name__)
-        from tqdm import tqdm
 
-        with tqdm(
-            df.iterrows(), total=total_rows, desc="Backtesting from Table"
-        ) as pbar:
-            for i, (_, row) in enumerate(pbar):
-                batch = [
-                    BinomialArmData(
-                        arm=str(row["arm"]),
-                        total=int(row["total"]),
-                        success=int(row["success"]),
-                    )
-                ]
-                self.update(batch)
-                prog = self.report_progress()
-
-                pbar.set_postfix(
-                    {"look": prog.get("look"), "status": prog.get("status")}
+        for i, (_, row) in enumerate(df.iterrows()):
+            batch = [
+                BinomialArmData(
+                    arm=str(row["arm"]),
+                    total=int(row["total"]),
+                    success=int(row["success"]),
                 )
+            ]
+            self.update(batch)
+            prog = self.report_progress()
 
-                if prog.get("status") != DecisionStatus.CONTINUE_:
-                    logger.info(
-                        f"Stopping criterion met at row {i}: {prog.get('status')}"
-                    )
-                    break
+            if prog.get("status") != DecisionStatus.CONTINUE_:
+                logger.info(f"Stopping criterion met at row {i}: {prog.get('status')}")
+                break
 
         # Calculate efficiency report
         with Session(self.ledger) as sess:
-            total_data_points = int(df[n_col].sum())
+            total_data_points = int(df[total_col].sum())
             report = sess.read(BacktestProjector(total_samples=total_data_points)).data
             res = report.model_dump(mode="json")
             # Flatten final_report for compatibility

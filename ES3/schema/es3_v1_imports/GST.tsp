@@ -586,6 +586,8 @@ namespace Log {
     info_frac: float64;
     /** Current calculated Z-statistic. */
     z_stat: float64;
+    /** Dictionary of Z-statistics per arm (for MAMS). */
+    z_stats?: Record<float64>;
 
     /** The calculated efficacy boundary at this look. */
     efficacy_boundary?: float64;
@@ -633,16 +635,25 @@ namespace Log {
 }
 
 model AdaptationSpec {
-  type: string;
+  sample_size_reestimation?: SampleSizeReestimationSpec;
 }
 
-model SampleSizeReestimationSpec extends AdaptationSpec {
+model PromisingZoneSpec {
+  conditional_power_threshold_min: float64;
+  conditional_power_threshold_max: float64;
+  target_conditional_power: float64;
+}
+
+model SampleSizeReestimationSpec {
   type: "sample_size_reestimation";
   method: "conditional_power" | "predictive_power";
   target_power: float64;
   /** Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error. */
   use_weighted_statistic?: boolean = true;
   n_range: [uint32, uint32]; 
+
+  /** Promising zone configuration. */
+  promising_zone?: PromisingZoneSpec;
 }
 
 namespace Multivariate {

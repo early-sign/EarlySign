@@ -74,8 +74,8 @@ from earlysign.framework.controller import (
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import BacktestSession, Session
 from earlysign.methods.binomial import Scoreboard
-from earlysign.methods.group_sequential.execution.binomial import (
-    BinomialGSTEngine,
+from earlysign.methods.group_sequential.execution.engine import (
+    GroupSequentialEngine,
 )
 from earlysign.methods.group_sequential.execution.entities import (
     InterimAnalyses,
@@ -286,7 +286,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         rng_seed = designer_params.get("model_params", {}).get("rng_seed", 42)
 
         # 3. Design Strategy Components using common ProtocolDesigner
-        from earlysign.schema.ES3.Common import BinaryEffectSize
+        from earlysign.schema.ES3.GST import BinaryEffectSize
 
         hypotheses = task.hypotheses
         if isinstance(hypotheses.target_effect, BinaryEffectSize):
@@ -386,7 +386,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
 
         if trigger:
             # 4. Engine Execution - compute result using trajectory history
-            engine = BinomialGSTEngine(protocol_traced.data)
+            engine = GroupSequentialEngine(protocol_traced.data)
 
             sess.call_and_commit(
                 LookResult,
@@ -419,34 +419,22 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
                     Each `BinomialArmData` must have `total`, `success`, and `arm`.
         """
         logger = get_logger(__name__)
-        from tqdm import tqdm
-
-        # We don't know the total length if it's an iterator, but often it's a list
-        total = len(batches) if hasattr(batches, "__len__") else None
 
         # Use BacktestSession for high-performance replay
         with BacktestSession(
             self.ledger, invariant_projectors=[ProtocolProjector]
         ) as sess:
-            with tqdm(batches, total=total, desc="Backtesting") as pbar:
-                for i, batch in enumerate(pbar):
-                    self.update(
-                        batch if isinstance(batch, list) else [batch], session=sess
-                    )
-                    # Report progress is now essentially free (cached)
-                    report = sess.read(ProgressProjector()).data
-                    prog = report.model_dump(mode="json")
+            for i, batch in enumerate(batches):
+                self.update(batch if isinstance(batch, list) else [batch], session=sess)
+                # Report progress is now essentially free (cached)
+                report = sess.read(ProgressProjector()).data
+                prog = report.model_dump(mode="json")
 
-                    # Update progress bar with current status
-                    pbar.set_postfix(
-                        {"look": prog.get("look"), "status": prog.get("status")}
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at index {i}: {prog.get('status')}"
                     )
-
-                    if prog.get("status") != DecisionStatus.CONTINUE_:
-                        logger.info(
-                            f"Stopping criterion met at index {i}: {prog.get('status')}"
-                        )
-                        break
+                    break
 
         # Calculate efficiency report
         # We need total count from batches. If it's an iterator, we might not have it unless we pre-calculated.
@@ -458,7 +446,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         table: Any,
         *,
         arm_col: str = "arm",
-        n_col: str = "total",  # Use n_col to match base class
+        total_col: str = "total",  # Use total_col to match base class
         success_col: str = "success",
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -469,7 +457,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         Args:
             table: Ibis table containing historical data.
             arm_col: Column name for the arm identifier.
-            n_col: Column name for the number of trials.
+            total_col: Column name for the number of trials.
             success_col: Column name for the number of successes.
             order_by: Column name to order the data by.
         """
@@ -481,57 +469,48 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             # or just use the original table's column.
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
                 _order=table[order_by],
             ).order_by("_order")
         else:
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
             )
 
         # 2. Replay & Stop
         df = data_table.execute()
-        total_rows = len(df)
         logger = get_logger(__name__)
-        from tqdm import tqdm
 
         # Use BacktestSession for high-performance replay
         with BacktestSession(
             self.ledger, invariant_projectors=[ProtocolProjector]
         ) as sess:
-            with tqdm(
-                df.iterrows(), total=total_rows, desc="Backtesting from Table"
-            ) as pbar:
-                for i, (_, row) in enumerate(pbar):
-                    batch = [
-                        BinomialArmData(
-                            arm=str(row["arm"]),
-                            total=int(row["total"]),
-                            success=int(row["success"]),
-                        )
-                    ]
-                    self.update(batch, session=sess)
-
-                    # Performance note: sess.read(ProgressProjector) is cheap here due to caching
-                    report = sess.read(ProgressProjector()).data
-                    prog = report.model_dump(mode="json")
-
-                    pbar.set_postfix(
-                        {"look": prog.get("look"), "status": prog.get("status")}
+            for i, (_, row) in enumerate(df.iterrows()):
+                batch = [
+                    BinomialArmData(
+                        arm=str(row["arm"]),
+                        total=int(row["total"]),
+                        success=int(row["success"]),
                     )
+                ]
+                self.update(batch, session=sess)
 
-                    if prog.get("status") != DecisionStatus.CONTINUE_:
-                        logger.info(
-                            f"Stopping criterion met at row {i}: {prog.get('status')}"
-                        )
-                        break
+                # Performance note: sess.read(ProgressProjector) is cheap here due to caching
+                report = sess.read(ProgressProjector()).data
+                prog = report.model_dump(mode="json")
+
+                if prog.get("status") != DecisionStatus.CONTINUE_:
+                    logger.info(
+                        f"Stopping criterion met at row {i}: {prog.get('status')}"
+                    )
+                    break
 
             # Calculate efficiency report at the end
             # We use sum of 'total' for actual sample size efficiency
-            total_data_points = int(df[n_col].sum())
+            total_data_points = int(df[total_col].sum())
             backtest_report_data = sess.read(
                 BacktestProjector(total_samples=total_data_points)
             ).data
@@ -600,7 +579,7 @@ Stopping Policy:
             else "treatment"
         )
 
-        from earlysign.schema.ES3.Common import BinaryEffectSize
+        from earlysign.schema.ES3.GST import BinaryEffectSize
 
         hypotheses = task.hypotheses
         p0 = 0.0
@@ -613,7 +592,7 @@ Stopping Policy:
         strategy = policy.strategy
 
         spending_fn = "Unknown"
-        from earlysign.methods.group_sequential.shared.entities import (
+        from earlysign.schema.ES3.GST import (
             AlphaBetaSpendingStrategy,
         )
 

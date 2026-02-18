@@ -38,7 +38,7 @@ class AdaptationSnapshot(BaseModel):
 
 
 class AdaptationSpec(BaseModel):
-    type: str
+    sample_size_reestimation: SampleSizeReestimationSpec | None = None
 
 
 class DecisionStrategyBase(BaseModel):
@@ -239,6 +239,12 @@ class PocockStrategy(BoundaryFunctionStrategyBase):
     sided: Sided
 
 
+class PromisingZoneSpec(BaseModel):
+    conditional_power_threshold_min: float
+    conditional_power_threshold_max: float
+    target_conditional_power: float
+
+
 class Protocol(Protocol_1):
     """
     GST-Specific Protocol Container.
@@ -268,7 +274,7 @@ class ResponseType(StrEnum):
     TIME_TO_EVENT = "time_to_event"
 
 
-class SampleSizeReestimationSpec(AdaptationSpec):
+class SampleSizeReestimationSpec(BaseModel):
     type: Literal["sample_size_reestimation"] = "sample_size_reestimation"
     method: Method
     target_power: float
@@ -277,6 +283,9 @@ class SampleSizeReestimationSpec(AdaptationSpec):
         description="Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error.",
     )
     n_range: list[Any]
+    promising_zone: PromisingZoneSpec | None = Field(
+        None, description="Promising zone configuration."
+    )
 
 
 class SampleSizeTimer(InformationTimerBase):

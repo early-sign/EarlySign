@@ -82,6 +82,9 @@ class LookResult(BaseModel):
         ..., description="Current fraction of information accrued."
     )
     z_stat: float = Field(..., description="Current calculated Z-statistic.")
+    z_stats: dict[str, float] | None = Field(
+        None, description="Dictionary of Z-statistics per arm (for MAMS)."
+    )
     efficacy_boundary: float | None = Field(
         None, description="The calculated efficacy boundary at this look."
     )

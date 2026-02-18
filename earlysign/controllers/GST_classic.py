@@ -21,8 +21,15 @@ from earlysign.framework.controller import (
 )
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
-from earlysign.methods.binomial import Scoreboard
-from earlysign.methods.group_sequential.execution.binomial import BinomialGSTEngine
+from earlysign.framework.trace import Traced
+from earlysign.methods.continuous import Scoreboard as ContinuousScoreboard
+from earlysign.methods.group_sequential.execution.engine import GroupSequentialEngine
+from earlysign.methods.group_sequential.execution.entities import (
+    InterimAnalyses,
+)
+from earlysign.methods.group_sequential.execution.trigger_strategies import (
+    get_pending_look_trigger,
+)
 from earlysign.methods.group_sequential.plan.protocol_design import (
     ProtocolDesigner,
 )
@@ -225,14 +232,48 @@ class ClassicGSTController(Controller[ClassicProtocol]):
 
         with Session(self.ledger) as sess:
             protocol = sess.read(ProtocolProjector(ClassicProtocol))
-            metrics = sess.read(Scoreboard(identity="metrics"))
-
+            # The original code had a specific BinomialScoreboard import.
+            # Now we use the generic Scoreboard and rely on response_type.
+            metrics: Traced[Any]
             if protocol.data.task.response_type == GST.ResponseType.BINARY:
-                engine = BinomialGSTEngine(protocol.data)
-                sess.call_and_commit(LookResult, engine.run, metrics=metrics)
+                from earlysign.methods.binomial import (
+                    Scoreboard as BinomialScoreboard,
+                )
+
+                metrics = sess.read(BinomialScoreboard(identity="metrics"))
             else:
-                # Placeholder for Continuous Engine binding
-                pass
+                metrics = sess.read(ContinuousScoreboard(identity="metrics"))
+
+            trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
+            trigger = get_pending_look_trigger(
+                protocol=Traced(data=protocol.data, trace=protocol.trace),
+                metrics=Traced(data=metrics.data, trace=metrics.trace),
+                history=Traced(data=trajectory.data, trace=trajectory.trace),
+            )
+
+            if trigger:
+                if protocol.data.task.response_type == GST.ResponseType.BINARY:
+                    engine = GroupSequentialEngine(protocol.data)
+                else:
+                    # Note: We can reuse GroupSequentialEngine for Continuous as long as
+                    # its Z-stat calculation is either abstracted or we specialize it.
+                    # Currently GroupSequentialEngine has a hardcoded Z-stat for binomial.
+                    # I should probably create ContinuousGSTEngine or make GroupSequentialEngine
+                    # polymorphic.
+                    from earlysign.methods.group_sequential.execution.engine import (
+                        GroupSequentialEngine as ContinuousGSTEngine,
+                    )
+
+                    engine = ContinuousGSTEngine(protocol.data)
+
+                sess.call_and_commit(
+                    LookResult,
+                    engine.run,
+                    identity="interim_analyses",
+                    metrics=metrics.data,
+                    history=trajectory.data,
+                    trigger=trigger.data,
+                )
 
     def report_progress(self) -> Dict[str, Any]:
         """Returns the current progress report."""
@@ -254,24 +295,15 @@ class ClassicGSTController(Controller[ClassicProtocol]):
            batches: Iterator yielding `BinomialArmData` objects or lists of them.
         """
         logger = get_logger(__name__)
-        from tqdm import tqdm
+        for i, batch in enumerate(batches):
+            self.update(batch if isinstance(batch, list) else [batch])
+            prog = self.report_progress()
 
-        total = len(batches) if hasattr(batches, "__len__") else None
-
-        with tqdm(batches, total=total, desc="Backtesting") as pbar:
-            for i, batch in enumerate(pbar):
-                self.update(batch if isinstance(batch, list) else [batch])
-                prog = self.report_progress()
-
-                pbar.set_postfix(
-                    {"look": prog.get("look"), "status": prog.get("status")}
+            if prog.get("status") != DecisionStatus.CONTINUE_:
+                logger.info(
+                    f"Stopping criterion met at index {i}: {prog.get('status')}"
                 )
-
-                if prog.get("status") != DecisionStatus.CONTINUE_:
-                    logger.info(
-                        f"Stopping criterion met at index {i}: {prog.get('status')}"
-                    )
-                    break
+                break
 
         return self.report_result()
 
@@ -280,7 +312,7 @@ class ClassicGSTController(Controller[ClassicProtocol]):
         table: Any,
         *,
         arm_col: str = "arm",
-        n_col: str = "total",
+        total_col: str = "total",
         success_col: str = "success",
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -294,50 +326,39 @@ class ClassicGSTController(Controller[ClassicProtocol]):
         if order_by:
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
                 _order=table[order_by],
             ).order_by("_order")
         else:
             data_table = table.select(
                 arm=table[arm_col],
-                n=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
             )
 
         # 2. Replay & Stop
         df = data_table.execute()
-        total_rows = len(df)
         logger = get_logger(__name__)
-        from tqdm import tqdm
 
-        with tqdm(
-            df.iterrows(), total=total_rows, desc="Backtesting from Table"
-        ) as pbar:
-            for i, (_, row) in enumerate(pbar):
-                batch = [
-                    BinomialArmData(
-                        arm=str(row["arm"]),
-                        total=int(row["total"]),
-                        success=int(row["success"]),
-                    )
-                ]
-                self.update(batch)
-                prog = self.report_progress()
-
-                pbar.set_postfix(
-                    {"look": prog.get("look"), "status": prog.get("status")}
+        for i, (_, row) in enumerate(df.iterrows()):
+            batch = [
+                BinomialArmData(
+                    arm=str(row["arm"]),
+                    total=int(row["total"]),
+                    success=int(row["success"]),
                 )
+            ]
+            self.update(batch)
+            prog = self.report_progress()
 
-                if prog.get("status") != DecisionStatus.CONTINUE_:
-                    logger.info(
-                        f"Stopping criterion met at row {i}: {prog.get('status')}"
-                    )
-                    break
+            if prog.get("status") != DecisionStatus.CONTINUE_:
+                logger.info(f"Stopping criterion met at row {i}: {prog.get('status')}")
+                break
 
         # Calculate efficiency report
         with Session(self.ledger) as sess:
-            total_data_points = int(df[n_col].sum())
+            total_data_points = int(df[total_col].sum())
             report = sess.read(BacktestProjector(total_samples=total_data_points)).data
             res = report.model_dump(mode="json")
             # Flatten final_report for compatibility

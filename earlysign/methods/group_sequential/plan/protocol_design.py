@@ -892,11 +892,15 @@ class ProtocolDesigner:
             if v_params.ssr_method == "hsiao_2019":
                 use_weighted = False
 
-            method_spec.adaptation = GST.SampleSizeReestimationSpec(
+            ssr_spec = GST.SampleSizeReestimationSpec(
                 method=GST.Method.CONDITIONAL_POWER,
                 target_power=float(target_power),
                 n_range=[0, 1000000],  # Default wide range
                 use_weighted_statistic=use_weighted,
+            )
+
+            method_spec.adaptation = GST.AdaptationSpec(
+                sample_size_reestimation=ssr_spec
             )
 
         return method_spec

@@ -68,14 +68,14 @@ class Controller(ABC, Generic[TProtocol]):
 
     def backtest(self, batches: Any) -> Dict[str, Any]:
         """Historical Analysis: Replays data and stops immediately on a stopping decision."""
-        raise NotImplementedError("Backtesting is not implemented for this template.")
+        raise NotImplementedError("Backtesting is not implemented for this controller.")
 
     def backtest_from_table(
         self,
         table: Any,
         *,
         arm_col: str = "arm",
-        n_col: str = "total",
+        total_col: str = "total",
         success_col: str = "success",
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:

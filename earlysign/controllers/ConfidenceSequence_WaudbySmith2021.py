@@ -1,6 +1,6 @@
-"""Confidence Sequence (Waudby-Smith 2021).
+"""Confidence Sequence Controller (Waudby-Smith 2021).
 
-This template implements Confidence Sequences (CS) derived using the
+This controller implements Confidence Sequences (CS) derived using the
 Generalized Anytime-Valid Inference (GAVI) framework as described in
 Waudby-Smith et al. (2021).
 

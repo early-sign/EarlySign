@@ -56,8 +56,8 @@ def plot_gst_summary(
     Generates a generic summary plot for Group Sequential Test results.
     Supports optional overlay of Adaptive Design events.
     """
-    from earlysign.methods.group_sequential.execution.binomial import (
-        BinomialGSTEngine,
+    from earlysign.methods.group_sequential.execution.engine import (
+        GroupSequentialEngine,
     )
 
     # Resolve history from full_history if provided as trajectory data
@@ -82,7 +82,7 @@ def plot_gst_summary(
 
     # 1. Planned Boundaries (Faint)
     try:
-        engine = BinomialGSTEngine(protocol)
+        engine = GroupSequentialEngine(protocol)
         timer = protocol.method.stopping_policy.timer
         n_max = 0
         if hasattr(timer, "max_sample_size"):

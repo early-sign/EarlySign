@@ -18,6 +18,17 @@ from earlysign.schema.ES3.GST.Log import (
 )
 
 
+def _get_ssr_spec(protocol: Protocol) -> GST.SampleSizeReestimationSpec:
+    """Helper to find the SampleSizeReestimationSpec in the protocol."""
+    if not protocol.method.adaptation:
+        raise ValueError("Protocol has no adaptation configured.")
+
+    ssr_spec = protocol.method.adaptation.sample_size_reestimation
+    if not ssr_spec:
+        raise ValueError("No SampleSizeReestimationSpec found in method.adaptation.")
+    return ssr_spec
+
+
 class ConditionalPowerAdaptationEngine:
     """
     Engine for calculating Conditional Power and recommending Sample Size Re-estimation (SSR).
@@ -90,8 +101,6 @@ class ConditionalPowerAdaptationEngine:
         cls,
         result: LookResult,
         protocol: Protocol,
-        cp_threshold_min: float = 0.5,
-        cp_threshold_max: float = 0.9,
     ) -> AdaptationLog:
         """
         Assess if the trial is in the 'Promising Zone' and recommend action.
@@ -101,7 +110,7 @@ class ConditionalPowerAdaptationEngine:
         ...     Protocol, MethodSpec, StoppingPolicySpec, OBrienFlemingStrategy,
         ...     TaskSpec, HypothesisSpec, BinaryEffectSize, EquidistantSchedule,
         ...     TwoArmBinomialZ, SampleSizeTimer, EqualityHypothesis,
-        ...     CanonicalGaussianModel
+        ...     CanonicalGaussianModel, SampleSizeReestimationSpec, PromisingZoneSpec
         ... )
         >>> from earlysign.methods.group_sequential.execution.sample_size_reestimation import ConditionalPowerAdaptationEngine
         >>> from earlysign.schema.ES3.GST.Log import LookResult
@@ -135,6 +144,18 @@ class ConditionalPowerAdaptationEngine:
         ...                 max_sample_size={"control": 50, "treatment": 50}
         ...             ),
         ...             schedule=EquidistantSchedule(n_looks=2)
+        ...         ),
+        ...         adaptation=SampleSizeReestimationSpec(
+        ...             type="sample_size_reestimation",
+        ...             method="conditional_power",
+        ...             target_power=0.8,
+        ...             use_weighted_statistic=True,
+        ...             n_range=[0, 1000],
+        ...             promising_zone=PromisingZoneSpec(
+        ...                 conditional_power_threshold_min=0.5,
+        ...                 conditional_power_threshold_max=0.9,
+        ...                 target_conditional_power=0.9
+        ...             )
         ...         )
         ...     )
         ... )
@@ -148,6 +169,19 @@ class ConditionalPowerAdaptationEngine:
         # Internalize stats derivation
         theta = get_standardized_drift(protocol)
         final_efficacy_bound = get_final_efficacy_boundary(protocol)
+
+        # Extract Promising Zone parameters
+        ssr_spec = _get_ssr_spec(protocol)
+        promising_zone = ssr_spec.promising_zone
+
+        if not promising_zone:
+            raise ValueError(
+                "Protocol must have 'promising_zone' configuration in 'method.adaptation.sample_size_reestimation'."
+            )
+
+        conditional_power_threshold_min = promising_zone.conditional_power_threshold_min
+        conditional_power_threshold_max = promising_zone.conditional_power_threshold_max
+
         # 1. Stop Check
         if result.is_efficacy_crossed:
             return AdaptationLog(
@@ -167,10 +201,10 @@ class ConditionalPowerAdaptationEngine:
             final_efficacy_bound=final_efficacy_bound,
             assumed_effect=theta,
         )
-        if cp < cp_threshold_min:
+        if cp < conditional_power_threshold_min:
             status = PromisingZoneStatus.FUTILITY
             rec = "Consider stopping for futility (Low CP)"
-        elif cp > cp_threshold_max:
+        elif cp > conditional_power_threshold_max:
             status = PromisingZoneStatus.CONTINUE_
             rec = "Continue as planned (High CP)"
         else:
@@ -196,20 +230,26 @@ class ConditionalPowerAdaptationEngine:
         cls,
         result: LookResult,
         protocol: Protocol,
-        cp_threshold_min: float = 0.5,
-        cp_threshold_max: float = 0.9,
-        target_cp: float = 0.9,
     ) -> AdaptationLog:
         """
         Convenience method that assesses the promising zone and recalculates
         the sample size if needed.
         """
-        log = cls.assess_promising_zone(
-            result, protocol, cp_threshold_min, cp_threshold_max
-        )
+        log = cls.assess_promising_zone(result, protocol)
 
         if log.promising_zone_status == PromisingZoneStatus.PROMISING:
-            new_proto = cls.replan_sample_size(protocol, log, result, target_cp)
+            # Extract target CP
+            ssr_spec = _get_ssr_spec(protocol)
+            promising_zone = ssr_spec.promising_zone
+            if not promising_zone:
+                raise ValueError(
+                    "Protocol must have 'promising_zone' configuration in 'method.adaptation.sample_size_reestimation'."
+                )
+            target_conditional_power = promising_zone.target_conditional_power
+
+            new_proto = cls.replan_sample_size(
+                protocol, log, result, target_conditional_power
+            )
             new_n_dict = getattr(
                 new_proto.method.stopping_policy.timer, "max_sample_size", {}
             )
@@ -225,7 +265,7 @@ class ConditionalPowerAdaptationEngine:
         protocol: Protocol,
         adaptation_log: AdaptationLog,
         look_result: LookResult,
-        target_cp: float = 0.9,
+        target_conditional_power: float = 0.9,
     ) -> Protocol:
         """
         Returns a NEW Protocol with updated max_sample_size to achieve target CP.
@@ -258,16 +298,16 @@ class ConditionalPowerAdaptationEngine:
         n_old_val: int = n_old
 
         # Cui-Hung-Wang / CP Inversion Logic:
-        # We want P(sqrt(t)Z_t + sqrt(1-t)Z_rem' >= c) = target_cp
+        # We want P(sqrt(t)Z_t + sqrt(1-t)Z_rem' >= c) = target_conditional_power
         # Z_rem' ~ N(theta * sqrt(r(1-t)), 1)
         # Solve for r (inflation factor for remaining sample size)
 
         # Z_needed from remaining data (independent of r) to reach c
         z_needed_rem = (c_val - np.sqrt(t_val) * z_t_val) / np.sqrt(1 - t_val)
 
-        # z_target = stats.norm.ppf(target_cp)
+        # z_target = stats.norm.ppf(target_conditional_power)
         # Equation: theta * sqrt(r) * sqrt(1-t) = z_needed_rem + z_target
-        z_target = stats.norm.ppf(target_cp)
+        z_target = stats.norm.ppf(target_conditional_power)
         numerator = z_needed_rem + z_target
 
         if numerator <= 0:
@@ -285,12 +325,17 @@ class ConditionalPowerAdaptationEngine:
         # Often SSR is capped (e.g., at 2x or 4x the original n_max).
         # We respect the inflation_cap from the protocol spec if provided.
         inflation_cap = float("inf")  # Default if not specified (uncapped)
-        if (
-            protocol.method.adaptation
-            and hasattr(protocol.method.adaptation, "inflation_cap")
-            and protocol.method.adaptation.inflation_cap is not None
-        ):
-            inflation_cap = protocol.method.adaptation.inflation_cap
+        # Try to find SSR spec for inflation cap
+        try:
+            ssr_spec = _get_ssr_spec(protocol)
+            if (
+                hasattr(ssr_spec, "inflation_cap")
+                and ssr_spec.inflation_cap is not None
+            ):
+                inflation_cap = ssr_spec.inflation_cap
+        except ValueError:
+            # If no valid SSR spec, ignore inflation cap
+            pass
 
         if np.isfinite(inflation_cap):
             new_n = min(new_n, int(np.ceil(inflation_cap * n_old_val)))

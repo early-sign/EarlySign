@@ -1,6 +1,6 @@
-"""Always Valid Inference (mSPRT - Johari 2019).
+"""Binomial and Continuous mSPRT Controller (Johari 2019).
 
-This template implements the Mixture Sequential Probability Ratio Test (mSPRT)
+This controller implements the Mixture Sequential Probability Ratio Test (mSPRT)
 as described in Johari et al. (2019).
 
 Reference:
@@ -162,22 +162,16 @@ class BinomialJohari2019Controller(Controller[Protocol]):
            batches: Iterator yielding `BinomialArmData` objects or lists of them.
         """
         logger = get_logger(__name__)
-        from tqdm import tqdm
 
-        total = len(batches) if hasattr(batches, "__len__") else None
+        for i, batch in enumerate(batches):
+            self.update(batch if isinstance(batch, list) else [batch])
+            prog = self.report_progress()
 
-        with tqdm(batches, total=total, desc="Backtesting (mSPRT)") as pbar:
-            for i, batch in enumerate(pbar):
-                self.update(batch if isinstance(batch, list) else [batch])
-                prog = self.report_progress()
-
-                pbar.set_postfix({"status": prog.get("status")})
-
-                if prog.get("status") != DecisionStatus.CONTINUE_:
-                    logger.info(
-                        f"Stopping criterion met at index {i}: {prog.get('status')}"
-                    )
-                    break
+            if prog.get("status") != DecisionStatus.CONTINUE_:
+                logger.info(
+                    f"Stopping criterion met at index {i}: {prog.get('status')}"
+                )
+                break
 
         return self.report_result()
 
@@ -186,7 +180,7 @@ class BinomialJohari2019Controller(Controller[Protocol]):
         table: Any,
         *,
         arm_col: str = "arm",
-        n_col: str = "total",
+        total_col: str = "total",
         success_col: str = "success",
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -199,48 +193,39 @@ class BinomialJohari2019Controller(Controller[Protocol]):
         if order_by:
             data_table = table.select(
                 arm=table[arm_col],
-                total=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
                 _order=table[order_by],
             ).order_by("_order")
         else:
             data_table = table.select(
                 arm=table[arm_col],
-                total=table[n_col],
+                total=table[total_col],
                 success=table[success_col],
             )
 
         # 2. Replay & Stop
         df = data_table.execute()
-        total_rows = len(df)
         logger = get_logger(__name__)
-        from tqdm import tqdm
 
-        with tqdm(
-            df.iterrows(), total=total_rows, desc="Backtesting from Table (mSPRT)"
-        ) as pbar:
-            for i, (_, row) in enumerate(pbar):
-                batch = [
-                    BinomialArmData(
-                        arm=str(row["arm"]),
-                        total=int(row["total"]),
-                        success=int(row["success"]),
-                    )
-                ]
-                self.update(batch)
-                prog = self.report_progress()
+        for i, (_, row) in enumerate(df.iterrows()):
+            batch = [
+                BinomialArmData(
+                    arm=str(row["arm"]),
+                    total=int(row["total"]),
+                    success=int(row["success"]),
+                )
+            ]
+            self.update(batch)
+            prog = self.report_progress()
 
-                pbar.set_postfix({"status": prog.get("status")})
-
-                if prog.get("status") != DecisionStatus.CONTINUE_:
-                    logger.info(
-                        f"Stopping criterion met at row {i}: {prog.get('status')}"
-                    )
-                    break
+            if prog.get("status") != DecisionStatus.CONTINUE_:
+                logger.info(f"Stopping criterion met at row {i}: {prog.get('status')}")
+                break
 
         # Calculate efficiency report
         with Session(self.ledger) as sess:
-            total_data_points = int(df[n_col].sum())
+            total_data_points = int(df[total_col].sum())
             report = sess.read(BacktestProjector(total_samples=total_data_points)).data
             res = report.model_dump(mode="json")
             # Flatten final_report for compatibility

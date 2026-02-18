@@ -1,6 +1,7 @@
 from typing import List, Optional, Tuple, Union
 
 import ibis
+import numpy as np
 
 from earlysign.core.util.ibis_ops import type_filter
 from earlysign.framework.entity import Entity, Snapshot
@@ -141,3 +142,24 @@ class Scoreboard(Entity[ScoreboardSchema]):
         return ProjectionResult(
             data=ScoreboardSchema(arms=current_arms), trace=tracked_uuids
         )
+
+
+def calculate_continuous_z_statistic(
+    control: ArmMetrics, treatment: ArmMetrics
+) -> float:
+    """
+    Computes the standard Z-statistic for two continuous arm means.
+    Assumes unpooled variance (Welch-like) for the Z-score calculation.
+    """
+    n_c, n_t = control.total, treatment.total
+
+    if n_c < 2 or n_t < 2:
+        return 0.0
+
+    # SE = sqrt(var_c/n_c + var_t/n_t)
+    se = np.sqrt(control.variance / n_c + treatment.variance / n_t)
+
+    if se <= 0:
+        return 0.0
+
+    return float((treatment.mean - control.mean) / se)

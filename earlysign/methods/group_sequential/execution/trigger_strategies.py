@@ -1,9 +1,8 @@
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
 from earlysign.framework.trace import Traced, extract_traces
-from earlysign.schema.ES3.Binomial import Scoreboard as ScoreboardSchema
 from earlysign.schema.ES3.GST import (
     DueLookTrigger,
     EquidistantSchedule,
@@ -18,7 +17,7 @@ from earlysign.schema.ES3.GST.Log import LookResult, ScheduleTrigger
 
 def get_pending_look_trigger(
     protocol: Traced[Protocol],
-    metrics: Traced[ScoreboardSchema],
+    metrics: Traced[Any],
     history: Traced[List[Tuple[int, LookResult]]],
 ) -> Optional[Traced[ScheduleTrigger]]:
     """
