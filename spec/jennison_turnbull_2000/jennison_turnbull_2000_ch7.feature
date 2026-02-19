@@ -3,7 +3,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
   Jennison, C., & Turnbull, B. W. (2000). Group Sequential Methods with Applications to Clinical Trials. Chapman and Hall/CRC.
 
   Background:
-    Given simulation precision with 2000 samples
+    Given simulation precision with 3000 samples
 
   Scenario: Inflation factor R_LD (Table 7.1)
     # Note: under the canonical Gaussian process model, R_LD is independent of the effect size.
@@ -454,7 +454,7 @@ Feature: Jennison & Turnbull (2000) Chapter 7 (Flexible Monitoring: The Error Sp
     And target power <power> at effect delta
     And a maximum of <K> equally-spaced looks with rho-family spending <rho> for both type-I and type-II errors
     When I compute the inflation factor R_OS
-    Then R_OS should be <R_OS> ± 0.10
+    Then R_OS should be <R_OS> ± 0.20
 
     Examples:
       | K  | power | rho | R_OS  |

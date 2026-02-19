@@ -1,9 +1,9 @@
 # Implementation Plan: Pattern G (EarlySign v1) - The Scientific Standard
 
-This plan outlines the definitive implementation of "Pattern G" within the `earlysign/v1/` directory. For the foundational design philosophy, see the [Concept Design](file:///Users/teshima/2025/EarlySign/docs/explanation/concept_design.md).
+This plan outlines the definitive implementation of "Pattern G" within the `earlysign/` directory. For the foundational design philosophy, see the [Concept Design](file:///Users/teshima/2025/EarlySign/docs/explanation/concept_design.md).
 
 > [!IMPORTANT]
-> The implementation is strictly confined to `earlysign/v1/` to avoid collisions with the existing "v0" codebase. We leverage `earlysign/core` as the foundational layer.
+> The implementation is strictly confined to `earlysign/` to avoid collisions with the existing "v0" codebase. We leverage `earlysign/core` as the foundational layer.
 
 ## Trace: Scientific Provenance
 
@@ -60,7 +60,7 @@ When you call Commit without an explicit trace, this accumulated trace is used a
 
 ## Proposed Changes
 
-### 1. Framework Foundations (`earlysign/v1/framework/`)
+### 1. Framework Foundations (`earlysign/framework/`)
 
 #### trace.py (Causality Primitives)
 - **`TraceId = NewType("TraceId", str)`**: Type safety for Ledger uuids.
@@ -83,7 +83,7 @@ When you call Commit without an explicit trace, this accumulated trace is used a
 
 ---
 
-### 2. Domain Layer (`earlysign/v1/methods/`)
+### 2. Domain Layer (`earlysign/methods/`)
 
 #### actions.py (Ubiquitous Language Writers)
 - **`Decision(session, decision, trace=None)`**: Records operational conclusion.

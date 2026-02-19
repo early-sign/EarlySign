@@ -16,7 +16,6 @@ Example:
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>> from earlysign.tests.util import BinomialStream
     >>> import numpy as np
-    >>>
     >>> # Setup
     >>> conn = ibis.connect("duckdb://:memory:")
     >>> ledger = Ledger(conn, "events")
@@ -25,11 +24,12 @@ Example:
     >>>
     >>> # Design
     >>> protocol = JennisonTurnbull2000Controller.design(
-    ...     p_control=0.20, p_treatment=0.25, alpha=0.05, power=0.8, looks=2
+    ...     p_control=0.20, p_treatment=0.25, alpha=0.05, power=0.8, looks=2,
+    ...     method="simulation"
     ... )
     >>>
     >>> # Initialize and Run
-    >>> controller = JennisonTurnbull2000Controller(ledger)
+    >>> controller = JennisonTurnbull2000Controller(ledger, rng_seed=42)
     >>> controller.set_protocol(protocol)
     >>>
     >>> stream = BinomialStream(n_per_batch=600, arms={"control": 0.20, "treatment": 0.25}, n_max=13000, seed=42)
@@ -40,8 +40,8 @@ Example:
     ...         print(f"Look {prog['look']}: Z={prog['z_stat']:.2f}, Boundary={prog['efficacy_boundary']:.2f}")
     ...     if prog['status'] != DecisionStatus.CONTINUE_:
     ...         break
-    Look 1: Z=0.70, Boundary=1.92
-    Look 2: Z=1.89, Boundary=1.75
+    Look 1: Z=0.70, Boundary=1.95
+    Look 2: Z=1.89, Boundary=1.73
     >>>
     >>> final = controller.report_result()
     >>> print(f"Final Status: {final['final_status']}")
@@ -93,6 +93,10 @@ from earlysign.methods.group_sequential.reporting.projectors import (
 )
 from earlysign.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
+)
+from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+    NumericalIntegrationConfig,
+    SimulationConfig,
 )
 from earlysign.schema.ES3.GST import (
     AbsoluteDifference,
@@ -157,8 +161,9 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
 
     _protocol_class = JennisonTurnbull2000Protocol
 
-    def __init__(self, ledger: Ledger):
+    def __init__(self, ledger: Ledger, rng_seed: Optional[int] = None):
         self.ledger = ledger
+        self.rng_seed = rng_seed
 
     @classmethod
     def design(
@@ -180,6 +185,10 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
         allocation_ratios: Optional[Dict[str, float]] = None,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> JennisonTurnbull2000Protocol:
         """
         Designs a Binomial A/B protocol.
@@ -200,6 +209,9 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             p_control: Baseline proportion (if task is None).
             p_treatment: Target proportion (if task is None).
             effect_spec: Structured target effect size (e.g. delta, OR, RR).
+            method: Method for boundary solving ('simulation' or 'numerical_integration').
+                    Simulation is significantly faster for larger designs.
+            method_config: Configuration object.
 
         Returns:
             A populated JennisonTurnbull2000Protocol.
@@ -214,7 +226,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             >>> # --- Example 1: Standard Equidistant Schedule ---
             >>> protocol_eq = JennisonTurnbull2000Controller.design(
             ...     p_control=0.20, p_treatment=0.22, alpha=0.05, power=0.8, looks=3,
-            ...     scheduling="equidistant"
+            ...     scheduling="equidistant", designer_params={"model_params": {"rng_seed": 42}}
             ... )
             >>> np.allclose(get_info_times(protocol_eq.method.stopping_policy.schedule), [1/3, 2/3, 1.0])
             True
@@ -335,6 +347,8 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             allocation_ratios=allocation_ratios,
             control_arm_name=control_arm_name,
             treatment_arm_name=treatment_arm_name,
+            method=method,
+            method_config=method_config,
         )
 
         return JennisonTurnbull2000Protocol(
@@ -388,7 +402,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
 
         if trigger:
             # 4. Engine Execution - compute result using trajectory history
-            engine = GroupSequentialEngine(protocol_traced.data)
+            engine = GroupSequentialEngine(protocol_traced.data, rng_seed=self.rng_seed)
 
             sess.call_and_commit(
                 LookResult,

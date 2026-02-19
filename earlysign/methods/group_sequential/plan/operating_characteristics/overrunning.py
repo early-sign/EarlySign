@@ -49,12 +49,12 @@ def compute_overrunning_inflation(
     s = seed if seed is not None else config.rng_seed
     rng = np.random.default_rng(s)
 
-    k = len(config.info_times)
+    len(config.info_times)
     t = config.info_times
 
     # We simulate H0 once and re-use it (Common Random Numbers) to smooth the objective function
     gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=rng)
-    z_h0 = gp_h0.sample(t, n)
+    gp_h0.sample(t, n)
 
     # Pre-calculate shape values for efficay/futility boundaries if possible
     # This implementation assumes the standard "Power Family" shape logic used in the test source.
@@ -110,95 +110,51 @@ def compute_overrunning_inflation(
         # Note: assuming 1-sided for this drift calculation
         actual_drift = norm.ppf(1 - alpha_val) + norm.ppf(config.power)
 
+    # Use numerical integration for speed and precision
+    # We need a model instance to access the solver
+    from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+        CanonicalJointModel,
+        SimulationConfig,
+    )
+
+    model = CanonicalJointModel(config)
+    # CRITICAL: Must use a fixed seed (CRN) so that the objective function is deterministic/smooth
+    # vs r_os. Otherwise brentq cannot converge on the changing noise.
+    sim_config = SimulationConfig(
+        n_sims=config.n_sims if config.n_sims else 2000,
+        rng_seed=config.rng_seed if config.rng_seed is not None else 42,
+    )
+
     def objective(r_os: float) -> float:
         # Drift scales with sqrt(r_os) relative to fixed design scale
         current_drift = actual_drift * np.sqrt(r_os)
 
-        # H1 Simulation (using CRN by shifting H0)
-        z_h1 = z_h0 + current_drift * np.sqrt(t)
+        # Solve boundaries dynamically for this R_OS using efficient integration
+        # Note: tails=1 is forced because R_OS logic treats efficacy/futility
+        # as upper/lower bounds of a ONE-SIDED process (canonical form).
+        a_tmp, b_tmp = model.solve_boundaries_from_cumulative_targets(
+            info_times=t,
+            efficacy_targets=a_cum,
+            futility_targets=b_cum,
+            drift=current_drift,
+            efficacy_binding=True,
+            futility_binding=config.futility_binding,
+            tails=1,
+            method="simulation",
+            method_config=sim_config,
+        )
 
-        # Solve boundaries dynamically for this R_OS
-        a_tmp = np.zeros(k)
-        b_tmp = np.zeros(k)
-
-        stop0 = np.zeros(n, dtype=bool)
-        rej0 = np.zeros(n, dtype=bool)
-
-        stop1 = np.zeros(n, dtype=bool)
-        fut1 = np.zeros(n, dtype=bool)
-
-        for i in range(k):
-            # Efficacy Bound (match accumulated alpha spending)
-            # Find a_tmp[i] such that P(Reject H0 <= i) ~ a_cum[i]
-            # Valid set are those NOT stopped before i.
-
-            # Note: This logic mimics 'when_compute_ros' manual percentile finding.
-            # It's 'simulation-based boundary solving'.
-
-            # H0 logic
-            rem_mask0 = ~stop0
-            n_rem0 = np.sum(rem_mask0)
-            n_rej_prev0 = np.sum(rej0)
-
-            needed0 = a_cum[i] * n - n_rej_prev0
-            frac0 = needed0 / max(1, n_rem0)
-
-            if frac0 >= 1.0 or n_rem0 < 10:
-                a_tmp[i] = -10.0 if frac0 > 0 else 10.0
-            else:
-                # We want top frac0 percent
-                a_tmp[i] = np.percentile(
-                    z_h0[rem_mask0, i], 100 * max(0, min(1, 1 - frac0))
-                )
-
-            # Funnel H0 stops
-            just_rej0 = rem_mask0 & (z_h0[:, i] > a_tmp[i])
-            rej0 |= just_rej0
-            stop0 |= just_rej0
-
-            # Futility stopping logic for H0 (binding futility).
-            # We solve for b_tmp[i] alongside a_tmp[i].
-            # The test loop solves a_tmp and b_tmp in the same step i.
-            # But b_tmp depends on H1 stats.
-
-            # H1 logic for Futility Bound (match accumulated beta spending)
-            rem_mask1 = ~stop1
-            n_rem1 = np.sum(rem_mask1)
-            n_fut_prev1 = np.sum(fut1)
-
-            needed1 = b_cum[i] * n - n_fut_prev1
-            frac1 = needed1 / max(1, n_rem1)
-
-            if frac1 >= 1.0 or n_rem1 < 10:
-                b_tmp[i] = 10.0 if frac1 > 0 else -10.0
-            else:
-                # We want bottom frac1 percent
-                b_tmp[i] = np.percentile(
-                    z_h1[rem_mask1, i], 100 * max(0, min(1, frac1))
-                )
-
-            # Apply bounds to update state for NEXT step
-            # If futility is binding, it also stops H0 paths.
-
-            if config.futility_binding:
-                just_fut0 = (~stop0) & (z_h0[:, i] < b_tmp[i])
-                stop0 |= just_fut0
-
-            # H1 stops
-            just_rej1 = rem_mask1 & (z_h1[:, i] > a_tmp[i])  # Efficacy stop in H1
-            stop1 |= just_rej1
-
-            just_fut1 = rem_mask1 & (z_h1[:, i] < b_tmp[i])  # Futility stop in H1
-            fut1 |= just_fut1
-            stop1 |= just_fut1
+        if a_tmp is None or b_tmp is None:
+            # Should not happen given config steps above
+            return 100.0
 
         # Find the R_OS where the boundaries meet at the final analysis (K).
         return float(a_tmp[-1] - b_tmp[-1])
 
     try:
-        r_os = brentq(objective, r_range[0], r_range[1], xtol=1e-2)
+        r_os = brentq(objective, r_range[0], r_range[1], xtol=1e-4)
     except Exception:
-        # Fallback if root not found (monotonicity might be violated due to noise)
+        # Fallback if root not found (monotonicity might be violated due to numerical noise if limits reached)
         f_low, f_high = objective(r_range[0]), objective(r_range[1])
         r_os = r_range[0] if abs(f_low) < abs(f_high) else r_range[1]
 

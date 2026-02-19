@@ -39,11 +39,8 @@ Examples:
     >>> # 2. Design with Promising Zone
     >>> # 2 Looks, initial N=1000.
     >>> protocol = CuiHungWang1999Controller.design(
-    ...     p_control=0.10,
-    ...     p_treatment=0.13,
-    ...     alpha=0.025,
-    ...     power=0.8,
-    ...     looks=2,
+    ...     p_control=0.1, p_treatment=0.15, alpha=0.025, power=0.9,
+    ...     looks=3, method="simulation",
     ...     spending_function="obrien_fleming",
     ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
     ... )
@@ -63,15 +60,15 @@ Examples:
     >>> # 5. Verify status and SSR trigger
     >>> report = controller.report_progress()
     >>> print(f"Status: {report['status']}, Initial Max N: {protocol.method.stopping_policy.timer.max_sample_size}")
-    Status: continue, Initial Max N: {'control': 1584, 'treatment': 1584}
+    Status: continue, Initial Max N: {'control': 787, 'treatment': 787}
     >>> print(f"Adapted Max N: {report['max_sample_size']}")
-    Adapted Max N: {'control': 1584, 'treatment': 1584}
+    Adapted Max N: {'control': 787, 'treatment': 787}
     >>> # Note: The increase reflects SSR to recover power based on interim results.
     >>> # (CP was calculated and found to be in the promising zone).
 """
 
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel
 
@@ -94,6 +91,10 @@ from earlysign.methods.group_sequential.reporting.projectors import (
 )
 from earlysign.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
+)
+from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+    NumericalIntegrationConfig,
+    SimulationConfig,
 )
 from earlysign.schema.ES3.GST.Log import (
     AdaptationLog,
@@ -147,6 +148,10 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
         # Binomial params (convenience)
         p_control: Optional[float] = None,
         p_treatment: Optional[float] = None,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> CuiHungWang1999Protocol:
         """
         Designs the protocol. Supports both TaskSpec and scalar inputs.
@@ -158,6 +163,57 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
              spending_params: Spending function parameters.
              designer_params: Designer configuration.
              p_control, p_treatment, alpha, power: Scalar inputs if task is None.
+             method: Method for boundary solving ('simulation' or 'numerical_integration').
+             method_config: Configuration object.
+
+        Returns:
+            A CuiHungWang1999Protocol.
+
+        Examples:
+            >>> import ibis, duckdb  # noqa: F401
+            >>> from earlysign.core.ledger import Ledger
+            >>> from earlysign.controllers.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Controller
+            >>> import earlysign.schema.ES3.Base as ES3_BASE
+            >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+            >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
+            >>>
+            >>> # 1. Setup
+            >>> conn = ibis.connect("duckdb://:memory:")
+            >>> ledger = Ledger(conn, "events")
+            >>> ledger.ensure()
+            >>> ledger = ledger.bind(experiment_id="doctest_chw1999")
+            >>>
+            >>> # 2. Design with Promising Zone
+            >>> # 2 Looks, initial N=1000.
+            >>> protocol = CuiHungWang1999Controller.design(
+            ...     p_control=0.10,
+            ...     p_treatment=0.13,
+            ...     alpha=0.025,
+            ...     power=0.8,
+            ...     looks=2,
+            ...     spending_function="obrien_fleming",
+            ...     method="simulation",
+            ...     designer_params={"model": "canonical_joint", "model_params": {"rng_seed": 42}}
+            ... )
+            >>> controller = CuiHungWang1999Controller(ledger)
+            >>> controller.set_protocol(protocol)
+            >>>
+            >>> # 3. Update with "Promising" data (Conditional Power ~ 0.6)
+            >>> # Need roughly half the data.
+            >>> # Control: 50/500 (10%), Treatment: 65/500 (13%) -> Z ~ 1.5
+            >>> # This should fall into the promising zone if configured right.
+            >>> batch = [
+            ...     BinomialArmData(total=500, success=50, arm="control"),
+            ...     BinomialArmData(total=500, success=65, arm="treatment")
+            ... ]
+            >>> controller.update(batch)
+            >>>
+            >>> # 5. Verify status and SSR trigger
+            >>> report = controller.report_progress()
+            >>> print(f"Status: {report['status']}, Initial Max N: {protocol.method.stopping_policy.timer.max_sample_size}")
+            Status: continue, Initial Max N: {'control': 1611, 'treatment': 1611}
+            >>> print(f"Adapted Max N: {report['max_sample_size']}")
+            Adapted Max N: {'control': 1611, 'treatment': 1611}
         """
         from earlysign.methods.group_sequential.plan.protocol_design import (
             ProtocolDesigner,
@@ -192,17 +248,19 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
         # 2. Design
         designer_params = designer_params or {"model": "canonical_joint"}
         designer = ProtocolDesigner.from_dict(designer_params)
-        method = designer.method_from_task_spec(
+        method_spec = designer.method_from_task_spec(
             task,
             params={
                 "looks": looks,
                 "spending_function": spending_function,
                 "spending_params": spending_params,
                 "ssr_method": "cui_hung_wang",
+                "method": method,
+                "method_config": method_config,
             },
         )
 
-        if method.adaptation and method.adaptation.sample_size_reestimation:
+        if method_spec.adaptation and method_spec.adaptation.sample_size_reestimation:
             promising_spec = GST.PromisingZoneSpec(
                 conditional_power_threshold_min=conditional_power_min,
                 conditional_power_threshold_max=conditional_power_max,
@@ -210,9 +268,11 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             )
 
             # Assign PromisingZoneSpec to the SSR spec within the container
-            method.adaptation.sample_size_reestimation.promising_zone = promising_spec
+            method_spec.adaptation.sample_size_reestimation.promising_zone = (
+                promising_spec
+            )
 
-        return CuiHungWang1999Protocol(task=task, method=method)
+        return CuiHungWang1999Protocol(task=task, method=method_spec)
 
     def update(self, batch: List[BaseModel]) -> None:
         """

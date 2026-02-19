@@ -70,7 +70,7 @@ Examples:
 """
 
 import warnings
-from typing import Any, Dict, Optional, Sequence, cast
+from typing import Any, Dict, Literal, Optional, Sequence, Union, cast
 
 from pydantic import BaseModel
 
@@ -95,6 +95,10 @@ from earlysign.methods.group_sequential.reporting.projectors import (
 )
 from earlysign.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
+)
+from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+    NumericalIntegrationConfig,
+    SimulationConfig,
 )
 from earlysign.schema.ES3.GST import (
     Method,
@@ -162,6 +166,10 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         p_treatment: Optional[float] = None,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> Hsiao2019Protocol:
         """
         Designs the protocol.
@@ -170,6 +178,8 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
              conditional_power_min: Minimum Conditional Power to be considered "Promising".
              conditional_power_max: Maximum Conditional Power to be considered "Promising" (above this is "Favorable").
              target_conditional_power: Target Conditional Power to achieve when increasing sample size.
+             method: Method for boundary solving ('simulation' or 'numerical_integration').
+             method_config: Configuration object.
         """
         from earlysign.methods.group_sequential.plan.protocol_design import (
             ProtocolDesigner,
@@ -209,13 +219,15 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         designer = ProtocolDesigner.from_dict(designer_params)
 
         # We use standard GSD design parameters initially
-        method = designer.method_from_task_spec(
+        method_spec = designer.method_from_task_spec(
             task,
             params={
                 "looks": looks,
                 "spending_function": spending_function,
                 "spending_params": spending_params,
                 "ssr_method": "hsiao_2019",
+                "method": method,
+                "method_config": method_config,
             },
         )
 
@@ -234,16 +246,16 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
             target_power=target_conditional_power,
         )
 
-        if method.adaptation is None:
-            method.adaptation = GST.AdaptationSpec()
+        if method_spec.adaptation is None:
+            method_spec.adaptation = GST.AdaptationSpec()
 
         # Assign SSR spec to the composition container
-        method.adaptation.sample_size_reestimation = ssr_spec
+        method_spec.adaptation.sample_size_reestimation = ssr_spec
 
         # Create Protocol
         protocol = Hsiao2019Protocol(
             task=task,
-            method=method,
+            method=method_spec,
             conditional_power_min=conditional_power_min,
             conditional_power_max=conditional_power_max,
             target_conditional_power=target_conditional_power,

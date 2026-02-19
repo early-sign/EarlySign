@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Literal, Optional, Self
+from typing import Any, Dict, Literal, Optional, Self, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -11,6 +11,8 @@ import earlysign.schema.ES3.GST as GST
 from earlysign.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
+    NumericalIntegrationConfig,
+    SimulationConfig,
 )
 from earlysign.methods.group_sequential.shared.spending import (
     SpendingFunction,
@@ -66,6 +68,11 @@ class MethodDesignParams(BaseModel):
     spending_params: Optional[Dict[str, Any]] = Field(default_factory=dict)
     power: Optional[float] = None
     ssr_method: Optional[str] = None
+    method: Literal["simulation", "numerical_integration"] = "simulation"
+    method_config: Optional[Union[SimulationConfig, NumericalIntegrationConfig]] = None
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class ProtocolDesigner:
@@ -84,7 +91,7 @@ class ProtocolDesigner:
 
         Supported keys:
             - 'model': 'canonical_joint' (mapped to CanonicalJointModel)
-            - 'model_params': Dict containing 'rng_seed', etc.
+            - 'model_params': Dict containing 'rng_seed', 'n_sims', etc.
 
         Args:
             config: A dictionary containing configuration parameters.
@@ -101,6 +108,7 @@ class ProtocolDesigner:
                 Config(
                     info_times=np.array([1.0]),  # Placeholder for design-phase use
                     rng_seed=model_params.get("rng_seed"),
+                    n_sims=model_params.get("n_sims", 2000),
                 )
             )
         return cls(model=model)
@@ -115,9 +123,10 @@ class ProtocolDesigner:
         efficacy_binding: bool = True,
         futility_binding: bool = False,
         tails: int = 1,
-        method: Literal[
-            "simulation", "numerical_integration"
-        ] = "numerical_integration",
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
         rng_seed: Optional[int] = None,
     ) -> GSDDesign:
         """Pure statistical solver for group sequential design.
@@ -140,16 +149,18 @@ class ProtocolDesigner:
             >>> design = designer.solve_design(
             ...     info_times=t, alpha=0.025, power=0.9,
             ...     efficacy_spending=eff_sf, futility_spending=fut_sf,
-            ...     efficacy_binding=True, futility_binding=False
+            ...     efficacy_binding=True, futility_binding=False,
+            ...     method="simulation",
+            ...     rng_seed=42
             ... )
             >>> np.round(design.upper_boundaries, 2)
-            array([3.01, 2.55, 1.95])
+            array([2.96, 2.5 , 1.97])
             >>> np.round(design.lower_boundaries, 2)
-            array([-0.29,  0.87,  1.95])
+            array([-0.31,  0.9 ,  1.97])
             >>> round(design.drift, 3)
-            3.266
+            3.296
             >>> round(design.inflation_factor, 2)
-            1.02
+            1.03
         """
         # 1. Initial Guess for Drift (Fixed Design)
         from scipy.stats import norm
@@ -187,6 +198,7 @@ class ProtocolDesigner:
                 futility_spending=futility_spending,
                 drift=current_drift,
                 method=method,
+                method_config=method_config,
             )
             current_drift = model.solve_drift(
                 info_times=info_times.tolist(),
@@ -197,6 +209,7 @@ class ProtocolDesigner:
                 ),
                 tails=tails,
                 method=method,
+                method_config=method_config,
                 bracket=(current_drift * 0.8, current_drift * 1.2),
             )
 
@@ -240,6 +253,10 @@ class ProtocolDesigner:
         allocation_ratios: Optional[Dict[str, float]] = None,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> tuple[GST.MethodSpec, int]:
         """Core logic for designing a Binomial Group Sequential Test.
 
@@ -259,6 +276,8 @@ class ProtocolDesigner:
             allocation_ratios: Ratios of treatments to control (defaults to {treatment: 1.0}).
             control_arm_name: Name of the control arm.
             treatment_arm_name: Name of the primary treatment arm (used for drift solving).
+            method: Method for boundary solving ('simulation' or 'numerical_integration').
+            method_config: Configuration object.
 
         Returns:
             A tuple of (MethodSpec, n_max). n_max is total (int).
@@ -305,6 +324,8 @@ class ProtocolDesigner:
                     efficacy_spending=sf_eff,
                     futility_spending=sf_fut,
                     drift=1.0,
+                    method=method,
+                    method_config=method_config,
                 )
                 drift_target = proxy_model.solve_drift(
                     proxy_times.tolist(),
@@ -312,6 +333,8 @@ class ProtocolDesigner:
                     target_power=power,
                     futility_boundaries=l_prox.tolist() if l_prox is not None else None,
                     tails=tails,
+                    method=method,
+                    method_config=method_config,
                 )
 
                 # 1b. Run Schedule Optimization
@@ -322,7 +345,8 @@ class ProtocolDesigner:
                     alpha=alpha,
                     drift=drift_target,
                     tails=tails,
-                    method="simulation",
+                    method=method,
+                    method_config=method_config,
                     seed=rng_seed,
                 )
                 info_times = res.schedule
@@ -339,6 +363,8 @@ class ProtocolDesigner:
             efficacy_binding=True,
             futility_binding=futility_binding,
             tails=tails,
+            method=method,
+            method_config=method_config,
             rng_seed=rng_seed,
         )
 
@@ -419,6 +445,10 @@ class ProtocolDesigner:
         tails: int = 2,
         arm_names: list[str] = ["control", "treatment"],
         rng_seed: Optional[int] = None,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> tuple[GST.MethodSpec, int]:
         """Core logic for designing a Classic (Fixed Shape) Group Sequential Test.
 
@@ -434,6 +464,8 @@ class ProtocolDesigner:
             tails: 1 or 2 sided.
             arm_names: List of arm names.
             rng_seed: Random seed.
+            method: Computation method.
+            method_config: Configuration object.
 
         Returns:
             A tuple of (MethodSpec, n_max).
@@ -469,6 +501,8 @@ class ProtocolDesigner:
             shape_type=type,
             tails=tails,
             shape_params=shape_params,
+            method=method,
+            method_config=method_config,
         )
 
         if type == "pocock":
@@ -486,6 +520,8 @@ class ProtocolDesigner:
             boundaries.tolist(),
             target_power=power,
             tails=tails,
+            method=method,
+            method_config=method_config,
         )
 
         # 4. Map to Sample Size
@@ -574,6 +610,10 @@ class ProtocolDesigner:
         spending_fn: Optional[SpendingFunction] = None,
         side: int = 1,
         rho: float = 3.0,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> GST.Protocol:
         """Plans a binomial A/B design and returns a fully populated GST.Protocol.
 
@@ -587,6 +627,8 @@ class ProtocolDesigner:
                 If None, O'Brien-Fleming spending is used.
             side: The number of sides for the test (1 or 2).
             rho: Not used for binomial but kept for compatibility.
+            method: Method for boundary solving ('simulation' or 'numerical_integration').
+            method_config: Configuration object.
 
         Returns:
             A fully populated GST.Protocol representing the planned design.
@@ -608,6 +650,8 @@ class ProtocolDesigner:
             spending_params=spending_params,
             futility=True,  # Default to including futility in planning
             tails=side,
+            method=method,
+            method_config=method_config,
             rng_seed=self._model.config.rng_seed if self._model else None,
         )
 
@@ -884,6 +928,8 @@ class ProtocolDesigner:
             allocation_ratios=allocation_ratios,
             control_arm_name=control_arm_name,
             treatment_arm_name=treatment_arm_name,
+            method=v_params.method,
+            method_config=v_params.method_config,
         )
 
         # 7. Attach Adaptation Spec if SSR method is requested
@@ -913,6 +959,10 @@ class ProtocolDesigner:
         sigma: float,
         k: int,
         spending_fn: Optional[SpendingFunction] = None,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> GST.Protocol:
         """
         Plans a Continuous (Two Means) A/B design.
@@ -931,6 +981,10 @@ class ProtocolDesigner:
             Number of looks.
         spending_fn : Optional[SpendingFunction]
             Spending function configuration.
+        method : Literal["simulation", "numerical_integration"]
+            Method for boundary solving.
+        method_config : Optional[Union[SimulationConfig, NumericalIntegrationConfig]]
+            Configuration object.
 
         Returns
         -------
@@ -953,6 +1007,8 @@ class ProtocolDesigner:
             power=power,
             efficacy_spending=spending_fn,
             rng_seed=self._model.config.rng_seed if self._model else None,
+            method=method,
+            method_config=method_config,
         )
 
         # 3. Calculate Sample Size (n_max)

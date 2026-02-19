@@ -36,7 +36,7 @@ class GroupSequentialEngine:
     n_max: int
     stopping_policy: StoppingPolicy
 
-    def __init__(self, protocol: GST.Protocol):
+    def __init__(self, protocol: GST.Protocol, rng_seed: Optional[int] = None):
         self.protocol = protocol
         method = protocol.method
         schedule = method.stopping_policy.schedule
@@ -71,7 +71,9 @@ class GroupSequentialEngine:
                 self.n_max = timer.max_sample_size
 
         # Initialize Canonical Model
-        self.canonical_model = CanonicalJointModel.from_spec(protocol)
+        self.canonical_model = CanonicalJointModel.from_spec(
+            protocol, rng_seed=rng_seed
+        )
         self._efficacy_boundaries: Optional[np.ndarray] = None
         self._futility_boundaries: Optional[np.ndarray] = None
 

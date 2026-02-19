@@ -25,8 +25,9 @@ EXAMPLES:
     >>> from earlysign.methods.group_sequential.plan.schedule_optimization import optimize_schedule
     >>> from earlysign.methods.group_sequential.shared.spending import PowerFamilySpending
     >>> spending = PowerFamilySpending(budget=0.025, rho=3.0)
+    >>> from earlysign.methods.group_sequential.shared.canonical_joint_model import SimulationConfig
     >>> res = optimize_schedule(k_looks=3, efficacy_spending=spending, drift=3.0,
-    ...                         method="simulation", n_sims=100000, seed=42)
+    ...                         method_config=SimulationConfig(n_sims=100000, rng_seed=42))
     >>> print(f"Opt Schedule: {res.schedule}, ASN: {res.asn:.4f}")  # doctest: +SKIP
     Opt Schedule: [0.517 0.753 1.   ], ASN: 0.7804
 
@@ -46,7 +47,7 @@ EXAMPLES:
 """
 
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, Tuple, cast
+from typing import Any, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -60,6 +61,8 @@ from earlysign.methods.group_sequential.plan.operating_characteristics.engines i
 from earlysign.methods.group_sequential.shared.canonical_joint_model import (
     CanonicalJointModel,
     Config,
+    NumericalIntegrationConfig,
+    SimulationConfig,
 )
 from earlysign.methods.group_sequential.shared.spending import SpendingFunction
 
@@ -71,12 +74,13 @@ class OptimizationConfig:
     n_global_samples: int = 100
     n_top_seeds: int = 5
     method: Literal["simulation", "numerical_integration"] = "simulation"
-    n_sims: int = 50000
+    method_config: Optional[Union[SimulationConfig, NumericalIntegrationConfig]] = None
     rng_seed: Optional[int] = None
     tolerance: float = 1e-4
 
     def __post_init__(self) -> None:
-        pass
+        if self.method == "simulation" and self.method_config is None:
+            self.method_config = SimulationConfig(n_sims=50000, rng_seed=self.rng_seed)
 
 
 class SequentialASNEstimator:
@@ -108,10 +112,12 @@ class SequentialASNEstimator:
 
         if self.config.method == "simulation":
             # AsymptoticSimulator: Takes Model (Physics)
+            # method_config is guaranteed by OptimizationConfig.__post_init__ for simulation
+            sim_cfg = cast(SimulationConfig, self.config.method_config)
             return AsymptoticSimulator(
                 model=CanonicalGaussianProcess(),
-                n_sims=self.config.n_sims,
-                seed=self._rng_seed,
+                n_sims=sim_cfg.n_sims,
+                seed=sim_cfg.rng_seed,
             )
         else:
             return NumericalCalculator()
@@ -130,7 +136,6 @@ class SequentialASNEstimator:
             efficacy_spending=self.efficacy_spending,
             futility_spending=self.futility_spending,
             tails=self.tails,
-            n_sims=self.config.n_sims,
             rng_seed=self._rng_seed,
         )
         model = CanonicalJointModel(model_config)
@@ -141,7 +146,11 @@ class SequentialASNEstimator:
             # used for spending. Larger effect sizes (and hence larger drift sizes)
             # tend to provide stronger signals, which can lead to higher chances
             # of stopping early when we plan early looks.
-            a, b = model.solve_boundaries(drift=self.drift, method=self.config.method)
+            a, b = model.solve_boundaries(
+                drift=self.drift,
+                method=self.config.method,
+                method_config=self.config.method_config,
+            )
         except Exception:
             return 1e6
 
@@ -176,14 +185,17 @@ class SequentialASNEstimator:
             efficacy_spending=self.efficacy_spending,
             futility_spending=self.futility_spending,
             tails=self.tails,
-            n_sims=self.config.n_sims,
             rng_seed=self._rng_seed,
         )
         model = CanonicalJointModel(model_config)
 
         try:
             # Solve for the boundary shape at the target evaluation drift.
-            a, b = model.solve_boundaries(drift=self.drift, method=self.config.method)
+            a, b = model.solve_boundaries(
+                drift=self.drift,
+                method=self.config.method,
+                method_config=self.config.method_config,
+            )
         except Exception:
             return 1e6, 0.0
 
@@ -327,7 +339,7 @@ def optimize_schedule(
     drift: float = 0.0,
     tails: int = 1,
     method: Literal["simulation", "numerical_integration"] = "simulation",
-    n_sims: int = 20000,
+    method_config: Optional[Union[SimulationConfig, NumericalIntegrationConfig]] = None,
     seed: Optional[int] = None,
 ) -> OptimizationResult:
     """Find the optimal information time schedule to minimize ASN.
@@ -343,14 +355,18 @@ def optimize_schedule(
         drift: The true effect size (theta * sqrt(I_max)) at which to minimize ASN.
         tails: 1 or 2 sided.
         method: "simulation" or "numerical_integration".
-        n_sims: Number of simulations (if method="simulation").
+        method_config: Configuration object.
         seed: Random seed.
 
     Returns:
         OptimizationResult object containing schedule, asn, and power.
     """
     config = OptimizationConfig(
-        method=method, n_sims=n_sims, rng_seed=seed, n_global_samples=50, n_top_seeds=3
+        method=method,
+        method_config=method_config,
+        rng_seed=seed,
+        n_global_samples=50,
+        n_top_seeds=3,
     )
 
     estimator = SequentialASNEstimator(

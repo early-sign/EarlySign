@@ -6,7 +6,7 @@ families. Unlike the Alpha-Spending approach, these designs use fixed boundary
 shape constants determined by the total number of looks and alpha/power requirements.
 """
 
-from typing import Any, Dict, Literal, Optional, Sequence, cast
+from typing import Any, Dict, Literal, Optional, Sequence, Union, cast
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,10 @@ from earlysign.methods.group_sequential.reporting.projectors import (
     BacktestProjector,
     FinalProjector,
     ProgressProjector,
+)
+from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+    NumericalIntegrationConfig,
+    SimulationConfig,
 )
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 
@@ -86,6 +90,10 @@ class ClassicGSTController(Controller[ClassicProtocol]):
         seed: int = 42,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> ClassicProtocol:
         """Designs a Classic GST Protocol.
 
@@ -104,6 +112,8 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             tails: Number of tails (1 or 2).
             arms: Number of arms (1 or 2).
             seed: Random seed for simulation/calculation.
+            method: Method for boundary solving ('simulation' or 'numerical_integration').
+            method_config: Configuration object.
 
         Returns:
             A populated ClassicProtocol.
@@ -196,6 +206,8 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             tails=tails,
             arm_names=arm_names,
             rng_seed=seed,
+            method=method,
+            method_config=method_config,
         )
 
         # 4. Assemble Task Spec

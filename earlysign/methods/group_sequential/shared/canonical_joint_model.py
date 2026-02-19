@@ -70,7 +70,7 @@ Examples:
 
 import warnings
 from dataclasses import dataclass
-from typing import Dict, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, Literal, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -89,6 +89,22 @@ from earlysign.stats.gaussian_process import CanonicalGaussianProcess
 # These are kept local to avoid influencing general design logic.
 _Z_SOLVER_LIMIT = 100.0
 _SOLVER_BRACKET_HIGH = 100.0
+
+
+@dataclass
+class SimulationConfig:
+    """Configuration for simulation-based boundary solving."""
+
+    n_sims: int = 20000
+    rng_seed: Optional[int] = None
+
+
+@dataclass
+class NumericalIntegrationConfig:
+    """Configuration for numerical integration-based boundary solving."""
+
+    tolerance: float = 1e-6
+    abseps: float = 1e-5
 
 
 @dataclass
@@ -198,6 +214,9 @@ class CanonicalJointModel:
         upper: Optional[NDArray[np.float64]] = None,
         lower: Optional[NDArray[np.float64]] = None,
         method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
         drift: float = 0.0,
         n_sims: Optional[int] = None,
         seed: Optional[int] = None,
@@ -209,15 +228,34 @@ class CanonicalJointModel:
             upper: Upper boundaries at each look.
             lower: Lower boundaries at each look.
             method: "simulation" or "numerical_integration".
+            method_config: Configuration object for the chosen method.
             drift: Standardized drift (0 for H0, non-zero for H1).
-            n_sims: Number of simulations (simulation method only).
-            seed: Random seed for reproducibility.
+            n_sims: Deprecated. Use method_config.n_sims.
+            seed: Deprecated. Use method_config.rng_seed.
 
         Returns:
             Probability of crossing either boundary.
         """
-        n = n_sims or self.config.n_sims
-        s = seed if seed is not None else self.config.rng_seed
+        # Resolve config
+        if method_config is None:
+            if method == "simulation":
+                method_config = SimulationConfig(
+                    n_sims=n_sims or self.config.n_sims,
+                    rng_seed=seed if seed is not None else self.config.rng_seed,
+                )
+            elif method == "numerical_integration":
+                method_config = NumericalIntegrationConfig()
+
+        s = (
+            method_config.rng_seed
+            if isinstance(method_config, SimulationConfig)
+            else (seed if seed is not None else self.config.rng_seed)
+        )
+        n = (
+            method_config.n_sims
+            if isinstance(method_config, SimulationConfig)
+            else (n_sims or self.config.n_sims)
+        )
 
         # For numerical integration, we can compute without instance creation overhead if needed,
         # but GP instance creation is cheap.
@@ -239,6 +277,9 @@ class CanonicalJointModel:
         tails: int = 1,
         drift: float = 0.0,
         method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> float:
         """Find constant c such that P(Crossing c*shape) = target_probability.
 
@@ -249,15 +290,31 @@ class CanonicalJointModel:
             tails: 1 for one-sided, 2 for two-sided symmetric.
             drift: Drift parameter (0 for Type I error).
             method: Computation method.
+            method_config: Configuration object.
 
         Returns:
             Critical constant c.
         """
-        crn_seed = (
-            self.config.rng_seed
-            if self.config.rng_seed is not None
-            else int(self._rng.integers(100000))
-        )
+        import dataclasses
+
+        # Ensure CRN for simulation stability in root finding
+        if method == "simulation":
+            if method_config is None:
+                eff_seed = (
+                    self.config.rng_seed
+                    if self.config.rng_seed is not None
+                    else int(self._rng.integers(100000))
+                )
+                method_config = SimulationConfig(
+                    n_sims=self.config.n_sims, rng_seed=eff_seed
+                )
+            elif isinstance(method_config, SimulationConfig):
+                if method_config.rng_seed is None:
+                    # Inject stable seed if missing
+                    eff_seed = int(self._rng.integers(100000))
+                    method_config = dataclasses.replace(
+                        method_config, rng_seed=eff_seed
+                    )
 
         def objective(c: float) -> float:
             boundary = c * shape
@@ -267,8 +324,8 @@ class CanonicalJointModel:
                     upper=boundary,
                     lower=-boundary,
                     method=method,
+                    method_config=method_config,
                     drift=drift,
-                    seed=crn_seed,
                 )
             else:
                 prob = self.compute_crossing_probability(
@@ -276,8 +333,8 @@ class CanonicalJointModel:
                     upper=boundary,
                     lower=None,
                     method=method,
+                    method_config=method_config,
                     drift=drift,
-                    seed=crn_seed,
                 )
             return prob - target_probability
 
@@ -315,7 +372,10 @@ class CanonicalJointModel:
         efficacy_binding: bool = True,
         futility_binding: bool = False,
         tails: int = 1,
-        method: str = "numerical_integration",
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> Tuple[Optional[NDArray[np.float64]], Optional[NDArray[np.float64]]]:
         """Solve boundaries to match cumulative stopping probabilities.
 
@@ -327,6 +387,8 @@ class CanonicalJointModel:
             efficacy_binding: Is Efficacy boundary binding? (Affects futility calculation).
             futility_binding: Is Futility boundary binding? (Affects efficacy calculation).
             tails: 1 or 2.
+            method: Computation method.
+            method_config: Configuration object.
 
         Returns:
             Tuple of (efficacy_boundaries, futility_boundaries).
@@ -355,24 +417,41 @@ class CanonicalJointModel:
             )
 
         # Simulation path
+        if method_config is None:
+            method_config = SimulationConfig(
+                n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+            )
+        elif isinstance(method_config, NumericalIntegrationConfig):
+            # This shouldn't happen if types match method, but safe fallback
+            method_config = SimulationConfig(
+                n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+            )
+
+        sim_cfg = method_config
+
         gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=self._rng)
-        z_sims_h0 = gp_h0.sample(t, self.config.n_sims)
+        z_sims_h0 = gp_h0.sample(
+            t, sim_cfg.n_sims, rng=np.random.default_rng(sim_cfg.rng_seed)
+        )
 
         gp_h1 = CanonicalGaussianProcess(drift=safe_drift, rng=self._rng)
-        z_sims_h1 = gp_h1.sample(t, self.config.n_sims)
+        # Simulate H1 paths (reusing seed for reproducibility)
+        z_sims_h1 = gp_h1.sample(
+            t, sim_cfg.n_sims, rng=np.random.default_rng(sim_cfg.rng_seed)
+        )
 
         a = np.zeros(k) if efficacy_targets is not None else None
         b = np.full(k, -np.inf) if futility_targets is not None else None
 
-        rejected_h0 = np.zeros(self.config.n_sims, dtype=bool)
-        stopped_h0 = np.zeros(self.config.n_sims, dtype=bool)
-        futility_h1 = np.zeros(self.config.n_sims, dtype=bool)
-        stopped_h1 = np.zeros(self.config.n_sims, dtype=bool)
+        rejected_h0 = np.zeros(sim_cfg.n_sims, dtype=bool)
+        stopped_h0 = np.zeros(sim_cfg.n_sims, dtype=bool)
+        futility_h1 = np.zeros(sim_cfg.n_sims, dtype=bool)
+        stopped_h1 = np.zeros(sim_cfg.n_sims, dtype=bool)
 
         for i in range(k):
             # Efficacy boundary
             if a is not None and efficacy_targets is not None:
-                needed = efficacy_targets[i] * self.config.n_sims - np.sum(rejected_h0)
+                needed = efficacy_targets[i] * sim_cfg.n_sims - np.sum(rejected_h0)
                 rem_mask = ~stopped_h0
                 num_rem = np.sum(rem_mask)
 
@@ -391,7 +470,7 @@ class CanonicalJointModel:
 
             # Futility boundary
             if b is not None and futility_targets is not None:
-                needed = futility_targets[i] * self.config.n_sims - np.sum(futility_h1)
+                needed = futility_targets[i] * sim_cfg.n_sims - np.sum(futility_h1)
                 rem_mask_h1 = ~stopped_h1
                 num_rem_h1 = np.sum(rem_mask_h1)
 
@@ -434,6 +513,10 @@ class CanonicalJointModel:
         previous_futility: Optional[Sequence[float]] = None,
         rule_type: str = "efficacy",
         drift: float = 0.0,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> float:
         """
         Solve for the next boundary point given history and a cumulative probability target.
@@ -473,11 +556,22 @@ class CanonicalJointModel:
             def obj_a(val: float) -> float:
                 temp_eff = eff.copy()
                 temp_eff[-1] = val
+                # Prepare method args
+                method_kwargs: Dict[str, Any] = {}
+                if method == "numerical_integration":
+                    if isinstance(method_config, NumericalIntegrationConfig):
+                        method_kwargs["abseps"] = method_config.abseps
+                elif method == "simulation":
+                    if isinstance(method_config, SimulationConfig):
+                        method_kwargs["n_sims"] = method_config.n_sims
+                        method_kwargs["seed"] = method_config.rng_seed
+
                 prob = gp_h0.compute_crossing_probability(
                     t=times,
                     upper=temp_eff,
                     lower=binding_fut if tails == 1 else -temp_eff,
-                    method="numerical_integration",
+                    method=method,
+                    **method_kwargs,
                 )
                 return float(prob - target_cumulative_prob)
 
@@ -514,11 +608,22 @@ class CanonicalJointModel:
             def obj_b(val: float) -> float:
                 temp_fut = fut.copy()
                 temp_fut[-1] = val
+                # Prepare method args
+                method_kwargs: Dict[str, Any] = {}
+                if method == "numerical_integration":
+                    if isinstance(method_config, NumericalIntegrationConfig):
+                        method_kwargs["abseps"] = method_config.abseps
+                elif method == "simulation":
+                    if isinstance(method_config, SimulationConfig):
+                        method_kwargs["n_sims"] = method_config.n_sims
+                        method_kwargs["seed"] = method_config.rng_seed
+
                 prob = gp_h1.compute_crossing_probability(
                     t=times,
                     upper=binding_eff,
                     lower=temp_fut,
-                    method="numerical_integration",
+                    method=method,
+                    **method_kwargs,
                 )
                 return float(prob - target_cumulative_prob)
 
@@ -672,9 +777,10 @@ class CanonicalJointModel:
     def solve_boundaries(
         self,
         drift: Optional[float] = None,
-        method: Literal[
-            "simulation", "numerical_integration"
-        ] = "numerical_integration",
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
         efficacy_spending: Optional[SpendingFunction] = None,
         futility_spending: Optional[SpendingFunction] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
@@ -683,6 +789,7 @@ class CanonicalJointModel:
         Args:
             drift: Drift parameter (optional).
             method: Computation method.
+            method_config: Configuration object.
             efficacy_spending: Optional override for efficacy spending function.
             futility_spending: Optional override for futility spending function.
 
@@ -732,6 +839,7 @@ class CanonicalJointModel:
         return self._solve_from_spending(
             drift,
             method=method,
+            method_config=method_config,
             efficacy_spending=efficacy_spending,
             futility_spending=futility_spending,
         )
@@ -745,9 +853,10 @@ class CanonicalJointModel:
     def _solve_from_spending(
         self,
         drift: Optional[float],
-        method: Literal[
-            "simulation", "numerical_integration"
-        ] = "numerical_integration",
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
         efficacy_spending: Optional[SpendingFunction] = None,
         futility_spending: Optional[SpendingFunction] = None,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
@@ -794,6 +903,7 @@ class CanonicalJointModel:
             futility_binding=self.config.futility_binding,
             tails=self.config.tails,
             method=method,
+            method_config=method_config,
         )
 
     # =========================================================================
@@ -823,6 +933,9 @@ class CanonicalJointModel:
         drift: float = 0.0,
         tails: Optional[int] = None,
         method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> float:
         """Evaluate Average Sample Number (ASN) in terms of looks."""
         t = np.asarray(info_times)
@@ -849,8 +962,20 @@ class CanonicalJointModel:
             return float(np.sum(p_stop * looks) + prob_reaches_k * len(t))
 
         # Simulation
+        if method_config is None:
+            method_config = SimulationConfig(
+                n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+            )
+        elif isinstance(method_config, NumericalIntegrationConfig):
+            method_config = SimulationConfig(
+                n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+            )
+        sim_cfg = method_config
+
         gp = CanonicalGaussianProcess(drift=drift, rng=self._rng)
-        samples = gp.sample(t, self.config.n_sims * 2)
+        samples = gp.sample(
+            t, sim_cfg.n_sims * 2, rng=np.random.default_rng(sim_cfg.rng_seed)
+        )
         n_sims, k = samples.shape
         stop_looks = np.full(n_sims, k, dtype=int)
         stopped = np.zeros(n_sims, dtype=bool)
@@ -872,6 +997,10 @@ class CanonicalJointModel:
         shape_type: str = "pocock",
         tails: int = 2,
         shape_params: Optional[Dict[str, float]] = None,
+        method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> float:
         """Legacy API for solving shape-based boundary constants."""
         t = np.asarray(info_times)
@@ -885,7 +1014,9 @@ class CanonicalJointModel:
         else:
             raise ValueError(f"Unknown shape_type: {shape_type}")
 
-        return self.find_boundary_constant(t, shape, alpha, tails=tails)
+        return self.find_boundary_constant(
+            t, shape, alpha, tails=tails, method=method, method_config=method_config
+        )
 
     def compute_rejection_probability(
         self,
@@ -896,6 +1027,9 @@ class CanonicalJointModel:
         samples: Optional[np.ndarray] = None,
         futility_boundaries: Optional[Sequence[float] | NDArray[np.float64]] = None,
         method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> float:
         """Compute rejection probability (probability of crossing efficacy bound)."""
         t = np.asarray(info_times)
@@ -918,10 +1052,28 @@ class CanonicalJointModel:
                 return float(np.sum(pu) + np.sum(pl))
             return float(np.sum(pu))
 
+        # Simulation path
+        if method_config is None:
+            method_config = SimulationConfig(
+                n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+            )
+        elif isinstance(method_config, NumericalIntegrationConfig):
+            method_config = SimulationConfig(
+                n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+            )
+        sim_cfg = method_config
+
         if samples is None:
+            # Standard simulation: Generate samples directly from the GP with the specified drift.
             gp = CanonicalGaussianProcess(drift=drift, rng=self._rng)
-            samples = gp.sample(t, self.config.n_sims * 2)
+            samples = gp.sample(
+                t, sim_cfg.n_sims * 2, rng=np.random.default_rng(sim_cfg.rng_seed)
+            )
         else:
+            # Optimization (CRN): Use provided H0 samples and shift them by the drift.
+            # Z(t) = Z_H0(t) + drift * sqrt(t)
+            # This keeps the underlying randomness fixed across different drift values,
+            # resulting in a smooth power function that helps the root solver converge.
             samples = samples + drift * np.sqrt(t)
 
         n_sims, k = samples.shape
@@ -952,6 +1104,9 @@ class CanonicalJointModel:
         futility_boundaries: Optional[Sequence[float]] = None,
         bracket: Tuple[float, float] = (1.0, 10.0),
         method: Literal["simulation", "numerical_integration"] = "simulation",
+        method_config: Optional[
+            Union[SimulationConfig, NumericalIntegrationConfig]
+        ] = None,
     ) -> float:
         """Solve for drift that yields target power."""
         t = np.asarray(info_times)
@@ -960,8 +1115,19 @@ class CanonicalJointModel:
 
         samples_h0 = None
         if method == "simulation":
+            if method_config is None:
+                method_config = SimulationConfig(
+                    n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+                )
+            elif isinstance(method_config, NumericalIntegrationConfig):
+                method_config = SimulationConfig(
+                    n_sims=self.config.n_sims, rng_seed=self.config.rng_seed
+                )
+            sim_cfg = method_config
             gp_h0 = CanonicalGaussianProcess(drift=0.0, rng=self._rng)
-            samples_h0 = gp_h0.sample(t, self.config.n_sims * 2)
+            samples_h0 = gp_h0.sample(
+                t, sim_cfg.n_sims * 2, rng=np.random.default_rng(sim_cfg.rng_seed)
+            )
 
         # Common objective function
         def f(d: float) -> float:
@@ -973,6 +1139,7 @@ class CanonicalJointModel:
                 samples=samples_h0,
                 futility_boundaries=futility_boundaries,
                 method=method,
+                method_config=method_config,
             )
             return float(p - target_power)
 

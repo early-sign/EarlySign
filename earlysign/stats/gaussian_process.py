@@ -12,11 +12,11 @@ Examples:
     >>> # Simple white noise GP
     >>> gp = GaussianProcess(dims=1)
     >>> t = np.array([0.1, 0.5, 1.0])
-    >>> samples = gp.sample(t, n_sims=100)
+    >>> samples = gp.sample(t, n_sims=10000)
     >>> samples.shape
-    (100, 3)
+    (10000, 3)
     >>> # Check that variance is approx 1 at each point
-    >>> np.allclose(np.var(samples, axis=0), 1.0, atol=0.5)
+    >>> np.allclose(np.var(samples, axis=0), 1.0, atol=0.1)
     True
 
     >>> # --- Test: Canonical GP Properties ---
@@ -156,35 +156,58 @@ class GaussianProcess:
         samples: NDArray[Any],
         upper: Optional[NDArray[Any]] = None,
         lower: Optional[NDArray[Any]] = None,
-    ) -> tuple[NDArray[Any], NDArray[Any]]:
-        """Determine where each path crosses boundaries.
+    ) -> tuple[NDArray[np.bool_], NDArray[np.int_]]:
+        """Determine where each path crosses boundaries using vectorized operations.
 
         Args:
-            samples: Sampled paths, shape (n_sims, k) (D=1 assumed for now).
-            upper: Upper boundaries at each look, shape (k,).
-            lower: Lower boundaries at each look, shape (k,).
+            samples: Sampled paths, shape (n_sims, k) or (n_sims, k, D).
+            upper: Upper boundaries. Broadcastable against samples.
+            lower: Lower boundaries. Broadcastable against samples.
 
         Returns:
             Tuple of (ever_stopped, stop_looks).
             ever_stopped: Boolean mask of shape (n_sims,).
-            stop_looks: Look index at which path first stopped (1 to k).
+            stop_looks: Look index at which path first stopped (1 to k). If never, returns k.
         """
-        n_sims, k = samples.shape
-        stopped = np.zeros(n_sims, dtype=bool)
-        stop_looks = np.full(n_sims, k, dtype=int)
+        n_sims = samples.shape[0]
+        k = samples.shape[1]
 
-        for i in range(k):
-            crossing = np.zeros(n_sims, dtype=bool)
-            if upper is not None:
-                crossing |= samples[:, i] > upper[i]
-            if lower is not None:
-                crossing |= samples[:, i] < lower[i]
+        # 1. Compute crossings for all looks at once
+        # Shape: (n_sims, k) (or (n_sims, k, D) if D > 1)
+        crossing: NDArray[np.bool_] = np.zeros(samples.shape, dtype=bool)
 
-            just_stopped = crossing & ~stopped
-            stop_looks[just_stopped] = i + 1
-            stopped |= crossing
+        if upper is not None:
+            # Expand upper if it's (k,) to (1, k) or similar for broadcasting
+            crossing |= samples > upper
 
-        return stopped, stop_looks
+        if lower is not None:
+            crossing |= samples < lower
+
+        # If D > 1, we consider "stopped" if ANY dimension crosses
+        # If samples is (N, K, D), we reduce to (N, K)
+        crossing_reduced: NDArray[np.bool_]
+        if samples.ndim > 2:
+            # "Any dimension crossing" strategy
+            # Explicit cast because any() returns bool | NDArray
+            crossing_reduced = cast(
+                NDArray[np.bool_], crossing.any(axis=tuple(range(2, samples.ndim)))
+            )
+        else:
+            crossing_reduced = crossing
+
+        # 2. Find first crossing index
+        # argmax returns the first index of True. If all False, returns 0.
+        first_crossing_idx = np.argmax(crossing_reduced, axis=1)
+
+        # check if it actually stopped (argmax returns 0 if all false)
+        any_stopped = cast(NDArray[np.bool_], crossing_reduced.any(axis=1))
+
+        # Stop looks are 1-based index (0 -> Look 1)
+        # If never stopped, we return k (default behavior)
+        stop_looks = np.full(n_sims, k, dtype=np.int_)
+        stop_looks[any_stopped] = first_crossing_idx[any_stopped] + 1
+
+        return any_stopped, stop_looks
 
     def solve_boundary_step(
         self,
@@ -296,6 +319,7 @@ class CanonicalGaussianProcess(GaussianProcess):
         n_sims: int = 20000,
         method: str = "simulation",
         seed: Optional[int] = None,
+        abseps: Optional[float] = None,
     ) -> float:
         """Compute the probability of crossing the specified boundaries.
 
@@ -318,7 +342,7 @@ class CanonicalGaussianProcess(GaussianProcess):
         l_arr = np.asarray(lower) if lower is not None else None
 
         if method == "numerical_integration":
-            return self._compute_crossing_numerical(t_arr, u_arr, l_arr)
+            return self._compute_crossing_numerical(t_arr, u_arr, l_arr, abseps=abseps)
         elif method == "simulation":
             return self._compute_crossing_simulation(t_arr, u_arr, l_arr, n_sims, seed)
         else:
@@ -329,6 +353,7 @@ class CanonicalGaussianProcess(GaussianProcess):
         t_arr: NDArray[Any],
         u_arr: Optional[NDArray[Any]],
         l_arr: Optional[NDArray[Any]],
+        abseps: Optional[float] = None,
     ) -> float:
         """Numerical integration engine for crossing probability."""
         k = len(t_arr)
@@ -368,7 +393,7 @@ class CanonicalGaussianProcess(GaussianProcess):
                 cov=cov,
                 lower_limit=lower_bound,
                 allow_singular=True,
-                abseps=1e-8,
+                abseps=abseps if abseps is not None else 1e-8,
             )
             return 1.0 - float(prob_within)
         except Exception as e:
@@ -399,6 +424,7 @@ class CanonicalGaussianProcess(GaussianProcess):
         n_sims: int = 20000,
         seed: Optional[int] = None,
         drift: Optional[float] = None,
+        abseps: Optional[float] = None,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """Compute the probability of stopping at each look for efficacy and futility.
 
@@ -425,7 +451,7 @@ class CanonicalGaussianProcess(GaussianProcess):
             )
         elif method == "numerical_integration":
             return self._compute_stopping_probs_numerical(
-                t_arr, u_arr, l_arr, drift=drift
+                t_arr, u_arr, l_arr, drift=drift, abseps=abseps
             )
         else:
             raise ValueError(f"Method '{method}' is not implemented.")
@@ -466,6 +492,7 @@ class CanonicalGaussianProcess(GaussianProcess):
         u_arr: NDArray[Any],
         l_arr: NDArray[Any],
         drift: Optional[float] = None,
+        abseps: Optional[float] = None,
     ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
         """
         Compute stopping probabilities using recursive numerical integration.
@@ -514,7 +541,7 @@ class CanonicalGaussianProcess(GaussianProcess):
                     cov=current_cov,
                     lower_limit=lower_limits_u,
                     allow_singular=True,
-                    abseps=1e-5,
+                    abseps=abseps if abseps is not None else 1e-5,
                 )
                 prob_upper[i] = p
 
@@ -535,7 +562,7 @@ class CanonicalGaussianProcess(GaussianProcess):
                     cov=current_cov,
                     lower_limit=lower_limits_l,
                     allow_singular=True,
-                    abseps=1e-8,
+                    abseps=abseps if abseps is not None else 1e-8,
                 )
                 prob_lower[i] = p
 

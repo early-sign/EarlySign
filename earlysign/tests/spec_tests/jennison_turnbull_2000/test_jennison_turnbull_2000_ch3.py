@@ -29,7 +29,7 @@ scenarios(str(corresponding_scenario_path(__file__)))
 @pytest.fixture
 def design_params() -> Dict[str, Any]:
     return {
-        "n_sims": 1000,
+        "n_sims": 3000,
         "rng_seed": 42,
         "type": "normal-mean",
         "tails": 2,
@@ -530,7 +530,7 @@ def when_eval_ttest(design_params: Dict[str, Any]) -> Dict[str, Any]:
         model=CanonicalTProcess(
             rng=np.random.default_rng(design_params.get("rng_seed", 42))
         ),
-        n_sims=design_params.get("n_sims", 20000),
+        n_sims=design_params.get("n_sims", 2000),
         seed=design_params.get("rng_seed", 42),
     )
 

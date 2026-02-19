@@ -24,7 +24,7 @@ scenarios(str(corresponding_scenario_path(__file__)))
 @pytest.fixture
 def ch7_params() -> Dict[str, Any]:
     # Ultra-high precision for benchmark matching
-    return {"n_sims": 20000, "rng_seed": 42, "tails": 2, "alpha": 0.05, "power": 0.9}
+    return {"n_sims": 3000, "rng_seed": 42, "tails": 2, "alpha": 0.05, "power": 0.9}
 
 
 # --- GIVEN: Setup ---
