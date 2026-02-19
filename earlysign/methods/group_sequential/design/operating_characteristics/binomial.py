@@ -7,16 +7,14 @@ from typing import Any, List, Literal, Optional, cast
 
 import numpy as np
 
-from earlysign.methods.group_sequential.plan.operating_characteristics.engines import (
+from earlysign.methods.group_sequential.core.model import CanonicalJointModel
+from earlysign.methods.group_sequential.design.operating_characteristics.engines import (
     AsymptoticSimulator,
     EvaluationResult,
     MonteCarloSimulator,
     NumericalCalculator,
     OperatingCharacteristicsEvaluator,
     SimulationCurve,
-)
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
-    CanonicalJointModel,
 )
 from earlysign.schema.ES3 import (
     GST,

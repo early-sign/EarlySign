@@ -28,7 +28,7 @@ from earlysign.methods.binomial import (
 from earlysign.methods.continuous import (
     Scoreboard as ContinuousScoreboard,
 )
-from earlysign.methods.group_sequential.execution.calculators import (
+from earlysign.methods.group_sequential.engine.calculators import (
     ZStatisticCalculatorFactory,
 )
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult

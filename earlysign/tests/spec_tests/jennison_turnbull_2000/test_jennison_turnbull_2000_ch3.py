@@ -6,14 +6,14 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from scipy import stats
 
-from earlysign.methods.group_sequential.plan.operating_characteristics.engines import (
-    AsymptoticSimulator,
-)
-from earlysign.methods.group_sequential.plan.solver import solve_boundaries
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+from earlysign.methods.group_sequential.core.model import (
     CanonicalJointModel,
     Config,
 )
+from earlysign.methods.group_sequential.design.operating_characteristics.engines import (
+    AsymptoticSimulator,
+)
+from earlysign.methods.group_sequential.design.solver import solve_boundaries
 from earlysign.methods.group_sequential.shared.design_utils import get_info_times
 from earlysign.schema.ES3.GST import (
     SampleSizeTimer,
@@ -247,7 +247,7 @@ def given_total_n(n_max: str, design_params: Dict[str, Any]) -> None:
 @when("I compute the log-rank sequential design", target_fixture="results")
 def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
     from earlysign.controllers.GST_classic import ClassicGSTController
-    from earlysign.methods.group_sequential.execution.stopping_policy import (
+    from earlysign.methods.group_sequential.core.policy import (
         StoppingPolicyFactory,
     )
 
@@ -419,7 +419,7 @@ def when_table32_eval(
 
     t_plan = np.linspace(1 / k, 1.0, k)
 
-    from earlysign.methods.group_sequential.shared.spending import (
+    from earlysign.methods.group_sequential.core.spending import (
         OBrienFlemingSpending,
         PocockSpending,
         SpendingFunction,

@@ -6,14 +6,14 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from scipy import stats
 from scipy.stats import norm
 
-from earlysign.methods.group_sequential.plan.operating_characteristics.engines import (
-    AsymptoticSimulator,
-)
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+from earlysign.methods.group_sequential.core.model import (
     CanonicalJointModel,
     Config,
 )
-from earlysign.methods.group_sequential.shared.spending import PowerFamilySpending
+from earlysign.methods.group_sequential.core.spending import PowerFamilySpending
+from earlysign.methods.group_sequential.design.operating_characteristics.engines import (
+    AsymptoticSimulator,
+)
 from earlysign.stats.gaussian_process import CanonicalGaussianProcess
 from earlysign.tests.util import corresponding_scenario_path
 
@@ -555,11 +555,11 @@ def when_bhat_deaths(deaths: str, ch7_params: Dict[str, Any]) -> Dict[str, Any]:
 
 @when(parsers.re(r"(?i)I compute the inflation factor R_OS"), target_fixture="results")
 def when_compute_ros(ch7_params: Dict[str, Any]) -> Dict[str, Any]:
-    from earlysign.methods.group_sequential.plan.operating_characteristics.overrunning import (
-        compute_overrunning_inflation,
-    )
-    from earlysign.methods.group_sequential.shared.spending import (
+    from earlysign.methods.group_sequential.core.spending import (
         PowerFamilySpending,
+    )
+    from earlysign.methods.group_sequential.design.operating_characteristics.overrunning import (
+        compute_overrunning_inflation,
     )
 
     alpha, power, rho, k = (

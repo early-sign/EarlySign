@@ -3,7 +3,7 @@ import pytest
 from earlysign.controllers.GST_Spending_JennisonTurnbull2000 import (
     JennisonTurnbull2000Controller,
 )
-from earlysign.methods.group_sequential.plan.protocol_design import ProtocolDesigner
+from earlysign.methods.group_sequential.design.protocol_design import ProtocolDesigner
 
 
 def test_relative_improvement_resolution() -> None:

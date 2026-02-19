@@ -8,7 +8,15 @@ import ibis
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
+import earlysign.schema.ES3.GST as GST
+from earlysign.methods.group_sequential.design.operating_characteristics.binomial import (
+    BinomialOperatingCharacteristicsEvaluator,
+)
+from earlysign.methods.group_sequential.design.operating_characteristics.continuous import (
+    ContinuousOperatingCharacteristicsEvaluator,
+)
 from earlysign.schema.ES3.GST.Log import LookResult
 
 
@@ -56,7 +64,7 @@ def plot_gst_summary(
     Generates a generic summary plot for Group Sequential Test results.
     Supports optional overlay of Adaptive Design events.
     """
-    from earlysign.methods.group_sequential.execution.engine import (
+    from earlysign.methods.group_sequential.engine.engine import (
         GroupSequentialEngine,
     )
 
@@ -211,3 +219,93 @@ def plot_gst_summary(
     secax.set_xlabel("Information Time")
 
     return fig
+
+
+def visualize_protocol_design(
+    protocol: GST.Protocol, effect_sizes: List[float]
+) -> dict[str, Any]:
+    """
+    Visualizes the Operating Characteristics (OC) of a protocol design.
+
+    Args:
+        protocol: The design to evaluate.
+        effect_sizes: List of effect sizes to evaluate (interpreted as %).
+
+    Returns:
+        dict: {"summary": pd.DataFrame, "figure": plt.Figure}
+    """
+    # 1. Select Evaluator
+    evaluator: Any
+    if protocol.task.response_type == GST.ResponseType.BINARY:
+        evaluator = BinomialOperatingCharacteristicsEvaluator(protocol, n_sims=10000)
+    else:
+        evaluator = ContinuousOperatingCharacteristicsEvaluator(protocol, n_sims=10000)
+
+    # 2. Evaluate Curve
+    # We treat effect_sizes as percentage change relative to baseline
+    curve = evaluator.evaluate_metric_at(effect_sizes, metric_type="absolute_diff_pct")
+
+    # 3. Build DataFrame
+    rows = []
+    n_max_total = curve.n_max_total or 0
+
+    for i, res in enumerate(curve.results):
+        x_val = curve.x_values[i]
+
+        # Calculate Expected N (Total)
+        # Use computed expected_n_per_arm if available (more precise for some designs)
+        if res.expected_n_per_arm:
+            expected_n = sum(res.expected_n_per_arm.values())
+        else:
+            expected_n = res.asn * n_max_total
+
+        rows.append(
+            {
+                "Effect Size (%)": x_val,
+                "Power": res.power,
+                "Expected N": expected_n,
+            }
+        )
+    df = pd.DataFrame(rows)
+
+    # 4. Plot
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    # Power Curve
+    ax1.plot(df["Effect Size (%)"], df["Power"], "b-o", label="Power")
+    ax1.set_title("Power Curve")
+    ax1.set_xlabel("Relative Effect Size (%)")
+    ax1.set_ylabel("Probability of Rejection")
+    ax1.axhline(
+        protocol.task.efficacy.alpha, color="r", linestyle="--", label="Alpha (Type I)"
+    )
+    if protocol.task.futility:
+        ax1.axhline(
+            protocol.task.futility.power,
+            color="g",
+            linestyle="--",
+            label="Target Power",
+        )
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+
+    # ASN Curve
+    ax2.plot(
+        df["Effect Size (%)"], df["Expected N"], "k-o", label="Average Sample Number"
+    )
+    ax2.set_title("Expected Sample Size (ASN)")
+    ax2.set_xlabel("Relative Effect Size (%)")
+    ax2.set_ylabel("Sample Size")
+
+    # Mark max N
+    max_n = sum(evaluator.n_max_per_arm.values())
+    ax2.axhline(max_n, color="r", linestyle="--", label="Max N")
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+
+    plt.tight_layout()
+
+    return {
+        "summary": df.style.format({"Power": "{:.1%}", "Expected N": "{:.1f}"}),
+        "figure": fig,
+    }

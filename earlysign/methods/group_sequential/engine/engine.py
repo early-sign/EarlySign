@@ -3,19 +3,19 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.methods.group_sequential.execution.calculators import (
-    ZStatisticCalculatorFactory,
+from earlysign.methods.group_sequential.adapters.protocol import (
+    get_standardized_drift,
 )
-from earlysign.methods.group_sequential.execution.stopping_policy import (
+from earlysign.methods.group_sequential.core.model import (
+    CanonicalJointModel,
+)
+from earlysign.methods.group_sequential.core.policy import (
     SpendingFunctionStoppingPolicy,
     StoppingPolicy,
     StoppingPolicyFactory,
 )
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
-    CanonicalJointModel,
-)
-from earlysign.methods.group_sequential.shared.design_utils import (
-    get_standardized_drift,
+from earlysign.methods.group_sequential.engine.calculators import (
+    ZStatisticCalculatorFactory,
 )
 from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult, ScheduleTrigger
 

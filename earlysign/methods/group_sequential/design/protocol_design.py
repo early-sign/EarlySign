@@ -8,13 +8,18 @@ from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.Base as ES3_BASE
 import earlysign.schema.ES3.GST as GST
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+from earlysign.methods.group_sequential.adapters import (
+    binomial,
+    continuous,
+    protocol as adapter,
+)
+from earlysign.methods.group_sequential.core.model import (
     CanonicalJointModel,
     Config,
     NumericalIntegrationConfig,
     SimulationConfig,
 )
-from earlysign.methods.group_sequential.shared.spending import (
+from earlysign.methods.group_sequential.core.spending import (
     SpendingFunction,
     SpendingFunctionFactory,
 )
@@ -136,8 +141,8 @@ class ProtocolDesigner:
 
         Examples:
             >>> import numpy as np
-            >>> from earlysign.methods.group_sequential.plan.protocol_design import ProtocolDesigner
-            >>> from earlysign.methods.group_sequential.shared.spending import HwangShihDeCaniSpending
+            >>> from earlysign.methods.group_sequential.design.protocol_design import ProtocolDesigner
+            >>> from earlysign.methods.group_sequential.core.spending import HwangShihDeCaniSpending
             >>>
             >>> # Replicate gsDesign manual default (CLIP/CAPTURE trial)
             >>> # alpha=0.025, power=0.9, 3-look HSD(gamma=-4/-2)
@@ -301,12 +306,12 @@ class ProtocolDesigner:
         if isinstance(scheduling, (np.ndarray, list)):
             info_times = np.array(scheduling)
         elif scheduling == "equidistant":
-            info_times = np.linspace(1 / looks, 1.0, looks)
+            info_times = adapter.get_info_times(GST.EquidistantSchedule(n_looks=looks))
         elif scheduling == "asn_minimizer":
             if looks == 1:
                 info_times = np.array([1.0])
             else:
-                from earlysign.methods.group_sequential.plan.schedule_optimization import (
+                from earlysign.methods.group_sequential.design.schedule_optimization import (
                     optimize_schedule,
                 )
 
@@ -369,25 +374,15 @@ class ProtocolDesigner:
         )
 
         # 3. Calculate Sample Size (n_max)
-        drift = design.drift
-        delta = abs(p_treatment - p_control)
-        sigma2 = p_control * (1.0 - p_control)
-        # Information at final look: I_max = (drift / delta)^2
-        # Note: This is standardized information. For binomial: Var(diff) = sigma2/nc + sigma2/nt
-        i_max_stat = (drift / delta) ** 2
-
-        if allocation_ratios is None:
-            allocation_ratios = {treatment_arm_name: 1.0}
-
-        # Var(diff_j) = sigma2 * (1/nc + 1/nj) = sigma2 * (1/nc + 1/(rj*nc)) = (sigma2/nc) * (1 + 1/rj)
-        # nc = I_max_stat * sigma2 * (1 + 1/rj) -- assuming drift solved for treatment_arm_name
-        primary_ratio = allocation_ratios.get(treatment_arm_name, 1.0)
-        n_c = int(np.ceil(i_max_stat * sigma2 * (1 + 1.0 / primary_ratio)))
-        n_max_dict = {control_arm_name: n_c}
-        for arm, ratio in allocation_ratios.items():
-            n_max_dict[arm] = int(np.ceil(n_c * ratio))
-        n_max: dict[str, int] = n_max_dict
-        total_n = sum(n_max_dict.values())
+        n_max = binomial.calculate_n_max(
+            drift=design.drift,
+            p_control=p_control,
+            p_treatment=p_treatment,
+            allocation_ratios=allocation_ratios,
+            control_arm_name=control_arm_name,
+            treatment_arm_name=treatment_arm_name,
+        )
+        total_n = sum(n_max.values())
 
         # 6. Construct MethodSpec
         strategy: Any
@@ -471,7 +466,7 @@ class ProtocolDesigner:
             A tuple of (MethodSpec, n_max).
         """
         # 1. Setup Model & Strategy
-        info_times = np.linspace(1 / looks, 1.0, looks)
+        info_times = adapter.get_info_times(GST.EquidistantSchedule(n_looks=looks))
         model = CanonicalJointModel(Config(info_times=info_times, rng_seed=rng_seed))
 
         shape_params = (
@@ -528,12 +523,13 @@ class ProtocolDesigner:
         n_arms = len(arm_names)
         if p_control is not None:
             # Binomial
-            sigma2_unit = p_control * (1.0 - p_control)
-            theta = delta
-            # Z = (p1-p2)/sqrt(var1/n1 + var2/n2). For balanced 2-arm: I = n / (4*sigma2).
-            # For 1-arm Z = (p-p0)/sqrt(sigma2/n): I = n / sigma2.
-            i_max = (drift / theta) ** 2
-            n_total_calc = int(np.ceil((4 if n_arms == 2 else 1) * i_max * sigma2_unit))
+            n_max_dict = binomial.calculate_n_max(
+                drift=drift,
+                p_control=p_control,
+                p_treatment=p_control + delta,
+                control_arm_name=arm_names[0],
+                treatment_arm_name=arm_names[1] if n_arms > 1 else arm_names[0],
+            )
             timer_unit = GST.Unit.INDIVIDUALS
             stat_spec: Any = (
                 GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED)
@@ -544,13 +540,13 @@ class ProtocolDesigner:
             )
         elif sigma is not None:
             # Continuous
-            # Two-sample balanced: Z = delta / sqrt(4*sigma^2/n) = delta*sqrt(n)/(2*sigma).
-            # theta = delta / (2*sigma). i_max = (drift / theta)**2. n_max = i_max.
-            # One-sample: Z = delta / (sigma/sqrt(n)) = delta*sqrt(n)/sigma.
-            # theta = delta / sigma. i_max = (drift/theta)**2. n_max = i_max.
-            theta = delta / (2 * sigma if n_arms == 2 else sigma)
-            i_max = (drift / theta) ** 2
-            n_total_calc = int(np.ceil(i_max))
+            n_max_dict = continuous.calculate_n_max(
+                drift=drift,
+                delta=delta,
+                sigma=sigma,
+                n_arms=n_arms,
+                arm_names=arm_names,
+            )
             timer_unit = GST.Unit.INDIVIDUALS
             stat_spec = (
                 GST.TwoArmContinuousZ(
@@ -567,15 +563,6 @@ class ProtocolDesigner:
         else:
             raise ValueError("Must provide either p_control or sigma.")
 
-        # Distribute n_total_calc among arms
-        # Assuming equal allocation for classic designs
-        n_per_arm = int(np.ceil(n_total_calc / n_arms))
-        # Recalculate total to match sum of parts (might slightly exceed original n_total_calc due to rounding)
-        # But wait, n_total_calc was derived likely from formula that assumes integer n per arm?
-        # Actually n_total_calc is raw total.
-        # Let's just split it.
-        n_max_dict = {name: n_per_arm for name in arm_names}
-        # Update n_total_calc to reflect actual committed sample size
         n_total_calc = sum(n_max_dict.values())
 
         # 5. Assemble MethodSpec
@@ -782,7 +769,7 @@ class ProtocolDesigner:
         Derives a MethodSpec from a TaskSpec effectively serving as a 'Design Strategy'.
 
         Examples:
-            >>> from earlysign.methods.group_sequential.plan.protocol_design import ProtocolDesigner
+            >>> from earlysign.methods.group_sequential.design.protocol_design import ProtocolDesigner
             >>> import earlysign.schema.ES3.Base as ES3_BASE
             >>> import earlysign.schema.ES3.GST as GST
             >>> from pydantic import ValidationError

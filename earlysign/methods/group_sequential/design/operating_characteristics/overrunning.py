@@ -10,7 +10,7 @@ from typing import Optional
 import numpy as np
 from scipy.optimize import brentq
 
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+from earlysign.methods.group_sequential.core.model import (
     Config,
 )
 from earlysign.stats.gaussian_process import CanonicalGaussianProcess
@@ -112,7 +112,7 @@ def compute_overrunning_inflation(
 
     # Use numerical integration for speed and precision
     # We need a model instance to access the solver
-    from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+    from earlysign.methods.group_sequential.core.model import (
         CanonicalJointModel,
         SimulationConfig,
     )

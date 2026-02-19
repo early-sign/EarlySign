@@ -9,13 +9,13 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
-from earlysign.methods.group_sequential.execution.stopping_policy import (
-    BoundarySolver,
-    StoppingPolicy,
-)
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+from earlysign.methods.group_sequential.core.model import (
     CanonicalJointModel,
     Config,
+)
+from earlysign.methods.group_sequential.core.policy import (
+    BoundarySolver,
+    StoppingPolicy,
 )
 
 

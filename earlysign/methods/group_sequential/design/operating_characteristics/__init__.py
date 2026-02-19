@@ -8,13 +8,13 @@ Submodules:
     binomial: Domain-specific evaluators (e.g., BinomialEvaluator).
 """
 
-from earlysign.methods.group_sequential.plan.operating_characteristics.binomial import (
+from earlysign.methods.group_sequential.design.operating_characteristics.binomial import (
     BinomialOperatingCharacteristicsEvaluator,
 )
-from earlysign.methods.group_sequential.plan.operating_characteristics.continuous import (
+from earlysign.methods.group_sequential.design.operating_characteristics.continuous import (
     ContinuousOperatingCharacteristicsEvaluator,
 )
-from earlysign.methods.group_sequential.plan.operating_characteristics.engines import (
+from earlysign.methods.group_sequential.design.operating_characteristics.engines import (
     AsymptoticSimulator,
     EvaluationResult,
     NumericalCalculator,

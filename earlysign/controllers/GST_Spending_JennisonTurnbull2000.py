@@ -74,17 +74,21 @@ from earlysign.framework.controller import (
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import BacktestSession, Session
 from earlysign.methods.binomial import Scoreboard
-from earlysign.methods.group_sequential.execution.engine import (
+from earlysign.methods.group_sequential.core.model import (
+    NumericalIntegrationConfig,
+    SimulationConfig,
+)
+from earlysign.methods.group_sequential.design.protocol_design import (
+    ProtocolDesigner,
+)
+from earlysign.methods.group_sequential.engine.engine import (
     GroupSequentialEngine,
 )
-from earlysign.methods.group_sequential.execution.entities import (
+from earlysign.methods.group_sequential.engine.entities import (
     InterimAnalyses,
 )
-from earlysign.methods.group_sequential.execution.trigger_strategies import (
+from earlysign.methods.group_sequential.engine.trigger_strategies import (
     get_pending_look_trigger,
-)
-from earlysign.methods.group_sequential.plan.protocol_design import (
-    ProtocolDesigner,
 )
 from earlysign.methods.group_sequential.reporting.projectors import (
     BacktestProjector,
@@ -93,10 +97,6 @@ from earlysign.methods.group_sequential.reporting.projectors import (
 )
 from earlysign.methods.group_sequential.reporting.visualization import (
     plot_gst_summary,
-)
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
-    NumericalIntegrationConfig,
-    SimulationConfig,
 )
 from earlysign.schema.ES3.GST import (
     AbsoluteDifference,

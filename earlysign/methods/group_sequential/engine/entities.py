@@ -43,7 +43,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     --------
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.framework.session import Session
-    >>> from earlysign.methods.group_sequential.execution.entities import LookResult
+    >>> from earlysign.methods.group_sequential.engine.entities import LookResult
     >>> import ibis, duckdb
     >>> con = ibis.duckdb.connect(":memory:")
     >>> ledger = Ledger(con, "events"); ledger.ensure()

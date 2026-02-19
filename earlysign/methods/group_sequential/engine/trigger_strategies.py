@@ -1,7 +1,7 @@
 from typing import Any, List, Optional, Tuple
 
 from earlysign.framework.trace import Traced, extract_traces
-from earlysign.methods.group_sequential.shared.design_utils import get_info_times
+from earlysign.methods.group_sequential.adapters.protocol import get_info_times
 from earlysign.schema.ES3.GST import (
     DueLookTrigger,
     EventCountTimer,

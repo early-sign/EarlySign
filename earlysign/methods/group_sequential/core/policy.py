@@ -1,15 +1,32 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol, Tuple, cast
+from typing import Any, Optional, Protocol, Tuple, cast, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.methods.group_sequential.shared.spending import (
+from earlysign.methods.group_sequential.core.spending import (
     SpendingFunction,
     SpendingFunctionFactory,
 )
+
+
+@runtime_checkable
+class EngineContext(Protocol):
+    """Protocol for the execution context required by dynamic policies."""
+
+    @property
+    def _points(self) -> NDArray[np.float64]: ...
+
+    @property
+    def efficacy_boundaries(self) -> Optional[NDArray[np.float64]]: ...
+
+    @property
+    def futility_boundaries(self) -> Optional[NDArray[np.float64]]: ...
+
+    @property
+    def canonical_model(self) -> Any: ...
 
 
 class BoundarySolver(Protocol):
@@ -133,7 +150,7 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
 
     def get_boundary(
         self,
-        model: Any,
+        model: EngineContext,
         look_index: int,
         info_time: float,
         rule_type: str = "efficacy",
@@ -146,8 +163,8 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
         stage-by-stage using the spending function and historical data.
 
         Args:
-            model (Any): The statistical model or engine providing context,
-                including planned information times and historical boundaries.
+            model (EngineContext): The engine context providing information times
+                and historical boundaries.
             look_index (int): The index of the current look.
             info_time (float): The current information time.
             rule_type (str): The type of boundary to retrieve ("efficacy" or "futility").
@@ -217,7 +234,7 @@ class BoundaryFunctionStoppingPolicy(StoppingPolicy):
 
     def get_boundary(
         self,
-        model: Any,
+        model: EngineContext,
         look_index: int,
         info_time: float,
         rule_type: str = "efficacy",
@@ -322,7 +339,7 @@ class WhiteheadStoppingPolicy(BoundaryFunctionStoppingPolicy):
 
     def get_boundary(
         self,
-        model: Any,
+        model: EngineContext,
         look_index: int,
         info_time: float,
         rule_type: str = "efficacy",

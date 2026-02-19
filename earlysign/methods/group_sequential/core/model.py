@@ -7,8 +7,8 @@ Examples:
     >>> import numpy as np
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> import earlysign.schema.ES3.GST as GST
-    >>> from earlysign.methods.group_sequential.shared.canonical_joint_model import CanonicalJointModel, Config
-    >>> from earlysign.methods.group_sequential.shared.spending import OBrienFlemingSpending
+    >>> from earlysign.methods.group_sequential.core.model import CanonicalJointModel, Config
+    >>> from earlysign.methods.group_sequential.core.spending import OBrienFlemingSpending
     >>>
     >>> # --- Test: Model from Spec Basic ---
     >>> info_times = [0.5, 1.0]
@@ -77,12 +77,12 @@ from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.methods.group_sequential.execution.stopping_policy import (
+from earlysign.methods.group_sequential.core.policy import (
     SpendingFunctionStoppingPolicy,
     StoppingPolicy,
     StoppingPolicyFactory,
 )
-from earlysign.methods.group_sequential.shared.spending import SpendingFunction
+from earlysign.methods.group_sequential.core.spending import SpendingFunction
 from earlysign.stats.gaussian_process import CanonicalGaussianProcess
 
 # Internal numerical safety limits.
@@ -794,7 +794,7 @@ class CanonicalJointModel:
             futility_spending: Optional override for futility spending function.
 
         Examples:
-            >>> from earlysign.methods.group_sequential.shared.spending import OBrienFlemingSpending
+            >>> from earlysign.methods.group_sequential.core.spending import OBrienFlemingSpending
             >>> info_times = np.array([0.5, 1.0])
 
             1. Verify that a ValueError is raised when drift is missing but futility boundaries are requested

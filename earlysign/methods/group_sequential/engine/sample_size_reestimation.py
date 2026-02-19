@@ -6,7 +6,7 @@ import numpy as np
 from scipy import stats
 
 import earlysign.schema.ES3.GST as GST
-from earlysign.methods.group_sequential.shared.design_utils import (
+from earlysign.methods.group_sequential.adapters.protocol import (
     get_final_efficacy_boundary,
     get_standardized_drift,
 )
@@ -113,7 +113,7 @@ class ConditionalPowerAdaptationEngine:
         ...     CanonicalGaussianModel, SampleSizeReestimationSpec, PromisingZoneSpec,
         ...     AdaptationSpec
         ... )
-        >>> from earlysign.methods.group_sequential.execution.sample_size_reestimation import ConditionalPowerAdaptationEngine
+        >>> from earlysign.methods.group_sequential.engine.sample_size_reestimation import ConditionalPowerAdaptationEngine
         >>> from earlysign.schema.ES3.GST.Log import LookResult
         >>> # Mock results
         >>> res = LookResult(

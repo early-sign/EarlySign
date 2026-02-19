@@ -22,10 +22,10 @@ EXAMPLES:
     simulation with 100,000 paths (Common Random Numbers).
 
     >>> # K=3, 100k simulations
-    >>> from earlysign.methods.group_sequential.plan.schedule_optimization import optimize_schedule
-    >>> from earlysign.methods.group_sequential.shared.spending import PowerFamilySpending
+    >>> from earlysign.methods.group_sequential.design.schedule_optimization import optimize_schedule
+    >>> from earlysign.methods.group_sequential.core.spending import PowerFamilySpending
     >>> spending = PowerFamilySpending(budget=0.025, rho=3.0)
-    >>> from earlysign.methods.group_sequential.shared.canonical_joint_model import SimulationConfig
+    >>> from earlysign.methods.group_sequential.core.model import SimulationConfig
     >>> res = optimize_schedule(k_looks=3, efficacy_spending=spending, drift=3.0,
     ...                         method_config=SimulationConfig(n_sims=100000, rng_seed=42))
     >>> print(f"Opt Schedule: {res.schedule}, ASN: {res.asn:.4f}")  # doctest: +SKIP
@@ -53,18 +53,18 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import minimize
 
-from earlysign.methods.group_sequential.plan.operating_characteristics.engines import (
-    AsymptoticSimulator,
-    NumericalCalculator,
-    OperatingCharacteristicsEvaluator,
-)
-from earlysign.methods.group_sequential.shared.canonical_joint_model import (
+from earlysign.methods.group_sequential.core.model import (
     CanonicalJointModel,
     Config,
     NumericalIntegrationConfig,
     SimulationConfig,
 )
-from earlysign.methods.group_sequential.shared.spending import SpendingFunction
+from earlysign.methods.group_sequential.core.spending import SpendingFunction
+from earlysign.methods.group_sequential.design.operating_characteristics.engines import (
+    AsymptoticSimulator,
+    NumericalCalculator,
+    OperatingCharacteristicsEvaluator,
+)
 
 
 @dataclass
