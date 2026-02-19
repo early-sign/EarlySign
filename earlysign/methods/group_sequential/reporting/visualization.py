@@ -276,9 +276,13 @@ def visualize_protocol_design(
     ax1.set_title("Power Curve")
     ax1.set_xlabel("Relative Effect Size (%)")
     ax1.set_ylabel("Probability of Rejection")
-    ax1.axhline(
-        protocol.task.efficacy.alpha, color="r", linestyle="--", label="Alpha (Type I)"
-    )
+    if protocol.task.efficacy:
+        ax1.axhline(
+            protocol.task.efficacy.alpha,
+            color="r",
+            linestyle="--",
+            label="Alpha (Type I)",
+        )
     if protocol.task.futility:
         ax1.axhline(
             protocol.task.futility.power,
