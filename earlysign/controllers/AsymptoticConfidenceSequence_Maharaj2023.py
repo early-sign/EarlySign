@@ -75,7 +75,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[Protocol]):
         >>> controller.update(batch)
         >>> report = controller.report_progress()
         >>> print(f"Diff: {report['trajectory']:.3f}, Boundary: {report['boundary']:.3f}, Status: {report['status']}")
-        Diff: 0.100, Boundary: 0.053, Status: stop_efficacy
+        Diff: 0.100, Boundary: 0.053, Status: stop_detected
     """
 
     _protocol_class = Protocol

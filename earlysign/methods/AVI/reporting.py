@@ -214,11 +214,11 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
         return ["Protocol", "Scoreboard"]
 
     def project(self, table: ibis.Expr) -> ProjectionResult[ProgressReport]:
-        from earlysign.methods.AVI.engines.binomial_e_value import (
+        from earlysign.methods.AVI.adapters import BinomialAdapter
+        from earlysign.methods.AVI.core import (
+            BinomialEValueModel,
             EProcessProtocol,
-            compute_binomial_e_value,
         )
-        from earlysign.schema.ES3.Binomial import ArmMetrics
 
         # 1. Read Protocol
         protocol_traced = ProtocolProjector(EProcessProtocol).project(table)
@@ -227,15 +227,12 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
         # 2. Read Metrics
         metrics_traced = BinomialScoreboard(identity="metrics").project(table)
         metrics = metrics_traced.data
-        n_total = sum(a.metrics.total for a in metrics.arms.values())
-        s_total = sum(a.metrics.successes for a in metrics.arms.values())
-        p_total = s_total / n_total if n_total > 0 else 0.0
-        s = ArmMetrics(total=n_total, successes=s_total, p_hat=p_total)
+        n_total, s_total = BinomialAdapter.extract_total_stats(metrics)
 
         # 3. Compute e-value
-        res = compute_binomial_e_value(
-            n=s.total,
-            successes=s.successes,
+        res = BinomialEValueModel.compute(
+            n=n_total,
+            successes=s_total,
             null_p=p.null_p,
             alt_p=p.alt_p,
             alpha=p.alpha,
@@ -243,10 +240,10 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
 
         status = DecisionStatus.CONTINUE_
         if res.is_rejected:
-            status = DecisionStatus.STOP_EFFICACY
+            status = DecisionStatus.STOP_DETECTED
 
         report = ProgressReport(
-            sample_n=s.total,
+            sample_n=n_total,
             trajectory=res.e_value,
             boundary=1.0 / p.alpha,
             status=status,
@@ -268,9 +265,10 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
         return ["Protocol", "Scoreboard"]
 
     def project(self, table: ibis.Expr) -> ProjectionResult[FinalReport]:
-        from earlysign.methods.AVI.engines.binomial_e_value import (
+        from earlysign.methods.AVI.adapters import BinomialAdapter
+        from earlysign.methods.AVI.core import (
+            BinomialEValueModel,
             EProcessProtocol,
-            compute_binomial_e_value,
         )
 
         # 1. Read Protocol
@@ -280,11 +278,10 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
         # 2. Read Metrics
         metrics_traced = BinomialScoreboard(identity="metrics").project(table)
         metrics = metrics_traced.data
-        n_total = sum(a.metrics.total for a in metrics.arms.values())
-        s_total = sum(a.metrics.successes for a in metrics.arms.values())
+        n_total, s_total = BinomialAdapter.extract_total_stats(metrics)
 
         # 3. Compute e-value
-        res = compute_binomial_e_value(
+        res = BinomialEValueModel.compute(
             n=n_total,
             successes=s_total,
             null_p=p.null_p,
@@ -295,7 +292,7 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
         # 4. Determine Final Status
         final_status = DecisionStatus.CONTINUE_
         if res.is_rejected:
-            final_status = DecisionStatus.STOP_EFFICACY
+            final_status = DecisionStatus.STOP_DETECTED
 
         report = FinalReport(
             sample_n=n_total,

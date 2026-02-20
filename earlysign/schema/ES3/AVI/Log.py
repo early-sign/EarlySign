@@ -12,7 +12,7 @@ from ..Base import Log
 
 class DecisionStatus(StrEnum):
     CONTINUE_ = "continue"
-    STOP_EFFICACY = "stop_efficacy"
+    STOP_DETECTED = "stop_detected"
     STOP_PLAN_END_REACHED = "stop_plan_end_reached"
 
 

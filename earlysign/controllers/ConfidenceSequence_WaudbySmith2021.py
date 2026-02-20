@@ -47,7 +47,7 @@ Examples:
     >>> controller.update(batch2)
     >>> res2 = controller.report_progress()
     >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.4f}, Status: {res2['status']}")
-    Diff: 0.282, Boundary: 0.0655, Status: stop_efficacy
+    Diff: 0.282, Boundary: 0.0655, Status: stop_detected
 """
 
 from typing import Any, Dict, List, Literal

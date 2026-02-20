@@ -96,8 +96,8 @@ class HowardRamdas2022Controller(Controller[Protocol]):
     >>> print(f"Est: {res['estimated_quantile']:.2f}, CI: [{res['interval_lower']:.2f}, {res['interval_upper']:.2f}]")
     Est: 11.00, CI: [10.00, 11.00]
     >>> print(f"Status: {res['status']}")
-    Status: stop_efficacy
-    >>> # Note: The intervals are disjoint (A approx [1, 2], B=[10, 11]), so we stop for efficacy.
+    Status: stop_detected
+    >>> # Note: The intervals are disjoint (A approx [1, 2], B=[10, 11]), so we stop for efficacy (flag raised).
     """
 
     _protocol_class = Protocol

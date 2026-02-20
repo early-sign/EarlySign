@@ -5,11 +5,11 @@ from pydantic import BaseModel
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.session import Session
-from earlysign.methods.AVI import BinomialEValueEngine
-from earlysign.methods.AVI.engines.binomial_e_value import (
+from earlysign.methods.AVI.core import (
+    BinomialEValueModel,
     EProcessProtocol,
-    compute_binomial_e_value,
 )
+from earlysign.methods.AVI.engine import BinomialEValueEngine
 from earlysign.methods.AVI.reporting import (
     BinomialEValueFinalProjector,
     BinomialEValueProgressProjector,
@@ -37,7 +37,7 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-        >>> from earlysign.methods.AVI.engines.binomial_e_value import EProcessProtocol
+        >>> from earlysign.methods.AVI.core import EProcessProtocol
         >>> from earlysign.controllers.binomial_monitoring import BinomialMonitoringController
         >>>
         >>> # Setup
@@ -63,7 +63,7 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
         >>> controller.update([batch2])
         >>> report2 = controller.report_progress()
         >>> print(f"E-value: {report2['trajectory']:.2f}, Status: {report2['status']}")
-        E-value: 543250443896186605971754527833980928.00, Status: stop_efficacy
+        E-value: 543250443896186605971754527833980928.00, Status: stop_detected
         >>> final_report = controller.report_result()
         >>> print(f"Is Rejected: {final_report['is_rejected']}")
         Is Rejected: True
@@ -196,7 +196,7 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
             total_val = row["total_cum"]
             success_val = row["success_cum"]
 
-            res = compute_binomial_e_value(
+            res = BinomialEValueModel.compute(
                 n=total_val,
                 successes=success_val,
                 null_p=null_p,

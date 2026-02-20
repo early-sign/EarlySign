@@ -21,29 +21,41 @@ Examples:
     >>> ledger.ensure()
     >>> ledger = ledger.bind(experiment_id="doctest_msprt")
     >>>
+    >>> # Scenario:
+    >>> # You are an SRE at Acme Corp deploying a new microservice version (v2).
+    >>> # You must ensure the error rate does NOT increase by more than 0.1% (absolute) vs v1 (Guardrail).
+    >>> # You monitor continuously and want to stop/rollback immediately if the boundary is crossed.
+    >>>
     >>> # Design mSPRT (Binomial)
     >>> controller = BinomialJohari2019Controller(ledger)
     >>> protocol = controller.design(
-    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="v1_stable", treatment_arm_name="v2_canary"),
     ...     alpha=0.05,
-    ...     tau=0.1,  # Mixing parameter ~ MDE
+    ...     tau=0.01,  # Mixing parameter ~ MDE (e.g. 1% lift)
     ...     sides="two"
     ... )
     >>> controller.set_protocol(protocol)
     >>>
-    >>> # Update (Batch 1: Low data)
-    >>> batch = [BinomialArmData(total=100, success=20, arm="control"), BinomialArmData(total=100, success=30, arm="treatment")]
+    >>> # Update (Batch 1: Low data, identical error rates)
+    >>> batch = [
+    ...     BinomialArmData(total=100, success=2, arm="v1_stable"),
+    ...     BinomialArmData(total=100, success=2, arm="v2_canary")
+    ... ]
     >>> controller.update(batch)
     >>> res1 = controller.report_progress()
     >>> print(f"Diff: {res1['trajectory']:.3f}, Status: {res1['status']}")
-    Diff: 0.100, Status: continue
+    Diff: 0.000, Status: continue
     >>>
-    >>> # Update (Batch 2: High data crossing threshold)
-    >>> batch2 = [BinomialArmData(total=1000, success=200, arm="control"), BinomialArmData(total=1000, success=300, arm="treatment")]
+    >>> # Update (Batch 2: High data, v2 showing significantly higher errors)
+    >>> # v1: 200/1000 (20%), v2: 350/1000 (35%) -> Risk!
+    >>> batch2 = [
+    ...     BinomialArmData(total=1000, success=200, arm="v1_stable"),
+    ...     BinomialArmData(total=1000, success=350, arm="v2_canary")
+    ... ]
     >>> controller.update(batch2)
     >>> res2 = controller.report_progress()
     >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.3f}, Status: {res2['status']}")
-    Diff: 0.100, Boundary: 0.057, Status: stop_efficacy
+    Diff: 0.136, Boundary: 0.095, Status: stop_detected
 """
 
 from typing import Any, Dict, List, Literal, Optional, cast

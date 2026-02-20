@@ -63,7 +63,7 @@ model Protocol extends Base.Protocol {
 namespace Log {
   enum DecisionStatus {
     Continue: "continue",
-    StopEfficacy: "stop_efficacy",
+    StopDetected: "stop_detected",
     StopPlanEndReached: "stop_plan_end_reached",
   }
 
