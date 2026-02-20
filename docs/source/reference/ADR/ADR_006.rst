@@ -1,125 +1,74 @@
-ADR 006 — ibis-native DSL experiments and performance tradeoffs
-===============================================================
+.. ADR-006: Ledger DSL: Transactions and Sessions
+.. :Date: 2026-02-20
 
-.. warning::
-    **Historical Document**: This ADR describes historical experiments and a proposed DSL (v21) that differs from the final v1 implementation.
-    The current ``Ledger`` implementation does not support ``transaction()`` or ``session()`` directly on the ledger object; instead, use the ``earlysign.v1.framework.Session`` context manager.
-    Refer to ``docs/source/explanation/concepts.md`` for the authoritative design documentation.
+==================================================
+ADR-006: Ledger DSL: Transactions and Sessions
+==================================================
 
-Summary
--------
+**Status**: **`Accepted`**
 
-**Goal:** deliver a ledger-first DSL that is ibis-native enough to export SQL, fast enough to run in notebooks (<1–2 s/update), and faithful to the event-sourcing model (every state is written/read via the ledger).
+📋 Context
+-----------
 
-**How:** combine (a) a reusable ``Ledger`` core with ``transaction()``/``session()`` helpers, (b) stage helpers that materialise snapshot/info/stat rows, and (c) either cached ibis plans or Python arithmetic, depending on the use case. Explicit DuckDB (or BigQuery) transactions keep updates in a single scope, and literal inserts avoid recursion.
+Ideally, event-sourced statistical analysis should be 100% "Ibis-native"—meaning every calculation is a lazy SQL expression derived from the ledger. This would provide perfect auditability and portability (SQL export).
 
-**Status:** With the current v21-style DSL (stage materialisation + Python arithmetic + transactions), we meet the performance (<~1.1 s), maintainability, and event-sourcing requirements. If we need ibis-native math for auditing, we can reintroduce cached plan templates (option 2 below) without changing the user-facing DSL.
+However, extensive experiments (see **History of Experiments** below) showed that a purely lazy, self-referential Ibis pipeline suffers from:
+2.  **Recursion limits**: Reading from the same table you insert into causes compile-time infinite recursion in some backends.
+3.  **Performance overhead**: Compiling massive SQL ASTs for every small update step takes tens of seconds, which is unacceptable for interactive notebooks (< 1-2s required).
 
-Current DSL recommendation
---------------------------
+We needed a DSL that balances **auditability** (event sourcing) with **performance** and **usability**.
 
-Based on the profiling work below, the most practical DSL today is a two-tier pattern
-built directly on the ``Ledger`` ecosystem:
+💡 Decision
+------------
 
-.. code-block:: python
+We adopted a **Transaction + Session** pattern that strictly separates "Reading" (Snapshotting) from "Writing" (Emitting), managed by explicit scope.
 
-    ledger = Ledger(con, "ledger_name", labels={"experiment_id": "exp"})  # setup elsewhere
+1.  **Strict State Separation**:
+    *   **Read Phase**: Load the latest state (Snapshot) from the ledger *before* the transaction logic.
+    *   **Compute Phase**: Perform statistical calculations in Python (fast) using the snapshot.
+    *   **Write Phase**: Emit new events (Artifacts) as literal values.
 
-    with ledger.transaction():              # single DuckDB transaction per update
-        snapshot_prev = snapshot_stage.latest_payload()
-        snapshot_next = {...}               # Python arithmetic, ledger-centric
-        with ledger.session() as sess:      # emits literal rows (observation, snapshot, info…)
-            snapshot_stage.emit_from_dict(sess, snapshot_next)
-            info_stage.emit_from_dict(sess, {"info_time": ...})
-            stat_stage.emit_from_dict(sess, {...})
-            # downstream operators (e.g., BinomialABTestV21) compose these pieces
+2.  **Explicit Scope with `ledger.transaction()`**:
+    *   We use a `with ledger.transaction():` context to ensure atomicity.
+    *   This wraps the entire update process in a single database transaction (e.g., `BEGIN ... COMMIT` in DuckDB), preventing implicit auto-commit overhead for every insert.
 
-Why both ``transaction()`` and ``session()``?
+3.  **Session Object for Writes (`write_session`)**:
+    *   We use a `with ledger.write_session(experiment_id) as sess:` context to ensure atomicity.
+    *   This wraps the entire update process in a single database transaction (e.g., `BEGIN ... COMMIT` in DuckDB).
+    *   The `sess` object provides a clean API for emitting events (`sess.add(event)`), handling metadata (UUID generation, timestamping) automatically.
 
-* ``transaction()`` issues ``BEGIN/COMMIT`` on the DuckDB connection so all reads/inserts share a single transaction; it is about **DB-level scope** and keeping the REPL fast (no implicit auto-commit per statement).
-* ``session()`` remains the insertion DSL: it normalises payloads (UUID/timestamp/version), enforces label scoping, and gives us a future hook to reintroduce queued inserts if we ever need lazy/batched writes again.
-
-The names reflect their roles (DB transaction vs. logical write session). We could merge them later, but keeping them separate makes it clear that users can open a read-only transaction without emitting rows, or emit rows outside an explicit transaction when they really need to. The recommended pattern is to nest them exactly once per update as shown above.
-
-Minimal backend-agnostic DSL
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To make this concrete, the DSL only needs a tiny abstraction layer so different backends (DuckDB, BigQuery, …) can share the same ``transaction/session/stage`` API:
+**Example Usage:**
 
 .. code-block:: python
 
-    class LedgerBackend(Protocol):
-        @contextmanager
-        def transaction(self):
-            ...
+    # 1. Read Phase (Load latest state outside transaction)
+    current_state = controller.get_latest_state(experiment_id)
 
-        def insert_rows(self, table: str, rows: list[dict[str, Any]]) -> None:
-            ...
+    # 2. Compute Phase
+    new_stat = compute_statistic(current_state, new_data)
 
+    # 3. Write Phase (Atomic)
+    with ledger.write_session(experiment_id) as sess:
+        sess.add(new_stat)
+        # ... emit other artifacts
 
-    @dataclass
-    class DuckDBBackend(LedgerBackend):
-        con: ibis.backends.BaseBackend
+✨ Consequences
+-----------------
 
-        @contextmanager
-        def transaction(self):
-            try:
-                self.con.raw_sql("BEGIN")
-                yield
-                self.con.raw_sql("COMMIT")
-            except Exception:
-                self.con.raw_sql("ROLLBACK")
-                raise
+**Positive:**
+*   **Performance**: Runtimes are kept under < 1s per update because we avoid compiling massive self-referential SQL trees.
+*   **Safety**: Explicit transactions prevent partial state updates.
+*   **Simplicity**: The Python-based "Compute Phase" is easier to debug and test than complex SQL-generating Ibis expressions.
 
-        def insert_rows(self, table: str, rows: list[dict[str, Any]]) -> None:
-            self.con.insert(table, rows)
+**Negative:**
+*   **Loss of "Pure SQL"**: We cannot export the entire analysis as a single SQL query. The "Compute Phase" logic lives in Python. (However, the *data* is still fully queryable via SQL).
 
 
-    @dataclass
-    class BigQueryBackend(LedgerBackend):
-        client: "google.cloud.bigquery.Client"
 
-        @contextmanager
-        def transaction(self):
-            tx = self.client.transaction()
-            tx.begin()
-            try:
-                yield
-            except Exception:
-                tx.rollback()
-                raise
-            else:
-                tx.commit()
+📚 Historical Context: Experiments & Tradeoffs
+----------------------------------------------
 
-        def insert_rows(self, table: str, rows: list[dict[str, Any]]) -> None:
-            self.client.insert_rows_json(table, rows)
-
-
-    class LedgerSession:
-        def __init__(self, backend: LedgerBackend, table_name: str, labels: dict[str, Any]):
-            self.backend = backend
-            self.table_name = table_name
-            self.labels = labels
-
-        def insert(self, kind: str, payload: dict[str, Any]) -> None:
-            now = datetime.utcnow()
-            row = dict(
-                id=str(uuid.uuid4()),
-                ts=now,
-                pkg_version=__version__,
-                kind=kind,
-                labels=json.dumps(self.labels),
-                payload=json.dumps(payload),
-            )
-            self.backend.insert_rows(self.table_name, [row])
-
-
-    @contextmanager
-    def ledger_session(ledger) -> Iterator[LedgerSession]:
-        session = LedgerSession(ledger.backend, ledger.table_name, ledger.labels)
-        yield session
-
-With this shim in place, the DSL stays identical across DuckDB and BigQuery—the only difference is the backend injected during ``Ledger`` construction.  All of the scripts discussed below ultimately desugar into this pattern.
+*This section records the experiments and trade-offs that led to the current decision, preserved exactly as recorded during the v1 design phase.*
 
 Desired properties and trade-offs
 ---------------------------------

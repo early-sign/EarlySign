@@ -5,11 +5,7 @@
 ADR-004: ibis-framework as the foundation of ledger implementation
 ================================================================
 
-.. note::
-    **Terminology Update**: The implementation class is named ``Ledger`` (in ``earlysign.core``), not ``LedgerDF``.
-    The design decision to use Ibis and JSON columns remains the foundation of the system.
-
-**Status**: **`Accepted`** | `Proposed` | `Deprecated` | `Superseded`
+**Status**: **`Accepted`**
 
 📋 Context
 -----------
@@ -47,7 +43,7 @@ EarlySign requires a backend-agnostic ledger system for event-sourced statistica
 
 - Leverage ibis-framework for backend-agnostic database operations
 - Store payloads and labels as JSON columns in a single base table
-- Implement LedgerDF as a thin wrapper around ibis TableExpr
+- Implement the ``Ledger`` as a thin wrapper around ibis TableExpr
 - Use direct JSON access patterns: `ledger.t.payload["key"]`
 - No strategy abstractions - single, simple persistence approach
 

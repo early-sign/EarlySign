@@ -5,11 +5,7 @@
 ADR-003: Event-Sourcing Pattern
 =====================================================
 
-.. note::
-    **Terminology Update**: The core Event Sourcing concepts described here are active, but specific class names and implementation details have evolved in ``v1``.
-    For example, ``HandleRegistry`` is not part of the current API (see ``earlysign.v1.framework`` for current patterns).
-
-**Status**: `Proposed` | **`Accepted`** | `Deprecated` | `Superseded`
+**Status**: **`Accepted`**
 
 📋 Context
 -----------
@@ -40,9 +36,16 @@ Event-sourcing provides an append-only ledger where all state changes are record
 
 **Reserved labels (labels reserved keys):**
 * **namespace** (required): Event logical space (e.g., "design"|"obs"|"stats"|"signals"|"ops")
-* **experiment_id**: Experiment scope. Auto-applied hierarchically via `HandleRegistry.bind(experiment_id=...)`
+* **experiment_id** / **ledger_id**: Experiment scope. Applied logically to partition the ledger.
 * **tag**: System or version branching (optional)
 * **Recommended**: project, env, user, group, etc.
+
+**Ledger Partitioning and Clustering (`ledger_id`):**
+
+To support high-performance analytical queries on large datasets (especially in BigQuery), the system uses a dedicated `ledger_id` column rather than relying solely on JSON label filters.
+*   **Performance**: Filtering by a dedicated top-level column is significantly faster and cheaper than parsing JSON attributes in data warehouses.
+*   **Clustering**: The physical table is clustered by `ledger_id`, allowing the database engine to prune irrelevant blocks during query execution.
+*   **Usage**: The `ledger_id` corresponds to the logical grouping of events (e.g., an `experiment_id`). It is automatically applied as a filter when querying via the `Ledger` instance.
 
 
 ✨ Consequences

@@ -1,303 +1,73 @@
-.. ADR-005: Four-Layer Architecture with Framework DSL
-.. :Date: 2025-09-19
+.. ADR-005: Architecture of EarlySign v1
+.. :Date: 2026-02-20
 
-===================================================
-ADR-005: Four-Layer Architecture with Framework DSL
-===================================================
+=========================================
+ADR-005: Architecture of EarlySign v1
+=========================================
 
-.. warning::
-    **Historical Document**: This ADR describes the architectural vision as of 2025-09-19.
-    While the "Four-Layer" concept remains relevant, the physical directory structure has evolved.
-    Specifically, logical components described under ``earlysign.stats`` are now located primarily in ``earlysign.v1.methods``.
-
-**Title**: Four-layer architecture with framework layer for implementation consistency
-
-**Status**: `Proposed` | **`Accepted`** | `Deprecated` | `Superseded`
+**Status**: **`Accepted`**
 
 📋 Context
 -----------
 
-EarlySign requires a flexible yet consistent architecture supporting various use cases:
+EarlySign provides a framework for rigorous statistical analysis (Group Sequential Testing, Anytime-Valid Inference) on top of an event-sourced ledger. The system needs a clear separation of concerns to support:
 
-* **Research users** need maximum flexibility for experimental statistical methods
-* **Algorithm developers** need structured patterns without excessive boilerplate
-* **Production users** need high-level, domain-oriented APIs
-
-The core ledger system (LedgerDF/Ledger) provides excellent foundational persistence but requires repetitive implementation patterns for consistency across statistical methods:
-
-* Manual label management and namespace coordination
-* Boilerplate handle management for ledger operations
-* Repetitive component wiring and dependency management
-* Inconsistent execution patterns across different statistical implementations
-
-The challenge is providing the right abstraction levels while maintaining thin, focused layers.
+1.  **Reliable Persistence**: A backend-agnostic ledger.
+2.  **Flexible Execution**: A graph-based runtime for reproducible statistical flows.
+3.  **Methodological Rigor**: Correct implementation of statistical designs.
+4.  **User Usability**: Simple, high-level interfaces for end users.
 
 💡 Decision
 ------------
 
-**Adopt a four-layer architecture with clear separation of concerns:**
+We adopt a **Four-Layer Architecture** for the v1 release:
 
-1. **core**: LedgerDF/Ledger and other persistence fundamentals with minimal abstraction (complete delegation to Ibis)
+1.  **Core (`earlysign.core`)**: Persistence & Primitives
+    *   **Responsibility**: Manages the `Ledger`, database connections (Ibis), and basic schema.
+    *   **Key Components**: `Ledger`, `LedgerSession`.
+    *   **Dependency**: Independent (depends only on external libraries like Ibis).
 
-2. **framework**: Label binding, handles, DI, and operator run conventions - a thin DSL that reduces implementation burden and ensures consistency without handling computational logic
+2.  **Framework (`earlysign.framework`)**: Runtime & Wiring
+    *   **Responsibility**: Defines the graph execution model, nodes, handles, and dependency injection.
+    *   **Key Components**: `Node`, `Graph`, `Handle`, `Runtime`.
+    *   **Dependency**: Depends on `core`.
 
-3. **stats**: Concrete statistical method implementations (Wald/OBF/Pocock, etc.) and gating/runner implementations using framework building blocks
+3.  **Methods (`earlysign.methods`)**: Statistical Implementations
+    *   **Responsibility**: Implements specific statistical designs using the framework.
+    *   **Key Components**:
+        *   `earlysign.methods.group_sequential` (GST)
+        *   `earlysign.methods.AVI` (Anytime-Valid Inference)
+    *   **Dependency**: Depends on `framework` (for execution) and `core` (for data).
+    *   *Note*: `earlysign.stats` exists as a shared library of pure statistical tools (e.g., Gaussian Processes) used by these methods.
 
-4. **api**: High-level APIs assembled with domain language for external users, combining framework + stats
+4.  **Controllers (`earlysign.controllers`)**: User Interface
+    *   **Responsibility**: Provides the high-level API for users to interact with the system. Acts as a facade that coordinates the lower layers.
+    *   **Key Components**: `GST_Spending_JennisonTurnbull2000`, `mSPRT_Johari2019`.
+    *   **Dependency**: Depends on `methods` and `core`.
 
-**Framework layer responsibilities:**
-* **Label binding**: Automated namespace management and consistent event labeling
-* **Handle abstraction**: Simplified ledger connection and query context management
-* **Dependency injection**: Lightweight patterns for component wiring and contracts
-* **Operator run conventions**: Standardized execution patterns and state management
+Layer Diagram
+~~~~~~~~~~~~~
 
-**Layer interactions:**
-```
-api (domain APIs)
-  ↓ uses
-stats (Wald, OBF, etc.)
-  ↓ uses building blocks from
-framework (labels, handles, DI, run patterns)
-  ↓ uses persistence from
-core (LedgerDF, Ledger → Ibis)
-```
+::
+
+    [ Controllers ]  (User Facing Facade)
+          |
+          v
+    [  Methods  ]  (Statistical Logic: GST, AVI)
+          |
+          v
+    [ Framework ]  (Execution Graph, Nodes, Handles)
+          |
+          v
+    [   Core    ]  (Ledger, Persistence, Ibis)
 
 ✨ Consequences
 -----------------
 
 **Positive:**
-
-* ✅ **Separation of concerns**: Each layer has focused responsibility - persistence, coordination, computation, and user interface
-* ✅ **Reduced implementation burden**: Framework DSL automates repetitive patterns for algorithm developers
-* ✅ **Consistency**: Label binding and run conventions ensure operational consistency across statistical methods
-* ✅ **Pluggability**: Stats implementations can be swapped using common framework interfaces
-* ✅ **Flexibility**: Users can choose appropriate abstraction level (core → framework → stats → api)
+*   **Clear Boundaries**: Users rely on Controllers, while method developers work in Methods/Framework.
+*   **Testability**: Each layer can be tested in isolation (e.g., Framework tests don't need statistical correctness, just graph correctness).
+*   **Extensibility**: New statistical methods can be added to `methods/` without changing the core runtime.
 
 **Negative:**
-
-* ⛔ **Layering complexity**: Four layers require careful interface design to avoid tight coupling
-* ⛔ **Framework scope risk**: Framework must stay "thin" and avoid computational responsibilities
-* ⛔ **Learning curve**: Developers need to understand layer boundaries and appropriate usage patterns
-
-**Neutral:**
-
-* Framework layer focuses purely on coordination patterns, not statistical computation
-* Architecture supports both research flexibility (core access) and production simplicity (api access)
-
-📋 Framework Design Details
----------------------------
-
-**Handle DI Pattern:**
-* **Handle responsibility**: Manages "event series concerns" (where/what/how to write/read)
-* **Operator responsibility**: Focuses only on "procedure logic" (what/when to compute/decide)
-* **Benefits**: Schema extensions (label additions, tag branching) and observation granularity changes can be handled by swapping Handles, improving Operator reusability
-* **Auto-binding**: Handles automatically apply namespace/payload_type/tag and compose bound labels during query/insert operations
-
-**run(di, **kwargs) Convention:**
-* **Unified interface**: All procedures (tests, aggregations, gates, runners) implement `run(di, **kwargs)` synchronous function
-* **Stateless design**: Dependencies on series/persistence obtained via `di.handle("name")` - no global state
-* **Return format**: Dictionary containing minimal sufficient statistics and associated metadata
-* **Persistence**: Results persisted via Handle to Ledger as needed for cross-process re-execution tolerance
-
-
-=========================================
-Further Details: EarlySign Code Layout and Layering (v1)
-=========================================
-
-Purpose
-=======
-
-This note explains *why* each top-level directory exists and *what*
-belongs where. It also codifies naming, docstring/doctest, and
-scheme-boundary rules so that future extensions remain consistent.
-
-High-Level Layers
-=================
-
-The repository is organized as a small stack of layers:
-
-- ``earlysign.core``:
-  Lowest-level persistence and primitives (e.g., ``Ledger``).
-  No domain logic; only storage, schema, and query helpers.
-
-- ``earlysign.framework``:
-  Reusable execution skeletons built **on top of** ``core``.
-  This is where orchestration helpers live, such as template bases that
-  wire multiple operators in a repeatable order.
-  (e.g., ``framework/templates.py``)
-
-- ``earlysign.stats``:
-  All statistical logic. It is split into:
-
-  * ``stats/common`` — **scheme-agnostic** building blocks
-    (operators + records) reusable across multiple schemes.
-    Common is further divided by *framework family*:
-
-    - ``stats/common/group_sequential``: information time, boundary builders
-      (alpha-spending, significance-level), and the generic decision operator.
-    - ``stats/common/anytime_valid``: e-process increments (mixture, coin-betting),
-      accumulation, Ville criterion, and the generic decision operator.
-
-    **Rule:** nothing in ``stats/common`` may assume a specific data
-    shape such as "two proportions" or "one-sample continuous".
-
-  * ``stats/schemes`` — **scheme-specific** glue that connects data
-    sufficient statistics to the common building blocks.
-    Examples of scheme granularity:
-    "two_proportions" (two-sample binary outcomes),
-    "one_sample_continuous" (one-sample mean).
-
-- ``earlysign.templates``:
-  Concrete *procedural* templates that hide multi-operator flows behind
-  a simple ``step(...)`` API. Each template corresponds to a practical
-  procedure combining several stats operators (similar in spirit to
-  the examples in ``test_framework.py``).
-
-- ``earlysign.templates``:
-  Ready-to-use facades. Public vocabulary here follows domain phrasing:
-  - **Interim Analysis** for Group Sequential procedures
-  - **Safe Testing** for Anytime-Valid (Ville) procedures
-
-Directory Tree (Essentials)
-===========================
-
-::
-
-
-  earlysign/
-    core/
-    framework/
-      templates.py        # Abstract base for concrete templates
-      __init__.py              # Docstring-only (see policy below)
-    stats/
-      common/
-        group_sequential/
-          info_time.py         # InformationTime operator (scheme-agnostic)
-          alpha_spending.py    # Lan–DeMets OBF/Pocock boundary builders
-          significance_level.py# Per-look α allocation → Z boundaries
-          decision.py          # Generic z-vs-boundary decision
-          records.py           # InfoTime/Boundary/DecisionSignal records
-          __init__.py
-        anytime_valid/
-          mixture_e.py         # Mixture-based e-increment (scheme-agnostic)
-          coin_betting.py      # Coin-betting e-increment (scheme-agnostic)
-          accumulate.py        # CumulativeE (with log-stability)
-          ville.py             # Ville threshold + decision
-          records.py           # EIncrement/ECumulative/Ville* records
-          __init__.py
-      schemes/
-        two_proportions/
-          records.py           # Binomial counts (nA,mA,nB,mB,look)
-          statistics.py        # WaldZ, ScoreZ (scheme-specific)
-          group_sequential.py  # Wires stats → common/group_sequential
-          anytime_valid.py     # Wires stats → common/anytime_valid
-          __init__.py
-        one_sample_continuous/
-          records.py           # n, sum, sum_sq, look
-          statistics.py        # Z (σ known), T (σ unknown)
-          group_sequential.py
-          anytime_valid.py
-          __init__.py
-      __init__.py
-    templates/
-      interim_two_proportions.py          # IA wrapper for two_proportions
-      interim_one_sample_continuous.py    # IA wrapper for one_sample_continuous
-      safe_two_proportions_ville.py       # Safe/Ville wrapper for two_proportions
-      safe_one_sample_continuous_ville.py # Safe/Ville wrapper for one_sample_continuous
-      __init__.py
-    api/
-      ab_testing.py              # Public: "Interim Analysis"
-      guardrail.py               # Public: "Safe Testing" (Ville)
-      __init__.py
-
-Vocabulary and Naming
-=====================
-
-- In ``earlysign.templates``:
-  - Use **Interim Analysis** (IA) to refer to Group Sequential methods.
-  - Use **Safe Testing** to refer to Anytime-Valid (Ville) methods.
-
-- In ``earlysign.stats``:
-  - Family names are **group_sequential** and **anytime_valid**.
-  - Anytime-Valid stopping criteria must include **"Ville"** in class or
-    record names where the criterion is implemented (e.g., ``VilleCriterion``,
-    ``VilleDecisionSignal``).
-
-Separation of Concerns
-======================
-
-- ``stats/common``:
-  - Implements *framework-level* primitives (information time, alpha spending,
-    significance-level conversion to Z-boundaries, e-increments, accumulation,
-    Ville threshold/decision). These are **data-shape agnostic**.
-  - May expose operator options (e.g., OBF vs Pocock, stake schedules) but
-    must not depend on scheme-specific statistics or payload fields.
-
-- ``stats/schemes/<scheme>/statistics.py``:
-  - Produces the scheme-specific statistics needed by common operators
-    (e.g., Wald Z, Score Z for two_proportions; Z/T for one_sample_continuous).
-
-- ``stats/schemes/<scheme>/group_sequential.py``:
-  - *Glue* that computes the statistic and then invokes
-    ``common/group_sequential`` operators in order:
-    statistic → information time → boundary → decision.
-
-- ``stats/schemes/<scheme>/anytime_valid.py``:
-  - *Glue* that calculates e-increments via
-    ``common/anytime_valid`` (mixture/coin-betting), accumulates,
-    and applies the Ville criterion/decision.
-
-- ``templates``:
-  - Provide a concise ``step(...)`` surface, encapsulating the multi-operator
-    flow; they rely on ``framework/templates.py`` for repetitive mechanics.
-
-- ``api``:
-  - Presents end-user friendly facades using domain terms
-  (Interim Analysis / Safe Testing), delegating to templates.
-
-Docstrings, Doctests, and Comments
-==================================
-
-- **Comments**: English only.
-- **Docstrings**: Each module and public class/function should include
-  a docstring with a short doctest that demonstrates the *intended flow*.
-- **Module-level docstrings**: Recommended—summarize purpose and show a
-  tiny end-to-end doctest (e.g., computing a boundary or an e-threshold).
-
-``__init__.py`` Policy
-======================
-
-- Include ``__init__.py`` files **solely** to host a module-level docstring
-  (for documentation build and discoverability).
-- Do **not** re-export with ``__all__`` or perform import globs.
-- Keep them free of logic and imports to avoid accidental coupling.
-
-Example Flows (Conceptual)
-==========================
-
-- **Interim Analysis (Group Sequential)**
-
-  ``Counts/StatsInputs → Statistic (WaldZ/ScoreZ or Z/T)
-   → InformationTime → Boundary(OBF/Pocock or SigLevel) → Decision``
-
-- **Safe Testing (Anytime-Valid, Ville)**
-
-  ``Counts/StatsInputs → e-increment (mixture or coin-betting)
-   → cumulative e → Ville threshold (1/α) → Ville decision``
-
-Extending With a New Scheme
-===========================
-
-1. Create ``stats/schemes/<new_scheme>/{records.py,statistics.py}``.
-2. Implement ``group_sequential.py`` and ``anytime_valid.py`` by *wiring*
-   your statistics to the common operators.
-3. Add a matching template in ``earlysign/templates`` that exposes a
-   single-step interface (and a small doctest).
-4. Optionally add API sugar if the scheme should be public-facing.
-
-Non-Goals
-=========
-
-- No scheme-specific payload structures inside ``stats/common``.
-- No re-exports or convenience imports in ``__init__.py``.
-- No visualization or reporting in ``stats``; keep that at API or higher.
+*   **bureaucracy**: Simple tasks might require traversing multiple layers (e.g., exposing a new statistic from Core to Controller).

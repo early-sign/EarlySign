@@ -1,28 +1,55 @@
-.. ADR-008: RDBモデルを使用しなかった理由
+.. ADR-008: Decision Against Using RDB/MVC Models
 .. :Date: 2026-02-06
+.. :Updated: 2026-02-20
 
-=======================================
-ADR-008: RDBモデルを使用しなかった理由
-=======================================
+================================================
+ADR-008: Decision Against Using RDB/MVC Models
+================================================
 
 **Status**: **`Accepted`**
 
 📋 Context
 -----------
-Ledgerへのread/writeモデルとして、（MVCで言うModelのような）を使うことも考えられました。
+In the early stages, we considered using RDB-like entity designs (similar to Models in MVC architecture) as the read/write mechanism for the Ledger.
 
-しかし、このread/writeをMVC的なモデルに担わせる実装を試みたところ、同じモデルの継時的な変化の扱いや、読み取りの対象が「最新の状態」とは限らないといった点で概念的な整理の難しさが生じました。
+However, attempting to implement this read/write capability using MVC-style models led to significant conceptual difficulties. Tracking the chronological changes of the same model and determining whether the read target represented the "latest state" proved challenging to organize conceptually.
+
+Furthermore, this approach introduced severe adverse effects on the physical directory structure of the codebase (see Historical Context below).
 
 💡 Decision
 ------------
-RDBモデル（MVC的なモデル）を使用せず、CQRSでいう「さまざまなprojectionを作る」という読み取りモデルを採用することとしました。
-
-この移行により、上述の概念的な整理の難しさが解消されました。
+We decided against using RDB models (MVC-style models). Instead, we adopted an Event Sourcing approach (an append-only Ledger) for writing data, paired with a Command Query Responsibility Segregation (CQRS) model for reading, which generates various "projections" as needed.
 
 ✨ Consequences
 -----------------
 **Positive:**
-* 継時的な変化の扱いや、読み取り対象の状態（最新かどうか）に関する概念的な整理が容易になった。
+* Simplifies the conceptual organization of chronological changes and the determination of state freshness.
+* Resolves the over-complicated directory hierarchy, enabling a flat, domain-based structure.
 
 **Negative:**
-* (特になし)
+* (None specifically identified)
+
+📚 Historical Context: Hypothesis on Hierarchical Complexity (Lessons from Legacy ADR-002)
+-----------------------------------------------------------------------------------------
+During the initial design phase (the era of the obsolete ADR-002), our attempt to apply strict MVC/RDB-like models resulted in incredibly deep, convoluted, and chaotic directory hierarchies within `stats` and `methods`. For example:
+
+::
+
+    /design/initial_design/{records,operations,...}
+    /execution/binomial/{records,operations,...}
+
+**Why did this complexity occur? (Hypothesis)**
+
+When trying to strictly build RDB/MVC-style state models, developers are forced to represent the intersection of multiple dimensions as physical files, directories, or classes. These dimensions included:
+
+1. **Temporal State**: Is the system in the `design` phase or the `execution` phase?
+2. **Statistical Domain**: Is the underlying distribution `binomial` or `continuous`?
+3. **Model Component**: Are we handling data state (`records`) or behavior (`operations`)?
+
+Attempting to statically and strictly separate all these dimensions as types or table schemas triggered a combinatorial explosion: (Temporal Phase) × (Statistical Domain) × (Component). This resulted in unnecessarily deep and fragmented directory structures.
+
+**Resolution via Event Sourcing + CQRS**
+
+By adopting Event Sourcing and CQRS, we successfully removed the "Temporal State" dimension from the file structure. Any state transition is merely appended as an event to the Ledger. The current state (whether in the design or execution phase) is dynamically fully reconstructed as a Projection only when needed. 
+
+As a result, we were able to reorganize the codebase into natural, domain-centric units (e.g., the current `earlysign/methods` structure).
