@@ -1,14 +1,17 @@
-from typing import Any
+from typing import Any, Optional
+
+import ibis
 
 import earlysign.schema.ES3.Base as ES3_BASE
+from earlysign.framework.entity import Entity, Snapshot
+from earlysign.framework.projector import ProjectionResult
+from earlysign.framework.trace import TraceId
+from earlysign.methods.YEAST.adapters import BinomialAdapter, ContinuousAdapter
+from earlysign.methods.YEAST.core import BoundaryModel, TrajectoryModel
 from earlysign.schema.ES3.Binomial import (
-    ArmMetrics as BinomialArmMetrics,
-    ArmStatus as BinomialArmStatus,
     Scoreboard as BinomialScoreboard,
 )
 from earlysign.schema.ES3.Continuous import (
-    ArmMetrics as ContinuousArmMetrics,
-    ArmStatus as ContinuousArmStatus,
     Scoreboard as ContinuousScoreboard,
 )
 from earlysign.schema.ES3.YEAST import Protocol
@@ -19,12 +22,81 @@ from earlysign.schema.ES3.YEAST.Log import (
 )
 
 
+class Boundary(Entity[BoundarySchema]):
+    """
+    Entity representing the fixed testing boundary for YEAST.
+    """
+
+    data_type = BoundarySchema
+
+    @property
+    def initial_value(self) -> BoundarySchema:
+        import warnings
+
+        warnings.warn(
+            "YEAST boundary value has not been properly set. Returning an ineffective boundary.",
+            UserWarning,
+        )
+        return BoundarySchema(value=None)
+
+    @classmethod
+    def calculate(cls, protocol: Protocol) -> float:
+        return BoundaryModel.calculate_boundary_value(protocol)
+
+    def compute(
+        self,
+        snapshot: Optional[Snapshot[BoundarySchema]],
+        delta_expr: ibis.Expr,
+        full_table: ibis.Expr,
+    ) -> ProjectionResult[BoundarySchema]:
+        """
+        Projects the Boundary state from the event stream.
+        Logic: Use the latest 'Boundary' payload if available, else retain snapshot.
+        """
+        # Filter for Boundary updates
+        boundary_updates = delta_expr.filter(delta_expr.type == "Boundary")
+
+        # Get latest update
+        latest_df = (
+            boundary_updates.order_by(ibis.desc("timestamp"))
+            .limit(1)
+            .select("uuid", "payload")
+            .execute()
+        )
+
+        if not latest_df.empty:
+            # Found a new boundary update
+            row = latest_df.iloc[0]
+            record_uuid = str(row["uuid"])
+            payload = row["payload"]
+
+            if isinstance(payload, str):
+                import json
+
+                payload = json.loads(payload)
+
+            new_data = BoundarySchema.model_validate(payload)
+
+            # Trace lineage
+            trace = [TraceId(record_uuid)]
+            if snapshot and snapshot.uuid:
+                trace.insert(0, TraceId(str(snapshot.uuid)))
+
+            return ProjectionResult(data=new_data, trace=trace)
+
+        if snapshot:
+            # No update, keep existing
+            return ProjectionResult(
+                data=snapshot.data, trace=[TraceId(str(snapshot.uuid))]
+            )
+
+        # No snapshot and no update -> Default state
+        return ProjectionResult(data=self.initial_value, trace=[])
+
+
 class BinomialYEASTEngine:
     """
     Orchestrator for Binomial YEAST execution.
-
-    Calculates the trajectory (difference in successes) and compares it against
-    the pre-calculated fixed boundary.
     """
 
     def __init__(self, protocol: Protocol):
@@ -38,13 +110,6 @@ class BinomialYEASTEngine:
     ) -> LookResult:
         """
         Computes the test result given current summary statistics.
-
-        Args:
-            metrics: Scoreboard containing the aggregated metrics for all arms.
-            boundary: The current boundary schema containing the threshold value.
-
-        Returns:
-            LookResult containing the trajectory, boundaries, and status.
         """
         # Extract arm names
         arms_struct = self.protocol.task.arms
@@ -56,23 +121,14 @@ class BinomialYEASTEngine:
                 f"YEAST engine requires TwoArmComparison, but got {type(arms_struct).__name__}."
             )
 
-        default_arm = BinomialArmStatus(
-            metrics=BinomialArmMetrics(total=0, successes=0, p_hat=0.0), is_active=True
+        n_c, n_t, success_c, success_t = BinomialAdapter.extract_stats(
+            metrics, control_key, treatment_key
         )
-        summary_c = metrics.arms.get(control_key, default_arm).metrics
-        summary_t = metrics.arms.get(treatment_key, default_arm).metrics
+        cumulative_n = n_c + n_t
+        raw_diff = float(success_t - success_c)
 
-        cumulative_n = summary_c.total + summary_t.total
-        raw_diff = float(summary_t.successes - summary_c.successes)
-
-        # Standardized trajectory: S_n / sqrt(n_effective)
-        # where n_effective = 2 / (1/n_c + 1/n_t)
-        # For equal n, n_effective = n_per_arm.
-        if summary_c.total > 0 and summary_t.total > 0:
-            n_eff = 2.0 / (1.0 / summary_c.total + 1.0 / summary_t.total)
-            trajectory = raw_diff / (n_eff**0.5)
-        else:
-            trajectory = 0.0
+        # Standardized trajectory
+        trajectory = TrajectoryModel.calculate_trajectory(n_c, n_t, raw_diff)
 
         # Use the passed boundary value
         boundary_val = boundary.value
@@ -104,9 +160,6 @@ class BinomialYEASTEngine:
 class ContinuousYEASTEngine:
     """
     Orchestrator for Continuous YEAST execution.
-
-    Calculates the trajectory (difference in sums) and compares it against
-    the pre-calculated fixed boundary.
     """
 
     def __init__(self, protocol: Protocol):
@@ -130,23 +183,14 @@ class ContinuousYEASTEngine:
                 f"YEAST engine requires TwoArmComparison, but got {type(arms_struct).__name__}."
             )
 
-        default_arm = ContinuousArmStatus(
-            metrics=ContinuousArmMetrics(total=0, mean=0.0, variance=0.0),
-            is_active=True,
+        n_c, n_t, mean_c, mean_t = ContinuousAdapter.extract_stats(
+            metrics, control_key, treatment_key
         )
-        summary_c = metrics.arms.get(control_key, default_arm).metrics
-        summary_t = metrics.arms.get(treatment_key, default_arm).metrics
+        cumulative_n = n_c + n_t
+        raw_diff = (mean_t * n_t) - (mean_c * n_c)
 
-        cumulative_n = summary_c.total + summary_t.total
-        raw_diff = (summary_t.mean * summary_t.total) - (
-            summary_c.mean * summary_c.total
-        )
-
-        if summary_c.total > 0 and summary_t.total > 0:
-            n_eff = 2.0 / (1.0 / summary_c.total + 1.0 / summary_t.total)
-            trajectory = raw_diff / (n_eff**0.5)
-        else:
-            trajectory = 0.0
+        # Standardized trajectory
+        trajectory = TrajectoryModel.calculate_trajectory(n_c, n_t, raw_diff)
 
         boundary_val = boundary.value
         is_crossed = False

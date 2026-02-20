@@ -8,7 +8,7 @@ from earlysign.framework.controller import Controller
 from earlysign.framework.entity import SimpleSequentialEntity
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
-from earlysign.methods.AVI.engines.sequential_quantile import (
+from earlysign.methods.AVI.engine import (
     SequentialQuantileEngine,
 )
 from earlysign.schema.ES3.AVI import (
@@ -82,19 +82,30 @@ class HowardRamdas2022Controller(Controller[Protocol]):
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.controllers.SequentialQuantile_HowardRamdas2022 import HowardRamdas2022Controller
     >>> con = ibis.duckdb.connect(":memory:")
+    >>> # Scenario:
+    >>> # You are an SRE at Acme Corp monitoring the P99 latency of a search service.
+    >>> # You need a guarantee that the P99 latency of the new canary (v2) has not degraded
+    >>> # significantly compared to stable (v1).
+    >>>
     >>> ledger = Ledger(con, "events_sq"); ledger.ensure()
     >>> controller = HowardRamdas2022Controller(ledger)
     >>> protocol = controller.design(
-    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
-    ...     quantile=0.5,
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="v1_stable", treatment_arm_name="v2_canary"),
+    ...     quantile=0.99,  # Monitoring P99
     ...     alpha=0.05
     ... )
     >>> controller.set_protocol(protocol)
-    >>> t = con.create_table("raw_data_sq", {"arm": ["A", "A", "B", "B"], "val": [1.0, 2.0, 10.0, 11.0]})
-    >>> controller.update({"A": t.filter(t.arm == "A"), "B": t.filter(t.arm == "B")})
+    >>>
+    >>> # Simulating Latency Data (ms)
+    >>> # v1 is stable around 150ms, v2 has a regression (spikes to 300ms)
+    >>> t = con.create_table("raw_latency", {
+    ...     "arm": ["v1_stable", "v1_stable", "v2_canary", "v2_canary"],
+    ...     "val": [140.0, 160.0, 250.0, 350.0]
+    ... })
+    >>> controller.update({"v1_stable": t.filter(t.arm == "v1_stable"), "v2_canary": t.filter(t.arm == "v2_canary")})
     >>> res = controller.report_result()
-    >>> print(f"Est: {res['estimated_quantile']:.2f}, CI: [{res['interval_lower']:.2f}, {res['interval_upper']:.2f}]")
-    Est: 11.00, CI: [10.00, 11.00]
+    >>> print(f"Est P99 (Canary): {res['estimated_quantile']:.2f}, CI: [{res['interval_lower']:.2f}, {res['interval_upper']:.2f}]")
+    Est P99 (Canary): 350.00, CI: [250.00, 350.00]
     >>> print(f"Status: {res['status']}")
     Status: stop_detected
     >>> # Note: The intervals are disjoint (A approx [1, 2], B=[10, 11]), so we stop for efficacy (flag raised).
@@ -196,9 +207,11 @@ class HowardRamdas2022Controller(Controller[Protocol]):
                 n_res = table.count().execute()
                 n = int(n_res) if n_res is not None else 0
 
+                from earlysign.methods.AVI.core import QuantileModel
+
                 # b. Get ranks from Engine
-                l_rank, u_rank = SequentialQuantileEngine.get_confidence_interval_ranks(
-                    n, method
+                l_rank, u_rank = QuantileModel.get_confidence_interval_ranks(
+                    n, method.quantile, method.alpha
                 )
 
                 # c. Calculate values

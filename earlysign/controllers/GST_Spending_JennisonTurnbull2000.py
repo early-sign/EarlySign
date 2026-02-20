@@ -15,6 +15,7 @@ Example:
     >>> import earlysign.schema.ES3.GST as GST
     >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
     >>> from earlysign.tests.util import BinomialStream
+    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>> import numpy as np
     >>> # Setup
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -22,9 +23,15 @@ Example:
     >>> ledger.ensure()
     >>> ledger = ledger.bind(experiment_id="example_001")
     >>>
-    >>> # Design
+    >>> # Scenario:
+    >>> # You are a Product Manager at Acme Corp launching a new checkout flow (v2).
+    >>> # You hope to increase the "Payment Success Rate" by 5% (absolute) over the baseline (v1).
+    >>> # You have a fixed budget for 4 weeks of testing, with interim analyses every week
+    >>> # to potentially stop early for overwhelming efficacy (shipping the win) or futility (saving traffic).
+    >>>
+    >>> # Design: 4 looks (weekly), target lift 20% -> 25% (Huge win)
     >>> protocol = JennisonTurnbull2000Controller.design(
-    ...     p_control=0.20, p_treatment=0.25, alpha=0.05, power=0.8, looks=2,
+    ...     p_control=0.20, p_treatment=0.25, alpha=0.05, power=0.8, looks=4,
     ...     method="simulation"
     ... )
     >>>
@@ -32,16 +39,24 @@ Example:
     >>> controller = JennisonTurnbull2000Controller(ledger, rng_seed=42)
     >>> controller.set_protocol(protocol)
     >>>
-    >>> stream = BinomialStream(n_per_batch=600, arms={"control": 0.20, "treatment": 0.25}, n_max=13000, seed=42)
-    >>> for batch in stream:
-    ...     controller.update(batch)
-    ...     prog = controller.report_progress()
-    ...     if prog['is_milestone']:
-    ...         print(f"Look {prog['look']}: Z={prog['z_stat']:.2f}, Boundary={prog['efficacy_boundary']:.2f}")
-    ...     if prog['status'] != DecisionStatus.CONTINUE_:
-    ...         break
-    Look 1: Z=0.70, Boundary=1.95
-    Look 2: Z=1.89, Boundary=1.73
+    >>> # Simulate Weekly Batches
+    >>> # We manually define batches to show the progression towards a "win".
+    >>> # Week 1: 300 users, slight lift (20% vs 23%) -> Continue
+    >>> # Week 2: 300 users, strong lift (20% vs 28%) -> Significance!
+    >>> batch_w1 = [BinomialArmData(total=300, success=60, arm="control"), BinomialArmData(total=300, success=69, arm="treatment")]
+    >>> batch_w2 = [BinomialArmData(total=300, success=60, arm="control"), BinomialArmData(total=300, success=84, arm="treatment")]
+    >>>
+    >>> # Update Week 1
+    >>> controller.update(batch_w1)
+    >>> prog = controller.report_progress()
+    >>> print(f"Week 1: Z={prog['z_stat']:.2f}, Status={prog['status']}")
+    Week 1: Z=0.89, Status=continue
+    >>>
+    >>> # Update Week 2
+    >>> controller.update(batch_w2)
+    >>> prog = controller.report_progress()
+    >>> print(f"Week 2: Z={prog['z_stat']:.2f}, Status={prog['status']}")
+    Week 2: Z=2.27, Status=stop_efficacy
     >>>
     >>> final = controller.report_result()
     >>> print(f"Final Status: {final['final_status']}")

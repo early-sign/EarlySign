@@ -55,25 +55,32 @@ class BinomialKurennoy2025Controller(Controller[Protocol]):
         >>> from earlysign.controllers.YEAST_Kurennoy2025 import BinomialKurennoy2025Controller, BinomialKurennoy2025TaskSpec
         >>> from earlysign.schema.ES3.Binomial import BinomialArmData
 
+        >>> # Scenario:
+        >>> # You are an ML Engineer at Acme Corp monitoring a new ad-bidding model (v2) against the incumbent (v1).
+        >>> # You need to detect if v2's "win rate" is significantly better or worse than v1.
+        >>>
         >>> # Setup
         >>> conn = ibis.connect("duckdb://:memory:")
         >>> ledger = Ledger(conn, "events")
         >>> ledger.ensure()
-        >>> ledger = ledger.bind(experiment_id="doctest_yeast_bin")
+        >>> ledger = ledger.bind(experiment_id="acme_ad_bidding_v2")
         >>> controller = BinomialKurennoy2025Controller(ledger)
-
+        >>>
         >>> # 1. Design
         >>> task = BinomialKurennoy2025TaskSpec(
-        ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
+        ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="v1_incumbent", treatment_arm_name="v2_challenger"),
         ...     hypotheses={}
         ... )
         >>> protocol = controller.design(task, significance_level=0.05, expected_num_observations=1000, estimated_variance=0.25)
         >>> controller.set_protocol(protocol)
-
-        >>> # 2. Update
-        >>> batch = [BinomialArmData(total=100, success=20, arm="A"), BinomialArmData(total=100, success=25, arm="B")]
+        >>>
+        >>> # 2. Update (Day 1 Telemetry)
+        >>> batch = [
+        ...     BinomialArmData(total=100, success=20, arm="v1_incumbent"),
+        ...     BinomialArmData(total=100, success=25, arm="v2_challenger")
+        ... ]
         >>> controller.update(batch)
-
+        >>>
         >>> # 3. Report
         >>> res = controller.report_progress()
         >>> print(f"Evidence (Trajectory): {res['trajectory']:.4f}")
@@ -151,7 +158,7 @@ class BinomialKurennoy2025Controller(Controller[Protocol]):
             if protocol.method.boundary_sequence:
                 boundary_val = protocol.method.boundary_sequence[0]
             else:
-                from earlysign.methods.YEAST.boundary import Boundary
+                from earlysign.methods.YEAST.engine import Boundary
 
                 boundary_val = Boundary.calculate(protocol)
 
@@ -279,7 +286,7 @@ class ContinuousKurennoy2025Controller(Controller[Protocol]):
             if protocol_traced.data.method.boundary_sequence:
                 boundary_val = protocol_traced.data.method.boundary_sequence[0]
             else:
-                from earlysign.methods.YEAST.boundary import Boundary
+                from earlysign.methods.YEAST.engine import Boundary
 
                 boundary_val = Boundary.calculate(protocol_traced.data)
 
