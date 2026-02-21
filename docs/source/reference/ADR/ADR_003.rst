@@ -1,68 +1,79 @@
-.. ADR-003: Event-Sourcing Pattern
-.. :Date: 2025-09-19
+.. ADR-003: ibis-framework as the foundation of ledger implementation
+.. :Date: 2025-01-18
 
-=====================================================
-ADR-003: Event-Sourcing Pattern
-=====================================================
+================================================================
+ADR-003: ibis-framework as the foundation of ledger implementation
+================================================================
 
 **Status**: **`Accepted`**
 
 📋 Context
 -----------
 
-EarlySign statistical analysis requires reproducible, auditable computation across distributed processes. The system must support:
+EarlySign requires a backend-agnostic ledger system for event-sourced statistical analysis. The ledger must support JSON-based payloads and labels while maintaining compatibility across multiple database backends (DuckDB, Polars, BigQuery, etc.).
 
-* **Reproducibility**: Statistical procedures must be re-executable and yield consistent results
-* **Auditability**: Complete trace of observations, computations, and decisions
-* **Distributed execution**: Stateless processes operating on shared event history
-* **Schema evolution**: Flexible metadata and labeling as statistical methods evolve
+**Design requirements:**
+* Backend-agnostic data operations supporting multiple database systems
+* JSON column storage for flexible payload and metadata structures
+* Consistent query interface across all supported backends
+* Simple, maintainable architecture without unnecessary abstractions
+* Direct integration with statistical analysis workflows
 
-Event-sourcing provides an append-only ledger where all state changes are recorded as immutable events, enabling reconstruction of system state at any point in time.
+**Alternative approaches considered:**
 
-**Label consistency challenges:**
-* Manual namespace management leads to inconsistent event categorization
-* Ad-hoc labeling creates difficulties in querying and aggregating related events
-* Schema extensions require careful coordination to maintain backward compatibility
+1. **SQLAlchemy-based approach**: Traditional ORM with typed models
+   - ❌ Limited JSON support across backends
+   - ❌ Heavy ORM overhead for analytical workloads
+   - ❌ Backend-specific SQL dialects cause portability issues
+
+2. **Strategy pattern with multiple persistence layers**: Abstract strategy classes for different storage approaches
+   - ❌ Adds architectural complexity without clear benefits
+   - ❌ Strategy switching creates inconsistent interfaces
+   - ❌ Over-engineering for single JSON-based requirement
+
+3. **Custom backend abstraction layer**: Build proprietary database abstraction
+   - ❌ Reinventing existing solutions (ibis already solves this)
+   - ❌ Significant development and maintenance burden
+   - ❌ Limited ecosystem compared to mature alternatives
 
 💡 Decision
 ------------
 
-**Adopt event-sourcing with standardized label conventions for consistent metadata management.**
+**Use ibis-framework as the foundation with direct JSON column persistence.**
 
-**Event-sourcing implementation:**
-* All state changes recorded as immutable events in append-only ledger
-* System state reconstructed by replaying event history
-* Stateless computational processes with all state persisted in ledger
+- Leverage ibis-framework for backend-agnostic database operations
+- Store payloads and labels as JSON columns in a single base table
+- Implement the ``Ledger`` as a thin wrapper around ibis TableExpr
+- Use direct JSON access patterns: `ledger.t.payload["key"]`
+- No strategy abstractions - single, simple persistence approach
 
-**Reserved labels (labels reserved keys):**
-* **namespace** (required): Event logical space (e.g., "design"|"obs"|"stats"|"signals"|"ops")
-* **experiment_id** / **ledger_id**: Experiment scope. Applied logically to partition the ledger.
-* **tag**: System or version branching (optional)
-* **Recommended**: project, env, user, group, etc.
+**Architecture:**
+```python
+# JSON column access through ibis
+result = ledger.t.select("uuid", ledger.t.payload["key"], ledger.t.labels["exp_id"])
 
-**Ledger Partitioning and Clustering (`ledger_id`):**
-
-To support high-performance analytical queries on large datasets (especially in BigQuery), the system uses a dedicated `ledger_id` column rather than relying solely on JSON label filters.
-*   **Performance**: Filtering by a dedicated top-level column is significantly faster and cheaper than parsing JSON attributes in data warehouses.
-*   **Clustering**: The physical table is clustered by `ledger_id`, allowing the database engine to prune irrelevant blocks during query execution.
-*   **Usage**: The `ledger_id` corresponds to the logical grouping of events (e.g., an `experiment_id`). It is automatically applied as a filter when querying via the `Ledger` instance.
-
+# Direct persistence operations
+ledger.append_rows(rows)
+ledger.ensure()
+```
 
 ✨ Consequences
 -----------------
 
 **Positive:**
-* ✅ **Reproducibility**: Complete event history enables exact reconstruction of any analysis state
-* ✅ **Auditability**: Full trace of computational decisions and intermediate results
-* ✅ **Consistency**: Reserved label conventions prevent namespace collisions and categorization errors
-* ✅ **Schema flexibility**: Label conventions support evolution while maintaining query compatibility
-* ✅ **Distributed processing**: Stateless processes can operate independently using shared event history
+* Full backend compatibility across ibis-supported databases
+* Consistent JSON operations regardless of backend choice
+* Simple, maintainable architecture without over-abstraction
+* Excellent performance leveraging ibis optimizations
+* Rich ecosystem integration with ibis-compatible tools
+* Clear operational boundaries between wrapper and ibis operations
 
 **Negative:**
-* ⛔ **Storage overhead**: Event-sourcing requires more storage than state-based approaches
-* ⛔ **Query complexity**: Historical reconstruction may require complex event replay logic
-* ⛔ **Label discipline**: Reserved label conventions require developer awareness and compliance
+* JSON column approach may be less performant than typed columns for some analytical queries
+* No automatic schema validation at persistence layer
+* Users must handle JSON type casting explicitly in complex queries
+* Limited to single persistence approach (though this matches requirements)
 
 **Neutral:**
-* Event immutability trades update flexibility for consistency guarantees
-* Label standardization constrains naming freedom but improves system coherence
+* Architectural decisions favor simplicity over theoretical flexibility
+* JSON-first approach aligns with event-sourcing patterns commonly used in statistical analysis

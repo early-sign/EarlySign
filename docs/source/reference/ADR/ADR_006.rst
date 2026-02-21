@@ -1,396 +1,45 @@
-.. ADR-006: Ledger DSL: Transactions and Sessions
-.. :Date: 2026-02-20
-
-==================================================
-ADR-006: Ledger DSL: Transactions and Sessions
-==================================================
-
-**Status**: **`Accepted`**
+ADR-006: Selection of Schema Management and Pydantic Generation Strategy
+======================================================================
 
 📋 Context
 -----------
+The EarlySign Standard Schema (ES3) requires a robust technical foundation for defining cross-domain clinical trial protocols and generating type-safe Python SDKs. The primary requirements were:
 
-Ideally, event-sourced statistical analysis should be 100% "Ibis-native"—meaning every calculation is a lazy SQL expression derived from the ledger. This would provide perfect auditability and portability (SQL export).
-
-However, extensive experiments (see **History of Experiments** below) showed that a purely lazy, self-referential Ibis pipeline suffers from:
-2.  **Recursion limits**: Reading from the same table you insert into causes compile-time infinite recursion in some backends.
-3.  **Performance overhead**: Compiling massive SQL ASTs for every small update step takes tens of seconds, which is unacceptable for interactive notebooks (< 1-2s required).
-
-We needed a DSL that balances **auditability** (event sourcing) with **performance** and **usability**.
+1. **Schema-First Workflow**: Single source of truth for protocol definitions.
+2. **Human-Readable Syntax**: Easy for domain experts to review and edit.
+3. **Pydantic v2 Integration**: Automatic generation of high-quality Pydantic models.
+4. **Namespace Support**: Ability to organize models into logical groups (e.g., ``GST``, ``Base``, ``AVI``).
+5. **Deterministic Builds**: Consistent output for CI/CD and synchronization checks.
+6. **Flexibility**: Support for discriminators, enums, literals, and inheritance.
 
 💡 Decision
 ------------
+We have selected **TypeSpec** as the primary schema language, pipelined with the **OpenAPI 3** emitter and **datamodel-code-generator** for Python SDK generation.
 
-We adopted a **Transaction + Session** pattern that strictly separates "Reading" (Snapshotting) from "Writing" (Emitting), managed by explicit scope.
+The workflow is as follows:
+1. Define the schema in ``.tsp`` files using TypeSpec.
+2. Compile TypeSpec to an OpenAPI 3 YAML specification via ``@typespec/openapi3``.
+3. Generate namespaced Pydantic models using ``datamodel-code-generator`` with specific flags:
+   * ``--enum-field-as-literal one``: Keeps single-value "kind" fields as Literals for better type hinting.
+   * ``--capitalise-enum-members``: Ensures consistent enum member naming.
+   * ``--reuse-model``: Reduces redundancy across namespaces.
 
-1.  **Strict State Separation**:
-    *   **Read Phase**: Load the latest state (Snapshot) from the ledger *before* the transaction logic.
-    *   **Compute Phase**: Perform statistical calculations in Python (fast) using the snapshot.
-    *   **Write Phase**: Emit new events (Artifacts) as literal values.
+**Alternatives Considered:**
 
-2.  **Explicit Scope with `ledger.transaction()`**:
-    *   We use a `with ledger.transaction():` context to ensure atomicity.
-    *   This wraps the entire update process in a single database transaction (e.g., `BEGIN ... COMMIT` in DuckDB), preventing implicit auto-commit overhead for every insert.
-
-3.  **Session Object for Writes (`write_session`)**:
-    *   We use a `with ledger.write_session(experiment_id) as sess:` context to ensure atomicity.
-    *   This wraps the entire update process in a single database transaction (e.g., `BEGIN ... COMMIT` in DuckDB).
-    *   The `sess` object provides a clean API for emitting events (`sess.add(event)`), handling metadata (UUID generation, timestamping) automatically.
-
-**Example Usage:**
-
-.. code-block:: python
-
-    # 1. Read Phase (Load latest state outside transaction)
-    current_state = controller.get_latest_state(experiment_id)
-
-    # 2. Compute Phase
-    new_stat = compute_statistic(current_state, new_data)
-
-    # 3. Write Phase (Atomic)
-    with ledger.write_session(experiment_id) as sess:
-        sess.add(new_stat)
-        # ... emit other artifacts
+* **LinkML**: Investigated for its freshness. While powerful, it introduced friction in generating nested Python namespaces and deterministic outputs compared to the TypeSpec/OpenAPI pipeline.
+* **Protobuf/gRPC**: Excellent for performance, but lacks the natural mapping to Pydantic models required for this project's orchestration layer.
+* **Raw JSON Schema/OpenAPI**: Rejected as primary authoring formats due to extreme verbosity and poor human readability.
 
 ✨ Consequences
 -----------------
+The choice of TypeSpec provides a clean, modern syntax that mirrors TypeScript/IDL, making it accessible to developers while retaining the full power of the OpenAPI ecosystem.
 
 **Positive:**
-*   **Performance**: Runtimes are kept under < 1s per update because we avoid compiling massive self-referential SQL trees.
-*   **Safety**: Explicit transactions prevent partial state updates.
-*   **Simplicity**: The Python-based "Compute Phase" is easier to debug and test than complex SQL-generating Ibis expressions.
+* **Developer Velocity**: Rapid schema iteration with immediate feedback.
+* **Type Safety**: Strong alignment between schema definitions and the Python orchestration layer.
+* **CI/CD Integration**: Easy implementation of synchronization checks (``make check-sync``).
+* **Maintainability**: Clear separation of concerns between standard definitions and implementation.
 
 **Negative:**
-*   **Loss of "Pure SQL"**: We cannot export the entire analysis as a single SQL query. The "Compute Phase" logic lives in Python. (However, the *data* is still fully queryable via SQL).
-
-
-
-📚 Historical Context: Experiments & Tradeoffs
-----------------------------------------------
-
-*This section records the experiments and trade-offs that led to the current decision, preserved exactly as recorded during the v1 design phase.*
-
-Desired properties and trade-offs
----------------------------------
-
-.. list-table::
-   :header-rows: 1
-
-   * - Property
-     - Why we want it
-     - How to achieve it
-     - Risks / lessons from experiments
-   * - **Fully ibis-native computations**
-     - Enables SQL export/auditing, keeps formulas close to academic notation.
-     - Encode Φ, Φ⁻¹, spending functions via ibis primitives (v10/v11), reuse plan templates (v16 idea).
-     - ``con.insert`` recursion (v9, v19), huge AST compilation (v11), high runtime (47 s) unless we cache or simplify queries because of SQL compilation.
-   * - **Event-sourcing discipline**
-     - Deterministic replays, ability to inspect every intermediate state.
-     - Stage helpers that insert snapshot/info/stat rows + re-read them before use (v18–v21).
-     - Must ensure reads go through ledger (early v20 skipped info_prev re-read). More stages mean more inserts unless batched.
-   * - **Low runtime (<1–2 s/update)**
-     - Keeps notebooks responsive, enables rapid experimentation.
-     - Shift heavy math to Python (v20 refactor), use literal inserts, wrap updates in transactions (v21).
-     - SQLGlot compilation still shows up for every ``execute``/memtable; need caching or staged literals to go lower.
-   * - **Backend portability (DuckDB + BigQuery)**
-     - Same DSL should work locally and in cloud warehouses.
-     - Thin backend adapters (see code above) with `transaction()` + `insert_rows`.
-     - BigQuery transactions and insert APIs differ (JSON payload, quotas); need retry/error handling, but DSL stays unchanged.
-   * - **Readable, declarative DSL**
-     - Users think in terms of ledger events, not plumbing.
-     - Stage DSL (``snapshot_stage.emit(...)``) + `with ledger.transaction():` scaffolding.
-     - Too much “magic” (deep cached plans) can hurt debuggability; document the layers clearly.
-
-Background
-----------
-
-We have iterated on several standalone scripts (``earlysign_dsl_design_14`` … ``21``)
-to find a ledger-first, event-sourced DSL that is both ibis-native and practical.
-Each version explored a different point in the design space:
-
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| Script | Computation style          | Lazy plan usage       | Ledger writes            | Runtime (python run)      | Main bottleneck                         |
-+========+============================+=======================+==========================+===========================+=========================================+
-| v1     | struct payload + manual TX | Low (single plan)     | ``INSERT … SELECT``      | 0.29 s (2 updates, ibis OF boundary) | `_build_insert_from_table` compilation  |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v2     | LedgerSession + JSON rows  | Medium (staged union) | ``INSERT … SELECT``      | 0.46 s (2 updates, ibis OF boundary) | flush/`con.insert` on staged writes     |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v3     | JSON view + dual apps      | Medium                | ``INSERT … SELECT``      | 0.58 s (2 updates, ibis OF boundary) | same insert-from-select cost            |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v4     | labels-bound ledger (uuid) | Medium                | ``INSERT … SELECT``      | 0.64 s (2 updates, ibis OF boundary) | parsing the richer schema per insert    |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v5     | projector framework        | Medium/High           | staged insert batches    | 1.57 s (4 updates, ibis OF boundary) | `_build_insert_from_table` × 4 flushes  |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v6     | minimal projectors         | Medium                | staged insert batches    | 1.00 s (4 updates, ibis OF boundary) | `con.insert` + SQL parsing              |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v7     | reader hierarchy           | Medium/High           | staged insert batches    | 1.06 s (4 updates, ibis OF boundary) | parser/insert churn per reader          |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v8     | generic latest()/rows_since| Medium/High           | staged insert batches    | 1.22 s (4 updates, ibis OF boundary) | parser depth + `_build_insert...`       |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v9     | ibis math + ibis insert    | High (shared plan)    | ``INSERT … SELECT``      | 1.15 s (ibis OF boundary) | `con.insert` recursion risk + SQL build |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v10    | ibis/SQL-only boundaries   | High                  | ``INSERT … SELECT``      | 2.0 s (ibis OF boundary)  | raw_sql + plan depth (post-fix)         |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v11    | ibis math + frozen views   | Very high             | select-based insert      | 39 s (ibis OF boundary)   | `raw_sql` depth & huge query AST        |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v12    | ibis math + batched insert | High                  | select-based insert      | 14 s (ibis OF boundary)   | repeated `_insert_select_sql`           |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v13    | ibis math + literal insert | Medium                | dict inserts (memtable)  | 0.83 s (ibis OF boundary) | remaining memtable compile cost         |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v14    | ibis math + pandas reads   | Medium (some union)   | Python dicts             | ~0.6 s (Python spending fn) | minimal — pandas arithmetic             |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v15    | Python arithmetic          | Low                   | dict inserts             | ~0.6 s (Python spending fn) | none (Python math dominates)            |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v16    | cached ibis plan template  | Medium                | dict inserts             | 1.2 s (Python spending fn) | template.replace() still re-executes    |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v17    | staged memtables w/ reuse  | Medium                | dict inserts             | ~1.0 s (Python spending fn) | lookup caching + memtable cost          |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v18    | ibis reads + Python math   | Medium/High           | dict inserts             | ~0.6 s (Python spending fn) | stage reads (execute)                   |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v19    | ibis everything            | High (shared plan)    | plan-based insert        | 47 s (ibis spending fn)   | SQLGlot recursion + huge AST            |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v20    | ibis stages + Python math  | High initially        | stage inserts            | 45 s → 0.9 s (after fix, Python spending fn) | SQL compile → mitigated via Python math |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-| v21    | v20 + DuckDB tx            | Medium (read cost)    | stage inserts (literal)  | 1.1 s (Python spending fn) | repeated stage ``execute()``            |
-+--------+----------------------------+-----------------------+--------------------------+---------------------------+-----------------------------------------+
-
-.. note::
-
-   Runtimes for v1–v4 and v9 use two ``update`` calls (design + two batches);
-   v5–v8 execute four batches to exercise multiple looks, so their totals equate
-   to roughly 0.25–0.40 s per update.
-
-Key experiments and what we learned
------------------------------------
-
-v1: struct payload baseline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** prove that a single STRUCT payload ledger plus ibis expressions can cover the entire Lan–DeMets procedure within one SQL insert per update.
-- **Implementation:** ``BinomialABTest`` unions observation/snapshot/info/stat/decision expressions and executes a single ``INSERT … SELECT`` inside a manual ``BEGIN/COMMIT``.
-- **Performance:** 0.29 s for two updates; ``_build_insert_from_table`` (0.17 s) and ``con.insert`` (0.23 s) dominate the profile.
-- **Lesson:** Pure ibis already works, but every update recompiles a large SELECT and the STRUCT schema is inflexible—pushing us toward JSON payloads in v2.
-
-v2: staged LedgerSession with JSON payloads
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** offer an ergonomic read-after-write DSL via ``LedgerSession`` while keeping everything ibis-native.
-- **Implementation:** sessions buffer ibis expressions (observation, snapshot, etc.) and flush them via a batched ``INSERT … SELECT`` into a JSON payload column.
-- **Performance:** 0.46 s for two updates; ``LedgerSession.__exit__ → flush → con.insert`` costs 0.35 s because DuckDB must still parse the staged SELECT.
-- **Lesson:** The DSL improves usability, yet the INSERT compilation overhead remains unchanged.
-
-v3: shared ledger for AB test + E-process
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** reuse one ledger/session stack for both the binomial GST and the normal-mixture E-process without Python JSON munging.
-- **Implementation:** ``_real_flat_view`` projects JSON into typed fields so apps can add ibis literals on top of committed aggregates.
-- **Performance:** 0.58 s (two updates) with ``flush → con.insert`` still taking ~0.41 s.
-- **Lesson:** Multiple apps can coexist, but adding more views only increases the cost of the inevitable insert-from-select.
-
-v4: labels-bound ledger contract
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** lock in the ``(uuid, ts, pkg_version, payload_type, payload, labels)`` schema and introduce ``Ledger.bind`` for scoped reads.
-- **Implementation:** inserts auto-fill uuid/ts/pkg_version; readers consume the same JSON view.
-- **Performance:** 0.64 s (two updates); parsing the richer schema keeps ``_build_insert_from_table`` and ``con.insert`` as the bottleneck.
-- **Lesson:** We now have the table contract we like, but still no path around insert compilation.
-
-v5: projector framework (single design row)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** split responsibilities between a reusable ``Ledger`` framework and application-specific ``FlatProjector`` helpers while storing the entire design in one row.
-- **Implementation:** projectors synthesize design helper rows; updates still flush via ibis SELECT. Four updates were run to exercise multiple looks.
-- **Performance:** 1.57 s total (~0.39 s/update). ``flush`` and ``_build_insert_from_table`` dominate (>1.0 s combined).
-- **Lesson:** The DSL becomes pleasant, but runtime scales almost linearly with the number of staged batches because inserts are still expression-based.
-
-v6: minimal projectors, inline SQL
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** shrink projector SQL (no NULL padding, inline snippets) to curb plan size.
-- **Implementation:** ``ABBaseRows``/``EBaseRows`` emit compact SELECTs; ``LedgerSession`` is unchanged.
-- **Performance:** 0.997 s for four updates (~0.25 s/update); ``con.insert`` + SQL parsing stay on top.
-- **Lesson:** Leaner projectors help a bit, yet INSERT compilation continues to be the ceiling.
-
-v7: reader hierarchy with profiling hook
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** build reusable reader classes (``ABDesignLatest``, ``ABObsSince``, etc.) and add a ``__main__`` profiling harness.
-- **Implementation:** generic helpers such as ``rows_since`` feed the readers; writes are untouched.
-- **Performance:** 1.06 s for four updates; parser/``_build_insert_from_table`` remains the bottleneck because every reader adds SELECT depth.
-- **Lesson:** DSL clarity improved but cost per insert did not.
-
-v8: generic latest()/rows_since() helpers
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** generalize the reader DSL so any payload type can rely on ``latest_row``/``rows_since`` without bespoke SQL.
-- **Implementation:** ``LedgerReaderBase`` centralizes the helper logic; apps re-use it for AB + E workflows.
-- **Performance:** 1.22 s for four updates; ``dialect.parse`` (0.52 s) and ``_build_insert_from_table`` (0.71 s) dominate before inserts run.
-- **Lesson:** The reader abstraction is portable, but until inserts stop compiling huge SELECTs the runtime cannot improve—leading directly to the literal-insert experiments in v9+.
-
-v9: first ibis-native event-sourcing pipeline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** implement the full Lan–DeMets workflow purely in ibis, sending each event via ``INSERT … SELECT``.
-- **Result:** runtime ~1.15 s. Profiling shows ``Ledger.flush → con.insert → raw_sql`` dominating because every insert compiled a plan that read from the same ledger table (risking recursion).
-- **Lesson:** pure ibis is feasible, but self-referential inserts already push SQLGlot to its limits; we need lighter insert paths before adding more laziness.
-
-v10: SQL-only boundary approximation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** remove Python math entirely by encoding Φ, Φ⁻¹, and spending functions pure-SQL (Abramowitz–Stegun polynomials).
-- **Implementation:** pure ibis SQL for all math; after updating to ``ibis.cases`` the script runs again.
-- **Performance:** ~2.0 s; still dominated by ``flush → con.insert → raw_sql`` and large expression depth (action node depth 19).
-- **Lesson:** pure SQL approximations are possible but still suffer from INSERT plan compilation; faster than v19 but slower than Python hybrids.
-
-v11: frozen views and DB-evaluated timestamps
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** evaluate timestamps on the database side and read all state via “frozen” views (ts < latest observation).
-- **Result:** 39 s runtime. Bottleneck: `_insert_select_sql` issues huge `raw_sql` statements per stage; query depth explodes even though recursion is avoided.
-- **Lesson:** even when ibis math is elegant, repeatedly compiling insert-from-select queries dwarfs everything else.
-
-v12: staged INSERT/SELECT helper
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** refactor v11’s INSERT/SELECT into reusable helpers, hoping to amortize compilation.
-- **Result:** runtime dropped to 14 s, but `_insert_select_sql` still dominates (DuckDB must parse the SELECT every time).
-- **Lesson:** abstraction alone doesn’t remove the compile cost—we need a different insertion strategy.
-
-v13: literal inserts + aggregator objects
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** switch the pipeline to literal dict inserts (via ibis memtable) while keeping ibis math for stats/boundaries; introduce aggregator objects for readability.
-- **Result:** runtime ~0.83 s. Bottleneck shifts to memtable compilation, which is manageable.
-- **Lesson:** once inserts become literal, we regain the sub-second performance envelope.
-
-v14/v15: hybrid vs. pure Python
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** keep ibis-native state but avoid expensive queries per stage.
-- **Result:** pulling `_state_with_due_frame` into pandas (v15) gives ~0.6 s runtime
- while staying event-sourced (writes were still ledger inserts). ibis math remains in code but
- simultaneous ledger reads/writes are limited.
-- **Lesson:** Python arithmetic is extremely fast; ledger writes themselves are cheap
- when they are literal dicts (memtable select).
-
-v16: cached plan template (expr.op().replace)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** cache the ibis operator tree produced by ``_state_with_due_frame`` and reuse it by replacing the delta placeholder each update.
-- **Implementation:** ``template = expr.op()`` at setup, ``template.replace({delta_placeholder: delta_expr.op()}).to_expr()`` at runtime.
-- **Performance:** ~1.2 s (profiling shows ``_execute_state_plan`` → ``con.execute`` as the main cost).
-- **Trade-offs:** still ibis-native, but each replace leads to a new SELECT that DuckDB must compile; faster than v19 but slower than pure Python.
-
-v17: staged memtables with cached lookups
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** reuse stage information stored in the ledger via helper memtables / aggregator objects while still expressing decisions in ibis.
-- **Implementation:** aggregator reads latest snapshot/info/stat into Python, builds small memtables only for incremental deltas, and emits literal inserts.
-- **Performance:** ~1.0 s; bottleneck shifts to memtable construction and template lookup.
-- **Trade-offs:** good readability, near-baseline speed, but still not purely ibis-native (math happens partly in Python aggregators).
-
-v18: define-by-run session DSL
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** express updates as ibis-native DSL operations within ``with session``.
-- **Implementation:** stage rows (snapshot/info/stat) still read via ``latest_json`` (execute),
-  arithmetic performed in Python, payloads inserted as dicts.
-- **Performance:** ~0.6 s (similar to v15).
-- **Trade-offs:** event sourcing remained intact, but math not in ibis.
-
-v19: fully ibis-native lazy pipeline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** keep entire pipeline (snapshot deltas, I0/I1, boundaries) as ibis expressions.
-- **Implementation:** each stage was an ibis expression applied inside ``sess.insert``.
-- **Issues:** DuckDB/SQLGlot recursion when ``INSERT … SELECT`` reads from target table;
-  after switching to ``raw_sql`` each insert still compiled huge plans → ~47 s runtime.
-- **Lesson:** Reusing shared expression trees causes both recursion and heavy SQL compilation.
-
-v20 early: stage DSL + eager execute
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** keep ibis-native stages but materialise intermediate rows. Inserts executed via `execute()` + literal insert to avoid recursion.
-- **Outcome:** still slow (45 s) because each stage read/insert triggered full query compilation (duckdb.to_arrow_table → SQLGlot).
-- **Fix:** move arithmetic to Python (fetch stage payload dicts, compute in Python, insert literal). Runtime dropped to ~0.9 s.
-- **Lesson:** Stage DSL alone doesn’t help unless intermediate math also avoids re-running the heavy ibis plans.
-
-v21: reuse DuckDB connection + transaction scope
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Goal:** reuse one DuckDB connection and wrap updates in explicit transactions (``BEGIN``/``COMMIT``) so ibis doesn’t auto-open per statement.
-- **Implementation:** added ``Ledger.transaction()`` context, used it around `set_design` and `update` (both AB and e-process).
-- **Performance:** ~1.1 s overall → still dominated by repeated ledger reads/inserts but no per-insert transaction overhead.
-- **Lesson:** Transactions help but SQL compilation (execute calls, Stage seeding) is still the top cost.
-
-Recurring bottlenecks
----------------------
-
-1. **SQL compilation cost (duckdb.to_arrow_table → SQLGlot).** Each ``execute`` / stage insert compiles a memtable select. This was ~20 s in v19 and still a few hundred ms in v21.
-2. **Self-referential inserts.** ``con.insert`` cannot handle queries that read from the target ledger → recursion crash. Workarounds: raw SQL, eager execute to Python, or staging into separate tables.
-3. **Plan depth / union defaults.** Unioning default rows + JSON unwrap + cross joins per stage makes the AST large.
-4. **Insert count.** Each update writes observation, snapshot, info, stat, decision (and default seeds). More inserts → more memtable compilation.
-5. **Transactions.** Without `BEGIN`/`COMMIT`, DuckDB implicitly wraps each statement; explicit transaction reduces overhead slightly but not the core compile cost.
-
-Design options going forward
-----------------------------
-
-+-----------+--------------------------------------+------------------------------------+----------------------------------------------------+
-| Option    | DSL idea                             | Key benefits                       | DSL sketch                                         |
-+===========+======================================+====================================+====================================================+
-| Stage +   | Cache ibis operator tree once, then  | ibis-native math, reproducible SQL | ``template = stats_expr.op()``                     |
-| cached    | ``replace`` delta placeholder each   | without re-compiling huge plans    | ``payload = template.replace({...}).to_expr()``    |
-| ibis plan | update (v16-style).                  |                                    | ``sess.insert(kind=\"stat\", payload_expr=payload)``|
-+-----------+--------------------------------------+------------------------------------+----------------------------------------------------+
-| Stage +   | Keep stage DSL, but fetch latest rows| Fast (~1 s), simple Python, easy   | ``snap = snapshot.latest_payload()``               |
-| Python    | as dicts; compute math in Python,    | to debug.                          | ``info = {'info_time': (snap['nA']+...)/N}``       |
-| arithmetic| insert literal dicts (v20/v21).      |                                    | ``snapshot.emit(sess, snap_next)``                 |
-+-----------+--------------------------------------+------------------------------------+----------------------------------------------------+
-| Prepared  | Pre-generate SQL text or prepared    | No SQLGlot compile per insert;     | ``sql = 'INSERT INTO ... VALUES (? , ? , ...)'``   |
-| insert    | statement and bind literals.         | works even when payload is ibis    | ``duckdb_conn.execute(sql, params)``               |
-|           |                                      | derived outside ibis.              |                                                    |
-+-----------+--------------------------------------+------------------------------------+----------------------------------------------------+
-| Intermediate staging tables | Store snapshot/info/stat in lightweight DuckDB tables (or ledger kinds) and read via ``ORDER BY ts DESC LIMIT 1``. | Makes every downstream query tiny, keeps DSL close to ibis. | ``latest_snapshot = ibis.table('snap_stage').order_by('ts').limit(1)`` |
-+-----------+--------------------------------------+------------------------------------+----------------------------------------------------+
-| Tx-scoped caching | Provide a small DSL helper that caches stage payloads inside ``with ledger.transaction():`` so repeated reads hit Python memory unless a write occurs. | Reduces ``execute()`` churn; still event-sourced. | ``with ledger.transaction():\n    cache = StateCache(ledger)\n    snap = cache.snapshot()\n`` |
-+-----------+--------------------------------------+------------------------------------+----------------------------------------------------+
-| Hybrid    | Keep key formulas (e.g., boundaries) | Best of both worlds: ibis for math | ``boundary_expr = boundary_template.with(...)``    |
-|           | as ibis expressions, but evaluate    | tracing, Python for orchestration. | ``boundary = ledger.con.execute(boundary_expr)``   |
-|           | once per tx and store literal row.   |                                    | ``decision_stage.emit(sess, {..., 'boundary': b})``|
-+-----------+--------------------------------------+------------------------------------+----------------------------------------------------+
-
-Example: stage + cached ibis plan::
-
-    stats_tpl = stats_expr.op()
-    plan = stats_tpl.replace({delta_placeholder.op(): delta_expr.op()}).to_expr()
-    with ledger.session() as sess:
-        sess.insert(kind="stat", payload_expr=plan)
-
-Example: stage + Python arithmetic (current v21)::
-
-    snap_prev = snapshot_stage.latest_payload()
-    snap_next = {...}
-    with ledger.transaction():
-        with ledger.session() as sess:
-            snapshot_stage.emit_from_dict(sess, snap_next)
-            info_stage.emit_from_dict(sess, {"info_time": total_now / Nmax})
-
-These snippets illustrate the DSL flavour of the two extremes: either users manipulate ibis expressions directly (`plan = stats_tpl.replace(...)`) or they work with Python dicts backed by stage helpers. Prepared statements and hybrid approaches would expose similar helpers—e.g., `ledger.prepared.insert('decision', columns=[...])`—so the DSL remains declarative even when the backend strategy changes.
-
-In DSL terms:
-
-- **Stage + cached ibis plan** keeps the “define-by-run” feel: users chain ibis ops (`snapshot >> stats >> decision`) and the runtime swaps only the delta placeholder. The DSL remains highly portable (same expressions can render to SQL in other backends).
-- **Stage + Python arithmetic** feels almost like a PyData pipeline: ``snap = stage.snapshot(); stage.decision.emit(sess, compute(snap))``. It's readable, easy to debug, and users still reason in terms of ledger events.
-- **Prepared inserts** would surface as ``ledger.prepared('decision').emit(payload_dict)``—explicit yet declarative—and make it obvious when stage boundaries are reused across experiments.
-- **Intermediate staging tables** turn every “latest” read into ``stage.latest()`` without caring whether it hits the ledger or a helper table, keeping the DSL consistent.
-- **Transaction-scoped caching** lets us expose ``with ab.transaction()`` so notebooks look like: ``with ab.transaction(): snap = ab.snapshot(); stats = ab.stats(snap)``—very approachable while ensuring ledger-centric discipline.
-- **Hybrid** DSL keeps ibis-level constructs available for teams that need to see/emit SQL while still using the stage helpers for orchestration.
-
-Checklist for future DSL iterations
------------------------------------
-
-- **Prefer literal inserts** unless you absolutely need to express the insert as a SELECT.
-- **Cache or precompile heavy ibis expressions** (particularly unions, cross joins) or move the math into Python.
-- **Materialise every state in the ledger** and **read it back** before use to stay event-sourced.
-- **Batch work per transaction** (``with ledger.transaction():``) so DuckDB doesn’t auto-open new transactions for each statement.
-- **Monitor bottlenecks** with `cProfile` and look for `duckdb.to_arrow_table`, `generator.py:sql`, `con.insert`. Optimize those before touching math.
+* **Tooling Overhead**: Requires Node.js and specific TypeSpec packages (``@typespec/compiler``, etc.).
+* **Generator Complexity**: ``datamodel-code-generator`` flags require careful tuning to ensure correct inheritance and enum behavior.

@@ -1,55 +1,34 @@
-.. ADR-008: Decision Against Using RDB/MVC Models
-.. :Date: 2026-02-06
-.. :Updated: 2026-02-20
+.. ADR-008: Dedicated ledger_id Column for Clustering
+.. :Date: 2026-02-16
 
-================================================
-ADR-008: Decision Against Using RDB/MVC Models
-================================================
+=====================================================
+ADR-008: Dedicated ledger_id Column for Clustering
+=====================================================
 
 **Status**: **`Accepted`**
 
 📋 Context
 -----------
-In the early stages, we considered using RDB-like entity designs (similar to Models in MVC architecture) as the read/write mechanism for the Ledger.
+Previously, the `Ledger` stored experimental context (like `experiment_id`) solely within a JSON `attributes` column. While this provided high flexibility, it introduced performance bottlenecks in large-scale data warehouses like Google BigQuery. 
 
-However, attempting to implement this read/write capability using MVC-style models led to significant conceptual difficulties. Tracking the chronological changes of the same model and determining whether the read target represented the "latest state" proved challenging to organize conceptually.
-
-Furthermore, this approach introduced severe adverse effects on the physical directory structure of the codebase (see Historical Context below).
+In BigQuery, filtering on JSON fields is significantly slower and more expensive than filtering on top-level columns. Furthermore, BigQuery's clustering feature—which physically organizes data to optimize query performance—requires dedicated columns and cannot be applied to keys within a JSON blob.
 
 💡 Decision
 ------------
-We decided against using RDB models (MVC-style models). Instead, we adopted an Event Sourcing approach (an append-only Ledger) for writing data, paired with a Command Query Responsibility Segregation (CQRS) model for reading, which generates various "projections" as needed.
+We decided to add a dedicated `ledger_id` column to the core `Ledger` schema, positioned immediately after the `timestamp` column. 
+
+*   **Explicit Identification**: The `Ledger` instance now optionally accepts a `ledger_id` upon initialization.
+*   **Automatic Filtering**: When a `ledger_id` is set, the `ledger.t` property automatically applies a filter on this column.
+*   **Clustering Support**: In the BigQuery backend, the table is automatically configured to cluster by the `ledger_id` column during creation via `ledger.ensure()`.
+*   **Legacy Compatibility**: The `bind()` and `unbind()` mechanism for arbitrary JSON attributes remains unchanged and continues to be used for secondary context.
 
 ✨ Consequences
 -----------------
 **Positive:**
-* Simplifies the conceptual organization of chronological changes and the determination of state freshness.
-* Resolves the over-complicated directory hierarchy, enabling a flat, domain-based structure.
+*   **Performance**: Significant speedup for queries filtered by `ledger_id` (e.g., loading all events for a specific experiment) due to block pruning in BigQuery.
+*   **Cost Efficiency**: Reduced query costs in BigQuery as less data is scanned.
+*   **Clarity**: Provides a standard, high-performance way to partition the global event log into logical sub-ledgers.
 
 **Negative:**
-* (None specifically identified)
-
-📚 Historical Context: Hypothesis on Hierarchical Complexity (Lessons from Legacy ADR-002)
------------------------------------------------------------------------------------------
-During the initial design phase (the era of the obsolete ADR-002), our attempt to apply strict MVC/RDB-like models resulted in incredibly deep, convoluted, and chaotic directory hierarchies within `stats` and `methods`. For example:
-
-::
-
-    /design/initial_design/{records,operations,...}
-    /execution/binomial/{records,operations,...}
-
-**Why did this complexity occur? (Hypothesis)**
-
-When trying to strictly build RDB/MVC-style state models, developers are forced to represent the intersection of multiple dimensions as physical files, directories, or classes. These dimensions included:
-
-1. **Temporal State**: Is the system in the `design` phase or the `execution` phase?
-2. **Statistical Domain**: Is the underlying distribution `binomial` or `continuous`?
-3. **Model Component**: Are we handling data state (`records`) or behavior (`operations`)?
-
-Attempting to statically and strictly separate all these dimensions as types or table schemas triggered a combinatorial explosion: (Temporal Phase) × (Statistical Domain) × (Component). This resulted in unnecessarily deep and fragmented directory structures.
-
-**Resolution via Event Sourcing + CQRS**
-
-By adopting Event Sourcing and CQRS, we successfully removed the "Temporal State" dimension from the file structure. Any state transition is merely appended as an event to the Ledger. The current state (whether in the design or execution phase) is dynamically fully reconstructed as a Projection only when needed. 
-
-As a result, we were able to reorganize the codebase into natural, domain-centric units (e.g., the current `earlysign/methods` structure).
+*   **Schema Change**: Existing ledgers without the `ledger_id` column must be migrated or recreated.
+*   **Slightly Less Flexibility**: Users are encouraged to use `ledger_id` for primary grouping instead of relying purely on dynamic JSON attributes.
