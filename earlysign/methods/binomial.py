@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple, Union
 import ibis
 
 from earlysign.core.util.ibis_ops import type_filter
+from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity import Entity, Snapshot
 from earlysign.framework.projector import ProjectionResult
 from earlysign.framework.trace import TraceId
@@ -66,7 +67,6 @@ class Scoreboard(Entity[ScoreboardSchema]):
 
         is_arm_data = batch_table.type == "BinomialArmData"
         # Simple iteration for prototype:
-        from earlysign.core.util.json_ops import extract_json_scalar
 
         # NOTE on BigQuery Robustness:
         # We use ifelse() combined with extract_json_scalar() to guard against

@@ -88,6 +88,7 @@ import ibis.expr.schema as sch
 from ibis.expr.types import Table
 
 from earlysign import __version__
+from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.core.util.sanitize_for_json import sanitize_for_json
 from earlysign.schema.ES3.Base import Metadata as ES3Metadata
 
@@ -274,8 +275,9 @@ class Ledger:
         t = self.connector.table(self.table_name)
         if self.ledger_id:
             t = t.filter(t.ledger_id == self.ledger_id)
+
         for k, v in self.attributes.items():
-            t = t.filter(t.attributes[k].str == str(v))
+            t = t.filter(extract_json_scalar(t.attributes, k, "string") == str(v))
         return t
 
     # --------- write ----------
@@ -470,9 +472,9 @@ class Ledger:
             return (
                 t.mutate(
                     type=t.type.cast("string").split(".")[-1],
-                    identity=t.attributes["entity_identity"]
-                    .cast("string")
-                    .re_replace('^"|"$', ""),
+                    identity=extract_json_scalar(
+                        t.attributes, "entity_identity", "string"
+                    ),
                     trace=t.metadata["trace"],
                 )
                 .drop("uuid", "timestamp", "metadata")

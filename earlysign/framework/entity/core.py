@@ -36,6 +36,7 @@ from typing import (
 
 import ibis
 
+from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity.base import BaseEntity
 from earlysign.framework.entity.snapshot import Snapshot
 from earlysign.framework.projector import ProjectionResult
@@ -213,7 +214,6 @@ class Entity(BaseEntity[T], ABC):
         # Snapshots have the same payload_schema as the entity's data_type
         # but are identified by entity_identity label.
         schema_name = self.data_type.__name__
-        from earlysign.core.util.json_ops import extract_json_scalar
 
         identity_expr = extract_json_scalar(
             table.attributes, "entity_identity", "string"

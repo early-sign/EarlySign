@@ -38,6 +38,7 @@ class SimpleEntity(BaseEntity[Optional[T]]):
         Find the latest record for this identity.
         """
         schema_name = self.data_type.__name__
+
         identity_expr = extract_json_scalar(
             table.attributes, "entity_identity", "string"
         )
@@ -49,14 +50,16 @@ class SimpleEntity(BaseEntity[Optional[T]]):
 
         if latest.empty:
             # For SimpleEntity, we might want an initial value or None.
-            # Here we follow the Projector interface but it might return None data.
             return ProjectionResult(data=None, trace=[])
 
         row = latest.iloc[0]
 
         def _ensure_dict(val: Any) -> Dict[str, Any]:
             if isinstance(val, str):
-                return cast(Dict[str, Any], json.loads(val))
+                try:
+                    return cast(Dict[str, Any], json.loads(val))
+                except json.JSONDecodeError:
+                    return {}
             return dict(val) if val is not None else {}
 
         data_raw = _ensure_dict(row["payload"])

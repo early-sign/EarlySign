@@ -214,7 +214,8 @@ They represent a trajectory of states $(S_0, S_1, \\dots, S_n)$ indexed by a seq
     ...         return []
     ...
     ...     def get_index_expr(self, table: ibis.Expr) -> ibis.Expr:
-    ...         return table.attributes[self.index_field].cast("int64")
+    ...         from earlysign.core.util.json_ops import extract_json_scalar
+    ...         return extract_json_scalar(table.attributes, self.index_field, "int64")
     ...
     ...     def compute_step(self, index, prev_state, delta_expr) -> CounterState:
     ...         prev_val = prev_state.count if prev_state else 0

@@ -10,6 +10,7 @@ from typing import Any, List, Optional, Tuple, Type
 import ibis
 from pydantic import BaseModel
 
+from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity import (
     SequentialEntity,
 )
@@ -86,11 +87,22 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
         self, table: ibis.Expr
     ) -> List[Tuple[int, ProjectionResult[LookResult]]]:
         """
-        Collect trajectory by finding all LookResult records in the ledger.
+        Collect trajectory by finding all LookResult records in the ledger
+        matching this entity's identity.
         """
-        # Look for LookResult records in table
-        test_results = table.filter(table.type == "LookResult")
-        results_df = test_results.execute()
+        from earlysign.framework.trace import TraceId
+
+        # 1. Filter by LookResult type AND entity identity
+        identity_expr = extract_json_scalar(
+            table.attributes, "entity_identity", "string"
+        )
+        matched = table.filter(
+            (table.type == "LookResult") & (identity_expr == self.identity)
+        )
+
+        # 2. Reconstruct trajectory (Latest record for each look index wins)
+        # We order by timestamp to ensure we pick the most recent if multiple exist.
+        results_df = matched.order_by(ibis.desc("timestamp")).execute()
 
         trajectory: List[Tuple[int, ProjectionResult[LookResult]]] = []
         seen_looks: set[int] = set()
@@ -103,13 +115,13 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
                 payload = json.loads(payload)
 
             # Reconstruct LookResult
-            # Even if look is None (not yet at a milestone), we want to see it in progress
             look_val = payload.get("look")
             idx = look_val if look_val is not None else 0
 
             if idx not in seen_looks:
                 result = LookResult.model_validate(payload)
-                trajectory.append((idx, ProjectionResult(data=result, trace=[])))
+                trace = [TraceId(str(row["uuid"]))] if "uuid" in row else []
+                trajectory.append((idx, ProjectionResult(data=result, trace=trace)))
                 seen_looks.add(idx)
 
         # Sort by look number (0 comes first for pre-look results)

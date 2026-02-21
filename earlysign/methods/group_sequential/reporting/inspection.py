@@ -7,6 +7,7 @@ from typing import Optional
 import ibis
 from ibis import _
 
+from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.projector import ProjectionResult, Projector
 
 
@@ -66,8 +67,6 @@ class PosthocZTrajectoryProjector(Projector[ibis.Expr]):
         # 2. Extract fields from payload
         def _get_val(col: str) -> ibis.Expr:
             return _.payload[col].cast("string").re_replace('^"|"$', "")
-
-        from earlysign.core.util.json_ops import extract_json_scalar
 
         # We use extract_json_scalar here to avoid BigQuery's strict JSON-to-INT64 cast
         # which can fail on stringified numbers or non-conforming rows in unions.

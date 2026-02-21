@@ -25,10 +25,11 @@ payload/labels access behaves like Ibis JSON column:
 
     >>> # Empty select should still compile and execute:
     >>> df = ledger.t
+    >>> from earlysign.core.util.json_ops import extract_json_scalar
     >>> q = df.select(
     ...     df.uuid,
-    ...     x = df.payload["x"],          # JSON scalar (string) extraction
-    ...     kind = df.attributes["kind"],     # JSON scalar from attributes
+    ...     x = extract_json_scalar(df.payload, "x", "string"),          # JSON scalar (string) extraction
+    ...     kind = extract_json_scalar(df.attributes, "kind", "string"),     # JSON scalar from attributes
     ... )
     >>> out = q.execute()
     >>> list(out.columns)
@@ -41,7 +42,8 @@ payload/labels access behaves like Ibis JSON column:
     ... ]
     >>> _ = ledger.insert(data=rows[0]["payload"], attributes=rows[0]["attributes"])
     >>> _ = ledger.insert(data=rows[1]["payload"], attributes=rows[1]["attributes"])
-    >>> got = df.select(df.payload["x"].name("x")).execute().to_dict("records")
+    >>> from earlysign.core.util.json_ops import extract_json_scalar
+    >>> got = df.select(extract_json_scalar(df.payload, "x", "string").name("x")).execute().to_dict("records")
     >>> sorted(v["x"] for v in got)
     ['A', 'B']
 
@@ -100,14 +102,15 @@ Read using JSON accessors:
 
 .. code-block:: python
 
+    >>> from earlysign.core.util.json_ops import extract_json_scalar
     >>> obs = (
     ...   L.t
     ...     .select(
     ...       "uuid",
-    ...       nA=L.t.payload["nA"].cast("int64"),
-    ...       mA=L.t.payload["mA"].cast("int64"),
-    ...       nB=L.t.payload["nB"].cast("int64"),
-    ...       mB=L.t.payload["mB"].cast("int64"),
+    ...       nA=extract_json_scalar(L.t.payload, "nA", "int64"),
+    ...       mA=extract_json_scalar(L.t.payload, "mA", "int64"),
+    ...       nB=extract_json_scalar(L.t.payload, "nB", "int64"),
+    ...       mB=extract_json_scalar(L.t.payload, "mB", "int64"),
     ...     )
     ...     .execute()
     ... )
@@ -125,11 +128,12 @@ Insert more data and verify JSON access works:
     ...   attributes={"kind":"observation","batch":3}
     ... )
     UUID(...)
+    >>> from earlysign.core.util.json_ops import extract_json_scalar
     >>> q2 = (
     ...     L.t.filter(L.t.type == "dict")
     ...     .order_by(L.t.timestamp.desc())
     ...     .limit(1)
-    ...     .select(n_treat=L.t.payload["nA"].cast("int64"))
+    ...     .select(n_treat=extract_json_scalar(L.t.payload, "nA", "int64"))
     ... )
     >>> rows = q2.execute().to_dict("records")
     >>> rows[0]["n_treat"]

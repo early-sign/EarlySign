@@ -18,6 +18,7 @@ from typing import (
 
 import ibis
 
+from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity.core import Entity
 from earlysign.framework.entity.snapshot import Snapshot
 from earlysign.framework.projector import ProjectionResult, Projector
@@ -89,11 +90,6 @@ class PointwiseTrajectoryProjector(Projector[List[Tuple[Index, S]]], Generic[Ind
         # SimpleSequentialEntity has data_type=list, so we must use state_type.
         target_cls = getattr(self.entity, "state_type", None) or self.entity.data_type
         schema_name = target_cls.__name__
-
-        # Pointwise usually works with specific state records.
-        # We rely on the entity identity filtering.
-
-        from earlysign.core.util.json_ops import extract_json_scalar
 
         identity_expr = extract_json_scalar(
             table.attributes, "entity_identity", "string"
@@ -186,7 +182,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
         ...     snapshot_strategy = SequentialEntity.SnapshotStrategy.COLLECTIVE
         ...
         ...     def get_index_expr(self, table: ibis.Expr) -> ibis.Expr:
-        ...         return table.attributes[self.index_field].cast("int64")
+        ...         return extract_json_scalar(table.attributes, self.index_field, "int64")
         ...
         ...     @property
         ...     def initial_value(self) -> List[Tuple[int, SumState]]:
@@ -271,7 +267,7 @@ class SequentialEntity(Entity[List[Tuple[Index, S]]], Generic[Index, S], ABC):
 
         Default implementation extracts from attributes[self.index_field] as a string.
         """
-        return table.attributes[self.index_field].cast("string")
+        return extract_json_scalar(table.attributes, self.index_field, "string")
 
     @abstractmethod
     def compute_step(
