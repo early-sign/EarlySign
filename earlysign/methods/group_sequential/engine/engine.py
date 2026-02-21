@@ -8,6 +8,7 @@ from earlysign.methods.group_sequential.adapters.protocol import (
 )
 from earlysign.methods.group_sequential.core.model import (
     CanonicalJointModel,
+    SimulationConfig,
 )
 from earlysign.methods.group_sequential.core.policy import (
     SpendingFunctionStoppingPolicy,
@@ -277,6 +278,10 @@ class GroupSequentialEngine:
                     previous_efficacy=prev_eff,
                     previous_futility=prev_fut,
                     rule_type="efficacy",
+                    method_config=SimulationConfig(
+                        n_sims=self.canonical_model.config.n_sims,
+                        rng_seed=self.canonical_model.config.rng_seed,
+                    ),
                 )
 
             # Futility
@@ -299,6 +304,10 @@ class GroupSequentialEngine:
                     previous_futility=prev_fut,
                     rule_type="futility",
                     drift=drift,
+                    method_config=SimulationConfig(
+                        n_sims=self.canonical_model.config.n_sims,
+                        rng_seed=self.canonical_model.config.rng_seed,
+                    ),
                 )
         else:
             # Use pre-calculated or shape-based boundaries

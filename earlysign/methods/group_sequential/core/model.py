@@ -136,7 +136,7 @@ class Config:
     futility_binding: bool = False
     tails: int = 1
     n_sims: int = 20000
-    rng_seed: Optional[int] = None
+    rng_seed: int = 42
 
     def __post_init__(self) -> None:
         if self.stopping_policy:
@@ -564,7 +564,11 @@ class CanonicalJointModel:
                 elif method == "simulation":
                     if isinstance(method_config, SimulationConfig):
                         method_kwargs["n_sims"] = method_config.n_sims
-                        method_kwargs["seed"] = method_config.rng_seed
+                        method_kwargs["seed"] = (
+                            method_config.rng_seed or self.config.rng_seed
+                        )
+                    else:
+                        method_kwargs["seed"] = self.config.rng_seed
 
                 prob = gp_h0.compute_crossing_probability(
                     t=times,
@@ -616,7 +620,11 @@ class CanonicalJointModel:
                 elif method == "simulation":
                     if isinstance(method_config, SimulationConfig):
                         method_kwargs["n_sims"] = method_config.n_sims
-                        method_kwargs["seed"] = method_config.rng_seed
+                        method_kwargs["seed"] = (
+                            method_config.rng_seed or self.config.rng_seed
+                        )
+                    else:
+                        method_kwargs["seed"] = self.config.rng_seed
 
                 prob = gp_h1.compute_crossing_probability(
                     t=times,
