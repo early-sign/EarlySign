@@ -2,6 +2,7 @@
 # All Python versions managed in this file
 
 [tools]
+gcloud = "latest"
 # Primary development version - active by default
 python = "3.11"
 
