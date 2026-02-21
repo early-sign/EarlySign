@@ -2,10 +2,12 @@
 Lightweight entities for simple projection-based retrieval.
 """
 
-from typing import List, Optional, Tuple, Type, TypeVar
+import json
+from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, cast
 
 import ibis
 
+from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity.base import BaseEntity
 from earlysign.framework.entity.sequential import SequentialEntity
 from earlysign.framework.projector import ProjectionResult
@@ -36,9 +38,11 @@ class SimpleEntity(BaseEntity[Optional[T]]):
         Find the latest record for this identity.
         """
         schema_name = self.data_type.__name__
+        identity_expr = extract_json_scalar(
+            table.attributes, "entity_identity", "string"
+        )
         matched = table.filter(
-            (table.type == schema_name)
-            & (table.attributes["entity_identity"].str == self.identity)
+            (table.type == schema_name) & (identity_expr == self.identity)
         )
 
         latest = matched.order_by(ibis.desc("timestamp")).limit(1).execute()
@@ -49,11 +53,14 @@ class SimpleEntity(BaseEntity[Optional[T]]):
             return ProjectionResult(data=None, trace=[])
 
         row = latest.iloc[0]
-        # Payload is the data
-        data_raw = row["payload"]
-        data_inst = (
-            self.data_type(**data_raw) if isinstance(data_raw, dict) else data_raw
-        )
+
+        def _ensure_dict(val: Any) -> Dict[str, Any]:
+            if isinstance(val, str):
+                return cast(Dict[str, Any], json.loads(val))
+            return dict(val) if val is not None else {}
+
+        data_raw = _ensure_dict(row["payload"])
+        data_inst = self.data_type(**data_raw)
 
         return ProjectionResult(
             data=data_inst,
