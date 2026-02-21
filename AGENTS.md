@@ -37,13 +37,6 @@ EarlySign is built around an **event-sourcing** architecture with a typed, appen
 
 The conceptual decisions are stored and updated in docs/source/reference/ADR.
 
-## Core Components
-
-- **Ledger** (`earlysign.core`): Central event store using ibis-framework for backend-agnostic data operations. Supports DuckDB, Polars, and other ibis backends
-- **Framework** (`earlysign.framework`): Building blocks that standardize the read-write operations to the ledger.
-- **Stats Engine** (`earlysign.stats`): Statistical methods organized as `essentials/` (the essential classes and computations) and `applications/` (closer to scenario-based interfaces, uses `earlysign.framework`)
-- **API Layer** (`earlysign.templates`): Business-oriented facade using domain terminology (e.g., `ab_tests`, `guardrail_monitoring`)
-
 ## 🔧 Coding Standards
 
 ### Import Conventions
