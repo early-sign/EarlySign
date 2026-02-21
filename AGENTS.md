@@ -53,7 +53,7 @@ The conceptual decisions are stored and updated in docs/source/reference/ADR.
 ### Code Quality
 - **No development artifacts**: Remove working comments before final delivery
   - ❌ Examples: "this method moved from...", "TODO: refactor later"
-  - ✅ Keep only comments that add value to future maintainers
+  - ✅ Keep only comments that should make into the production version of the code.
 - **Clean commits**: Ensure production code doesn't contain debug prints or temporary code
 - **Consistent formatting**: Follow project formatting standards (enforced via `make format`)
 - **Exports & language features**: Avoid `__all__` exports (except the top-level version string) and do not rely on `from __future__ import annotations`; code should run without future-import shims.
