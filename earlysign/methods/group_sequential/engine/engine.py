@@ -37,7 +37,7 @@ class GroupSequentialEngine:
     n_max: int
     stopping_policy: StoppingPolicy
 
-    def __init__(self, protocol: GST.Protocol, rng_seed: Optional[int] = None):
+    def __init__(self, protocol: GST.Protocol, rng_seed: int = 42):
         self.protocol = protocol
         method = protocol.method
         schedule = method.stopping_policy.schedule

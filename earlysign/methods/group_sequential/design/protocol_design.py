@@ -112,7 +112,7 @@ class ProtocolDesigner:
             model = CanonicalJointModel(
                 Config(
                     info_times=np.array([1.0]),  # Placeholder for design-phase use
-                    rng_seed=model_params.get("rng_seed"),
+                    rng_seed=model_params.get("rng_seed", 42),
                     n_sims=model_params.get("n_sims", 2000),
                 )
             )
@@ -132,7 +132,7 @@ class ProtocolDesigner:
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
-        rng_seed: Optional[int] = None,
+        rng_seed: int = 42,
     ) -> GSDDesign:
         """Pure statistical solver for group sequential design.
 
@@ -189,7 +189,7 @@ class ProtocolDesigner:
 
         config = Config(
             info_times=info_times,
-            rng_seed=rng_seed or (self._model.config.rng_seed if self._model else 42),
+            rng_seed=rng_seed,
             efficacy_binding=efficacy_binding,
             futility_binding=futility_binding,
             tails=tails,
@@ -254,7 +254,7 @@ class ProtocolDesigner:
         futility: bool = True,
         futility_binding: bool = False,
         tails: int = 1,
-        rng_seed: Optional[int] = None,
+        rng_seed: int = 42,
         allocation_ratios: Optional[Dict[str, float]] = None,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
@@ -439,7 +439,7 @@ class ProtocolDesigner:
         wang_tsiatis_delta: float = 0.25,
         tails: int = 2,
         arm_names: list[str] = ["control", "treatment"],
-        rng_seed: Optional[int] = None,
+        rng_seed: int = 42,
         method: Literal["simulation", "numerical_integration"] = "simulation",
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
@@ -601,6 +601,7 @@ class ProtocolDesigner:
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
+        rng_seed: int = 42,
     ) -> GST.Protocol:
         """Plans a binomial A/B design and returns a fully populated GST.Protocol.
 
@@ -639,7 +640,7 @@ class ProtocolDesigner:
             tails=side,
             method=method,
             method_config=method_config,
-            rng_seed=self._model.config.rng_seed if self._model else None,
+            rng_seed=rng_seed,
         )
 
         # Construct the realized protocol
@@ -681,6 +682,7 @@ class ProtocolDesigner:
         side: int = 1,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
+        rng_seed: int = 42,
     ) -> GST.Protocol:
         """Plans a binomial design with unequal allocation.
 
@@ -714,7 +716,7 @@ class ProtocolDesigner:
             spending_params=spending_params,
             futility=True,
             tails=side,
-            rng_seed=self._model.config.rng_seed if self._model else None,
+            rng_seed=rng_seed,
             allocation_ratios=allocation_ratios,
             control_arm_name=control_arm_name,
             treatment_arm_name=treatment_arm_name,
@@ -911,7 +913,7 @@ class ProtocolDesigner:
             futility=futility is not None,
             futility_binding=bool(futility.binding) if futility else False,
             tails=1,  # Default to 1-sided for this template logic
-            rng_seed=self._model.config.rng_seed if self._model else None,
+            rng_seed=self._model.config.rng_seed if self._model else 42,
             allocation_ratios=allocation_ratios,
             control_arm_name=control_arm_name,
             treatment_arm_name=treatment_arm_name,
@@ -950,6 +952,7 @@ class ProtocolDesigner:
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
+        rng_seed: int = 42,
     ) -> GST.Protocol:
         """
         Plans a Continuous (Two Means) A/B design.
@@ -993,7 +996,7 @@ class ProtocolDesigner:
             alpha=alpha,
             power=power,
             efficacy_spending=spending_fn,
-            rng_seed=self._model.config.rng_seed if self._model else None,
+            rng_seed=rng_seed,
             method=method,
             method_config=method_config,
         )
@@ -1065,6 +1068,7 @@ class ProtocolDesigner:
         hazard_ratio: float,
         k: int,
         spending_fn: Optional[SpendingFunction] = None,
+        rng_seed: int = 42,
     ) -> GST.Protocol:
         """
         Plans a Survival (Time-to-Event) A/B design using Log-Rank Test.
@@ -1095,7 +1099,7 @@ class ProtocolDesigner:
             alpha=alpha,
             power=power,
             efficacy_spending=spending_fn,
-            rng_seed=self._model.config.rng_seed if self._model else None,
+            rng_seed=rng_seed,
         )
 
         # 3. Calculate Sample Size (n_max)

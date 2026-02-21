@@ -176,7 +176,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
 
     _protocol_class = JennisonTurnbull2000Protocol
 
-    def __init__(self, ledger: Ledger, rng_seed: Optional[int] = None):
+    def __init__(self, ledger: Ledger, rng_seed: int = 42):
         self.ledger = ledger
         self.rng_seed = rng_seed
 

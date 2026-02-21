@@ -75,7 +75,7 @@ class OptimizationConfig:
     n_top_seeds: int = 5
     method: Literal["simulation", "numerical_integration"] = "simulation"
     method_config: Optional[Union[SimulationConfig, NumericalIntegrationConfig]] = None
-    rng_seed: Optional[int] = None
+    rng_seed: int = 42
     tolerance: float = 1e-4
 
     def __post_init__(self) -> None:
@@ -105,7 +105,7 @@ class SequentialASNEstimator:
         self.prior = prior
         self.tails = tails
         self.config = config
-        self._rng_seed = config.rng_seed or np.random.randint(0, 10000)
+        self._rng_seed = config.rng_seed
 
     def _get_simulator(self) -> OperatingCharacteristicsEvaluator:
         from earlysign.stats.gaussian_process import CanonicalGaussianProcess
@@ -340,7 +340,7 @@ def optimize_schedule(
     tails: int = 1,
     method: Literal["simulation", "numerical_integration"] = "simulation",
     method_config: Optional[Union[SimulationConfig, NumericalIntegrationConfig]] = None,
-    seed: Optional[int] = None,
+    seed: int = 42,
 ) -> OptimizationResult:
     """Find the optimal information time schedule to minimize ASN.
 

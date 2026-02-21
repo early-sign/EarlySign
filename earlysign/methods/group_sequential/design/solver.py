@@ -26,12 +26,16 @@ class DesignSolver(BoundarySolver):
         self,
         info_times: NDArray[np.float64],
         tails: int = 1,
-        rng_seed: Optional[int] = None,
+        rng_seed: int = 42,
     ):
         self._info_times = info_times
         self._tails = tails
         self._model = CanonicalJointModel(
-            Config(info_times=info_times, tails=tails, rng_seed=rng_seed)
+            Config(
+                info_times=info_times,
+                tails=tails,
+                rng_seed=rng_seed,
+            )
         )
 
     @property
@@ -54,7 +58,7 @@ def solve_boundaries(
     policy: StoppingPolicy,
     info_times: NDArray[np.float64] | List[float],
     tails: int = 1,
-    rng_seed: Optional[int] = None,
+    rng_seed: int = 42,
 ) -> Tuple[Optional[NDArray[Any]], Optional[NDArray[Any]]]:
     """Lightweight convenience function for solving GSD boundaries.
 

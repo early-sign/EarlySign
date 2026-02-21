@@ -96,7 +96,7 @@ class SimulationConfig:
     """Configuration for simulation-based boundary solving."""
 
     n_sims: int = 20000
-    rng_seed: Optional[int] = None
+    rng_seed: int = 42
 
 
 @dataclass
@@ -170,7 +170,7 @@ class CanonicalJointModel:
         cls,
         spec: GST.Protocol,
         n_sims: int = 20000,
-        rng_seed: Optional[int] = None,
+        rng_seed: int = 42,
     ) -> "CanonicalJointModel":
         """Instantiate the model from an ES3 GST.Protocol specification."""
         task = spec.task
@@ -219,7 +219,7 @@ class CanonicalJointModel:
         ] = None,
         drift: float = 0.0,
         n_sims: Optional[int] = None,
-        seed: Optional[int] = None,
+        seed: int = 42,
     ) -> float:
         """Compute probability of crossing boundaries under given drift.
 
@@ -249,7 +249,7 @@ class CanonicalJointModel:
         s = (
             method_config.rng_seed
             if isinstance(method_config, SimulationConfig)
-            else (seed if seed is not None else self.config.rng_seed)
+            else seed
         )
         n = (
             method_config.n_sims
@@ -300,11 +300,7 @@ class CanonicalJointModel:
         # Ensure CRN for simulation stability in root finding
         if method == "simulation":
             if method_config is None:
-                eff_seed = (
-                    self.config.rng_seed
-                    if self.config.rng_seed is not None
-                    else int(self._rng.integers(100000))
-                )
+                eff_seed = self.config.rng_seed
                 method_config = SimulationConfig(
                     n_sims=self.config.n_sims, rng_seed=eff_seed
                 )
