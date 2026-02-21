@@ -36,6 +36,23 @@ Existing software packages for sequential analysis
   - append-only, immutable
 - Command Query Responsibility Segregation (CQRS)
 
+Under the CQRS pattern, the first-class operations are "command" and "query."
+Commands are operations that issue and append new records to the event store:
+```mermaid
+graph BT
+    User((User)) --> Command[Command]
+    Command --> Record[Record]
+    Record --> Ledger[(Ledger)]
+```
+
+On the other hand, queries are operations that generate projections from the event store:
+```mermaid
+graph TD
+    Ledger[(Ledger)] --> Query[Query]
+    Query --> Projection[Projection]
+    Projection --> User((User))
+```
+
 ### Practical considerations
 - Entity with Snapshots
 
@@ -45,6 +62,23 @@ Under the event sourcing pattern, entities are derivatives: they are computed fr
 In terms of the CQRS pattern, entities can be seen as special types of projections with snapshots.
 An Entity is not a pure CQRS Write Model nor a pure Read Model; it's a hybrid concept.
 It represents a consistently-identifiable aggregate whose state is derived from event projections but can be cached as Snapshots.
+
+```mermaid
+graph TD
+    Ledger[(Ledger)]
+    User((User))
+
+    %% Read Path (Left)
+    Ledger --> Query[Query]
+    Query --> Projection["Projection <br/> (Latest Entity State + Relevant Diffs)"]
+    Projection --> User
+
+    %% Write Path (Right)
+    User --> Command[Command]
+    Command --> Record["Record <br/> (New Entity State)"]
+    Record --> Ledger
+```
+
 
 <!-- SequentialEntity = Entity with Indexed Trajectory -->
 For sequential procedures (e.g., GST), certain entities are better represented as sequential entities.

@@ -29,6 +29,12 @@ This approach provides efficient storage usage while maintaining compatibility a
 ## Commands
 Always make sure to run the following to check if the tests and lint checks pass across all Python versions:
 ```sh
+$ make check-lites
+```
+This uses one of the supported Python versions.
+
+For a full check using all supported Python versions,
+```sh
 $ make check
 ```
 
@@ -37,26 +43,10 @@ If the lint fails, run the following to force the format:
 $ make format
 ```
 
-If you want to compile the documentation locally, run
+If you want to compile and check the documentation locally, run
 ```sh
 $ make docs-serve
 ```
-
-## Development Toolkit
-
-All the following checks can be run by the following command:
-```sh
-$ make check-lite
-```
-
-This uses one of the supported Python versions.
-
-For a full check using all supported Python versions,
-```sh
-$ make check
-```
-
-We prefer to set the configs for the following in `pyproject.toml`.
 
 ### Formatters / Linters: black, isort, ruff
 We use the following tools for formatting and lint-based automatic fixes:
@@ -78,5 +68,5 @@ Run `make check` to execute type checks.
 
 ### Tests: pytest, doctest
 Tests are run using **pytest** and **doctest**.
-All tests are executed with `make check`.
-Pytest is parametrized to run across multiple Python versions.
+All tests are executed with `make check` or `make check-lite`.
+Pytest is parametrized to run across multiple Python versions (if using `make check`).
