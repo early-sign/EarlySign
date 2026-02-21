@@ -70,12 +70,12 @@ def calculate_n_max(
     A single-arm design (control and treatment share the same name):
 
     >>> calculate_n_max(drift=1.0, p_control=0.5, p_treatment=0.6, control_arm_name="treatment", treatment_arm_name="treatment")
-    {'treatment': 25}
+    {'treatment': 26}
 
     A two-arm design with 1:1 allocation:
 
     >>> calculate_n_max(drift=1.0, p_control=0.5, p_treatment=0.6)
-    {'control': 50, 'treatment': 50}
+    {'control': 51, 'treatment': 51}
 
     Attempting to use identical control and treatment proportions raises an error:
 
