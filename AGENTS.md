@@ -37,13 +37,6 @@ EarlySign is built around an **event-sourcing** architecture with a typed, appen
 
 The conceptual decisions are stored and updated in docs/source/reference/ADR.
 
-## Core Components
-
-- **Ledger** (`earlysign.core`): Central event store using ibis-framework for backend-agnostic data operations. Supports DuckDB, Polars, and other ibis backends
-- **Framework** (`earlysign.framework`): Building blocks that standardize the read-write operations to the ledger.
-- **Stats Engine** (`earlysign.stats`): Statistical methods organized as `essentials/` (the essential classes and computations) and `applications/` (closer to scenario-based interfaces, uses `earlysign.framework`)
-- **API Layer** (`earlysign.templates`): Business-oriented facade using domain terminology (e.g., `ab_tests`, `guardrail_monitoring`)
-
 ## 🔧 Coding Standards
 
 ### Import Conventions
@@ -60,7 +53,7 @@ The conceptual decisions are stored and updated in docs/source/reference/ADR.
 ### Code Quality
 - **No development artifacts**: Remove working comments before final delivery
   - ❌ Examples: "this method moved from...", "TODO: refactor later"
-  - ✅ Keep only comments that add value to future maintainers
+  - ✅ Keep only comments that should make into the production version of the code.
 - **Clean commits**: Ensure production code doesn't contain debug prints or temporary code
 - **Consistent formatting**: Follow project formatting standards (enforced via `make format`)
 - **Exports & language features**: Avoid `__all__` exports (except the top-level version string) and do not rely on `from __future__ import annotations`; code should run without future-import shims.
