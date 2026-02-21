@@ -461,7 +461,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
                 report = sess.read(ProgressProjector()).data
                 prog = report.model_dump(mode="json")
 
-                if prog.get("status") != DecisionStatus.CONTINUE_:
+                if prog.get("status") != DecisionStatus.CONTINUE:
                     logger.info(
                         f"Stopping criterion met at index {i}: {prog.get('status')}"
                     )
@@ -533,7 +533,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
                 report = sess.read(ProgressProjector()).data
                 prog = report.model_dump(mode="json")
 
-                if prog.get("status") != DecisionStatus.CONTINUE_:
+                if prog.get("status") != DecisionStatus.CONTINUE:
                     logger.info(
                         f"Stopping criterion met at row {i}: {prog.get('status')}"
                     )

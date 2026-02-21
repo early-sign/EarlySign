@@ -43,7 +43,7 @@ namespace ES3;
  *    properties. This design allows for flexibility but requires careful handling at the implementation level.
  *    
  *    Facade Granularity:
- *    When implementing a specific Protocol's engine or facade (e.g., an EarlySign Template),
+ *    When implementing a specific Protocol's engine or facade (e.g., an EarlySign Controller),
  *    polymorphism should be largely resolved at the implementation level. In other words,
  *    the facade code should be defined granularly enough so that most schema choices are fixed.
  *    If a facade leaves too much polymorphism unresolved, it should likely be split into more

@@ -69,7 +69,7 @@ class ProgressProjector(Projector[ProgressReport]):
                     sample_n=0,
                     trajectory=0.0,
                     boundary=None,
-                    status=DecisionStatus.CONTINUE_,
+                    status=DecisionStatus.CONTINUE,
                 ),
                 trace=[],
             )
@@ -238,7 +238,7 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
             alpha=p.alpha,
         )
 
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
         if res.is_rejected:
             status = DecisionStatus.STOP_DETECTED
 
@@ -290,7 +290,7 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
         )
 
         # 4. Determine Final Status
-        final_status = DecisionStatus.CONTINUE_
+        final_status = DecisionStatus.CONTINUE
         if res.is_rejected:
             final_status = DecisionStatus.STOP_DETECTED
 

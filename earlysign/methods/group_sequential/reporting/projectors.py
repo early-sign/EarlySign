@@ -215,7 +215,7 @@ class ProgressProjector(Projector[ProgressReport]):
                 efficacy_boundary=None,
                 futility_boundary=None,
                 info_frac=curr_info_frac,
-                status=DecisionStatus.CONTINUE_,
+                status=DecisionStatus.CONTINUE,
                 is_milestone=False,
                 next_milestone_n=next_milestone_n,
                 arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},

@@ -303,7 +303,7 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             self.update(batch if isinstance(batch, list) else [batch])
             prog = self.report_progress()
 
-            if prog.get("status") != DecisionStatus.CONTINUE_:
+            if prog.get("status") != DecisionStatus.CONTINUE:
                 logger.info(
                     f"Stopping criterion met at index {i}: {prog.get('status')}"
                 )
@@ -356,7 +356,7 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             self.update(batch)
             prog = self.report_progress()
 
-            if prog.get("status") != DecisionStatus.CONTINUE_:
+            if prog.get("status") != DecisionStatus.CONTINUE:
                 logger.info(f"Stopping criterion met at row {i}: {prog.get('status')}")
                 break
 

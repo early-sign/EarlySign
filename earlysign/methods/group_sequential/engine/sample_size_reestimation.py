@@ -208,7 +208,7 @@ class ConditionalPowerAdaptationEngine:
             status = PromisingZoneStatus.FUTILITY
             rec = "Consider stopping for futility (Low CP)"
         elif cp > conditional_power_threshold_max:
-            status = PromisingZoneStatus.CONTINUE_
+            status = PromisingZoneStatus.CONTINUE
             rec = "Continue as planned (High CP)"
         else:
             status = PromisingZoneStatus.PROMISING

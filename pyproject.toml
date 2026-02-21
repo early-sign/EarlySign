@@ -26,6 +26,7 @@ examples = []
 
 #==== Development ====#
 [tool.poetry.group.dev.dependencies]
+datamodel-code-generator = "^0.54.0"
 jupyter = "^1.1.1" # Example development
 ipython = "^9.5.0" # Debugging
 pudb = "^2025.1" # Debugging

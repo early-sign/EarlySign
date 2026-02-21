@@ -165,7 +165,7 @@ class GroupSequentialEngine:
                 info_frac=info_frac,
                 z_stat=0.0,  # Schema requires float
                 z_stats=None,
-                status=DecisionStatus.CONTINUE_,
+                status=DecisionStatus.CONTINUE,
                 is_efficacy_crossed=False,
                 is_futility_crossed=False,
             )
@@ -193,7 +193,7 @@ class GroupSequentialEngine:
 
         is_efficacy_crossed = False
         is_futility_crossed = False
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
 
         if look_num is not None:
             # Efficacy: STOP if ANY arm crosses boundary
@@ -205,7 +205,7 @@ class GroupSequentialEngine:
                     status = DecisionStatus.STOP_EFFICACY
 
             # Futility: STOP if ALL arms cross futility boundary
-            if futility_boundary is not None and status == DecisionStatus.CONTINUE_:
+            if futility_boundary is not None and status == DecisionStatus.CONTINUE:
                 is_futility_crossed = all(
                     z < futility_boundary for z in z_scores.values()
                 )
@@ -214,7 +214,7 @@ class GroupSequentialEngine:
 
             # Plan End Reached
             if look_idx == len(self._points) - 1:
-                if status == DecisionStatus.CONTINUE_:
+                if status == DecisionStatus.CONTINUE:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
         return LookResult(

@@ -136,14 +136,14 @@ class BinomialYEASTEngine:
         if boundary_val is not None:
             is_crossed = trajectory > boundary_val
 
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
         if is_crossed:
             status = DecisionStatus.STOP_EFFICACY
 
         # Check for max N
         if hasattr(self.protocol.method, "expected_num_observations"):
             if cumulative_n >= self.protocol.method.expected_num_observations:
-                if status == DecisionStatus.CONTINUE_:
+                if status == DecisionStatus.CONTINUE:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
         return LookResult(
@@ -197,13 +197,13 @@ class ContinuousYEASTEngine:
         if boundary_val is not None:
             is_crossed = trajectory > boundary_val
 
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
         if is_crossed:
             status = DecisionStatus.STOP_EFFICACY
 
         if hasattr(self.protocol.method, "expected_num_observations"):
             if cumulative_n >= self.protocol.method.expected_num_observations:
-                if status == DecisionStatus.CONTINUE_:
+                if status == DecisionStatus.CONTINUE:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
         return LookResult(

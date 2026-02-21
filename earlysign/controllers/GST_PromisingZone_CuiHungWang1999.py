@@ -333,7 +333,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
 
             look_result = trajectory[-1][1]
 
-            if look_result.status == DecisionStatus.CONTINUE_:
+            if look_result.status == DecisionStatus.CONTINUE:
                 adapter = PromisingZoneAdaptationEngine()
                 adaptation_log = adapter.check_and_adapt(look_result, gst_protocol)
 

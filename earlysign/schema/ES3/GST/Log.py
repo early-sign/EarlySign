@@ -63,7 +63,7 @@ class DecisionStatus(StrEnum):
     Status of an ongoing or completed Group Sequential Test.
     """
 
-    CONTINUE_ = "continue"
+    CONTINUE = "continue"
     STOP_EFFICACY = "stop_efficacy"
     STOP_FUTILITY = "stop_futility"
     STOP_PLAN_END_REACHED = "stop_plan_end_reached"
@@ -112,7 +112,7 @@ class PromisingZoneStatus(StrEnum):
     FUTILITY = "futility"
     EFFICACY = "efficacy"
     PROMISING = "promising"
-    CONTINUE_ = "continue"
+    CONTINUE = "continue"
 
 
 class Trigger(BaseModel):

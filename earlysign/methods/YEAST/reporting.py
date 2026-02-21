@@ -59,7 +59,7 @@ class ProgressProjector(Projector[ProgressReport]):
                     sample_n=0,
                     trajectory=0.0,
                     boundary=None,
-                    status=DecisionStatus.CONTINUE_,
+                    status=DecisionStatus.CONTINUE,
                 ),
                 trace=[],
             )

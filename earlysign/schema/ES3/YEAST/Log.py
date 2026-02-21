@@ -19,7 +19,7 @@ class DecisionStatus(StrEnum):
     Status of an ongoing or completed YEAST Test.
     """
 
-    CONTINUE_ = "continue"
+    CONTINUE = "continue"
     STOP_EFFICACY = "stop_efficacy"
     STOP_PLAN_END_REACHED = "stop_plan_end_reached"
     STOP = "stop"

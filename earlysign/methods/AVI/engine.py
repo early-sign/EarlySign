@@ -43,7 +43,7 @@ class BinomialEValueEngine:
             alpha=self.protocol.alpha,
         )
 
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
         if res.is_rejected:
             status = DecisionStatus.STOP_DETECTED
 
@@ -103,7 +103,7 @@ class GAVIEngine:
                 trajectory=0.0,
                 boundary=float("inf"),
                 is_crossed=False,
-                status=DecisionStatus.CONTINUE_,
+                status=DecisionStatus.CONTINUE,
             )
 
         estimate = val_t - val_c
@@ -132,7 +132,7 @@ class GAVIEngine:
             if estimate > ci:
                 is_crossed = True
 
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
         if is_crossed:
             status = DecisionStatus.STOP_DETECTED
         elif (n_c + n_t) / 2.0 >= self.method.max_n:
@@ -190,7 +190,7 @@ class mSPRTEngine:
                 trajectory=0.0,
                 boundary=float("inf"),
                 is_crossed=False,
-                status=DecisionStatus.CONTINUE_,
+                status=DecisionStatus.CONTINUE,
             )
 
         estimate = val_t - val_c
@@ -213,7 +213,7 @@ class mSPRTEngine:
             if estimate > ci:
                 is_crossed = True
 
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
         if is_crossed:
             status = DecisionStatus.STOP_DETECTED
 
@@ -255,7 +255,7 @@ class SequentialQuantileEngine:
             treat.ci_upper < ctrl.ci_lower
         )
 
-        status = DecisionStatus.CONTINUE_
+        status = DecisionStatus.CONTINUE
         if is_disjoint:
             status = DecisionStatus.STOP_DETECTED
 
@@ -264,7 +264,7 @@ class SequentialQuantileEngine:
             hasattr(method, "max_n")
             and method.max_n
             and total_n >= method.max_n
-            and status == DecisionStatus.CONTINUE_
+            and status == DecisionStatus.CONTINUE
         ):
             status = DecisionStatus.STOP_PLAN_END_REACHED
 
