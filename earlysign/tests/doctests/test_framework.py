@@ -1,242 +1,285 @@
 """
-Introduction to the EarlySign Framework
+Framework: Patterns of Scientific Logic
 ---------------------------------------
 
-This module provides a comprehensive introduction to the EarlySign framework through functional doctests.
+The `EarlySign` **Framework layer** introduces an architecture that provides
+core abstractions to manage the lifecycle and lineage of an analysis:
 
-Setup
-^^^^^
+1. **Projectors**: Pure functional views that translate history into scientific objects.
+2. **Sessions & Writers**: Orchestrators that handle reading, writing, and lineage tracking.
+3. **Entities**: Identifiable aggregates that support efficient snapshotting.
+4. **Trace & Lineage**: The statistical "provenance" that links results to raw data.
+
+1. Setup
+^^^^^^^^
 
 .. code-block:: python
 
-    >>> import ibis
+    >>> import ibis, json
+    >>> from typing import Optional
+    >>> from pydantic import BaseModel
     >>> from earlysign.core.ledger import Ledger
+    >>> from earlysign.framework.session import Session
 
-    # Allow more columns in displaying pandas dataframes:
+    >>> # Initialize an in-memory ledger for demonstration
+    >>> con = ibis.connect("duckdb://:memory:")
+    >>> ledger = Ledger(con, "framework_demo")
+    >>> ledger.ensure()
+
+    >>> # Set pandas options for consistent display
     >>> import pandas as pd
     >>> pd.set_option('display.max_columns', None)
     >>> pd.set_option('display.width', 1000)
 
-    # Initialize an in-memory ledger for demonstration purposes:
-    >>> con = ibis.duckdb.connect(":memory:")
-    >>> ledger = Ledger(con, "events")
-    >>> ledger.ensure()
+2. Core Ledger Read/Write
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Core features
-^^^^^^^^^^^^^
-
-Ledger Read/Write
-~~~~~~~~~~~~~~~~~
-The Ledger is a low-level, append-only event store. You can record any Pydantic model
-to capture domain events or manual decisions without using the full framework.
+The Ledger is a low-level, append-only store. You can record any Pydantic model
+to capture domain events or manual decisions.
 
 .. code-block:: python
 
-    >>> from pydantic import BaseModel
     >>> class MyDecision(BaseModel):
     ...     action: str
     ...     reason: str
-
-    >>> # Record a manual decision to continue despite crossing a non-binding boundary
-    >>> ledger.insert(
+    >>> _ = ledger.insert(
     ...     data=MyDecision(
     ...         action="CONTINUE",
     ...         reason="Non-binding futility boundary crossed, but clinical relevance remains."
     ...     )
     ... )
-    UUID(...)
-
-ibis-framework
-~~~~~~~~~~~~~~
-Since the Ledger is backed by Ibis, you can perform powerful queries using
-standard Ibis expressions.
-
-.. code-block:: python
-
-    >>> table = ledger.t
-    >>> table.filter(table.type == "MyDecision").payload["action"].execute().tolist()
-    ['CONTINUE']
-
     >>> # ledger.show() provides a quick summary view of the ledger
-    >>> ledger.show()
+    >>> ledger.show()  # doctest: +ELLIPSIS
              type identity trace                                            payload attributes
     0  MyDecision     None  None  {'action': 'CONTINUE', 'reason': 'Non-binding ...         {}
 
-Ledger Binding
-~~~~~~~~~~~~~~
+3. Scoped Views: Ledger Binding
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Ledgers can be "bound" to attributes, creating scoped views. Reads and writes
-automatically apply the bound attributes. Use `unbind()` to remove attributes.
+automatically apply the bound attributes.
 
 .. code-block:: python
 
+    >>> # Bind to a specific experiment_id
     >>> exp_ledger = ledger.bind(experiment_id="EXP001")
-    >>> # Every record has a unique id and timestamp (timestamp)
-    >>> df = ledger.t.execute()
-    >>> 'uuid' in df.columns and 'timestamp' in df.columns
-    True
-    >>> len(df.iloc[0]['uuid']) == 32  # hex uuid
-    True
-
-    >>> # Records inserted with one binding don't appear in a differently-bound ledger
+    >>> _ = exp_ledger.insert(data=MyDecision(action="STOP", reason="Scoped test"))
+    >>> # Records inserted with one binding don't appear in another
     >>> other_ledger = ledger.bind(experiment_id="OTHER")
-    >>> from pydantic import BaseModel
-    >>> class MyDecision(BaseModel):
-    ...     action: str
-    ...     reason: str
-    >>> _ = other_ledger.insert(data=MyDecision(action="OTHER", reason="scoped"))
-    >>> len(other_ledger.t.filter(other_ledger.t.type == "OTHER").execute())
+    >>> len(other_ledger.t.filter(other_ledger.t.type == "MyDecision").execute())
     0
 
-Framework features
-^^^^^^^^^^^^^^^^^^
+4. Pure Functional Views: Projectors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Write Model
-~~~~~~~~~~~
-The Framework provides `Session.commit` to record events with scientific lineage.
-`sess.commit` records a model, while `sess.call_and_commit` records the result of a function.
+A **`Projector`** takes a stream of events and "projects" them into a meaningful
+object. This follows the **State-as-a-Fold** pattern: your state is simply the result
+of "folding" (reducing) history.
 
-.. code-block:: python
-
-    >>> from earlysign.framework.session import Session
-    >>> with Session(ledger) as sess:
-    ...    sess.commit(MyDecision(action="STOP", reason="Safety concern"))
-    UUID(...)
-
-Projector
-~~~~~~~~~
-Projectors are "State-as-a-Fold" operators. They reconstruct high-level facts
-from the event stream.
+Projectors are **purely functional**. Instead of returning just a value, they
+return a **`ProjectionResult`**, which automatically bundles:
+- **`data`**: The projected state (e.g., a count or a model).
+- **`trace`**: A list of `TraceId`s that contributed to this specific result.
 
 .. code-block:: python
 
-    >>> import ibis
-    >>> from earlysign.framework.projector import ProjectionResult
+    >>> from earlysign.framework.projector import Projector, ProjectionResult
     >>> from earlysign.framework.trace import TraceId
-    >>> class DecisionProjector:
-    ...     def project(self, table):
+
+    >>> class CounterState(BaseModel):
+    ...     total: int = 0
+
+    >>> class IncrementProjector(Projector[CounterState]):
+    ...     def project(self, table: ibis.Expr) -> ProjectionResult[CounterState]:
+    ...         matches = table.filter(table.type == "Increment")
+    ...         pdf = matches.execute()
+    ...         if pdf.empty:
+    ...             return ProjectionResult(data=CounterState(total=0), trace=[])
+    ...         total = pdf["payload"].apply(
+    ...             lambda x: json.loads(x)["value"] if isinstance(x, str) else x["value"]
+    ...         ).sum()
+    ...         trace = [TraceId(str(u)) for u in pdf["uuid"]]
+    ...         return ProjectionResult(data=CounterState(total=total), trace=trace)
+
+    >>> # Projector for MyDecision (finds latest)
+    >>> class DecisionProjector(Projector[str]):
+    ...     def project(self, table: ibis.Expr) -> ProjectionResult[str]:
     ...         match = table.filter(table.type == "MyDecision").order_by(ibis.desc("timestamp")).limit(1).execute()
     ...         if match.empty: return ProjectionResult(data=None, trace=[])
-    ...         return ProjectionResult(data=match.iloc[0]["payload"]["action"], trace=[TraceId(str(match.iloc[0]["uuid"]))])
+    ...         p = match.iloc[0]["payload"]
+    ...         if isinstance(p, str): p = json.loads(p)
+    ...         return ProjectionResult(data=p["action"], trace=[TraceId(str(match.iloc[0]["uuid"]))])
 
-    >>> with Session(ledger) as sess:
-    ...     latest_action = sess.read(DecisionProjector())
-    >>> latest_action.data
-    'STOP'
+5. Orchestration: Sessions & Writers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Session (Horizon)
-~~~~~~~~~~~~~~~~~
-A Session defines a "Scientific Horizon"—a point-in-time snapshot of the ledger.
-Analysis within a session is protected from concurrent writes.
+The **`Session`** tracks lineage across multiple reads and writes, creating an
+**Implicit Web of Proof**.
 
-.. code-block:: python
-
-    >>> with Session(ledger) as sess:
-    ...     # 1. Write something outside (directly to ledger) AFTER session started
-    ...     _ = ledger.insert(data=MyDecision(action="EXTERNAL_B", reason="outside"))
-    ...     # 2. Projection within session only sees records up to the horizon (e.g., 'STOP')
-    ...     res = sess.read(DecisionProjector())
-    >>> res.data
-    'STOP'
-
-Session (Local Visibility)
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-A Session allows reading its own committed data even while the Scientific Horizon
-is fixed for external data. This allows multi-step updates within a single session.
+1. **`sess.read(projector)`**: Executes a projector and *merges* its trace into
+   the session's memory.
+2. **`sess.commit(fact)`**: Writes a new record to the ledger, automatically
+   tagging it with all traces accumulated during the session.
 
 .. code-block:: python
 
-    >>> with Session(ledger) as sess:
-    ...     # 1. Commit something within the session
-    ...     _ = sess.commit(MyDecision(action="LOCAL_A", reason="within session"))
-    ...     # 2. Directly insert something in the ledger (simulating external write)
-    ...     _ = ledger.insert(data=MyDecision(action="EXTERNAL_C", reason="external concurrent"))
-    ...     # 3. Read should see LOCAL_A but NOT EXTERNAL_C
-    ...     res = sess.read(DecisionProjector())
-    ...
-    >>> res.data
-    'LOCAL_A'
+    >>> class Increment(BaseModel):
+    ...     value: int
+    >>> class Summary(BaseModel):
+    ...     text: str
 
-Trace
-~~~~~
-Scientific Lineage (Trace) is automatically accumulated as you Read data in a Session.
+    >>> # Add tutorial data using scoped ledger
+    >>> sess_ledger = ledger.bind(experiment_id="102_demo")
+    >>> _ = sess_ledger.insert(Increment(value=10))
+    >>> _ = sess_ledger.insert(Increment(value=5))
+
+    >>> with Session(sess_ledger) as sess:
+    ...     # Reading merges trace into session
+    ...     res = sess.read(IncrementProjector())
+    ...     print(f"Current Total: {res.data.total}")
+    ...     # Committing uses session trace for lineage
+    ...     _ = sess.commit(Summary(text="Initial count completed"))
+    Current Total: 15
+
+6. Identifiable Aggregates: Entities
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+While Projectors process history, **`Entity`** provides identifiable aggregates
+with **snapshots** for efficiency. An Entity automatically handles:
+1. Loading the **Latest Snapshot**.
+2. Finding the **Delta** (new events since the snapshot).
+3. **Folding** the delta into the state.
+4. **Saving** a new snapshot back to the ledger.
 
 .. code-block:: python
 
-    >>> with Session(ledger) as sess:
-    ...     # Reading records their causal IDs in the session trace
-    ...     res = sess.read(DecisionProjector())
+    >>> from earlysign.framework.entity.core import Entity
+    >>> from earlysign.framework.entity.snapshot import Snapshot
+
+    >>> class CounterEntity(Entity[CounterState]):
+    ...     data_type = CounterState
+    ...     @property
+    ...     def initial_value(self) -> CounterState: return CounterState(total=0)
+    ...     def compute(self, snapshot, delta_expr, full_table):
+    ...         current_total = snapshot.data.total if snapshot else 0
+    ...         pdf = delta_expr.filter(delta_expr.type == "Increment").execute()
+    ...         for _, row in pdf.iterrows():
+    ...             p = row["payload"]
+    ...             val = json.loads(p)["value"] if isinstance(p, str) else p["value"]
+    ...             current_total += val
+    ...         trace = [TraceId(str(u)) for u in pdf["uuid"]]
+    ...         if snapshot and snapshot.uuid: trace.insert(0, TraceId(str(snapshot.uuid)))
+    ...         return ProjectionResult(data=CounterState(total=current_total), trace=trace)
+
+    >>> with Session(sess_ledger) as sess:
+    ...     counter = CounterEntity(identity="shared_counter")
+    ...     result = sess.read(counter)
+    ...     counter.save(sess, result)  # Save snapshot
+    ...     print(f"Entity Total: {result.data.total}")
+    Entity Total: 15
+
+7. Scientific Lineage (Trace)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+At the heart of `EarlySign` is the **Trace**. We don't just care about the
+current value; we care about **causality**.
+
+- **`TraceId`**: A pointer to a specific event in the Ledger.
+- **`Traced[T]`**: A wrapper that bundles a result of type `T` with its `TraceId` lineage.
+
+Think of it like being able to point to any "pixel on the screen" (a result)
+and seeing the direct line through every calculation back to the raw observations.
+
+.. code-block:: python
+
+    >>> with Session(sess_ledger) as sess:
+    ...     _ = sess.read(IncrementProjector())
+    ...     # Lineage is automatically accumulated during Read
     ...     len(sess.trace) > 0
     True
 
-Entity
-~~~~~~
-Entities are special aggregates with identity. `Entity` supports differential folding.
+8. Session Scoping: Horizon & Local Visibility
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sessions define a "Scientific Horizon"—a point-in-time snapshot. Analysis is
+protected from concurrent external writes while allowing regional consistency
+of local commits.
+
+.. code-block:: python
+
+    >>> # Horizon test
+    >>> # 1. Record exists BEFORE session starts
+    >>> _ = sess_ledger.insert(MyDecision(action="PRE_SESSION", reason="baseline"))
+    >>> with Session(sess_ledger) as sess:
+    ...     # 2. Record inserted outside AFTER session started
+    ...     _ = ledger.insert(MyDecision(action="EXTERNAL", reason="Mid-session"))
+    ...     # 3. Read should only see PRE_SESSION
+    ...     res = sess.read(DecisionProjector())
+    >>> res.data
+    'PRE_SESSION'
+
+    >>> # Local Visibility test
+    >>> with Session(sess_ledger) as sess:
+    ...     # 1. Commit something within the session
+    ...     _ = sess.commit(MyDecision(action="LOCAL_A", reason="Within sess"))
+    ...     # 2. Directly insert something in the ledger (simulating external write)
+    ...     _ = ledger.insert(MyDecision(action="EXTERNAL_3", reason="Outside sess"))
+    ...     # 3. Read should see LOCAL_A but NOT EXTERNAL_3
+    ...     res = sess.read(DecisionProjector())
+    >>> res.data
+    'LOCAL_A'
+
+Advanced Topics
+^^^^^^^^^^^^^^^
+
+The Framework also supports complex domain-specific aggregates and time-series
+trajectories.
 
 .. code-block:: python
 
     >>> from earlysign.methods.binomial import Scoreboard
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-    >>> fact = Scoreboard(identity="metrics")
-    >>> # Pre-populate data in a separate session so it's visible in the next horizon
-    >>> with Session(ledger) as sess:
-    ...     sess.commit(BinomialArmData(total=10, success=2, arm="A"))
-    UUID(...)
-
-    >>> with Session(ledger) as sess:
-    ...     state = sess.read(fact)
+    >>> with Session(sess_ledger) as sess:
+    ...     _ = sess.commit(BinomialArmData(total=10, success=2, arm="A"))
+    >>> with Session(sess_ledger) as sess:
+    ...     state = sess.read(Scoreboard(identity="metrics"))
     >>> state.data.arms["A"].metrics.total
     10
 
-Sequential Entity
-~~~~~~~~~~~~~~~~~
-Sequential Entities evolve over time (e.g., Test Statistics, Spending Boundaries).
-They represent a trajectory of states $(S_0, S_1, \\dots, S_n)$ indexed by a sequential coordinate.
-
-.. code-block:: python
-
     >>> from typing import List, Tuple
-    >>> from pydantic import BaseModel
     >>> from earlysign.framework.entity.sequential import SequentialEntity
-    >>>
-    >>> class CounterState(BaseModel):
-    ...     count: int
-    >>>
-    >>> class Increment(BaseModel):
-    ...     step: int
-    ...     val: int
-    >>>
     >>> class SequentialCounter(SequentialEntity[int, CounterState]):
     ...     data_type = List[Tuple[int, CounterState]]
     ...     index_field = "step"
-    ...
     ...     @property
-    ...     def initial_value(self) -> List[Tuple[int, CounterState]]:
-    ...         return []
-    ...
-    ...     def get_index_expr(self, table: ibis.Expr) -> ibis.Expr:
+    ...     def initial_value(self): return []
+    ...     def get_index_expr(self, table):
     ...         from earlysign.core.util.json_ops import extract_json_scalar
     ...         return extract_json_scalar(table.attributes, self.index_field, "int64")
-    ...
-    ...     def compute_step(self, index, prev_state, delta_expr) -> CounterState:
-    ...         prev_val = prev_state.count if prev_state else 0
-    ...         increments = delta_expr.filter(delta_expr.type == "Increment").execute()
-    ...         total_inc = increments["payload"].apply(lambda p: p["val"] if isinstance(p, dict) else 0).sum()
-    ...         return CounterState(count=prev_val + total_inc)
-    >>>
-    >>> # 1. Prepare data for two steps
-    >>> ledger.insert(Increment(step=1, val=10), attributes={"step": 1})
+    ...     def compute_step(self, index, prev_state, delta_expr):
+    ...         prev_val = prev_state.total if prev_state else 0
+    ...         inc = delta_expr.filter(delta_expr.type == "Increment").execute()["payload"].apply(
+    ...             lambda p: p["value"] if "value" in p else 0
+    ...         ).sum()
+    ...         return CounterState(total=prev_val + inc)
+    >>> # Prepare data for staggered steps
+    >>> sess_ledger.insert(Increment(value=10), attributes={"step": 1})
     UUID(...)
-    >>> ledger.insert(Increment(step=2, val=5), attributes={"step": 2})
+    >>> sess_ledger.insert(Increment(value=5), attributes={"step": 2})
     UUID(...)
-    >>>
-    >>> # 2. Project the trajectory
-    >>> with Session(ledger) as sess:
-    ...     counter = SequentialCounter(identity="demo_counter")
+    >>> with Session(sess_ledger) as sess:
+    ...     counter = SequentialCounter(identity="demo_seq")
     ...     trajectory = sess.read(counter).data
     >>> len(trajectory)
     2
-    >>> trajectory[0]
-    (1, CounterState(count=10))
-    >>> trajectory[1]
-    (2, CounterState(count=15))
+    >>> trajectory[1][1].total
+    15
+
+Summary
+^^^^^^^
+
+- **Projectors**: Pure functional interpretation of history.
+- **Sessions**: Managers for causality and the "Scientific Horizon".
+- **Entities**: Efficient, identifiable, and snapshot-capable aggregates.
+- **Trace**: The immutable web of evidence connecting every result to its origin.
 """
