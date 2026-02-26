@@ -17,6 +17,9 @@ from earlysign.methods.group_sequential.design.operating_characteristics.binomia
 from earlysign.methods.group_sequential.design.operating_characteristics.continuous import (
     ContinuousOperatingCharacteristicsEvaluator,
 )
+from earlysign.methods.group_sequential.design.operating_characteristics.engines import (
+    SimulationCurve,
+)
 from earlysign.schema.ES3.GST.Log import LookResult
 
 
@@ -94,9 +97,11 @@ def plot_gst_summary(
         timer = protocol.method.stopping_policy.timer
         n_max = 0
         if hasattr(timer, "max_sample_size"):
-            n_max = timer.max_sample_size
+            n_max_raw = timer.max_sample_size
+            n_max = sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
         elif hasattr(timer, "max_events"):
-            n_max = timer.max_events
+            n_max_raw = timer.max_events
+            n_max = sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
 
         if n_max > 0:
             # Create a dense grid for faint planned boundaries
@@ -221,6 +226,63 @@ def plot_gst_summary(
     return fig
 
 
+def generate_operating_characteristics_table(results: SimulationCurve) -> pd.DataFrame:
+    """Generates a summary DataFrame from a SimulationCurve with enhanced diagnostics."""
+    rows = []
+    n_max_total = results.n_max_total or 0.0
+    n_fixed_total = results.n_fixed_total or 0.0
+
+    for i, r in enumerate(results.results):
+        x_val = results.x_values[i]
+
+        # Use total N for summary
+        ess_total = (
+            (
+                sum(r.expected_n_per_arm.values())
+                if r.expected_n_per_arm
+                else r.asn * n_max_total
+            )
+            if n_max_total > 0
+            else (r.asn if r.asn is not None else 0.0)
+        )
+
+        # 1. Basic Stats & Parameter
+        row = {
+            "Effect Size (%)": x_val,
+            "Power": r.power,
+        }
+
+        row["Expected N"] = ess_total
+
+        # 3. Sequential vs Fixed Comparisons
+        if n_fixed_total > 0:
+            row["Fixed N (Ref)"] = n_fixed_total
+            row["ESS / Fixed (%)"] = ess_total / n_fixed_total
+
+        # 4. Capacity / Max N
+        if n_max_total > 0:
+            row["ESS / Max (%)"] = ess_total / n_max_total
+            row["Max N (Total)"] = n_max_total
+
+        # 5. Risk metrics
+        if n_fixed_total > 0 and r.n_per_arm_schedule and r.prob_stop_total is not None:
+            total_n_schedule = np.zeros_like(r.prob_stop_total)
+            for arm_schedule in r.n_per_arm_schedule.values():
+                total_n_schedule += arm_schedule
+            exceed_mask = total_n_schedule > (n_fixed_total + 1e-6)
+            prob_exceed = np.sum(r.prob_stop_total[exceed_mask])
+            row["Prob > Fixed N"] = prob_exceed
+
+        # 6. Stopping Breakdown (Pushed to end)
+        if r.prob_stop_total is not None and len(r.prob_stop_total) > 0:
+            for j, prob in enumerate(r.prob_stop_total):
+                row[f"Prob Stop (Look {j+1})"] = prob
+
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+
 def visualize_protocol_design(
     protocol: GST.Protocol, effect_sizes: List[float]
 ) -> dict[str, Any]:
@@ -236,80 +298,129 @@ def visualize_protocol_design(
     """
     # 1. Select Evaluator
     evaluator: Any
+    metric_type: str
     if protocol.task.response_type == GST.ResponseType.BINARY:
         evaluator = BinomialOperatingCharacteristicsEvaluator(protocol, n_sims=10000)
+        metric_type = "relative_lift_pct"
     else:
         evaluator = ContinuousOperatingCharacteristicsEvaluator(protocol, n_sims=10000)
+        metric_type = "absolute_diff_pct"
 
     # 2. Evaluate Curve
-    # We treat effect_sizes as percentage change relative to baseline
-    curve = evaluator.evaluate_metric_at(effect_sizes, metric_type="absolute_diff_pct")
+    # We treat effect_sizes as percentage change relative to baseline for binomial
+    curve = evaluator.evaluate_metric_at(effect_sizes, metric_type=metric_type)
 
     # 3. Build DataFrame
-    rows = []
-    n_max_total = curve.n_max_total or 0
+    df = generate_operating_characteristics_table(curve)
+
+    # 4. Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # ASN Bubble Curve
+    ax.set_title("Operating Characteristics: ESS vs Effect Size", fontsize=14, fontweight="bold")
+    ax.set_xlabel("Relative Effect Size (%)" if metric_type == "relative_lift_pct" else "Effect Size", fontsize=12)
+    ax.set_ylabel("Expected Sample Size", fontsize=12)
+
+    ax.plot(
+        df["Effect Size (%)"],
+        df["Expected N"],
+        color="#1f77b4",
+        linewidth=2.5,
+        label="ESS (Total)",
+        alpha=0.9,
+    )
 
     for i, res in enumerate(curve.results):
         x_val = curve.x_values[i]
-
-        # Calculate Expected N (Total)
-        # Use computed expected_n_per_arm if available (more precise for some designs)
-        if res.expected_n_per_arm:
-            expected_n = sum(res.expected_n_per_arm.values())
-        else:
-            expected_n = res.asn * n_max_total
-
-        rows.append(
-            {
-                "Effect Size (%)": x_val,
-                "Power": res.power,
-                "Expected N": expected_n,
-            }
+        
+        ax.scatter(
+            [x_val],
+            [df["Expected N"].iloc[i]],
+            color="#1f77b4",
+            s=80,
+            zorder=5,
+            edgecolors="black",
         )
-    df = pd.DataFrame(rows)
 
-    # 4. Plot
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        if res.prob_stop_total is not None and len(res.prob_stop_total) > 0:
+            sample_sizes = []
+            if getattr(res, "n_per_arm_schedule", None):
+                total_n_schedule = np.zeros_like(res.prob_stop_total)
+                for arm_schedule in res.n_per_arm_schedule.values():
+                    total_n_schedule += arm_schedule
+                sample_sizes = total_n_schedule.tolist()
+            else:
+                max_look = len(res.prob_stop_total)
+                for k in range(1, max_look + 1):
+                    if evaluator.n_max_per_arm:
+                        n_total = sum(evaluator.n_max_per_arm.values())
+                        sample_sizes.append(int(n_total * (k / max_look)))
+                    else:
+                        sample_sizes.append(int(n_max_total * (k / max_look)))
 
-    # Power Curve
-    ax1.plot(df["Effect Size (%)"], df["Power"], "b-o", label="Power")
-    ax1.set_title("Power Curve")
-    ax1.set_xlabel("Relative Effect Size (%)")
-    ax1.set_ylabel("Probability of Rejection")
-    if protocol.task.efficacy:
-        ax1.axhline(
-            protocol.task.efficacy.alpha,
-            color="r",
-            linestyle="--",
-            label="Alpha (Type I)",
-        )
-    if protocol.task.futility:
-        ax1.axhline(
-            protocol.task.futility.power,
-            color="g",
-            linestyle="--",
-            label="Target Power",
-        )
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
+            for analysis_idx, prob in enumerate(res.prob_stop_total):
+                if prob == 0:
+                    continue
+                alpha_val = min(max(prob * 0.5, 0.02), 0.6)
+                
+                try:
+                    n_total = sample_sizes[analysis_idx]
+                except Exception:
+                    n_total = sample_sizes[-1]
 
-    # ASN Curve
-    ax2.plot(
-        df["Effect Size (%)"], df["Expected N"], "k-o", label="Average Sample Number"
-    )
-    ax2.set_title("Expected Sample Size (ASN)")
-    ax2.set_xlabel("Relative Effect Size (%)")
-    ax2.set_ylabel("Sample Size")
+                ax.scatter(
+                    [x_val],
+                    [n_total],
+                    color="#1f77b4",
+                    s=500,  # Match original large size
+                    alpha=alpha_val,
+                    edgecolors="none",
+                    zorder=3,
+                )
 
-    # Mark max N
+    # Mark max N and Fixed N Star
     max_n = sum(evaluator.n_max_per_arm.values())
-    ax2.axhline(max_n, color="r", linestyle="--", label="Max N")
-    ax2.grid(True, alpha=0.3)
-    ax2.legend()
+    ax.axhline(max_n, color="#1f77b4", linestyle="--", alpha=0.3, label="Max N (Total)")
+    
+    fixed_n = getattr(curve, "n_fixed_total", None)
+    if fixed_n and fixed_n > 0 and protocol.task.futility:
+        # Approximate the effect size targeted by the design using the nearest power
+        target_power = protocol.task.futility.power
+        nearest_idx = (df["Power"] - target_power).abs().idxmin()
+        target_eff = df.loc[nearest_idx, "Effect Size (%)"]
+        
+        ax.scatter(
+            [target_eff],
+            [fixed_n],
+            color="#1f77b4",
+            marker="*",
+            s=400,
+            label="Fixed Design (Total)",
+            edgecolors="black",
+            zorder=4,
+        )
 
-    plt.tight_layout()
+    ax.grid(True, alpha=0.3)
+    
+    # Clean up legend
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1, 1), fontsize=10)
+
+    format_dict = {
+        "Power": "{:.1%}",
+        "Expected N": "{:.1f}",
+        "ESS / Fixed (%)": "{:.1%}",
+        "ESS / Max (%)": "{:.1%}",
+        "Prob > Fixed N": "{:.1%}",
+        "Fixed N (Ref)": "{:.1f}",
+        "Max N (Total)": "{:.1f}",
+    }
+    for col in df.columns:
+        if col.startswith("Prob Stop (Look"):
+            format_dict[col] = "{:.1%}"
 
     return {
-        "summary": df.style.format({"Power": "{:.1%}", "Expected N": "{:.1f}"}),
+        "summary": df.style.format(format_dict),
         "figure": fig,
     }
