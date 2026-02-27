@@ -98,6 +98,7 @@ class StoppingPolicy(ABC):
         look_index: int,
         info_time: float,
         rule_type: str = "efficacy",
+        method: str = "simulation",
     ) -> Optional[float]:
         """Compute boundary at a specific look and information time.
 
@@ -154,6 +155,7 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
         look_index: int,
         info_time: float,
         rule_type: str = "efficacy",
+        method: str = "simulation",
     ) -> Optional[float]:
         """Compute boundary at a specific look and information time using a spending function.
 
@@ -221,6 +223,7 @@ class SpendingFunctionStoppingPolicy(StoppingPolicy):
                 previous_futility=fut_hist,
                 rule_type=rule_type,
                 drift=1.0,  # Standard drift used for futility solving (usually solved at init)
+                method=method,
             ),
         )
 
@@ -238,6 +241,7 @@ class BoundaryFunctionStoppingPolicy(StoppingPolicy):
         look_index: int,
         info_time: float,
         rule_type: str = "efficacy",
+        method: str = "simulation",
     ) -> Optional[float]:
         """
         Index-based lookup: anchors to the pre-calculated boundary for the current look_index.
@@ -343,6 +347,7 @@ class WhiteheadStoppingPolicy(BoundaryFunctionStoppingPolicy):
         look_index: int,
         info_time: float,
         rule_type: str = "efficacy",
+        method: str = "simulation",
     ) -> Optional[float]:
         """
         Time-based (Analytical) Strategy: follow realized info_time.

@@ -98,10 +98,14 @@ def plot_gst_summary(
         n_max = 0
         if hasattr(timer, "max_sample_size"):
             n_max_raw = timer.max_sample_size
-            n_max = sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
+            n_max = (
+                sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
+            )
         elif hasattr(timer, "max_events"):
             n_max_raw = timer.max_events
-            n_max = sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
+            n_max = (
+                sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
+            )
 
         if n_max > 0:
             # Create a dense grid for faint planned boundaries
@@ -111,8 +115,16 @@ def plot_gst_summary(
             fut_planned = []
 
             for t in dense_t:
-                eff_planned.append(engine.get_boundary_at_look(0, t, "efficacy"))
-                fut_planned.append(engine.get_boundary_at_look(0, t, "futility"))
+                eff_planned.append(
+                    engine.get_boundary_at_look(
+                        0, t, "efficacy", method="numerical_integration"
+                    )
+                )
+                fut_planned.append(
+                    engine.get_boundary_at_look(
+                        0, t, "futility", method="numerical_integration"
+                    )
+                )
 
             if any(b is not None for b in eff_planned):
                 eff_filt = [b if b is not None else np.nan for b in eff_planned]
@@ -136,6 +148,9 @@ def plot_gst_summary(
                     alpha=0.2,
                     label="Planned Futility",
                 )
+
+            # Cap the Y-axis so early infinite Z-scores don't compress the plot
+            ax.set_ylim(bottom=-5, top=6)
 
     except Exception:
         n_max = max(history_n) if history_n else 1
@@ -317,8 +332,17 @@ def visualize_protocol_design(
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # ASN Bubble Curve
-    ax.set_title("Operating Characteristics: ESS vs Effect Size", fontsize=14, fontweight="bold")
-    ax.set_xlabel("Relative Effect Size (%)" if metric_type == "relative_lift_pct" else "Effect Size", fontsize=12)
+    ax.set_title(
+        "Operating Characteristics: ESS vs Effect Size", fontsize=14, fontweight="bold"
+    )
+    ax.set_xlabel(
+        (
+            "Relative Effect Size (%)"
+            if metric_type == "relative_lift_pct"
+            else "Effect Size"
+        ),
+        fontsize=12,
+    )
     ax.set_ylabel("Expected Sample Size", fontsize=12)
 
     ax.plot(
@@ -332,7 +356,7 @@ def visualize_protocol_design(
 
     for i, res in enumerate(curve.results):
         x_val = curve.x_values[i]
-        
+
         ax.scatter(
             [x_val],
             [df["Expected N"].iloc[i]],
@@ -351,18 +375,19 @@ def visualize_protocol_design(
                 sample_sizes = total_n_schedule.tolist()
             else:
                 max_look = len(res.prob_stop_total)
+                n_total = 0
+                if evaluator.n_max_per_arm:
+                    n_total = sum(evaluator.n_max_per_arm.values())
+                else:
+                    n_total = 1000  # Fallback
                 for k in range(1, max_look + 1):
-                    if evaluator.n_max_per_arm:
-                        n_total = sum(evaluator.n_max_per_arm.values())
-                        sample_sizes.append(int(n_total * (k / max_look)))
-                    else:
-                        sample_sizes.append(int(n_max_total * (k / max_look)))
+                    sample_sizes.append(int(n_total * (k / max_look)))
 
             for analysis_idx, prob in enumerate(res.prob_stop_total):
                 if prob == 0:
                     continue
                 alpha_val = min(max(prob * 0.5, 0.02), 0.6)
-                
+
                 try:
                     n_total = sample_sizes[analysis_idx]
                 except Exception:
@@ -381,14 +406,14 @@ def visualize_protocol_design(
     # Mark max N and Fixed N Star
     max_n = sum(evaluator.n_max_per_arm.values())
     ax.axhline(max_n, color="#1f77b4", linestyle="--", alpha=0.3, label="Max N (Total)")
-    
+
     fixed_n = getattr(curve, "n_fixed_total", None)
     if fixed_n and fixed_n > 0 and protocol.task.futility:
         # Approximate the effect size targeted by the design using the nearest power
         target_power = protocol.task.futility.power
         nearest_idx = (df["Power"] - target_power).abs().idxmin()
         target_eff = df.loc[nearest_idx, "Effect Size (%)"]
-        
+
         ax.scatter(
             [target_eff],
             [fixed_n],
@@ -401,11 +426,16 @@ def visualize_protocol_design(
         )
 
     ax.grid(True, alpha=0.3)
-    
     # Clean up legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc="upper left", bbox_to_anchor=(1, 1), fontsize=10)
+    ax.legend(
+        by_label.values(),
+        by_label.keys(),
+        loc="upper left",
+        bbox_to_anchor=(1, 1),
+        fontsize=10,
+    )
 
     format_dict = {
         "Power": "{:.1%}",
@@ -419,6 +449,8 @@ def visualize_protocol_design(
     for col in df.columns:
         if col.startswith("Prob Stop (Look"):
             format_dict[col] = "{:.1%}"
+
+    plt.close(fig)
 
     return {
         "summary": df.style.format(format_dict),

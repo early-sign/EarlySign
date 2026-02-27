@@ -120,7 +120,11 @@ class GroupSequentialEngine:
         )
 
     def get_boundary_at_look(
-        self, look_index: int, info_time: float, rule_type: str = "efficacy"
+        self,
+        look_index: int,
+        info_time: float,
+        rule_type: str = "efficacy",
+        method: str = "simulation",
     ) -> Optional[float]:
         if look_index < 0:
             return None
@@ -129,6 +133,7 @@ class GroupSequentialEngine:
             look_index=look_index,
             info_time=info_time,
             rule_type=rule_type,
+            method=method,
         )
 
     def run(
