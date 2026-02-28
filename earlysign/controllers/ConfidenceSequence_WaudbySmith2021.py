@@ -31,7 +31,8 @@ Examples:
     ...     alpha=0.05,
     ...     variance=0.25, # Max variance for Bernoulli
     ...     sides="two",
-    ...     max_n=1000
+    ...     max_n=1000,
+    ...     burn_in=10
     ... )
     >>> controller.set_protocol(protocol)
     >>>
@@ -92,6 +93,7 @@ class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[Protocol]):
         variance: float,  # Must be provided (e.g. 0.25)
         max_n: int,
         sides: Literal["one", "two"] = "two",
+        burn_in: int = 100,
     ) -> Protocol:
         """
         Design a Confidence Sequence experiment.
@@ -101,6 +103,7 @@ class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[Protocol]):
             variance=variance,
             sides=Sides(sides),
             max_n=max_n,
+            burn_in=burn_in,
         )
         task = TaskSpec(arms=arms, response_type=ResponseType.BINARY)
         return Protocol(name="CS (Waudby-Smith 2021)", task=task, method=method)

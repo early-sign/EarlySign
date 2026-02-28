@@ -1,6 +1,13 @@
 namespace ES3.AVI;
 
 model BaseAVIMethodSpec extends Base.MethodSpec {
+  /**
+   * Optional burn-in sample size before checking stopping rules.
+   * Recommended when using plug-in variance estimators to mitigate instability
+   * at very small sample sizes, or for asymptotic approximations that require a
+   * minimum sample size to become valid.
+   */
+  burn_in?: int32 = 100;
 }
 
 model GAVIMethodSpec extends BaseAVIMethodSpec {

@@ -97,7 +97,10 @@ class GAVIEngine:
             )
             sigma2_est = (var_c + var_t) / 2.0
 
-        if n_c == 0 or n_t == 0:
+        # Enforce burn-in period to avoid extreme instability of empirical variance plug-in
+        # and to wait for asymptotic approximations to hold.
+        burn_in = getattr(self.method, "burn_in", 100) or 100
+        if n_c < burn_in or n_t < burn_in:
             return LookResult(
                 sample_n=n_c + n_t,
                 trajectory=0.0,
@@ -184,7 +187,10 @@ class mSPRTEngine:
                 metrics, control_key, treatment_key
             )
 
-        if n_c == 0 or n_t == 0:
+        # Enforce burn-in period to avoid extreme instability of empirical variance plug-in
+        # and to wait for asymptotic approximations to hold.
+        burn_in = getattr(self.method, "burn_in", 100) or 100
+        if n_c < burn_in or n_t < burn_in:
             return LookResult(
                 sample_n=n_c + n_t,
                 trajectory=0.0,

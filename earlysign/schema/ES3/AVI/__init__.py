@@ -22,7 +22,10 @@ class AVIMetadata(BaseModel):
 
 
 class BaseAVIMethodSpec(MethodSpec_1):
-    pass
+    burn_in: int | None = Field(
+        100,
+        description="Optional burn-in sample size before checking stopping rules.\nRecommended when using plug-in variance estimators to mitigate instability\nat very small sample sizes, or for asymptotic approximations that require a\nminimum sample size to become valid.",
+    )
 
 
 class GAVIMethodSpec(BaseAVIMethodSpec):
