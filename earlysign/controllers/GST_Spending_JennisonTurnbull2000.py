@@ -519,13 +519,24 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         with BacktestSession(
             self.ledger, invariant_projectors=[ProtocolProjector]
         ) as sess:
-            for i, (_, row) in enumerate(df.iterrows()):
+
+            # 3. Create a unified iterator over the dataframe
+            # If order_by is set, we iterate over grouped sub-dataframes.
+            # Otherwise we iterate row by row, wrapping the row in a single-element list to simulate a group.
+            batch_iterator = (
+                df.groupby("_order")
+                if order_by
+                else ((i, df.iloc[[i]]) for i in range(len(df)))
+            )
+
+            for idx, group_df in batch_iterator:
                 batch = [
                     BinomialArmData(
                         arm=str(row["arm"]),
                         total=int(row["total"]),
                         success=int(row["success"]),
                     )
+                    for _, row in group_df.iterrows()
                 ]
                 self.update(batch, session=sess)
 
@@ -535,7 +546,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
 
                 if prog.get("status") != DecisionStatus.CONTINUE:
                     logger.info(
-                        f"Stopping criterion met at row {i}: {prog.get('status')}"
+                        f"Stopping criterion met at step {idx}: {prog.get('status')}"
                     )
                     break
 
