@@ -156,7 +156,8 @@ def plot_gst_summary(
         n_max = max(history_n) if history_n else 1
 
     # 2. Realized Boundaries (Solid Segments)
-    dx = n_max * 0.05  # Segment length: 5% of axis
+    plot_width = max(n_max, max(history_n) if history_n else 1)
+    dx = plot_width * 0.05  # Segment length: 5% of axis
 
     for res in raw_history:
         n = res.sample_n
@@ -181,9 +182,10 @@ def plot_gst_summary(
             )
 
     # 2. Realized Trajectory
-    plot_ns = [0] + history_n
-    plot_zs = [0.0] + history_z
-    ax.plot(plot_ns, plot_zs, "b.-", label="Z-Statistic")
+    plot_ns = history_n
+    plot_zs = history_z
+    if plot_ns:
+        ax.plot(plot_ns, plot_zs, "b.-", label="Z-Statistic")
 
     if history_n:
         ax.scatter(history_n, history_z, color="blue", zorder=5)
@@ -227,6 +229,7 @@ def plot_gst_summary(
     ax.legend()
     ax.grid(True, alpha=0.3)
     ax.axhline(0, color="k", linestyle=":", alpha=0.3)
+    ax.set_xlim(left=0)
 
     # Info Time Axis (Secondary)
     def n_to_info(x: float) -> float:
@@ -397,7 +400,7 @@ def visualize_protocol_design(
                     [x_val],
                     [n_total],
                     color="#1f77b4",
-                    s=500,  # Match original large size
+                    s=max(20, 500 * prob),  # Scale size by probability
                     alpha=alpha_val,
                     edgecolors="none",
                     zorder=3,
