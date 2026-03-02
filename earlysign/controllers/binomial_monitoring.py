@@ -1,9 +1,11 @@
 from typing import Any, Dict
 
+from matplotlib.figure import Figure
 from pydantic import BaseModel
 
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
+from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.methods.AVI.core import (
     BinomialEValueModel,
@@ -14,6 +16,8 @@ from earlysign.methods.AVI.reporting import (
     BinomialEValueFinalProjector,
     BinomialEValueProgressProjector,
 )
+from earlysign.methods.binomial import Scoreboard as BinomialScoreboard
+from earlysign.methods.common.visual import VisualizationResult
 from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
 
 # --- ES3 Protocol Manifest ---
@@ -78,8 +82,6 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
         """
         Run update cycle with E-value check.
         """
-        from earlysign.framework.projector import ProtocolProjector
-        from earlysign.methods.binomial import Scoreboard as BinomialScoreboard
 
         # 1. Unified Session
         with Session(self.ledger) as sess:
@@ -143,9 +145,6 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
         Returns:
             matplotlib.figure.Figure: The generated plot figure.
         """
-        import matplotlib.pyplot as plt
-
-        from earlysign.framework.projector import ProtocolProjector
 
         # 1. Get Final Result & Protocol
         final_res = self.report_result()
@@ -159,7 +158,8 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
 
         if "total" not in df.columns:
             # Fallback for simple display if no history
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig = Figure(figsize=(10, 6), layout="constrained")
+            ax = fig.subplots()
             ax.set_title("Monitoring Result (History Unavailable)")
             threshold = 1.0 / p.alpha
             ax.axhline(threshold, color="r", linestyle="--", label="Threshold")
@@ -169,7 +169,7 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
                 "bo",
                 label="Final E-value",
             )
-            return fig
+            return VisualizationResult(figure=fig)
 
         # Sort by arrival
         if "created_at" in df.columns:
@@ -207,7 +207,8 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
             history_total.append(total_val)
 
         # Plot
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig = Figure(figsize=(10, 6), layout="constrained")
+        ax = fig.subplots()
 
         # Threshold
         ax.axhline(
@@ -232,4 +233,4 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
         ax.legend()
         ax.grid(True, alpha=0.3)
 
-        return fig
+        return VisualizationResult(figure=fig)

@@ -2,15 +2,17 @@
 Visualization utilities for Group Sequential Testing.
 """
 
-from typing import Any, List, Optional, Tuple
+import json
+from typing import Any, List, Optional, Tuple, Union
 
 import ibis
 import matplotlib.figure
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.figure import Figure
 
 import earlysign.schema.ES3.GST as GST
+from earlysign.methods.common.visual import VisualizationResult
 from earlysign.methods.group_sequential.design.operating_characteristics.binomial import (
     BinomialOperatingCharacteristicsEvaluator,
 )
@@ -20,6 +22,7 @@ from earlysign.methods.group_sequential.design.operating_characteristics.continu
 from earlysign.methods.group_sequential.design.operating_characteristics.engines import (
     SimulationCurve,
 )
+from earlysign.methods.group_sequential.engine.engine import GroupSequentialEngine
 from earlysign.schema.ES3.GST.Log import LookResult
 
 
@@ -44,8 +47,6 @@ def reconstruct_full_history(table: ibis.Expr) -> List[LookResult]:
     for _, row in results_df.iterrows():
         payload = row["payload"]
         if isinstance(payload, str):
-            import json
-
             payload = json.loads(payload)
 
         lr = LookResult.model_validate(payload)
@@ -67,9 +68,6 @@ def plot_gst_summary(
     Generates a generic summary plot for Group Sequential Test results.
     Supports optional overlay of Adaptive Design events.
     """
-    from earlysign.methods.group_sequential.engine.engine import (
-        GroupSequentialEngine,
-    )
 
     # Resolve history from full_history if provided as trajectory data
     if full_history and isinstance(full_history, list) and len(full_history) > 0:
@@ -89,7 +87,8 @@ def plot_gst_summary(
     history_n = history_n or []
     history_z = history_z or []
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig = Figure(figsize=(10, 6), layout="constrained")
+    ax = fig.subplots()
 
     # 1. Planned Boundaries (Faint)
     try:
@@ -110,7 +109,7 @@ def plot_gst_summary(
         if n_max > 0:
             # Create a dense grid for faint planned boundaries
             dense_t = np.linspace(0.05, 1.0, 100)
-            dense_n = dense_t * n_max
+            dense_n = list(dense_t * n_max)
             eff_planned = []
             fut_planned = []
 
@@ -125,6 +124,13 @@ def plot_gst_summary(
                         0, t, "futility", method="numerical_integration"
                     )
                 )
+
+            if history_n and max(history_n) > n_max:
+                dense_n.append(max(history_n))
+                if eff_planned:
+                    eff_planned.append(eff_planned[-1])
+                if fut_planned:
+                    fut_planned.append(fut_planned[-1])
 
             if any(b is not None for b in eff_planned):
                 eff_filt = [b if b is not None else np.nan for b in eff_planned]
@@ -241,7 +247,7 @@ def plot_gst_summary(
     secax = ax.secondary_xaxis("top", functions=(n_to_info, info_to_n))  # type: ignore[arg-type]
     secax.set_xlabel("Information Time")
 
-    return fig
+    return VisualizationResult(figure=fig)
 
 
 def generate_operating_characteristics_table(results: SimulationCurve) -> pd.DataFrame:
@@ -302,8 +308,10 @@ def generate_operating_characteristics_table(results: SimulationCurve) -> pd.Dat
 
 
 def visualize_protocol_design(
-    protocol: GST.Protocol, effect_sizes: List[float]
-) -> dict[str, Any]:
+    protocol: GST.Protocol,
+    effect_sizes: List[float],
+    return_fig: bool = True,
+) -> Union[pd.DataFrame, VisualizationResult]:
     """
     Visualizes the Operating Characteristics (OC) of a protocol design.
 
@@ -312,7 +320,9 @@ def visualize_protocol_design(
         effect_sizes: List of effect sizes to evaluate (interpreted as %).
 
     Returns:
-        dict: {"summary": pd.DataFrame, "figure": plt.Figure}
+        VisualizationResult or pd.DataFrame:
+            If return_fig=True, returns a VisualizationResult with "summary" (Styler) and "figure".
+            If return_fig=False, returns only the summary (DataFrame).
     """
     # 1. Select Evaluator
     evaluator: Any
@@ -331,8 +341,27 @@ def visualize_protocol_design(
     # 3. Build DataFrame
     df = generate_operating_characteristics_table(curve)
 
+    format_dict = {
+        "Power": "{:.1%}",
+        "Expected N": "{:.1f}",
+        "ESS / Fixed (%)": "{:.1%}",
+        "ESS / Max (%)": "{:.1%}",
+        "Prob > Fixed N": "{:.1%}",
+        "Fixed N (Ref)": "{:.1f}",
+        "Max N (Total)": "{:.1f}",
+    }
+    for col in df.columns:
+        if col.startswith("Prob Stop (Look"):
+            format_dict[col] = "{:.1%}"
+
+    summary = df.style.format(format_dict)
+
+    if not return_fig:
+        return df
+
     # 4. Plot
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig = Figure(figsize=(10, 6), layout="constrained")
+    ax = fig.subplots()
 
     # ASN Bubble Curve
     ax.set_title(
@@ -429,6 +458,8 @@ def visualize_protocol_design(
         )
 
     ax.grid(True, alpha=0.3)
+    ax.set_ylim(bottom=0)
+
     # Clean up legend
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
@@ -440,22 +471,7 @@ def visualize_protocol_design(
         fontsize=10,
     )
 
-    format_dict = {
-        "Power": "{:.1%}",
-        "Expected N": "{:.1f}",
-        "ESS / Fixed (%)": "{:.1%}",
-        "ESS / Max (%)": "{:.1%}",
-        "Prob > Fixed N": "{:.1%}",
-        "Fixed N (Ref)": "{:.1f}",
-        "Max N (Total)": "{:.1f}",
-    }
-    for col in df.columns:
-        if col.startswith("Prob Stop (Look"):
-            format_dict[col] = "{:.1%}"
-
-    plt.close(fig)
-
-    return {
-        "summary": df.style.format(format_dict),
-        "figure": fig,
-    }
+    return VisualizationResult(
+        summary=summary,
+        figure=fig,
+    )

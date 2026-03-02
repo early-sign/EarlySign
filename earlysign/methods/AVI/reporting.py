@@ -1,7 +1,9 @@
+import json
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import ibis
 import pandas as pd
+from matplotlib.figure import Figure
 from pydantic import BaseModel
 
 from earlysign.framework.projector import (
@@ -9,8 +11,15 @@ from earlysign.framework.projector import (
     Projector,
     ProtocolProjector,
 )
+from earlysign.framework.session import Session
 from earlysign.framework.trace import TraceId
+from earlysign.methods.AVI.adapters import BinomialAdapter
+from earlysign.methods.AVI.core import (
+    BinomialEValueModel,
+    EProcessProtocol,
+)
 from earlysign.methods.binomial import Scoreboard as BinomialScoreboard
+from earlysign.methods.common.visual import VisualizationResult
 from earlysign.methods.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.schema.ES3.AVI import Protocol
 from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
@@ -78,8 +87,6 @@ class ProgressProjector(Projector[ProgressReport]):
         latest_row = results_df.iloc[-1]
         payload = latest_row["payload"]
         if isinstance(payload, str):
-            import json
-
             payload = json.loads(payload)
 
         latest_look = LookResult.model_validate(payload)
@@ -132,8 +139,6 @@ class FinalProjector(Projector[FinalReport]):
         latest_row = results_df.iloc[-1]
         payload = latest_row["payload"]
         if isinstance(payload, str):
-            import json
-
             payload = json.loads(payload)
 
         latest_look = LookResult.model_validate(payload)
@@ -214,12 +219,6 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
         return ["Protocol", "Scoreboard"]
 
     def project(self, table: ibis.Expr) -> ProjectionResult[ProgressReport]:
-        from earlysign.methods.AVI.adapters import BinomialAdapter
-        from earlysign.methods.AVI.core import (
-            BinomialEValueModel,
-            EProcessProtocol,
-        )
-
         # 1. Read Protocol
         protocol_traced = ProtocolProjector(EProcessProtocol).project(table)
         p = protocol_traced.data
@@ -265,12 +264,6 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
         return ["Protocol", "Scoreboard"]
 
     def project(self, table: ibis.Expr) -> ProjectionResult[FinalReport]:
-        from earlysign.methods.AVI.adapters import BinomialAdapter
-        from earlysign.methods.AVI.core import (
-            BinomialEValueModel,
-            EProcessProtocol,
-        )
-
         # 1. Read Protocol
         protocol_traced = ProtocolProjector(EProcessProtocol).project(table)
         p = protocol_traced.data
@@ -327,8 +320,6 @@ class TrajectoryProjector(Projector[pd.DataFrame]):
             return ProjectionResult(data=pd.DataFrame(), trace=[])
 
         # 3. Parse payloads
-        import json
-
         def _parse(p: Any) -> Any:
             if isinstance(p, str):
                 return json.loads(p)
@@ -353,31 +344,25 @@ def plot_avi_trajectory(
     ylabel: str = "Effect Estimate",
     ax: Optional[Any] = None,
     figsize: tuple[int, int] = (10, 6),
-) -> Any:
+) -> VisualizationResult:
     """
     Plots the history of AVI trajectory and boundaries.
 
     This function uses TrajectoryProjector to reconstruct history from the ledger
     and provides a standard visualization for AVI methods.
     """
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        raise ImportError("matplotlib is required for plot_avi_trajectory")
-
-    from earlysign.framework.session import Session
-
     with Session(ledger) as sess:
         history = sess.read(TrajectoryProjector()).data
 
     if history.empty:
         print("No history found in ledger to plot.")
-        return ax
+        return VisualizationResult(figure=None)
 
     if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
+        fig = Figure(figsize=figsize)
+        ax = fig.subplots()
     else:
-        pass
+        fig = ax.figure
 
     # Plot sequence
     n = history["sample_n"]
@@ -410,7 +395,7 @@ def plot_avi_trajectory(
     ax.set_xlim(left=0)
     ax.legend()
 
-    return ax
+    return VisualizationResult(figure=fig)
 
 
 def generate_avi_operating_characteristics_table(results: Any) -> pd.DataFrame:
@@ -445,8 +430,12 @@ def generate_avi_operating_characteristics_table(results: Any) -> pd.DataFrame:
 
 
 def visualize_avi_design(
-    protocol: Protocol, effect_sizes: List[float], n_sims: int = 1000, seed: int = 42
-) -> dict[str, Any]:
+    protocol: Protocol,
+    effect_sizes: List[float],
+    n_sims: int = 1000,
+    seed: int = 42,
+    return_fig: bool = True,
+) -> Union[pd.DataFrame, VisualizationResult]:
     """
     Visualizes the Operating Characteristics (OC) of an AVI protocol design.
 
@@ -457,10 +446,10 @@ def visualize_avi_design(
         seed: Random seed for reproducibility.
 
     Returns:
-        dict: {"summary": pd.DataFrame, "figure": plt.Figure}
+        VisualizationResult or pd.DataFrame:
+            If return_fig=True, returns a VisualizationResult with "summary" (Styler) and "figure".
+            If return_fig=False, returns only the summary (DataFrame).
     """
-    import matplotlib.pyplot as plt
-
     from earlysign.methods.AVI.design.operating_characteristics.binomial import (
         BinomialAVIEvaluator,
     )
@@ -480,7 +469,21 @@ def visualize_avi_design(
     curve = evaluator.evaluate_metric_at(effect_sizes, metric_type=metric_type)
     df = generate_avi_operating_characteristics_table(curve)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    format_dict = {
+        "Power": "{:.1%}",
+        "Expected N": "{:.1f}",
+        "ESS / Max (%)": "{:.1%}",
+        "Max N (Total)": "{:.1f}",
+    }
+
+    summary = df.style.format(format_dict)
+
+    if not return_fig:
+        return df
+
+    # 4. Plot
+    fig = Figure(figsize=(14, 5), layout="constrained")
+    (ax1, ax2) = fig.subplots(1, 2)
 
     title_proto = protocol.name if protocol.name else "Protocol"
     fig.suptitle(
@@ -512,19 +515,10 @@ def visualize_avi_design(
             max_n, color="black", linestyle="--", alpha=0.5, label=f"Max N ({max_n})"
         )
         ymin, ymax = ax2.get_ylim()
-        ax2.set_ylim(ymin, max(ymax, max_n * 1.05))
+        ax2.set_ylim(0, max(ymax, max_n * 1.05))
         ax2.legend()
 
-    format_dict = {
-        "Power": "{:.1%}",
-        "Expected N": "{:.1f}",
-        "ESS / Max (%)": "{:.1%}",
-        "Max N (Total)": "{:.1f}",
-    }
-
-    plt.close(fig)
-
-    return {
-        "summary": df.style.format(format_dict),
-        "figure": fig,
-    }
+    return VisualizationResult(
+        summary=summary,
+        figure=fig,
+    )
