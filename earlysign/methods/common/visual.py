@@ -4,14 +4,14 @@ Visualization-related schema and result objects.
 
 import base64
 import io
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import matplotlib.figure
 import pandas as pd
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 
-class VisualizationResult(dict):
+class VisualizationResult(dict[str, Any]):
     """
     A specialized dictionary for plotting results.
     Provides rich representation in Jupyter notebooks by automatically
@@ -34,7 +34,10 @@ class VisualizationResult(dict):
 
     @property
     def figure(self) -> Optional[matplotlib.figure.Figure]:
-        return self["figure"]
+        val = self.get("figure")
+        if val is None:
+            return None
+        return cast(matplotlib.figure.Figure, val)
 
     def _repr_html_(self) -> str:
         """

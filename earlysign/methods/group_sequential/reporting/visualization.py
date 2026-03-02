@@ -6,7 +6,6 @@ import json
 from typing import Any, List, Optional, Tuple, Union
 
 import ibis
-import matplotlib.figure
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
@@ -63,7 +62,7 @@ def plot_gst_summary(
     adaptation_logs: List[Any] | None = None,
     full_history: Optional[List[Any]] = None,
     **kwargs: Any,
-) -> matplotlib.figure.Figure:
+) -> VisualizationResult:
     """
     Generates a generic summary plot for Group Sequential Test results.
     Supports optional overlay of Adaptive Design events.
