@@ -2,7 +2,6 @@
 Visualization-related schema and result objects.
 """
 
-import base64
 import io
 from typing import Any, Optional, cast
 
@@ -55,18 +54,13 @@ class VisualizationResult(dict[str, Any]):
                 # Fallback for plain dataframes if needed
                 parts.append(pd.DataFrame(self.summary).to_html())
 
-        # 2. Figure (Base64 encoded)
+        # 2. Figure (SVG encoded)
         if self.figure is not None:
-            buf = io.BytesIO()
-            # Use a high DPI for better quality in notebooks
-            self.figure.savefig(buf, format="png", bbox_inches="tight", dpi=100)
+            buf = io.StringIO()
+            self.figure.savefig(buf, format="svg", bbox_inches="tight")
             buf.seek(0)
-            img_str = base64.b64encode(buf.read()).decode("utf-8")
-            parts.append(
-                f'<div style="margin-top: 10px;">'
-                f'<img src="data:image/png;base64,{img_str}" />'
-                f"</div>"
-            )
+            svg_str = buf.getvalue()
+            parts.append(f'<div style="margin-top: 10px;">' f"{svg_str}" f"</div>")
 
         if not parts:
             return ""

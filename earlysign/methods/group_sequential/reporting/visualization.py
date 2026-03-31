@@ -184,6 +184,7 @@ def plot_gst_summary(
                 xmax=n + dx / 2,
                 color="black",
                 linewidth=2,
+                label="Realized Boundary" if res == raw_history[0] else "",
             )
 
     # 2. Realized Trajectory
