@@ -1,6 +1,6 @@
 import numpy as np
 
-from earlysign.stats.z_tests import (
+from earlysign.parts.stats.z_tests import (
     calculate_two_arm_binomial_z,
     calculate_two_arm_continuous_z,
 )

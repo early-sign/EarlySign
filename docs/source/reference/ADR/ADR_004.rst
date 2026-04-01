@@ -32,15 +32,15 @@ We adopt a **Four-Layer Architecture** for the v1 release:
     *   **Key Components**: `Node`, `Graph`, `Handle`, `Runtime`.
     *   **Dependency**: Depends on `core`.
 
-3.  **Methods (`earlysign.methods`)**: Statistical Implementations
+3.  **Methods (`earlysign.builtin`)**: Statistical Implementations
     *   **Responsibility**: Implements specific statistical designs using the framework.
     *   **Key Components**:
-        *   `earlysign.methods.group_sequential` (GST)
-        *   `earlysign.methods.AVI` (Anytime-Valid Inference)
+        *   `earlysign.builtin.group_sequential` (GST)
+        *   `earlysign.builtin.AVI` (Anytime-Valid Inference)
     *   **Dependency**: Depends on `framework` (for execution) and `core` (for data).
-    *   *Note*: `earlysign.stats` exists as a shared library of pure statistical tools (e.g., Gaussian Processes) used by these methods.
+    *   *Note*: `earlysign.parts.stats` exists as a shared library of pure statistical tools (e.g., Gaussian Processes) used by these methods.
 
-4.  **Controllers (`earlysign.controllers`)**: User Interface
+4.  **Controllers (`earlysign.builtin`)**: User Interface
     *   **Responsibility**: Provides the high-level API for users to interact with the system. Acts as a facade that coordinates the lower layers.
     *   **Key Components**: `GST_Spending_JennisonTurnbull2000`, `mSPRT_Johari2019`.
     *   **Dependency**: Depends on `methods` and `core`.
