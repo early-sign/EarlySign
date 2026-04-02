@@ -6,7 +6,7 @@ calculations based on the canonical joint distribution of Z-statistics.
 Examples:
     >>> import numpy as np
     >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> import earlysign.schema.ES3.GST as GST
+    >>> from earlysign.builtin.group_sequential import schema as GST
     >>> from earlysign.builtin.group_sequential.core.model import CanonicalJointModel, Config
     >>> from earlysign.builtin.group_sequential.core.spending import OBrienFlemingSpending
     >>>
@@ -76,7 +76,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.policy import (
     SpendingFunctionStoppingPolicy,
     StoppingPolicy,

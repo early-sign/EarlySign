@@ -11,7 +11,7 @@ from typing import Any, Dict, Literal, Optional, Sequence, Union, cast
 from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.Base as ES3_BASE
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -31,6 +31,7 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
     FinalProjector,
     ProgressProjector,
 )
+from earlysign.builtin.group_sequential.schema import DecisionStatus, LookResult
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
 from earlysign.framework.controller import (
@@ -42,7 +43,6 @@ from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.framework.trace import Traced
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 
 
 class ClassicTaskSpec(GST.TaskSpec):

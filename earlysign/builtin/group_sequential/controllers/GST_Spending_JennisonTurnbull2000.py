@@ -12,8 +12,8 @@ Example:
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.builtin.group_sequential.controllers.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Controller, JennisonTurnbull2000TaskSpec
     >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> import earlysign.schema.ES3.GST as GST
-    >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
+    >>> from earlysign.builtin.group_sequential import schema as GST
+    >>> from earlysign.builtin.group_sequential.schema import DecisionStatus
     >>> from earlysign.tests.util import BinomialStream
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
     >>> import numpy as np
@@ -78,7 +78,7 @@ from typing import (
 from pydantic import BaseModel, Field, TypeAdapter
 
 import earlysign.schema.ES3.Base as ES3_BASE
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -103,6 +103,15 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
 from earlysign.builtin.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
+from earlysign.builtin.group_sequential.schema import (
+    AbsoluteDifference,
+    DecisionStatus,
+    EffectMeasure,
+    LookResult,
+    OddsRatio,
+    RelativeImprovement,
+    RelativeRisk,
+)
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
 from earlysign.framework.controller import (
@@ -113,14 +122,6 @@ from earlysign.framework.controller import (
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import BacktestSession, Session
 from earlysign.parts.trackers.binomial import Scoreboard
-from earlysign.schema.ES3.GST import (
-    AbsoluteDifference,
-    EffectMeasure,
-    OddsRatio,
-    RelativeImprovement,
-    RelativeRisk,
-)
-from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 
 
 class JennisonTurnbull2000TaskSpec(GST.TaskSpec):
@@ -315,7 +316,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         rng_seed = designer_params.get("model_params", {}).get("rng_seed", 42)
 
         # 3. Design Strategy Components using common ProtocolDesigner
-        from earlysign.schema.ES3.GST import BinaryEffectSize
+        from earlysign.builtin.group_sequential.schema import BinaryEffectSize
 
         hypotheses = task.hypotheses
         if isinstance(hypotheses.target_effect, BinaryEffectSize):
@@ -621,7 +622,7 @@ Stopping Policy:
             else "treatment"
         )
 
-        from earlysign.schema.ES3.GST import BinaryEffectSize
+        from earlysign.builtin.group_sequential.schema import BinaryEffectSize
 
         hypotheses = task.hypotheses
         p0 = 0.0
@@ -634,7 +635,7 @@ Stopping Policy:
         strategy = policy.strategy
 
         spending_fn = "Unknown"
-        from earlysign.schema.ES3.GST import (
+        from earlysign.builtin.group_sequential.schema import (
             AlphaBetaSpendingStrategy,
         )
 

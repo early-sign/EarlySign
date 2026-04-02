@@ -12,13 +12,13 @@ from earlysign.builtin.AVI.reporting import (
     BinomialEValueFinalProjector,
     BinomialEValueProgressProjector,
 )
+from earlysign.builtin.AVI.schema import MethodSpec, Protocol as AVIProtocol, TaskSpec
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.visualization.visual import VisualizationResult
-from earlysign.schema.ES3.AVI import MethodSpec, Protocol as AVIProtocol, TaskSpec
 
 # --- ES3 Protocol Manifest ---
 

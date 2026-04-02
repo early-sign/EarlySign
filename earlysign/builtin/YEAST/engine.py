@@ -5,6 +5,12 @@ import ibis
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.YEAST.adapters import BinomialAdapter, ContinuousAdapter
 from earlysign.builtin.YEAST.core import BoundaryModel, TrajectoryModel
+from earlysign.builtin.YEAST.schema import (
+    Boundary as BoundarySchema,
+    DecisionStatus,
+    LookResult,
+    Protocol,
+)
 from earlysign.framework.entity import Entity, Snapshot
 from earlysign.framework.projector import ProjectionResult
 from earlysign.framework.trace import TraceId
@@ -13,12 +19,6 @@ from earlysign.schema.ES3.Binomial import (
 )
 from earlysign.schema.ES3.Continuous import (
     Scoreboard as ContinuousScoreboard,
-)
-from earlysign.schema.ES3.YEAST import Protocol
-from earlysign.schema.ES3.YEAST.Log import (
-    Boundary as BoundarySchema,
-    DecisionStatus,
-    LookResult,
 )
 
 

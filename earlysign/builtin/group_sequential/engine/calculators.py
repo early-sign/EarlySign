@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional, Protocol as TypingProtocol
 
 import earlysign.schema.ES3.Base as ES3_BASE
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 
 
 class ZStatisticCalculator(TypingProtocol):

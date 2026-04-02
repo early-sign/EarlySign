@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 import earlysign.schema.ES3.Base as ES3_BASE
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.adapters import (
     binomial,
     continuous,
@@ -773,7 +773,7 @@ class ProtocolDesigner:
         Examples:
             >>> from earlysign.builtin.group_sequential.design.protocol_design import ProtocolDesigner
             >>> import earlysign.schema.ES3.Base as ES3_BASE
-            >>> import earlysign.schema.ES3.GST as GST
+            >>> from earlysign.builtin.group_sequential import schema as GST
             >>> from pydantic import ValidationError
 
             >>> designer = ProtocolDesigner()

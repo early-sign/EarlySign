@@ -8,26 +8,48 @@ OUTPUT_DIR ?= ../earlysign/schema/ES3
 SENTINEL ?= $(OUTPUT_DIR)/__init__.py
 TSP_SOURCE ?= build.tsp
 
-TSP_SOURCES := schema/es3_v1.tsp $(shell find ../earlysign/builtin -name '*.tsp')
+# Unified sources
+TSP_SOURCES := schema/es3_v1.tsp $(shell find ../earlysign/builtin -name 'schema.tsp')
 
 install:
 	npm install
 
 compile: $(SENTINEL)
 
+define build_schema
+	@echo "Building schema for $(1)..."
+	@rm -rf out-$(1) tmp-$(1)
+	@npx tsp compile ../earlysign/builtin/$(1)/schema.tsp --emit @typespec/openapi3 --output-dir out-$(1)
+	@mkdir -p tmp-$(1)
+	@$(DATAMODEL_CODEGEN) \
+		--input out-$(1)/@typespec/openapi3/openapi.yaml \
+		--output tmp-$(1) \
+		--input-file-type openapi \
+		--output-model-type pydantic_v2.BaseModel \
+		--base-class pydantic.BaseModel \
+		--use-schema-description \
+		--target-python-version $(TARGET_PYTHON_VERSION) \
+		--keep-model-order \
+		--use-type-alias \
+		--use-double-quotes \
+		--openapi-scopes schemas \
+		--enum-field-as-literal one \
+		--capitalise-enum-members \
+		--use-one-literal-as-default \
+		--use-standard-collections \
+		--disable-timestamp
+	@$(POETRY) run python ../scripts/fix_distributed_schema.py $(1) tmp-$(1) ../earlysign/builtin/$(1)/schema.py
+	@rm -rf tmp-$(1)
+endef
+
 $(SENTINEL): $(TSP_SOURCES) Makefile
 	@echo "Compiling ES3 Standard..."
-	# 0. Generate build.tsp dynamically
-	@echo 'import "./schema/es3_v1.tsp";' > $(TSP_SOURCE)
-	@for f in $$(find ../earlysign/builtin -name '*.tsp'); do \
-		echo "import \"$$f\";" >> $(TSP_SOURCE); \
-	done
-	# 1. Compile TypeSpec to OpenAPI 3
-	npx tsp compile $(TSP_SOURCE) --emit @typespec/openapi3 --output-dir out-openapi3
-	# 2. Generate Pydantic models
-	rm -rf $(OUTPUT_DIR)
-	$(DATAMODEL_CODEGEN) \
-		--input out-openapi3/@typespec/openapi3/openapi.yaml \
+	# 1. Compile Core Base Schema
+	@echo "Building Core Base Schema..."
+	@npx tsp compile schema/es3_v1.tsp --emit @typespec/openapi3 --output-dir out-base
+	@rm -rf $(OUTPUT_DIR)
+	@$(DATAMODEL_CODEGEN) \
+		--input out-base/@typespec/openapi3/openapi.yaml \
 		--output $(OUTPUT_DIR) \
 		--input-file-type openapi \
 		--output-model-type pydantic_v2.BaseModel \
@@ -43,6 +65,12 @@ $(SENTINEL): $(TSP_SOURCES) Makefile
 		--use-one-literal-as-default \
 		--use-standard-collections \
 		--disable-timestamp
+	
+	# 2. Compile each Builtin Schema (Explicit targets for stability)
+	$(call build_schema,AVI)
+	$(call build_schema,group_sequential)
+	$(call build_schema,YEAST)
+	
 	@touch $(SENTINEL)
 
 check-sync:
@@ -62,4 +90,4 @@ check-sync:
 	fi
 
 clean:
-	rm -rf out-openapi3 node_modules tsp-output package-lock.json
+	rm -rf out-* build.tsp

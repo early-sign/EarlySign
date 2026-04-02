@@ -5,16 +5,16 @@ Engine for Adaptive Group Sequential Design / Sample Size Re-estimation.
 import numpy as np
 from scipy import stats
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.adapters.protocol import (
     get_final_efficacy_boundary,
     get_standardized_drift,
 )
-from earlysign.schema.ES3.GST import Protocol
-from earlysign.schema.ES3.GST.Log import (
+from earlysign.builtin.group_sequential.schema import (
     AdaptationLog,
     LookResult,
     PromisingZoneStatus,
+    Protocol,
 )
 
 
@@ -106,7 +106,7 @@ class ConditionalPowerAdaptationEngine:
         Assess if the trial is in the 'Promising Zone' and recommend action.
 
         >>> import earlysign.schema.ES3.Base as ES3_BASE
-        >>> from earlysign.schema.ES3.GST import (
+        >>> from earlysign.builtin.group_sequential.schema import (
         ...     Protocol, MethodSpec, StoppingPolicySpec, OBrienFlemingStrategy,
         ...     TaskSpec, HypothesisSpec, BinaryEffectSize, EquidistantSchedule,
         ...     TwoArmBinomialZ, SampleSizeTimer, EqualityHypothesis,
@@ -114,7 +114,7 @@ class ConditionalPowerAdaptationEngine:
         ...     AdaptationSpec
         ... )
         >>> from earlysign.builtin.group_sequential.engine.sample_size_reestimation import ConditionalPowerAdaptationEngine
-        >>> from earlysign.schema.ES3.GST.Log import LookResult
+        >>> from earlysign.builtin.group_sequential.schema import LookResult
         >>> # Mock results
         >>> res = LookResult(
         ...     look=1, sample_n=50, info_frac=0.5, z_stat=2.0,

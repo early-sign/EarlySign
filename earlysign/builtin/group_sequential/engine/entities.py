@@ -10,12 +10,12 @@ from typing import Any, List, Optional, Tuple, Type
 import ibis
 from pydantic import BaseModel
 
+from earlysign.builtin.group_sequential.schema import LookResult
 from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity import (
     SequentialEntity,
 )
 from earlysign.framework.projector import ProjectionResult
-from earlysign.schema.ES3.GST.Log import LookResult
 
 
 class PreComputedBoundaries(BaseModel):

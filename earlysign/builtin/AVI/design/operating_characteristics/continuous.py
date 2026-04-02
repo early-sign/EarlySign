@@ -11,12 +11,12 @@ import numpy as np
 from earlysign.builtin.AVI.design.operating_characteristics.engines import (
     AVIMonteCarloSimulator,
 )
+from earlysign.builtin.AVI.schema import GAVIMethodSpec, MSPRTMethodSpec, Protocol
 from earlysign.builtin.group_sequential.design.operating_characteristics.engines import (
     EvaluationResult,
     SimulationCurve,
 )
 from earlysign.schema.ES3 import Base as ES3_BASE
-from earlysign.schema.ES3.AVI import GAVIMethodSpec, MSPRTMethodSpec, Protocol
 
 
 class ContinuousAVIEvaluator(AVIMonteCarloSimulator):

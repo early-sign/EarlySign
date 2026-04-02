@@ -11,6 +11,7 @@ from earlysign.builtin.AVI.core import (
     BinomialEValueModel,
     EProcessProtocol,
 )
+from earlysign.builtin.AVI.schema import DecisionStatus, LookResult, Protocol
 from earlysign.framework.projector import (
     ProjectionResult,
     Projector,
@@ -21,8 +22,6 @@ from earlysign.framework.trace import TraceId
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.parts.visualization.visual import VisualizationResult
-from earlysign.schema.ES3.AVI import Protocol
-from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
 from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboardSchema
 from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboardSchema
 
@@ -456,7 +455,7 @@ def visualize_avi_design(
     from earlysign.builtin.AVI.design.operating_characteristics.continuous import (
         ContinuousAVIEvaluator,
     )
-    from earlysign.schema.ES3.AVI import ResponseType
+    from earlysign.builtin.AVI.schema import ResponseType
 
     evaluator: Any
     if protocol.task.response_type == ResponseType.BINARY:

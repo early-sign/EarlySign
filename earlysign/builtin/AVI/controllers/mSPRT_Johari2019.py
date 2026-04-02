@@ -14,7 +14,7 @@ Examples:
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.builtin.AVI.controllers.mSPRT_Johari2019 import BinomialJohari2019Controller
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-    >>> from earlysign.schema.ES3.AVI.Log import DecisionStatus
+    >>> from earlysign.builtin.AVI.schema import DecisionStatus
 
     >>> conn = ibis.connect("duckdb://:memory:")
     >>> ledger = Ledger(conn, "events")
@@ -69,14 +69,9 @@ from earlysign.builtin.AVI.reporting import (
     FinalProjector,
     ProgressProjector,
 )
-from earlysign.core.ledger import Ledger
-from earlysign.core.util.logging import get_logger
-from earlysign.framework.controller import Controller, RichDisplayMixin
-from earlysign.framework.projector import ProtocolProjector
-from earlysign.framework.session import Session
-from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
-from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.AVI import (
+from earlysign.builtin.AVI.schema import (
+    DecisionStatus,
+    LookResult,
     MethodSpec,
     MSPRTMethodSpec,
     Protocol as Protocol_Schema,
@@ -84,7 +79,13 @@ from earlysign.schema.ES3.AVI import (
     Sides,
     TaskSpec,
 )
-from earlysign.schema.ES3.AVI.Log import DecisionStatus, LookResult
+from earlysign.core.ledger import Ledger
+from earlysign.core.util.logging import get_logger
+from earlysign.framework.controller import Controller, RichDisplayMixin
+from earlysign.framework.projector import ProtocolProjector
+from earlysign.framework.session import Session
+from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
+from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ContinuousArmData
 
@@ -276,7 +277,7 @@ Method:
                 f"{task.arms.control_arm_name} vs {task.arms.treatment_arm_name}"
             )
 
-        from earlysign.schema.ES3.AVI import MSPRTMethodSpec
+        from earlysign.builtin.AVI.schema import MSPRTMethodSpec
 
         mde = 0.0
         sides = "two"

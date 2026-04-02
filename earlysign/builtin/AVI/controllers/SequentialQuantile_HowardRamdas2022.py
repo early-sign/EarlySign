@@ -6,19 +6,21 @@ import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.AVI.engine import (
     SequentialQuantileEngine,
 )
+from earlysign.builtin.AVI.schema import (
+    ArmMetrics,
+    ArmStatus,
+    Protocol,
+    ResponseType,
+    Scoreboard,
+    SequentialQuantileLookResult,
+    SequentialQuantileMethodSpec,
+    TaskSpec,
+)
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.entity import SimpleSequentialEntity
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
-from earlysign.schema.ES3.AVI import (
-    Protocol,
-    ResponseType,
-    SequentialQuantileMethodSpec,
-    TaskSpec,
-)
-from earlysign.schema.ES3.AVI.Log import SequentialQuantileLookResult
-from earlysign.schema.ES3.SequentialQuantile import ArmMetrics, ArmStatus, Scoreboard
 
 
 class SequentialQuantileMetrics(SimpleSequentialEntity[int, ArmMetrics]):

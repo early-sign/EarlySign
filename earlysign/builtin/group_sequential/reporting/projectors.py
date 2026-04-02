@@ -17,10 +17,11 @@ from typing import (
 import ibis
 from pydantic import BaseModel, Field
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.engine.calculators import (
     ZStatisticCalculatorFactory,
 )
+from earlysign.builtin.group_sequential.schema import DecisionStatus, LookResult
 from earlysign.framework.projector import (
     ProjectionResult,
     Projector,
@@ -31,7 +32,6 @@ from earlysign.parts.trackers.binomial import (
 from earlysign.parts.trackers.continuous import (
     Scoreboard as ContinuousScoreboard,
 )
-from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult
 
 
 class ProgressReport(BaseModel):

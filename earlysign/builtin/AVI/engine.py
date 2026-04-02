@@ -7,21 +7,19 @@ from earlysign.builtin.AVI.core import (
     GAVIBoundaryModel,
     MSPRTBoundaryModel,
 )
-from earlysign.framework.trace import TraceId
-from earlysign.schema.ES3.AVI import (
+from earlysign.builtin.AVI.schema import (
+    DecisionStatus,
     GAVIMethodSpec,
+    LookResult,
     MSPRTMethodSpec,
     Protocol,
+    Scoreboard as QuantileScoreboard,
+    SequentialQuantileLookResult,
     SequentialQuantileMethodSpec,
 )
-from earlysign.schema.ES3.AVI.Log import (
-    DecisionStatus,
-    LookResult,
-    SequentialQuantileLookResult,
-)
+from earlysign.framework.trace import TraceId
 from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboard
 from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.SequentialQuantile import Scoreboard as QuantileScoreboard
 
 
 class BinomialEValueEngine:

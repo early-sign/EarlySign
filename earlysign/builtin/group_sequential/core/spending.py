@@ -147,7 +147,7 @@ class SpendingFunctionFactory:
 
     Example::
 
-        >>> from earlysign.schema.ES3.GST import SpendingFunction
+        >>> from earlysign.builtin.group_sequential.schema import SpendingFunction
         >>> from earlysign.builtin.group_sequential.core.spending import SpendingFunctionFactory
         >>> factory = SpendingFunctionFactory(budget=0.025)
         >>> spec = SpendingFunction(family="obrien_fleming")

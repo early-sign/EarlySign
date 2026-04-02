@@ -5,7 +5,7 @@ from typing import Any, Optional, Protocol, Tuple, cast, runtime_checkable
 import numpy as np
 from numpy.typing import NDArray
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.spending import (
     SpendingFunction,
     SpendingFunctionFactory,

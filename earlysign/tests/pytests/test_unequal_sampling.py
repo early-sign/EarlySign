@@ -57,7 +57,7 @@ def test_unequal_allocation_n_max_2_arm() -> None:
     assert pytest.approx(n_uneq, abs=2) == 1.125 * n_bal
 
     # Check that max_sample_size is a dict
-    from earlysign.schema.ES3.GST import SampleSizeTimer
+    from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 
     timer = spec_uneq.stopping_policy.timer
     assert isinstance(timer, SampleSizeTimer)
@@ -90,7 +90,7 @@ def test_multi_arm_allocation_n_max() -> None:
         treatment_arm_name="A",  # Design against arm A
     )
 
-    from earlysign.schema.ES3.GST import SampleSizeTimer
+    from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 
     timer = spec.stopping_policy.timer
     assert isinstance(timer, SampleSizeTimer)
@@ -112,7 +112,7 @@ def test_template_design_with_relative_improvement() -> None:
         allocation_ratios={"treatment": 2.0},
     )
 
-    from earlysign.schema.ES3.GST import BinaryEffectSize
+    from earlysign.builtin.group_sequential.schema import BinaryEffectSize
 
     hypotheses = protocol.task.hypotheses
     assert isinstance(hypotheses.target_effect, BinaryEffectSize)
@@ -124,7 +124,7 @@ def test_template_design_with_relative_improvement() -> None:
     assert isinstance(arms, TwoArmComparison)
     assert arms.allocation_ratios == {"treatment": 2.0}
 
-    from earlysign.schema.ES3.GST import SampleSizeTimer
+    from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 
     timer = protocol.method.stopping_policy.timer
     assert isinstance(timer, SampleSizeTimer)

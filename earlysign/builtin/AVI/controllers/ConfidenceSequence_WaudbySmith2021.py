@@ -56,20 +56,20 @@ from typing import Any, Dict, List, Literal
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.AVI import GAVIEngine
 from earlysign.builtin.AVI.reporting import FinalProjector, ProgressProjector
+from earlysign.builtin.AVI.schema import (
+    GAVIMethodSpec,
+    LookResult,
+    Protocol,
+    ResponseType,
+    Sides,
+    TaskSpec,
+)
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.AVI import (
-    GAVIMethodSpec,
-    Protocol,
-    ResponseType,
-    Sides,
-    TaskSpec,
-)
-from earlysign.schema.ES3.AVI.Log import LookResult
 from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ContinuousArmData
 

@@ -28,7 +28,7 @@ Examples:
     >>> from earlysign.builtin.group_sequential.controllers.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Controller
     >>> import earlysign.schema.ES3.Base as ES3_BASE
     >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-    >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
+    >>> from earlysign.builtin.group_sequential.schema import DecisionStatus
     >>>
     >>> # 1. Setup
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -73,7 +73,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel
 
 import earlysign.schema.ES3.Base as ES3_BASE
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -92,16 +92,16 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
 from earlysign.builtin.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.core.ledger import Ledger
-from earlysign.framework.controller import Controller
-from earlysign.framework.projector import ProtocolProjector
-from earlysign.framework.session import Session
-from earlysign.schema.ES3.GST.Log import (
+from earlysign.builtin.group_sequential.schema import (
     AdaptationLog,
     DecisionStatus,
     LookResult,
     PromisingZoneStatus,
 )
+from earlysign.core.ledger import Ledger
+from earlysign.framework.controller import Controller
+from earlysign.framework.projector import ProtocolProjector
+from earlysign.framework.session import Session
 
 
 class CuiHungWang1999Protocol(BaseModel):
@@ -175,7 +175,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             >>> from earlysign.builtin.group_sequential.controllers.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Controller
             >>> import earlysign.schema.ES3.Base as ES3_BASE
             >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-            >>> from earlysign.schema.ES3.GST.Log import DecisionStatus
+            >>> from earlysign.builtin.group_sequential.schema import DecisionStatus
             >>>
             >>> # 1. Setup
             >>> conn = ibis.connect("duckdb://:memory:")
@@ -355,7 +355,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             report = sess.read(ProgressProjector()).data.model_dump(mode="json")
             protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
             # Enrich with current trial constraints
-            from earlysign.schema.ES3.GST import SampleSizeTimer
+            from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 
             timer = protocol.method.stopping_policy.timer
             if isinstance(timer, SampleSizeTimer):

@@ -75,7 +75,7 @@ from typing import Any, Dict, Literal, Optional, Sequence, Union, cast
 from pydantic import BaseModel
 
 import earlysign.schema.ES3.Base as ES3_BASE
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -95,22 +95,20 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
 from earlysign.builtin.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
+from earlysign.builtin.group_sequential.schema import (
+    AdaptationLog,
+    DecisionStatus,
+    LookResult,
+    Method,
+    PromisingZoneSpec,
+    PromisingZoneStatus,
+    SampleSizeReestimationSpec,
+)
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
 from earlysign.framework.controller import Controller
 from earlysign.framework.projector import ProjectionResult, ProtocolProjector
 from earlysign.framework.session import Session
-from earlysign.schema.ES3.GST import (
-    Method,
-    PromisingZoneSpec,
-    SampleSizeReestimationSpec,
-)
-from earlysign.schema.ES3.GST.Log import (
-    AdaptationLog,
-    DecisionStatus,
-    LookResult,
-    PromisingZoneStatus,
-)
 
 
 class Hsiao2019Protocol(BaseModel):
@@ -363,7 +361,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
             report = report_data.model_dump(mode="json")
             protocol_wrapper = sess.read(ProtocolProjector(Hsiao2019Protocol)).data
 
-            from earlysign.schema.ES3.GST import SampleSizeTimer
+            from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 
             timer = protocol_wrapper.method.stopping_policy.timer
             if isinstance(timer, SampleSizeTimer):

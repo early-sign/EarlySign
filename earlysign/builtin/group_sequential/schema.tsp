@@ -512,7 +512,7 @@ model DueLookTrigger extends TriggerStrategySpecBase {
   tolerance?: float64 = 0.0;
 }
 
-namespace Log {
+// Flattened Log
   /**
    * Status of an ongoing or completed Group Sequential Test.
    */
@@ -633,7 +633,6 @@ namespace Log {
     /** Newly recommended max sample size (if SSR triggered). */
     recommended_sample_size?: int32;
   }
-}
 
 model AdaptationSpec {
   sample_size_reestimation?: SampleSizeReestimationSpec;
@@ -657,16 +656,16 @@ model SampleSizeReestimationSpec {
   promising_zone?: PromisingZoneSpec;
 }
 
-namespace Multivariate {
+// Flattened Multivariate
   /**
    * Multivariate Task (Multiple Endpoints).
    * Composed of multiple Univariate GST Tasks.
    */
-  model TaskSpec extends Base.TaskSpec {
+  model MultivariateTaskSpec extends Base.TaskSpec {
     kind: "group_sequential_multivariate" = "group_sequential_multivariate"; 
     
     /** Reusing the Standard GST TaskSpec */
-    sub_tasks: ES3.GST.TaskSpec[]; 
+    sub_tasks: TaskSpec[]; 
     
     /** Global parameters */
     /** Study-wide arms (must be consistent with sub_tasks) */
@@ -676,7 +675,7 @@ namespace Multivariate {
      * Global Hypothesis (e.g., "At least one effective" or "Global Null").
      * Typically represents the Union-Intersection or Intersection-Union test.
      */
-    hypotheses: ES3.GST.HypothesisSpec; 
+    hypotheses: HypothesisSpec; 
     
     /** Global FWER */
     alpha?: float64;
@@ -684,18 +683,17 @@ namespace Multivariate {
     beta?: float64;
   }
 
-  model MethodSpec extends Base.MethodSpec {
+  model MultivariateMethodSpec extends Base.MethodSpec {
     kind: "group_sequential_multivariate" = "group_sequential_multivariate";
     
     multiplicity_adjustment: "none" | "bonferroni" | "holm" | "hochberg" | "gatekeeping";
     correlation_matrix?: float64[][];
   }
 
-  model Protocol extends Base.Protocol {
-    task: TaskSpec;
-    method: MethodSpec;
+  model MultivariateProtocol extends Base.Protocol {
+    task: MultivariateTaskSpec;
+    method: MultivariateMethodSpec;
   }
-}
 
 /**
  * State captured during an adaptation event to preserve Type I error control.

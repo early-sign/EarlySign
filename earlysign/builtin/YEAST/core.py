@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import stats
 
-from earlysign.schema.ES3.YEAST import Protocol
+from earlysign.builtin.YEAST.schema import Protocol
 
 
 class BoundaryModel:

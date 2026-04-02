@@ -25,11 +25,7 @@ model Protocol extends Base.Protocol {
   method: MethodSpec;
 }
 
-namespace Log {
-  /**
-   * Status of an ongoing or completed YEAST Test.
-   */
-  enum DecisionStatus {
+enum DecisionStatus {
     Continue: "continue",
     StopEfficacy: "stop_efficacy",
     StopPlanEndReached: "stop_plan_end_reached",
@@ -62,4 +58,3 @@ namespace Log {
     /** Current status of the YEAST test. */
     status: DecisionStatus | string;
   }
-}

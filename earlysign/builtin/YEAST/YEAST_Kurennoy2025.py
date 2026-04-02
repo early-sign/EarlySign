@@ -3,6 +3,14 @@ from typing import Any, Dict, List, Literal
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.YEAST.engine import BinomialYEASTEngine, ContinuousYEASTEngine
 from earlysign.builtin.YEAST.reporting import FinalProjector, ProgressProjector
+from earlysign.builtin.YEAST.schema import (
+    Boundary as BoundarySchema,
+    LookResult,
+    MethodSpec,
+    Protocol,
+    ResponseType,
+    TaskSpec as YeastTaskSpec,
+)
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.projector import ProtocolProjector
@@ -11,13 +19,6 @@ from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ContinuousArmData
-from earlysign.schema.ES3.YEAST import (
-    MethodSpec,
-    Protocol,
-    ResponseType,
-    TaskSpec as YeastTaskSpec,
-)
-from earlysign.schema.ES3.YEAST.Log import Boundary as BoundarySchema, LookResult
 
 
 class BinomialKurennoy2025TaskSpec(YeastTaskSpec):

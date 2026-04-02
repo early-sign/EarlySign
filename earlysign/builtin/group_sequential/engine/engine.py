@@ -2,7 +2,7 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.adapters.protocol import (
     get_standardized_drift,
 )
@@ -18,7 +18,11 @@ from earlysign.builtin.group_sequential.core.policy import (
 from earlysign.builtin.group_sequential.engine.calculators import (
     ZStatisticCalculatorFactory,
 )
-from earlysign.schema.ES3.GST.Log import DecisionStatus, LookResult, ScheduleTrigger
+from earlysign.builtin.group_sequential.schema import (
+    DecisionStatus,
+    LookResult,
+    ScheduleTrigger,
+)
 
 
 class GroupSequentialEngine:

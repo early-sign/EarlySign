@@ -7,6 +7,10 @@ from typing import Any, List, Literal, Optional, cast
 
 import numpy as np
 
+import earlysign.schema.ES3.Base as ES3_BASE
+from earlysign.builtin.group_sequential import (
+    schema,
+)
 from earlysign.builtin.group_sequential.core.model import CanonicalJointModel
 from earlysign.builtin.group_sequential.design.operating_characteristics.engines import (
     AsymptoticSimulator,
@@ -17,10 +21,6 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     SimulationCurve,
 )
 from earlysign.parts.stats.gaussian_process import CanonicalGaussianProcess
-from earlysign.schema.ES3 import (
-    GST,
-    Base as ES3_BASE,
-)
 
 
 class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
@@ -34,7 +34,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
     def __init__(
         self,
-        protocol: GST.Protocol,
+        protocol: schema.Protocol,
         method: Literal["simulation", "numerical_integration"] = "simulation",
         n_sims: int = 50000,
         seed: Optional[int] = None,
@@ -55,7 +55,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 1. Inspect Task to get Baseline/Target Props and Arms
         task = protocol.task
-        if not isinstance(task.hypotheses.target_effect, GST.BinaryEffectSize):
+        if not isinstance(task.hypotheses.target_effect, schema.BinaryEffectSize):
             raise ValueError(
                 "Evaluator requires BinaryEffectSize in protocol hypotheses."
             )
@@ -80,7 +80,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 2. Derive statistical parameters for Canonical Model
         timer = protocol.method.stopping_policy.timer
-        if not isinstance(timer, GST.SampleSizeTimer):
+        if not isinstance(timer, schema.SampleSizeTimer):
             raise ValueError(
                 f"Protocol timer must be SampleSizeTimer, got {type(timer).__name__}."
             )

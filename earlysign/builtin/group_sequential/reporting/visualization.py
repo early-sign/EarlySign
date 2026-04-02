@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.design.operating_characteristics.binomial import (
     BinomialOperatingCharacteristicsEvaluator,
 )
@@ -21,8 +21,8 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     SimulationCurve,
 )
 from earlysign.builtin.group_sequential.engine.engine import GroupSequentialEngine
+from earlysign.builtin.group_sequential.schema import LookResult
 from earlysign.parts.visualization.visual import VisualizationResult
-from earlysign.schema.ES3.GST.Log import LookResult
 
 
 def reconstruct_z_history(table: ibis.Expr) -> Tuple[List[int], List[float]]:

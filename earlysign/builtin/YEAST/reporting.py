@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import ibis
 from pydantic import BaseModel
 
+from earlysign.builtin.YEAST.schema import DecisionStatus, LookResult, Protocol
 from earlysign.framework.projector import (
     ProjectionResult,
     Projector,
@@ -12,8 +13,6 @@ from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboardSchema
 from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboardSchema
-from earlysign.schema.ES3.YEAST import Protocol
-from earlysign.schema.ES3.YEAST.Log import DecisionStatus, LookResult
 
 
 class ProgressReport(BaseModel):

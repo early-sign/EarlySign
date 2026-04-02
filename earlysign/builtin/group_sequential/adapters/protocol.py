@@ -1,6 +1,6 @@
 import numpy as np
 
-import earlysign.schema.ES3.GST as GST
+from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.adapters import binomial, continuous
 
 
