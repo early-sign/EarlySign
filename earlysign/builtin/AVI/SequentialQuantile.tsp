@@ -1,3 +1,5 @@
+import "@earlysign/es3-standard";
+
 namespace ES3.SequentialQuantile;
 
 @doc("Metrics for a single arm in a sequential quantile test.")

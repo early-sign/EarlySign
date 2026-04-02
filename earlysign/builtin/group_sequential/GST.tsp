@@ -1,3 +1,4 @@
+import "@earlysign/es3-standard";
 
 namespace ES3.GST;
 

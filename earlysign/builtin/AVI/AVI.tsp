@@ -1,3 +1,5 @@
+import "@earlysign/es3-standard";
+
 namespace ES3.AVI;
 
 model BaseAVIMethodSpec extends Base.MethodSpec {

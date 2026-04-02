@@ -25,23 +25,15 @@ Core Manifest
 AVI
 ---
 
-.. literalinclude:: ../../../ES3/schema/es3_v1_imports/AVI.tsp
+.. literalinclude:: ../../../earlysign/builtin/AVI/AVI.tsp
    :language: typescript
    :linenos:
    :caption: AVI.tsp
 
-GST
----
-
-.. literalinclude:: ../../../ES3/schema/es3_v1_imports/GST.tsp
-   :language: typescript
-   :linenos:
-   :caption: GST.tsp
-
 SequentialQuantile
 ------------------
 
-.. literalinclude:: ../../../ES3/schema/es3_v1_imports/SequentialQuantile.tsp
+.. literalinclude:: ../../../earlysign/builtin/AVI/SequentialQuantile.tsp
    :language: typescript
    :linenos:
    :caption: SequentialQuantile.tsp
@@ -49,7 +41,15 @@ SequentialQuantile
 YEAST
 -----
 
-.. literalinclude:: ../../../ES3/schema/es3_v1_imports/YEAST.tsp
+.. literalinclude:: ../../../earlysign/builtin/YEAST/YEAST.tsp
    :language: typescript
    :linenos:
    :caption: YEAST.tsp
+
+GST
+---
+
+.. literalinclude:: ../../../earlysign/builtin/group_sequential/GST.tsp
+   :language: typescript
+   :linenos:
+   :caption: GST.tsp

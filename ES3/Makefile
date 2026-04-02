@@ -6,9 +6,9 @@ TARGET_PYTHON_VERSION ?= 3.11
 DATAMODEL_CODEGEN ?= $(POETRY) run datamodel-codegen
 OUTPUT_DIR ?= ../earlysign/schema/ES3
 SENTINEL ?= $(OUTPUT_DIR)/__init__.py
-TSP_SOURCE ?= schema/es3_v1.tsp
+TSP_SOURCE ?= build.tsp
 
-TSP_SOURCES := $(shell find schema -name '*.tsp')
+TSP_SOURCES := schema/es3_v1.tsp $(shell find ../earlysign/builtin -name '*.tsp')
 
 install:
 	npm install
@@ -17,6 +17,11 @@ compile: $(SENTINEL)
 
 $(SENTINEL): $(TSP_SOURCES) Makefile
 	@echo "Compiling ES3 Standard..."
+	# 0. Generate build.tsp dynamically
+	@echo 'import "./schema/es3_v1.tsp";' > $(TSP_SOURCE)
+	@for f in $$(find ../earlysign/builtin -name '*.tsp'); do \
+		echo "import \"$$f\";" >> $(TSP_SOURCE); \
+	done
 	# 1. Compile TypeSpec to OpenAPI 3
 	npx tsp compile $(TSP_SOURCE) --emit @typespec/openapi3 --output-dir out-openapi3
 	# 2. Generate Pydantic models

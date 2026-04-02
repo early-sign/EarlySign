@@ -2,6 +2,7 @@
 
 install:
 	poetry install --with dev,ci
+	npm install
 
 lint:
 	poetry run black --check .

@@ -1,3 +1,5 @@
+import "@earlysign/es3-standard";
+
 namespace ES3.YEAST;
 
 model TaskSpec extends Base.TaskSpec {

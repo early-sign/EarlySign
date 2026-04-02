@@ -1,6 +1,7 @@
 {
-    "name": "es3-standard",
+    "name": "@earlysign/es3-standard",
     "version": "1.0.0",
+    "tspMain": "schema/es3_v1.tsp",
     "description": "ES3 Standard Specification (TypeSpec)",
     "dependencies": {
         "@typespec/compiler": "latest",

@@ -151,19 +151,21 @@ def generate_schema_rst(app):
     if not os.path.exists(schema_dir):
         return
 
-    # Collect all .tsp files in root and imports subdir
+    # Collect all .tsp files in root
     tsp_files = []
-    # Root .tsp files
     for f in sorted(os.listdir(schema_dir)):
         if f.endswith(".tsp"):
             tsp_files.append(os.path.join(schema_dir, f))
 
-    # Imports subdir
-    imports_dir = os.path.join(schema_dir, "es3_v1_imports")
-    if os.path.exists(imports_dir):
-        for f in sorted(os.listdir(imports_dir)):
-            if f.endswith(".tsp"):
-                tsp_files.append(os.path.join(imports_dir, f))
+    # Builtin subdirs
+    builtin_dir = os.path.join(repo_root, "earlysign", "builtin")
+    if os.path.exists(builtin_dir):
+        # We sort directories to ensure deterministic order (e.g., AVI before YEAST)
+        for root, dirs, files in os.walk(builtin_dir):
+            dirs.sort()
+            for f in sorted(files):
+                if f.endswith(".tsp"):
+                    tsp_files.append(os.path.join(root, f))
 
     content = [
         "ES3 Schema Reference",

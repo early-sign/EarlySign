@@ -208,3 +208,5 @@ __marimo__/
 
 .archive/
 .Trash/
+node_modules/
+ES3/build.tsp
