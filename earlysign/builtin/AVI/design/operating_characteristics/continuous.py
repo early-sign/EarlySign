@@ -11,7 +11,7 @@ import numpy as np
 from earlysign.builtin.AVI.design.operating_characteristics.engines import (
     AVIMonteCarloSimulator,
 )
-from earlysign.builtin.AVI.schema import GAVIMethodSpec, MSPRTMethodSpec, Protocol
+from earlysign.builtin.AVI.schema import AVIProtocol, GAVIMethodSpec, MSPRTMethodSpec
 from earlysign.builtin.group_sequential.design.operating_characteristics.engines import (
     EvaluationResult,
     SimulationCurve,
@@ -24,7 +24,7 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
 
     def __init__(
         self,
-        protocol: Protocol,
+        protocol: AVIProtocol,
         mean_control: float = 0.0,
         n_sims: int = 2000,
         seed: Optional[int] = None,
@@ -87,12 +87,14 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
 
         if self.method_type == "msprt":
             method_msprt = cast(MSPRTMethodSpec, self.protocol.method)
+            from earlysign.builtin.AVI.schema import Sides
+
             alpha = (
                 method_msprt.alpha * 2
-                if method_msprt.sides == "one"
+                if method_msprt.sides == Sides.ONE
                 else method_msprt.alpha
             )
-            tau = method_msprt.mde
+            tau = method_msprt.mde or 1.0
 
             # Estimate running variance (simplified to true variance for simulation speed
             # or could compute empirical variance, but let's use the base variance supplied)
@@ -123,7 +125,7 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
             )
 
             V = (sigma2 / n_array) * 2
-            phi = float(method_gavi.max_n)
+            phi = float(method_gavi.max_n or 1000)
             n_val = (n_array * 2) / 2.0
 
             denom = np.log(np.log(np.exp(1) * alpha ** (-2))) - 2 * np.log(alpha)
@@ -141,7 +143,9 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
             boundary[n_array < burn_in] = np.inf
 
         sides = str(self.protocol.method.sides)
-        if sides == "two":
+        from earlysign.builtin.AVI.schema import Sides
+
+        if sides == Sides.TWO:
             crossed = np.abs(trajectory) > boundary
         else:
             crossed = trajectory > boundary

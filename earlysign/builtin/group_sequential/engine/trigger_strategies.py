@@ -1,11 +1,11 @@
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, cast
 
 from earlysign.builtin.group_sequential.adapters.protocol import get_info_times
 from earlysign.builtin.group_sequential.schema import (
     DueLookTrigger,
     EventCountTimer,
     FisherInformationTimer,
-    LookResult,
+    GSTMethodSpec,
     Protocol,
     SampleSizeTimer,
     ScheduleTrigger,
@@ -16,7 +16,7 @@ from earlysign.framework.trace import Traced, extract_traces
 def get_pending_look_trigger(
     protocol: Traced[Protocol],
     metrics: Traced[Any],
-    history: Traced[List[Tuple[int, LookResult]]],
+    history: Traced[List[Tuple[int, Any]]],
 ) -> Optional[Traced[ScheduleTrigger]]:
     """
     Identifies if a planned look is "due" and returns a ScheduleTrigger if so.
@@ -33,7 +33,8 @@ def get_pending_look_trigger(
     Returns:
         ScheduleTrigger if a look is due, else None. (Traced)
     """
-    policy = protocol.data.method.stopping_policy
+    method = cast(GSTMethodSpec, protocol.data.method)
+    policy = method.stopping_policy
     trigger_spec = policy.trigger_strategy
     trace = extract_traces(protocol, metrics, history)
 
@@ -50,7 +51,12 @@ def get_pending_look_trigger(
     # 2. Calculate current information fraction
     n_max: float = 0.0
     if isinstance(timer, SampleSizeTimer):
-        n_max = float(sum(timer.max_sample_size.values()))
+        if isinstance(timer.max_sample_size, dict):
+            n_max = float(sum(timer.max_sample_size.values()))
+        elif isinstance(timer.max_sample_size, list):
+            n_max = float(sum(timer.max_sample_size))
+        else:
+            n_max = float(timer.max_sample_size)
     elif isinstance(timer, EventCountTimer):
         n_max = timer.max_events
     elif isinstance(timer, FisherInformationTimer):
@@ -58,7 +64,12 @@ def get_pending_look_trigger(
     else:
         return None
 
-    total_n = sum(arm.metrics.total for arm in metrics.data.arms.values())
+    arms_metrics = metrics.data.arms
+    if isinstance(arms_metrics, dict):
+        total_n = sum(arm.metrics.total for arm in arms_metrics.values())
+    else:
+        total_n = sum(arm.metrics.total for arm in arms_metrics)
+
     current_info_frac = total_n / n_max if n_max > 0 else 0.0
 
     # 3. Identify due looks

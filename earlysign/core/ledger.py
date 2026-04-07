@@ -309,7 +309,7 @@ class Ledger:
             combined_attributes.update(attributes)
 
         # Source version from the schema Metadata default
-        schema_version = ES3Metadata.model_fields["ES3_version"].default
+        schema_version = ES3Metadata.model_fields["es3_version"].default
 
         combined_metadata: Dict[str, Any] = {
             "pkg_version": f"earlysign=={__version__}",

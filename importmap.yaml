@@ -1,0 +1,7 @@
+# LinkML importmap: schema-id -> Python module path
+# Used by earlysign.parts.codegen.linkml_generator to resolve explicit imports.
+# Keys must be the canonical schema ``id`` field (absolute URI).
+
+https://earlysign.io/schema/ES3/base:       earlysign.schema.ES3.Base
+https://earlysign.io/schema/ES3/binomial:   earlysign.schema.ES3.Binomial
+https://earlysign.io/schema/ES3/continuous: earlysign.schema.ES3.Continuous

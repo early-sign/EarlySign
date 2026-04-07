@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Dict, Literal, Optional, Self, Union
+from typing import Any, Dict, List, Literal, Optional, Self, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -209,11 +209,11 @@ class ProtocolDesigner:
                 info_times=info_times.tolist(),
                 boundaries=upper.tolist() if upper is not None else [],
                 target_power=power,
+                tails=tails,
+                method=method,
                 futility_boundaries=(
                     lower.tolist() if futility_binding and lower is not None else None
                 ),
-                tails=tails,
-                method=method,
                 method_config=method_config,
                 bracket=(current_drift * 0.8, current_drift * 1.2),
             )
@@ -255,14 +255,14 @@ class ProtocolDesigner:
         futility_binding: bool = False,
         tails: int = 1,
         rng_seed: int = 42,
-        allocation_ratios: Optional[Dict[str, float]] = None,
+        allocation_ratios: Optional[List[float]] = None,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
         method: Literal["simulation", "numerical_integration"] = "simulation",
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
-    ) -> tuple[GST.MethodSpec, int]:
+    ) -> tuple[GST.GSTMethodSpec, int]:
         """Core logic for designing a Binomial Group Sequential Test.
 
         Args:
@@ -288,19 +288,23 @@ class ProtocolDesigner:
             A tuple of (MethodSpec, n_max). n_max is total (int).
         """
         # 0. Setup Spending Function Specimens (for Model Solver)
-        sf_factory = SpendingFunctionFactory(budget=alpha)
-        sf_eff = sf_factory.build_from_spec(
-            GST.SpendingFunction(family=spending_function, params=spending_params)
+        alpha_spending = GST.SpendingFunction(
+            family=spending_function,
+            params=list(spending_params.values()) if spending_params else None,
         )
+        beta_spending = GST.SpendingFunction(
+            family=spending_function,
+            params=list(spending_params.values()) if spending_params else None,
+        )
+        sf_factory = SpendingFunctionFactory(budget=alpha)
+        sf_eff = sf_factory.build_from_spec(alpha_spending)
         sf_fut = None
         if futility:
             # Use Decimal for the budget calculation 1.0 - power to avoid floating-point
             # artifacts (e.g., 1.0 - 0.8 becoming 0.19999999999999996).
             beta_budget = float(Decimal("1.0") - Decimal(str(power)))
             sf_factory_fut = SpendingFunctionFactory(budget=beta_budget)
-            sf_fut = sf_factory_fut.build_from_spec(
-                GST.SpendingFunction(family=spending_function, params=spending_params)
-            )
+            sf_fut = sf_factory_fut.build_from_spec(beta_spending)
 
         # 1. Determine Schedule
         if isinstance(scheduling, (np.ndarray, list)):
@@ -332,6 +336,7 @@ class ProtocolDesigner:
                     method=method,
                     method_config=method_config,
                 )
+
                 drift_target = proxy_model.solve_drift(
                     proxy_times.tolist(),
                     u_prox.tolist() if u_prox is not None else [],
@@ -374,11 +379,19 @@ class ProtocolDesigner:
         )
 
         # 3. Calculate Sample Size (n_max)
+        # Convert list allocation_ratios to dict for the adapter if needed
+        ratio_dict = None
+        if allocation_ratios:
+            # For multi-arm, adapters might need more work, but for now we handle 2-arm logic
+            ratio_dict = {
+                treatment_arm_name: allocation_ratios[1] / allocation_ratios[0]
+            }
+
         n_max = binomial.calculate_n_max(
             drift=design.drift,
             p_control=p_control,
             p_treatment=p_treatment,
-            allocation_ratios=allocation_ratios,
+            allocation_ratios=ratio_dict,
             control_arm_name=control_arm_name,
             treatment_arm_name=treatment_arm_name,
         )
@@ -388,12 +401,8 @@ class ProtocolDesigner:
         strategy: Any
         if futility:
             strategy = GST.AlphaBetaSpendingStrategy(
-                alpha_spending_fn=GST.SpendingFunction(
-                    family=spending_function, params=spending_params
-                ),
-                beta_spending_fn=GST.SpendingFunction(
-                    family=spending_function, params=spending_params
-                ),
+                alpha_spending_fn=alpha_spending,
+                beta_spending_fn=beta_spending,
                 alpha_budget=alpha,
                 beta_budget=float(Decimal("1.0") - Decimal(str(power))),
                 alpha_binding=True,
@@ -402,15 +411,13 @@ class ProtocolDesigner:
             )
         else:
             strategy = GST.AlphaSpendingStrategy(
-                spending_fn=GST.SpendingFunction(
-                    family=spending_function, params=spending_params
-                ),
+                spending_fn=alpha_spending,
                 budget=alpha,
                 sided=GST.Sided.ONE if tails == 1 else GST.Sided.TWO,
                 statistical_model=GST.CanonicalGaussianModel(),
             )
 
-        method_spec = GST.MethodSpec(
+        method_spec = GST.GSTMethodSpec(
             kind="group_sequential",
             stopping_policy=GST.StoppingPolicySpec(
                 statistic=GST.TwoArmBinomialZ(
@@ -419,7 +426,11 @@ class ProtocolDesigner:
                 strategy=strategy,
                 timer=GST.SampleSizeTimer(
                     unit=GST.Unit.INDIVIDUALS,
-                    max_sample_size=n_max,
+                    max_sample_size=(
+                        list(n_max.values())
+                        if isinstance(n_max, dict)
+                        else [int(n_max)]
+                    ),
                 ),
                 schedule=GST.FixedSchedule(analyses=info_times.tolist()),
             ),
@@ -444,7 +455,7 @@ class ProtocolDesigner:
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
-    ) -> tuple[GST.MethodSpec, int]:
+    ) -> tuple[GST.GSTMethodSpec, int]:
         """Core logic for designing a Classic (Fixed Shape) Group Sequential Test.
 
         Args:
@@ -540,12 +551,18 @@ class ProtocolDesigner:
             )
         elif sigma is not None:
             # Continuous
+            # Convert list allocation_ratios to dict for the adapter if needed
+            ratio_dict = None
+            # For multi-arm, adapters might need more work, but for now we handle 2-arm logic
+            ratio_dict = {arm_names[1]: 1.0} if n_arms > 1 else None
+
             n_max_dict = continuous.calculate_n_max(
                 drift=drift,
                 delta=delta,
                 sigma=sigma,
                 n_arms=n_arms,
                 arm_names=arm_names,
+                allocation_ratios=ratio_dict,
             )
             timer_unit = GST.Unit.INDIVIDUALS
             stat_spec = (
@@ -564,6 +581,15 @@ class ProtocolDesigner:
             raise ValueError("Must provide either p_control or sigma.")
 
         n_total_calc = sum(n_max_dict.values())
+        # For non-multivariate / standard GST, verify we have correct per-arm sizes.
+        # This was causing factor-of-2 doubling in JT survival tests if n_total was taken as i_max.
+        if n_arms == 1 and len(n_max_dict) == 1:
+            n_total_calc = list(n_max_dict.values())[0]
+        elif n_arms == 2 and len(n_max_dict) == 1:
+            # Fallback if calculate_n_max returned a combined scalar but we wanted arms
+            val = list(n_max_dict.values())[0]
+            n_max_dict = {arm_names[0]: val // 2, arm_names[1]: val // 2}
+            n_total_calc = val
 
         # 5. Assemble MethodSpec
         # Prepare strategy arguments
@@ -575,12 +601,19 @@ class ProtocolDesigner:
         if type == "wang_tsiatis":
             strategy_kwargs["delta"] = wang_tsiatis_delta
 
-        method_spec = GST.MethodSpec(
+        method_spec = GST.GSTMethodSpec(
             kind="group_sequential",
             stopping_policy=GST.StoppingPolicySpec(
                 statistic=stat_spec,
                 strategy=strategy_cls(**strategy_kwargs),
-                timer=GST.SampleSizeTimer(unit=timer_unit, max_sample_size=n_max_dict),
+                timer=GST.SampleSizeTimer(
+                    unit=timer_unit,
+                    max_sample_size=(
+                        list(n_max_dict.values())
+                        if isinstance(n_max_dict, dict)
+                        else [int(n_max_dict)]
+                    ),
+                ),
                 schedule=GST.FixedSchedule(analyses=info_times.tolist()),
             ),
         )
@@ -602,7 +635,7 @@ class ProtocolDesigner:
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
         rng_seed: int = 42,
-    ) -> GST.Protocol:
+    ) -> GST.GSTProtocol:
         """Plans a binomial A/B design and returns a fully populated GST.Protocol.
 
         Args:
@@ -644,9 +677,9 @@ class ProtocolDesigner:
         )
 
         # Construct the realized protocol
-        return GST.Protocol(
+        return GST.GSTProtocol(
             name="Designed Protocol",
-            task=GST.TaskSpec(
+            task=GST.GSTTaskSpec(
                 kind="group_sequential",
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
@@ -658,10 +691,7 @@ class ProtocolDesigner:
                     h_alt_description=f"Difference > {delta}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.BinaryEffectSize(
-                        proportions={
-                            "control": p_control,
-                            "treatment": p_treatment,
-                        }
+                        proportions=[p_control, p_treatment]
                     ),
                 ),
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
@@ -677,13 +707,13 @@ class ProtocolDesigner:
         p_control: float,
         p_treatment: float,
         k: int,
-        allocation_ratios: Optional[Dict[str, float]] = None,
+        allocation_ratios: Optional[List[float]] = None,
         spending_fn: Optional[SpendingFunction] = None,
         side: int = 1,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
         rng_seed: int = 42,
-    ) -> GST.Protocol:
+    ) -> GST.GSTProtocol:
         """Plans a binomial design with unequal allocation.
 
         Args:
@@ -722,33 +752,41 @@ class ProtocolDesigner:
             treatment_arm_name=treatment_arm_name,
         )
 
-        if allocation_ratios and len(allocation_ratios) > 1:
+        if allocation_ratios and len(allocation_ratios) > 2:
             arms: ES3_BASE.ArmStructure = ES3_BASE.MultiArmComparison(
                 control_arm_name=control_arm_name,
-                treatment_arm_names=list(allocation_ratios.keys()),
+                treatment_arm_names=[
+                    f"{treatment_arm_name}_{i}"
+                    for i in range(1, len(allocation_ratios))
+                ],
                 allocation_ratios=allocation_ratios,
             )
-            props = {control_arm_name: p_control}
-            props.update({arm: p_treatment for arm in allocation_ratios.keys()})
+            props = [
+                p_control,
+                *[p_treatment for _ in range(len(allocation_ratios) - 1)],
+            ]
         else:
             ratio = 1.0
-            if allocation_ratios:
-                ratio = list(allocation_ratios.values())[0]
+            if allocation_ratios and len(allocation_ratios) == 2:
+                ratio = allocation_ratios[1]
 
-            # For TwoArmComparison, we must provide allocation_ratios as a dict
-            # Expected key is treatment_arm_name
-            two_arm_ratios = {treatment_arm_name: ratio}
+            # For TwoArmComparison, we use a list
+            two_arm_ratios = None
+            if ratio != 1.0:
+                two_arm_ratios = [1.0, ratio]
+            elif allocation_ratios:
+                two_arm_ratios = [1.0, allocation_ratios[1]]
 
             arms = ES3_BASE.TwoArmComparison(
                 control_arm_name=control_arm_name,
                 treatment_arm_name=treatment_arm_name,
                 allocation_ratios=two_arm_ratios,
             )
-            props = {control_arm_name: p_control, treatment_arm_name: p_treatment}
+            props = [p_control, p_treatment]
 
-        return GST.Protocol(
+        return GST.GSTProtocol(
             name="Designed Protocol (Unequal)",
-            task=GST.TaskSpec(
+            task=GST.GSTTaskSpec(
                 kind="group_sequential",
                 arms=arms,
                 response_type=GST.ResponseType.BINARY,
@@ -765,8 +803,8 @@ class ProtocolDesigner:
         )
 
     def method_from_task_spec(
-        self, task: GST.TaskSpec, params: Dict[str, Any]
-    ) -> GST.MethodSpec:
+        self, task: GST.GSTTaskSpec, params: Dict[str, Any]
+    ) -> GST.GSTMethodSpec:
         """
         Derives a MethodSpec from a TaskSpec effectively serving as a 'Design Strategy'.
 
@@ -780,7 +818,7 @@ class ProtocolDesigner:
 
             1. Valid power in task.futility
 
-            >>> task = GST.TaskSpec(
+            >>> task = GST.GSTTaskSpec(
             ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
             ...     response_type=GST.ResponseType.BINARY,
             ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
@@ -789,7 +827,7 @@ class ProtocolDesigner:
             ...         h_null_description="null",
             ...         h_alt_description="alt",
             ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-            ...         target_effect=GST.BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
+            ...         target_effect=GST.BinaryEffectSize(proportions=[0.1, 0.2]),
             ...     ),
             ... )
             >>> params = {"looks": 2, "spending_function": "obrien_fleming"}
@@ -799,7 +837,7 @@ class ProtocolDesigner:
 
             2. Valid power in params
 
-            >>> task_no_fut = GST.TaskSpec(
+            >>> task_no_fut = GST.GSTTaskSpec(
             ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
             ...     response_type=GST.ResponseType.BINARY,
             ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
@@ -808,7 +846,7 @@ class ProtocolDesigner:
             ...         h_null_description="null",
             ...         h_alt_description="alt",
             ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-            ...         target_effect=GST.BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
+            ...         target_effect=GST.BinaryEffectSize(proportions=[0.1, 0.2]),
             ...     ),
             ... )
             >>> params_with_power = {
@@ -864,16 +902,20 @@ class ProtocolDesigner:
         props = hypotheses.target_effect.proportions
         arms = task.arms
 
-        allocation_ratios: Optional[Dict[str, float]] = None
+        allocation_ratios: Optional[List[float]] = None
         control_arm_name = "control"
         treatment_arm_name = "treatment"
 
         if isinstance(arms, ES3_BASE.TwoArmComparison):
-            p_c = float(props[arms.control_arm_name])
-            p_t = float(props[arms.treatment_arm_name])
+            p_c = float(props[0])
+            p_t = float(props[1])
             allocation_ratios = arms.allocation_ratios
             if not allocation_ratios:
-                allocation_ratios = {arms.treatment_arm_name: 1.0}
+                allocation_ratios = [1.0, 1.0]
+
+            r = allocation_ratios[1] if allocation_ratios else 1.0
+            4.0 * r / ((1.0 + r) ** 2)
+
             control_arm_name = arms.control_arm_name
             treatment_arm_name = arms.treatment_arm_name
         elif isinstance(arms, ES3_BASE.MultiArmComparison):
@@ -881,8 +923,8 @@ class ProtocolDesigner:
             treatment_arm_names = arms.treatment_arm_names
             # Pick first treatment arm as primary for drift solving if not specified or just use first
             treatment_arm_name = treatment_arm_names[0]
-            p_c = float(props[control_arm_name])
-            p_t = float(props[treatment_arm_name])
+            p_c = float(props[0])
+            p_t = float(props[1])
             allocation_ratios = arms.allocation_ratios
         else:
             raise ValueError(
@@ -934,7 +976,8 @@ class ProtocolDesigner:
                 use_weighted_statistic=use_weighted,
             )
 
-            method_spec.adaptation = GST.AdaptationSpec(
+            methods_spec_gst = method_spec
+            methods_spec_gst.adaptation = GST.AdaptationSpec(
                 sample_size_reestimation=ssr_spec
             )
 
@@ -953,7 +996,7 @@ class ProtocolDesigner:
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
         rng_seed: int = 42,
-    ) -> GST.Protocol:
+    ) -> GST.GSTProtocol:
         """
         Plans a Continuous (Two Means) A/B design.
 
@@ -1009,9 +1052,9 @@ class ProtocolDesigner:
         i_max = (drift / theta) ** 2
         n_max = int(np.ceil(i_max))
 
-        return GST.Protocol(
+        return GST.GSTProtocol(
             name="Continuous AB Protocol",
-            task=GST.TaskSpec(
+            task=GST.GSTTaskSpec(
                 kind="group_sequential",
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
@@ -1023,14 +1066,14 @@ class ProtocolDesigner:
                     h_alt_description=f"Difference > {delta}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.ContinuousEffectSize(
-                        means={"control": 0.0, "treatment": delta},
+                        means=[0.0, delta],
                         standard_deviation=sigma,
                     ),
                 ),
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
                 futility=GST.FutilityRequirement(power=power),
             ),
-            method=GST.MethodSpec(
+            method=GST.GSTMethodSpec(
                 kind="group_sequential",
                 stopping_policy=GST.StoppingPolicySpec(
                     statistic=GST.TwoArmContinuousZ(
@@ -1049,10 +1092,10 @@ class ProtocolDesigner:
                     ),
                     timer=GST.SampleSizeTimer(
                         unit=GST.Unit.INDIVIDUALS,
-                        max_sample_size={
-                            "control": n_max // 2,
-                            "treatment": n_max - (n_max // 2),
-                        },
+                        max_sample_size=[
+                            n_max // 2,
+                            n_max - (n_max // 2),
+                        ],
                     ),
                     schedule=GST.FixedSchedule(
                         analyses=info_times.tolist(),
@@ -1069,7 +1112,7 @@ class ProtocolDesigner:
         k: int,
         spending_fn: Optional[SpendingFunction] = None,
         rng_seed: int = 42,
-    ) -> GST.Protocol:
+    ) -> GST.GSTProtocol:
         """
         Plans a Survival (Time-to-Event) A/B design using Log-Rank Test.
 
@@ -1109,9 +1152,9 @@ class ProtocolDesigner:
         # drift = theta * sqrt(Events)
         events_max = int(np.ceil((drift / theta) ** 2))
 
-        return GST.Protocol(
+        return GST.GSTProtocol(
             name="Survival AB Protocol",
-            task=GST.TaskSpec(
+            task=GST.GSTTaskSpec(
                 kind="group_sequential",
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
@@ -1123,13 +1166,13 @@ class ProtocolDesigner:
                     h_alt_description=f"HR < {hazard_ratio}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.SurvivalEffectSize(
-                        hazard_ratios={"control": 1.0, "treatment": hazard_ratio}
+                        hazard_ratios=[1.0, hazard_ratio]
                     ),
                 ),
                 efficacy=GST.EfficacyRequirement(alpha=alpha),
                 futility=GST.FutilityRequirement(power=power),
             ),
-            method=GST.MethodSpec(
+            method=GST.GSTMethodSpec(
                 kind="group_sequential",
                 stopping_policy=GST.StoppingPolicySpec(
                     statistic=GST.TwoArmContinuousZ(

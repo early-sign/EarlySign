@@ -11,7 +11,12 @@ from earlysign.builtin.AVI.core import (
     BinomialEValueModel,
     EProcessProtocol,
 )
-from earlysign.builtin.AVI.schema import DecisionStatus, LookResult, Protocol
+from earlysign.builtin.AVI.schema import (
+    AVILookResult,
+    AVIProtocol,
+    DecisionStatus,
+    ResponseType,
+)
 from earlysign.framework.projector import (
     ProjectionResult,
     Projector,
@@ -78,6 +83,7 @@ class ProgressProjector(Projector[ProgressReport]):
                     trajectory=0.0,
                     boundary=None,
                     status=DecisionStatus.CONTINUE,
+                    arms={},
                 ),
                 trace=[],
             )
@@ -86,12 +92,14 @@ class ProgressProjector(Projector[ProgressReport]):
         latest_row = results_df.iloc[-1]
         payload = latest_row["payload"]
         if isinstance(payload, str):
+            import json
+
             payload = json.loads(payload)
 
-        latest_look = LookResult.model_validate(payload)
+        latest_look = AVILookResult.model_validate(payload)
 
         # 2. Determine response type from Protocol
-        protocol_traced = ProtocolProjector(Protocol).project(table)
+        protocol_traced = ProtocolProjector(AVIProtocol).project(table)
         response_type = getattr(protocol_traced.data.task, "response_type", "binary")
 
         # 3. Read Scoreboard for arm metrics
@@ -109,11 +117,18 @@ class ProgressProjector(Projector[ProgressReport]):
         )
 
         report = ProgressReport(
-            sample_n=latest_look.sample_n,
-            trajectory=latest_look.trajectory,
+            sample_n=latest_look.sample_n or 0,
+            trajectory=latest_look.trajectory or 0.0,
             boundary=latest_look.boundary,
-            status=latest_look.status,
-            arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
+            status=latest_look.status or "",
+            arms={
+                k: v.metrics.model_dump()
+                for k, v in (
+                    (metrics.arms.items() if metrics.arms else [])
+                    if metrics.arms
+                    else []
+                )
+            },
         )
 
         return ProjectionResult(data=report, trace=metrics_traced.trace)
@@ -140,10 +155,10 @@ class FinalProjector(Projector[FinalReport]):
         if isinstance(payload, str):
             payload = json.loads(payload)
 
-        latest_look = LookResult.model_validate(payload)
+        latest_look = AVILookResult.model_validate(payload)
 
         # 2. Determine response type from Protocol
-        protocol_traced = ProtocolProjector(Protocol).project(table)
+        protocol_traced = ProtocolProjector(AVIProtocol).project(table)
         response_type = getattr(protocol_traced.data.task, "response_type", "binary")
 
         # 3. Read Scoreboard
@@ -162,11 +177,18 @@ class FinalProjector(Projector[FinalReport]):
         ] = metrics_traced.data
 
         report = FinalReport(
-            sample_n=latest_look.sample_n,
-            trajectory=latest_look.trajectory,
-            is_rejected=latest_look.is_crossed,
-            final_status=latest_look.status,
-            arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
+            sample_n=latest_look.sample_n or 0,
+            trajectory=latest_look.trajectory or 0.0,
+            is_rejected=latest_look.is_crossed or False,
+            final_status=latest_look.status or "",
+            arms={
+                k: v.metrics.model_dump()
+                for k, v in (
+                    (metrics.arms.items() if metrics.arms else [])
+                    if metrics.arms
+                    else []
+                )
+            },
         )
 
         return ProjectionResult(data=report, trace=metrics_traced.trace)
@@ -245,7 +267,10 @@ class BinomialEValueProgressProjector(Projector[ProgressReport]):
             trajectory=res.e_value,
             boundary=1.0 / p.alpha,
             status=status,
-            arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
+            arms={
+                k: v.metrics.model_dump()
+                for k, v in (metrics.arms.items() if metrics.arms else [])
+            },
         )
         return ProjectionResult(
             data=report, trace=metrics_traced.trace + protocol_traced.trace
@@ -291,7 +316,10 @@ class BinomialEValueFinalProjector(Projector[FinalReport]):
             trajectory=res.e_value,
             is_rejected=res.is_rejected,
             final_status=final_status,
-            arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
+            arms={
+                k: v.metrics.model_dump()
+                for k, v in (metrics.arms.items() if metrics.arms else [])
+            },
         )
         return ProjectionResult(
             data=report, trace=metrics_traced.trace + protocol_traced.trace
@@ -429,7 +457,7 @@ def generate_avi_operating_characteristics_table(results: Any) -> pd.DataFrame:
 
 
 def visualize_avi_design(
-    protocol: Protocol,
+    protocol: AVIProtocol,
     effect_sizes: List[float],
     n_sims: int = 1000,
     seed: int = 42,
@@ -455,7 +483,6 @@ def visualize_avi_design(
     from earlysign.builtin.AVI.design.operating_characteristics.continuous import (
         ContinuousAVIEvaluator,
     )
-    from earlysign.builtin.AVI.schema import ResponseType
 
     evaluator: Any
     if protocol.task.response_type == ResponseType.BINARY:

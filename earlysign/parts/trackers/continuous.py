@@ -60,7 +60,7 @@ class Scoreboard(Entity[ScoreboardSchema]):
         """
         # 1. Start with previous state
         current_state = snapshot.data if snapshot else self.initial_value
-        current_arms = current_state.arms.copy()
+        current_arms = current_state.arms.copy() if current_state.arms else {}
 
         # 2. Process Delta: Data Ingestion
         batch_table = type_filter(delta_expr, self.record_type)
@@ -100,21 +100,25 @@ class Scoreboard(Entity[ScoreboardSchema]):
         for _, row in batch_df.iterrows():
             arm_name = row["payload"]["arm"]
             if arm_name not in current_arms:
+                from earlysign.schema.ES3.Continuous import ContinuousArmMetrics
+
                 current_arms[arm_name] = ArmStatus(
-                    metrics=ArmMetrics(total=0, mean=0.0, variance=0.0),
+                    arm_name=arm_name,
+                    metrics=ContinuousArmMetrics(total=0, mean=0.0, variance=0.0),
                     is_active=True,
                 )
 
             status = current_arms[arm_name]
 
             # Reconstruct running sums to update easily
-            total_old = status.metrics.total
-            sum_x_old = status.metrics.mean * total_old
+            total_old = status.metrics.total or 0
+            mean_old = status.metrics.mean or 0.0
+            variance_old = status.metrics.variance or 0.0
+
+            sum_x_old = mean_old * total_old
             # Var = E[X^2] - (E[X])^2 => sum_x2 / total - mean^2
             sum_x2_old = (
-                (status.metrics.variance + status.metrics.mean**2) * total_old
-                if total_old > 0
-                else 0.0
+                (variance_old + mean_old**2) * total_old if total_old > 0 else 0.0
             )
 
             total_new = total_old + int(row["total"])

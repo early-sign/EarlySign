@@ -1,3 +1,5 @@
+from typing import cast
+
 import numpy as np
 from scipy import stats
 
@@ -20,10 +22,19 @@ class BoundaryModel:
         Returns:
             The calculated boundary value.
         """
-        method = protocol.method
-        alpha = method.significance_level
-        n_max = method.expected_num_observations
-        estimated_variance = method.estimated_variance
+        from earlysign.builtin.YEAST.schema import YeastProtocol
+
+        yeast_protocol = cast(YeastProtocol, protocol)
+        method = yeast_protocol.method
+        alpha = method.alpha if method.alpha is not None else 0.05
+        n_max = (
+            method.expected_num_observations
+            if method.expected_num_observations is not None
+            else 1000
+        )
+        estimated_variance = (
+            method.estimated_variance if method.estimated_variance is not None else 1.0
+        )
 
         # Two-sided critical value (using upper tail)
         z_crit = stats.norm.ppf(1 - alpha / 2)

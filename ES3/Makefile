@@ -16,60 +16,37 @@ install:
 
 compile: $(SENTINEL)
 
-define build_schema
-	@echo "Building schema for $(1)..."
-	@rm -rf out-$(1) tmp-$(1)
-	@npx tsp compile ../earlysign/builtin/$(1)/schema.tsp --emit @typespec/openapi3 --output-dir out-$(1)
-	@mkdir -p tmp-$(1)
-	@$(DATAMODEL_CODEGEN) \
-		--input out-$(1)/@typespec/openapi3/openapi.yaml \
-		--output tmp-$(1) \
-		--input-file-type openapi \
-		--output-model-type pydantic_v2.BaseModel \
-		--base-class pydantic.BaseModel \
-		--use-schema-description \
-		--target-python-version $(TARGET_PYTHON_VERSION) \
-		--keep-model-order \
-		--use-type-alias \
-		--use-double-quotes \
-		--openapi-scopes schemas \
-		--enum-field-as-literal one \
-		--capitalise-enum-members \
-		--use-one-literal-as-default \
-		--use-standard-collections \
-		--disable-timestamp
-	@$(POETRY) run python ../scripts/fix_distributed_schema.py $(1) tmp-$(1) ../earlysign/builtin/$(1)/schema.py
-	@rm -rf tmp-$(1)
-endef
-
 $(SENTINEL): $(TSP_SOURCES) Makefile
 	@echo "Compiling ES3 Standard..."
 	# 1. Compile Core Base Schema
 	@echo "Building Core Base Schema..."
+	@mkdir -p out-base
 	@npx tsp compile schema/es3_v1.tsp --emit @typespec/openapi3 --output-dir out-base
+	@cp out-base/@typespec/openapi3/openapi.yaml ../base_openapi.yaml
 	@rm -rf $(OUTPUT_DIR)
 	@$(DATAMODEL_CODEGEN) \
-		--input out-base/@typespec/openapi3/openapi.yaml \
+		--input ../base_openapi.yaml \
 		--output $(OUTPUT_DIR) \
 		--input-file-type openapi \
 		--output-model-type pydantic_v2.BaseModel \
-		--base-class pydantic.BaseModel \
+		--snake-case-field \
 		--use-schema-description \
+		--use-field-description \
 		--target-python-version $(TARGET_PYTHON_VERSION) \
-		--keep-model-order \
-		--use-type-alias \
+		--disable-timestamp \
 		--use-double-quotes \
-		--openapi-scopes schemas \
-		--enum-field-as-literal one \
+		--output-datetime-class AwareDatetime \
 		--capitalise-enum-members \
+		--enum-field-as-literal one \
 		--use-one-literal-as-default \
-		--use-standard-collections \
-		--disable-timestamp
+		--use-type-alias
 	
-	# 2. Compile each Builtin Schema (Explicit targets for stability)
-	$(call build_schema,AVI)
-	$(call build_schema,group_sequential)
-	$(call build_schema,YEAST)
+	# Fix absolute imports for Core SDK
+	@$(POETRY) run python ../scripts/fix_imports_absolute.py $(OUTPUT_DIR) earlysign.schema.ES3 false
+	
+	# 2. Compile each Builtin Schema using the modular orchestrator
+	@echo "Building Builtin Modular SDKs..."
+	@$(POETRY) run python ../scripts/generate_modular_sdk.py AVI group_sequential YEAST
 	
 	@touch $(SENTINEL)
 

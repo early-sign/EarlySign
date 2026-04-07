@@ -1,0 +1,21 @@
+id: https://earlysign.io/schema/ES3/unified
+name: es3_unified
+title: EarlySign Unified SDK Manifest
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  base: https://earlysign.io/schema/ES3/base/
+  yeast: https://earlysign.io/schema/ES3/yeast/
+  avi: https://earlysign.io/schema/ES3/avi/
+  group_sequential: https://earlysign.io/schema/ES3/group_sequential/
+
+imports:
+  - linkml:types
+  - base.yaml
+  - binomial.yaml
+  - continuous.yaml
+  - ../../builtin/YEAST/schema.yaml
+  - ../../builtin/AVI/schema.yaml
+  - ../../builtin/group_sequential/schema.yaml
+
+default_range: string

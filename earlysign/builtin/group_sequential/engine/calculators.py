@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Protocol as TypingProtocol
+from typing import Any, Dict, Optional, Protocol as TypingProtocol, cast
 
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.group_sequential import schema as GST
@@ -24,7 +24,7 @@ class BinomialZCalculator:
     def calculate(
         self, metrics: Any, protocol: GST.Protocol
     ) -> Optional[Dict[str, float]]:
-        task = protocol.task
+        task = cast(GST.GSTTaskSpec, protocol.task)
         arms_struct = task.arms
 
         # Determine Control Arm
@@ -52,11 +52,17 @@ class BinomialZCalculator:
         # Determine Variance Estimation Method
         # In ES3.GST.TwoArmBinomialZ, variance_estimation is used.
         # In ES3.GST.OneArmBinomialZ, variance_source is used.
-        stopping_stat = protocol.method.stopping_policy.statistic
+        method = cast(GST.GSTMethodSpec, protocol.method)
+        stopping_stat = method.stopping_policy.statistic
 
         variance_method = GST.VarianceEstimation.POOLED
         if hasattr(stopping_stat, "variance_estimation"):
-            variance_method = stopping_stat.variance_estimation
+            # Cast to the enum to satisfy Mypy
+            variance_method = cast(
+                GST.VarianceEstimation,
+                getattr(stopping_stat, "variance_estimation", None)
+                or GST.VarianceEstimation.POOLED,
+            )
 
         results = {}
         for trtm_name in treatment_names:
@@ -92,7 +98,7 @@ class ContinuousZCalculator:
     def calculate(
         self, metrics: Any, protocol: GST.Protocol
     ) -> Optional[Dict[str, float]]:
-        task = protocol.task
+        task = cast(GST.GSTTaskSpec, protocol.task)
         arms_struct = task.arms
 
         if isinstance(
@@ -114,13 +120,15 @@ class ContinuousZCalculator:
         elif isinstance(arms_struct, ES3_BASE.MultiArmComparison):
             treatment_names = arms_struct.treatment_arm_names
 
-        stat_spec = protocol.method.stopping_policy.statistic
+        method = cast(GST.GSTMethodSpec, protocol.method)
+        stat_spec = method.stopping_policy.statistic
 
         # Continuous usually has 'variance' spec: KnownVariance or TwoArmEstimatedVariance
         # If TwoArmEstimatedVariance, it has 'method' (pooled/unpooled)
-        variance_method = "unpooled"
+        variance_method = "pooled"
         if hasattr(stat_spec, "variance") and hasattr(stat_spec.variance, "method"):
-            variance_method = stat_spec.variance.method
+            # Cast to str to satisfy Mypy
+            variance_method = cast(str, stat_spec.variance.method)
 
         results = {}
         for trtm_name in treatment_names:
@@ -156,7 +164,8 @@ class ZStatisticCalculatorFactory:
 
     @staticmethod
     def build(protocol: GST.Protocol) -> ZStatisticCalculator:
-        response_type = protocol.task.response_type
+        task = cast(GST.GSTTaskSpec, protocol.task)
+        response_type = task.response_type
         if response_type == GST.ResponseType.BINARY:
             return BinomialZCalculator()
         elif response_type == GST.ResponseType.CONTINUOUS:

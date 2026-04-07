@@ -1,0 +1,18 @@
+id: https://earlysign.io/schema/ES3/combined
+name: es3_combined
+title: EarlySign Standard Schema (ES3) - Combined Flat Namespace
+
+imports:
+  - linkml:types
+  - ./base
+  - ./binomial
+  - ./continuous
+  - ../../builtin/AVI/schema
+  - ../../builtin/YEAST/schema
+  - ../../builtin/group_sequential/schema
+
+default_range: string
+default_prefix: https://earlysign.io/schema/ES3/combined/
+
+# All specialized classes (YeastTaskSpec, AVITaskSpec, GSTTaskSpec, etc.) 
+# are included via the imports above.

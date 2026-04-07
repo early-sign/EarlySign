@@ -20,13 +20,16 @@ matplotlib = "^3.10.6"
 ibis-framework = "^11.0.0"
 pydantic = "^2.11.9"
 tqdm = "^4.67.1"
+linkml = "^1.10.0"
 
 [tool.poetry.extras]
 examples = []
 
+[tool.poetry.scripts]
+
 #==== Development ====#
 [tool.poetry.group.dev.dependencies]
-datamodel-code-generator = "^0.54.0"
+linkml = "^1.10.0"
 jupyter = "^1.1.1" # Example development
 ipython = "^9.5.0" # Debugging
 pudb = "^2025.1" # Debugging
@@ -70,6 +73,10 @@ src_paths = ["earlysign"]
 include_trailing_comma = true
 combine_as_imports = true
 multi_line_output = 3
+extend_skip_glob = [
+    "earlysign/schema/ES3/*.py",
+    "earlysign/builtin/*/schema.py",
+]
 
 [tool.ruff]
 line-length = 88
@@ -81,6 +88,7 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "earlysign/schema/ES3/**" = ["TID252"]
+"earlysign/builtin/**/schema.py" = ["TID252"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true

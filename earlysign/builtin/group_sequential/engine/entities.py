@@ -10,7 +10,7 @@ from typing import Any, List, Optional, Tuple, Type
 import ibis
 from pydantic import BaseModel
 
-from earlysign.builtin.group_sequential.schema import LookResult
+from earlysign.builtin.group_sequential.schema import GSTLookResult
 from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity import (
     SequentialEntity,
@@ -29,7 +29,7 @@ class PreComputedBoundaries(BaseModel):
     drift: Optional[float] = None
 
 
-class InterimAnalyses(SequentialEntity[int, LookResult]):
+class InterimAnalyses(SequentialEntity[int, GSTLookResult]):
     """
     Sequential Entity representing the trajectory of interim analyses.
 
@@ -74,18 +74,18 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     1.5
     """
 
-    state_type: Type[LookResult] = LookResult
-    data_type: Type[List[Tuple[int, LookResult]]] = list
+    state_type: Type[GSTLookResult] = GSTLookResult
+    data_type: Type[List[Tuple[int, GSTLookResult]]] = list
     index_field: str = "look"
     snapshot_strategy = SequentialEntity.SnapshotStrategy.COLLECTIVE
 
     @property
-    def initial_value(self) -> List[Tuple[int, LookResult]]:
+    def initial_value(self) -> List[Tuple[int, GSTLookResult]]:
         return []
 
     def project_trajectory(
         self, table: ibis.Expr
-    ) -> List[Tuple[int, ProjectionResult[LookResult]]]:
+    ) -> List[Tuple[int, ProjectionResult[GSTLookResult]]]:
         """
         Collect trajectory by finding all LookResult records in the ledger
         matching this entity's identity.
@@ -104,7 +104,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
         # We order by timestamp to ensure we pick the most recent if multiple exist.
         results_df = matched.order_by(ibis.desc("timestamp")).execute()
 
-        trajectory: List[Tuple[int, ProjectionResult[LookResult]]] = []
+        trajectory: List[Tuple[int, ProjectionResult[GSTLookResult]]] = []
         seen_looks: set[int] = set()
 
         for _, row in results_df.iterrows():
@@ -119,7 +119,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
             idx = look_val if look_val is not None else 0
 
             if idx not in seen_looks:
-                result = LookResult.model_validate(payload)
+                result = GSTLookResult.model_validate(payload)
                 trace = [TraceId(str(row["uuid"]))] if "uuid" in row else []
                 trajectory.append((idx, ProjectionResult(data=result, trace=trace)))
                 seen_looks.add(idx)
@@ -134,7 +134,7 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
         snapshot: Optional[Any],
         delta_expr: ibis.Expr,
         full_table: ibis.Expr,
-    ) -> ProjectionResult[List[Tuple[int, LookResult]]]:
+    ) -> ProjectionResult[List[Tuple[int, GSTLookResult]]]:
         """
         Compute the trajectory from the full table.
         """
@@ -145,9 +145,9 @@ class InterimAnalyses(SequentialEntity[int, LookResult]):
     def compute_step(
         self,
         index: int,
-        prev_state: Optional[LookResult],
+        prev_state: Optional[GSTLookResult],
         delta_expr: ibis.Expr,
-    ) -> LookResult:
+    ) -> GSTLookResult:
         """
         Compute state at a specific look (not typically used with COLLECTIVE).
         """

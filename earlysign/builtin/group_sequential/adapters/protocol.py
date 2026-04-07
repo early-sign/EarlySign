@@ -1,3 +1,5 @@
+from typing import cast
+
 import numpy as np
 
 from earlysign.builtin.group_sequential import schema as GST
@@ -8,18 +10,18 @@ def get_standardized_drift(protocol: GST.Protocol) -> float:
     """
     Dispatches to domain-specific drift calculations.
     """
-    task = protocol.task
+    task = cast(GST.GSTTaskSpec, protocol.task)
     effect = task.hypotheses.target_effect
 
     if isinstance(effect, GST.BinaryEffectSize):
-        props = list(effect.proportions.values())
-        if len(props) < 2:
+        props = effect.proportions
+        if not props or len(props) < 2:
             raise ValueError("BinaryEffectSize must define at least 2 arm proportions.")
         return binomial.get_standardized_drift(props[0], props[1])
 
     elif isinstance(effect, GST.ContinuousEffectSize):
-        means = list(effect.means.values())
-        if len(means) < 2:
+        means = effect.means
+        if not means or len(means) < 2:
             raise ValueError("ContinuousEffectSize must define at least 2 arm means.")
         delta = abs(means[0] - means[1])
         return continuous.get_standardized_drift(
@@ -28,8 +30,8 @@ def get_standardized_drift(protocol: GST.Protocol) -> float:
 
     elif isinstance(effect, GST.SurvivalEffectSize):
         # theta = |log(HR)| / 2
-        hrs = list(effect.hazard_ratios.values())
-        if len(hrs) < 2:
+        hrs = effect.hazard_ratios
+        if not hrs or len(hrs) < 2:
             raise ValueError(
                 "SurvivalEffectSize must define at least 2 arm hazard ratios."
             )
@@ -56,7 +58,8 @@ def get_final_efficacy_boundary(protocol: GST.Protocol) -> float:
     """
     from earlysign.builtin.group_sequential.core.model import CanonicalJointModel
 
-    spec = protocol.method.stopping_policy
+    method = cast(GST.GSTMethodSpec, protocol.method)
+    spec = method.stopping_policy
     schedule = spec.schedule
     info_times = get_info_times(schedule)
 

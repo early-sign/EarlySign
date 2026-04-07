@@ -1,0 +1,213 @@
+id: https://earlysign.io/schema/ES3/base
+name: es3_base
+title: EarlySign Standard Schema (ES3) - Base
+description: >-
+  Core base classes for the EarlySign Standard Schema (ES3).
+  Defines the root protocol container, base task/method specs,
+  arm structure types, and log events.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+
+imports:
+  - linkml:types
+
+default_range: string
+default_prefix: https://earlysign.io/schema/ES3/base/
+
+classes:
+
+  Log:
+    description: Base log/event model for metadata inclusion.
+
+  Metadata:
+    description: Metadata for EarlySign events and records.
+    attributes:
+      ES3_version:
+        range: string
+        ifabsent: string(v1.0.0)
+        description: 'Schema version (e.g., "v1.0.0")'
+
+  TaskSpec:
+    description: >-
+      Base class for Problem Definition.
+      Concrete protocols should extend this (e.g., GST.TaskSpec).
+    attributes:
+      kind:
+        range: string
+        required: true
+        description: The kind of task (discriminator).
+
+  MethodSpec:
+    description: >-
+      Base class for Operational Method.
+      Concrete protocols should extend this (e.g., GST.MethodSpec).
+    attributes:
+      kind:
+        range: string
+        required: true
+        description: The kind of method (discriminator).
+
+  Protocol:
+    description: >-
+      The Root Protocol Container.
+      Defines the high-level structure of any EarlySign protocol.
+    attributes:
+      name:
+        range: string
+        required: true
+        description: The name of the protocol.
+      task:
+        range: TaskSpec
+        required: true
+        inlined: true
+        description: The problem definition.
+      method:
+        range: MethodSpec
+        required: true
+        inlined: true
+        description: The operational method.
+
+  ArmStructureBase:
+    description: Internal base for arm structure discriminated union members.
+    attributes:
+      kind:
+        range: string
+        required: true
+
+  SingleArm:
+    is_a: ArmStructureBase
+    description: A single-arm trial design.
+    attributes:
+      kind:
+        range: string
+        equals_string: single
+        ifabsent: string(single)
+        required: true
+      arm_name:
+        range: string
+        required: true
+
+  TwoArmComparison:
+    is_a: ArmStructureBase
+    description: A classic two-arm comparison (e.g., Treatment vs. Control).
+    attributes:
+      kind:
+        range: string
+        equals_string: two_arm
+        ifabsent: string(two_arm)
+        required: true
+      control_arm_name:
+        range: string
+        required: true
+      treatment_arm_name:
+        range: string
+        required: true
+      allocation_ratios:
+        range: float
+        multivalued: true
+        inlined: true
+        description: >-
+          Mapping of treatment arm name to its ratio relative to control.
+          Key must match treatment_arm_name.
+        annotations:
+          python_range:
+            tag: python_range
+            value: Optional[Dict[str, float]]
+
+  MultiArmComparison:
+    is_a: ArmStructureBase
+    description: A multi-arm comparison against a common control.
+    attributes:
+      kind:
+        range: string
+        equals_string: multi_arm
+        ifabsent: string(multi_arm)
+        required: true
+      control_arm_name:
+        range: string
+        required: true
+      treatment_arm_names:
+        range: string
+        multivalued: true
+        required: true
+      allocation_ratios:
+        range: float
+        multivalued: true
+        inlined: true
+        description: >-
+          Mapping of treatment arm names to their ratio relative to control
+          (n_treatment / n_control). If None, equal allocation is assumed.
+        annotations:
+          python_range:
+            tag: python_range
+            value: Optional[Dict[str, float]]
+
+  ArmStructure:
+    description: Structural definition of study arms and their roles.
+    union_of:
+      - SingleArm
+      - TwoArmComparison
+      - MultiArmComparison
+
+  ArmMetrics:
+    description: Metrics for a single arm in a sequential test.
+    is_a: Log
+    attributes:
+      total:
+        range: integer
+        required: true
+      ci_lower:
+        range: float
+        required: false
+      ci_upper:
+        range: float
+        required: false
+      quantile_estimate:
+        range: float
+        required: false
+      mean:
+        range: float
+        required: false
+      variance:
+        range: float
+        required: false
+      successes:
+        range: integer
+        required: false
+      p_hat:
+        range: float
+        required: false
+
+  ArmStatus:
+    description: Status wrapper for arm metrics.
+    is_a: Log
+    attributes:
+      arm_name:
+        range: string
+        identifier: true
+      metrics:
+        range: ArmMetrics
+        required: true
+        inlined: true
+      is_active:
+        range: boolean
+        required: true
+
+  Scoreboard:
+    description: Projection of all arm metrics.
+    is_a: Log
+    attributes:
+      arms:
+        range: ArmStatus
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+
+  LookResult:
+    description: Base class for intermediate look results.
+    is_a: Log
+    attributes:
+      look:
+        range: integer
+        required: false

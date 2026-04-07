@@ -60,7 +60,7 @@ class Scoreboard(Entity[ScoreboardSchema]):
         """
         # 1. Start with previous state
         current_state = snapshot.data if snapshot else self.initial_value
-        current_arms = current_state.arms.copy()
+        current_arms = current_state.arms.copy() if current_state.arms else {}
 
         # 2. Process Delta: Data Ingestion
         batch_table = type_filter(delta_expr, self.record_type)
@@ -90,15 +90,20 @@ class Scoreboard(Entity[ScoreboardSchema]):
             arm_name = row["payload"]["arm"]
             if arm_name not in current_arms:
                 current_arms[arm_name] = ArmStatus(
+                    arm_name=arm_name,
                     metrics=ArmMetrics(total=0, successes=0, p_hat=0.0),
                     is_active=True,
                 )
 
             status = current_arms[arm_name]
-            status.metrics.total += int(row["total"])
-            status.metrics.successes += int(row["success"])
-            if status.metrics.total > 0:
-                status.metrics.p_hat = status.metrics.successes / status.metrics.total
+            status.metrics.total = (status.metrics.total or 0) + int(row["total"])
+            status.metrics.successes = (status.metrics.successes or 0) + int(
+                row["success"]
+            )
+            if (status.metrics.total or 0) > 0:
+                status.metrics.p_hat = float(status.metrics.successes or 0) / float(
+                    status.metrics.total or 1
+                )
 
         # 4. Lineage Management
         tracked_uuids = [TraceId(str(uid)) for uid in batch_df["uuid"].tolist()]

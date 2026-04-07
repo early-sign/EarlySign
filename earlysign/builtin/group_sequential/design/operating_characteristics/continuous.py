@@ -181,7 +181,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         self.evaluator: OperatingCharacteristicsEvaluator
 
         # 1. Inspect Task to get Baseline/Target Means and Variance
-        task = protocol.task
+        task = cast(schema.GSTTaskSpec, protocol.task)
         if not isinstance(task.hypotheses.target_effect, schema.ContinuousEffectSize):
             raise ValueError(
                 "Evaluator requires ContinuousEffectSize in protocol hypotheses."
@@ -200,8 +200,9 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             self.arm_names = [self.control_arm_name, self.treatment_arm_name]
             self.arms = 2
 
-            self.mu_control = float(means[self.control_arm_name])
-            mu_t = float(means[self.treatment_arm_name])
+            # In the new schema, means is a list [control, treatment]
+            self.mu_control = float(means[0])
+            mu_t = float(means[1])
             self.target_delta = mu_t - self.mu_control
 
         elif isinstance(arms_struct, ES3_BASE.SingleArm):
@@ -211,7 +212,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             # Usually hypotheses define margins, but EffectSize defines expected mean.
             # We assume target_effect.means contains the single arm's expected mean.
             self.mu_control = 0.0  # Virtual baseline
-            mu_t = float(means[arms_struct.arm_name])
+            mu_t = float(means[0])
             self.target_delta = mu_t  # Absolute value
         else:
             raise ValueError(
@@ -219,12 +220,13 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             )
 
         # 2. Derive statistical parameters for Canonical Model
-        timer = protocol.method.stopping_policy.timer
+        gst_method = cast(schema.GSTMethodSpec, protocol.method)
+        timer = gst_method.stopping_policy.timer
         if not isinstance(timer, schema.SampleSizeTimer):
             raise ValueError(
                 f"Protocol timer must be SampleSizeTimer, got {type(timer).__name__}."
             )
-        self.n_max_total = sum(timer.max_sample_size.values())
+        self.n_max_total = float(sum(timer.max_sample_size) or 0)
 
         # Calculate Information I_max
         # I = 1/V_beta
@@ -239,7 +241,10 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
             # Var = 4 * sigma^2 / N
             # I = N / (4 * sigma^2)
             self.i_max = self.n_max_total / (4 * self.sigma2)
-            self.n_max_per_arm = timer.max_sample_size
+            self.n_max_per_arm = {
+                self.control_arm_name: timer.max_sample_size[0],
+                self.treatment_arm_name: timer.max_sample_size[1],
+            }
 
         # 3. Solve Design Boundaries (Target Drift)
         # theta = delta
@@ -362,8 +367,9 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         from scipy.stats import norm
 
         # Calculate N_fixed for comparison
-        efficacy = self.protocol.task.efficacy
-        futility = self.protocol.task.futility
+        task = cast(schema.GSTTaskSpec, self.protocol.task)
+        efficacy = task.efficacy
+        futility = task.futility
 
         n_fixed = None
         if efficacy and futility and abs(self.target_delta) > 1e-9:
@@ -399,7 +405,11 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         curve.target_x_value = target_val
         curve.null_x_value = null_val
         curve.info_times = self.info_times
-        curve.n_max_per_arm = self.n_max_per_arm
+        curve.n_max_per_arm = (
+            {k: int(v) for k, v in self.n_max_per_arm.items()}
+            if self.n_max_per_arm
+            else None
+        )
 
         if n_fixed is not None:
             n_fixed_arm = n_fixed / self.arms

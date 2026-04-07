@@ -175,5 +175,12 @@ class SpendingFunctionFactory:
         """
         family = str(spec.family).strip().lower()
         spending_cls = get_spending_class(family)
-        params = dict(spec.params) if spec.params else {}
+        params = {}
+        if spec.params:
+            if family == "hwang_shih_decani":
+                params["gamma"] = spec.params[0]
+            elif family == "power_family":
+                params["rho"] = spec.params[0]
+            # More general mapping could be added here if needed.
+
         return spending_cls(budget=self.budget, **params)  # type: ignore[call-arg]

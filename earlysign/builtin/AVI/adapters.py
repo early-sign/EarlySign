@@ -16,17 +16,18 @@ class BinomialAdapter:
         """
         Extracts (n_c, n_t, p_hat_c, p_hat_t)
         """
-        s_c = metrics.arms.get(control_key)
-        s_t = metrics.arms.get(treatment_key)
+        arms = metrics.arms or {}
+        s_c = arms.get(control_key)
+        s_t = arms.get(treatment_key)
 
         if not s_c or not s_t:
             return 0, 0, 0.0, 0.0
 
         return (
-            s_c.metrics.total,
-            s_t.metrics.total,
-            s_c.metrics.p_hat,
-            s_t.metrics.p_hat,
+            s_c.metrics.total or 0,
+            s_t.metrics.total or 0,
+            s_c.metrics.p_hat or 0.0,
+            s_t.metrics.p_hat or 0.0,
         )
 
     @staticmethod
@@ -34,8 +35,9 @@ class BinomialAdapter:
         """
         Extracts aggregated (total_n, total_successes) across all arms.
         """
-        n_total = sum(a.metrics.total for a in metrics.arms.values())
-        s_total = sum(a.metrics.successes for a in metrics.arms.values())
+        arms = metrics.arms or {}
+        n_total = sum((a.metrics.total or 0) for a in arms.values())
+        s_total = sum((a.metrics.successes or 0) for a in arms.values())
         return n_total, s_total
 
 
@@ -47,17 +49,18 @@ class ContinuousAdapter:
         """
         Extracts (n_c, n_t, mean_c, mean_t, var_c, var_t)
         """
-        s_c = metrics.arms.get(control_key)
-        s_t = metrics.arms.get(treatment_key)
+        arms = metrics.arms or {}
+        s_c = arms.get(control_key)
+        s_t = arms.get(treatment_key)
 
         if not s_c or not s_t:
             return 0, 0, 0.0, 0.0, 0.0, 0.0
 
         return (
-            s_c.metrics.total,
-            s_t.metrics.total,
-            s_c.metrics.mean,
-            s_t.metrics.mean,
-            s_c.metrics.variance or 0.0,
-            s_t.metrics.variance or 0.0,
+            int(s_c.metrics.total or 0),
+            int(s_t.metrics.total or 0),
+            float(s_c.metrics.mean or 0.0),
+            float(s_t.metrics.mean or 0.0),
+            float(s_c.metrics.variance or 0.0),
+            float(s_t.metrics.variance or 0.0),
         )

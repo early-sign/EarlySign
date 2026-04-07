@@ -12,6 +12,7 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    cast,
 )
 
 import ibis
@@ -21,7 +22,7 @@ from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.engine.calculators import (
     ZStatisticCalculatorFactory,
 )
-from earlysign.builtin.group_sequential.schema import DecisionStatus, LookResult
+from earlysign.builtin.group_sequential.schema import DecisionStatus, GSTLookResult
 from earlysign.framework.projector import (
     ProjectionResult,
     Projector,
@@ -112,16 +113,16 @@ class ProgressProjector(Projector[ProgressReport]):
                 if isinstance(payload, str):
                     payload = json.loads(payload)
 
-                # We need a proper GST.Protocol object to use calculators
-                protocol = GST.Protocol.model_validate(payload)
+                # We need a proper GST.GSTProtocol object to use calculators
+                protocol = GST.GSTProtocol.model_validate(payload)
 
                 response_type = protocol.task.response_type
 
                 # Determine max sample size
                 timer = protocol.method.stopping_policy.timer
                 if isinstance(timer, GST.SampleSizeTimer):
-                    if isinstance(timer.max_sample_size, dict):
-                        n_max_total = float(sum(timer.max_sample_size.values()))
+                    if isinstance(timer.max_sample_size, list):
+                        n_max_total = float(sum(timer.max_sample_size))
                     else:
                         n_max_total = float(timer.max_sample_size)
 
@@ -146,7 +147,9 @@ class ProgressProjector(Projector[ProgressReport]):
             metrics_traced = BinomialScoreboard(identity="metrics").project(table)
 
         metrics = metrics_traced.data
-        total_n = sum(arm.metrics.total for arm in metrics.arms.values())
+        total_n = sum(
+            arm.metrics.total for arm in (metrics.arms.values() if metrics.arms else [])
+        )
 
         # 3. Read the latest LookResult
         latest_look_traced = (
@@ -163,12 +166,12 @@ class ProgressProjector(Projector[ProgressReport]):
                 import json
 
                 payload = json.loads(payload)
-            latest_look = LookResult.model_validate(payload)
+            latest_look = GSTLookResult.model_validate(payload)
 
         # 4. Calculate current Z-statistic (even if not a milestone)
         curr_z_stats = None
         representative_z = None
-        if protocol and len(metrics.arms) >= 1:
+        if protocol and len(metrics.arms or {}) >= 1:
             try:
                 calculator = ZStatisticCalculatorFactory.build(protocol)
                 curr_z_stats = calculator.calculate(metrics, protocol)
@@ -193,18 +196,33 @@ class ProgressProjector(Projector[ProgressReport]):
 
             # If at milestone, use recorded boundaries but show CURRENT Z (proactive)
             # or should we show milestone Z? Usually, ProgressReport is proactive.
+
+            # Map list z_stats to dict if needed for the report model
+            report_z_stats: Optional[Dict[str, float]] = None
+            if curr_z_stats is not None:
+                report_z_stats = curr_z_stats
+            elif latest_look.z_stats is not None:
+                z_val = latest_look.z_stats
+                if isinstance(z_val, list):
+                    report_z_stats = {f"arm_{i}": v for i, v in enumerate(z_val)}
+                else:
+                    report_z_stats = cast(Dict[str, float], z_val)
+
             report = ProgressReport(
                 look=latest_look.look,
                 sample_n=total_n,
                 z_stat=representative_z or latest_look.z_stat,
-                z_stats=curr_z_stats or latest_look.z_stats,
+                z_stats=report_z_stats,
                 efficacy_boundary=latest_look.efficacy_boundary,
                 futility_boundary=latest_look.futility_boundary,
                 info_frac=curr_info_frac,
                 status=latest_look.status,
                 is_milestone=is_milestone,
                 next_milestone_n=next_milestone_n,
-                arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
+                arms={
+                    k: v.metrics.model_dump()
+                    for k, v in (metrics.arms.items() if metrics.arms else {})
+                },
             )
         else:
             report = ProgressReport(
@@ -218,7 +236,10 @@ class ProgressProjector(Projector[ProgressReport]):
                 status=DecisionStatus.CONTINUE,
                 is_milestone=False,
                 next_milestone_n=next_milestone_n,
-                arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
+                arms={
+                    k: v.metrics.model_dump()
+                    for k, v in (metrics.arms.items() if metrics.arms else {})
+                },
             )
 
         return ProjectionResult(data=report, trace=metrics_traced.trace)
@@ -251,7 +272,7 @@ class FinalProjector(Projector[FinalReport]):
             import json
 
             payload = json.loads(payload)
-        latest_look = LookResult.model_validate(payload)
+        latest_look = GSTLookResult.model_validate(payload)
 
         # 2. Read Scoreboard (Determine response_type from protocol)
         response_type = GST.ResponseType.BINARY
@@ -284,14 +305,25 @@ class FinalProjector(Projector[FinalReport]):
 
         metrics = metrics_traced.data
 
+        # Map list z_stats to dict if needed for the report model
+        report_z_stats = None
+        look_z_val = latest_look.z_stats
+        if isinstance(look_z_val, list):
+            report_z_stats = {f"arm_{i}": v for i, v in enumerate(look_z_val)}
+        else:
+            report_z_stats = look_z_val
+
         report = FinalReport(
             look=latest_look.look,
             sample_n=latest_look.sample_n,
             z_stat=latest_look.z_stat,
-            z_stats=latest_look.z_stats,
+            z_stats=report_z_stats,
             is_rejected=latest_look.is_efficacy_crossed,
             final_status=latest_look.status,
-            arms={k: v.metrics.model_dump() for k, v in metrics.arms.items()},
+            arms={
+                k: v.metrics.model_dump()
+                for k, v in (metrics.arms.items() if (metrics and metrics.arms) else {})
+            },
         )
 
         return ProjectionResult(data=report, trace=metrics_traced.trace)

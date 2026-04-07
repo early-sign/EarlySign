@@ -5,7 +5,7 @@ operating characteristics using Monte Carlo simulation for Anytime Valid Inferen
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -75,9 +75,22 @@ class AVIMonteCarloSimulator(AVIOperatingCharacteristicsEvaluator):
         else:
             self.max_n_total = max_n
 
-        self.n_max_per_arm = {
-            self.protocol.task.arms.control_arm_name: self.max_n_total // 2,
-            self.protocol.task.arms.treatment_arm_name: self.max_n_total // 2,
-        }
+        from earlysign.builtin.AVI.schema import AVITaskSpec
+
+        task = cast(AVITaskSpec, self.protocol.task)
+        import earlysign.schema.ES3.Base as ES3_BASE
+
+        if isinstance(task.arms, ES3_BASE.TwoArmComparison):
+            self.n_max_per_arm = {
+                task.arms.control_arm_name: self.max_n_total // 2,
+                task.arms.treatment_arm_name: self.max_n_total // 2,
+            }
+        elif isinstance(task.arms, ES3_BASE.SingleArm):
+            self.n_max_per_arm = {
+                task.arms.arm_name: self.max_n_total,
+            }
+        else:
+            # Fallback for MultiArm or unknown
+            self.n_max_per_arm = {}
 
     # Children must implement evaluate_point to generate paths and compute boundaries

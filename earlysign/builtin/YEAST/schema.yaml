@@ -1,0 +1,92 @@
+id: https://earlysign.io/schema/ES3/yeast
+name: es3_yeast
+title: EarlySign YEAST Method Schema
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  base: earlysign.schema.ES3.Base
+
+imports:
+  - linkml:types
+  - ../../schema/ES3/base
+  - ../../schema/ES3/binomial
+
+default_range: string
+default_prefix: https://earlysign.io/schema/ES3/yeast/
+
+classes:
+
+  YeastMethodSpec:
+    is_a: MethodSpec
+    description: MethodSpec for YEAST.
+    attributes:
+      kind:
+        range: string
+        equals_string: YEAST
+        ifabsent: string(YEAST)
+        required: true
+      alpha:
+        range: float
+        required: true
+      mde:
+        range: float
+        required: true
+      significance_level:
+        range: float
+      expected_num_observations:
+        range: integer
+      estimated_variance:
+        range: float
+      boundary_sequence:
+        range: float
+        multivalued: true
+
+  # Specialized Task and Protocol for YEAST.
+  YeastTaskSpec:
+    is_a: TaskSpec
+    attributes:
+      kind:
+        range: string
+        equals_string: yeast
+        ifabsent: string(yeast)
+        required: true
+      arms:
+        range: ArmStructure
+        required: true
+        inlined: true
+
+  YeastProtocol:
+    is_a: Protocol
+    attributes:
+      task:
+        range: YeastTaskSpec
+        required: true
+        inlined: true
+      method:
+        range: YeastMethodSpec
+        required: true
+        inlined: true
+
+  # Results for YEAST
+  YeastLookResult:
+    is_a: LookResult
+    attributes:
+      p_hat:
+        range: float
+        required: true
+      z_score:
+        range: float
+        required: true
+      sample_n:
+        range: integer
+      trajectory:
+        range: float
+        multivalued: true
+      efficacy_boundary:
+        range: float
+      raw_difference:
+        range: float
+      is_efficacy_crossed:
+        range: boolean
+      status:
+        range: string

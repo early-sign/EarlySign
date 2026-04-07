@@ -1,0 +1,38 @@
+.. ADR-009: Transition from TypeSpec to LinkML for ES3 and Method Schemas
+.. :Date: 2026-04-05
+
+========================================================================
+ADR-009: Transition from TypeSpec to LinkML for ES3 and Method Schemas
+========================================================================
+
+**Status**: **`Accepted`**
+
+📋 Context
+-----------
+EarlySign uses formal schema definitions for its core data structures (**ES3**) and various experimental methods (AVI, YEAST, GST, etc.). Originally, these were defined using **TypeSpec**, as it is a modern, TypeScript-like language for defining data structures and generating Pydantic models.
+
+However, as the project evolved, several limitations of TypeSpec in this context became apparent:
+*   **Web API Focus**: TypeSpec is primarily a language for modeling Web APIs. EarlySign's use case is more focused on general "Data Modeling"—defining complex, reusable, and hierarchical configuration structures that aren't necessarily bound to a service interface.
+*   **Import and Shadowing Issues**: TypeSpec's generated Pydantic code often struggled with complex cross-file dependencies and shadowing (e.g., a method's ``TaskSpec`` conflicting with the core ``TaskSpec``), leading to numerous ``F811`` and ``F821`` linting errors that required fragile manual intervention or complex post-processing scripts.
+*   **Shared Core vs. Independent Methods**: It was difficult to cleanly reuse a common "Core SDK" (for ES3 Base) while allowing independent builtin method sub-SDKs to extend it without duplicating large amounts of code or breaking type-safe linkages.
+
+💡 Decision
+------------
+We decided to replace TypeSpec with **LinkML** (Linked Data Modeling Language) as our primary schema definition framework.
+
+*   **Data Modeling Priority**: LinkML is specifically designed for general-purpose data modeling. It provides a more expressive framework for inheritance, slots, and reusable types that fits our statistical method configurations.
+*   **SchemaView Closure**: By using LinkML's ``SchemaView`` and its ``imports_closure()``, we can programmatically inspect the entire schema context, making it significantly easier to generate robust, correctly-linked Python code.
+*   **Custom Generator Implementation**: We implemented a dedicated generator (``RobustEarlySignGenerator``) within ``earlysign.parts.codegen.linkml_generator`` that handles our specific naming conventions (e.g., prefix stripping like ``AVI_Log`` to ``Log``) and enforces a strict namespaced import strategy.
+*   **Import Resolution Strategy**: The generator uses namespaced access (e.g., ``es3_base.ArmStructure``) for core references to prevent shadowing and ensures structural core classes are always correctly linked, while only aliasing overridable classes (like ``TaskSpec_Base``) for inheritance.
+
+✨ Consequences
+-----------------
+**Positive:**
+*   **Strictly Decoupled Core**: Core schemas (ES3) can now be maintained independently and safely reused by all experimental methods through well-defined import paths.
+*   **No Redundant Code**: Method schemas no longer need to duplicate core class definitions to satisfy the Pydantic type system.
+*   **Improved Type Safety**: The generated code is fully type-safe and compliant with ``ruff`` and ``isort`` without manual patching.
+*   **Cleaner Definitions**: Schemas are now defined in standard YAML files that focus purely on data structure rather than API endpoints.
+
+**Negative:**
+*   **Team Transition**: The team must move from TypeSpec's TypeScript-like syntax to LinkML's YAML-based syntax.
+*   **Custom Tooling**: We now maintain a custom Pydantic generator rather than relying strictly on standard tools, though this provides us with much-needed control over the output quality.

@@ -2,6 +2,8 @@
 Engine for Adaptive Group Sequential Design / Sample Size Re-estimation.
 """
 
+from typing import cast
+
 import numpy as np
 from scipy import stats
 
@@ -12,7 +14,7 @@ from earlysign.builtin.group_sequential.adapters.protocol import (
 )
 from earlysign.builtin.group_sequential.schema import (
     AdaptationLog,
-    LookResult,
+    GSTLookResult,
     PromisingZoneStatus,
     Protocol,
 )
@@ -20,10 +22,11 @@ from earlysign.builtin.group_sequential.schema import (
 
 def _get_ssr_spec(protocol: Protocol) -> GST.SampleSizeReestimationSpec:
     """Helper to find the SampleSizeReestimationSpec in the protocol."""
-    if not protocol.method.adaptation:
+    method = cast(GST.GSTMethodSpec, protocol.method)
+    if not method.adaptation:
         raise ValueError("Protocol has no adaptation configured.")
 
-    ssr_spec = protocol.method.adaptation.sample_size_reestimation
+    ssr_spec = method.adaptation.sample_size_reestimation
     if not ssr_spec:
         raise ValueError("No SampleSizeReestimationSpec found in method.adaptation.")
     return ssr_spec
@@ -99,7 +102,7 @@ class ConditionalPowerAdaptationEngine:
     @classmethod
     def assess_promising_zone(
         cls,
-        result: LookResult,
+        result: GSTLookResult,
         protocol: Protocol,
     ) -> AdaptationLog:
         """
@@ -215,10 +218,17 @@ class ConditionalPowerAdaptationEngine:
             rec = "Promising Zone: Consider increasing sample size to recover power"
 
         # Calculate total original sample size
-        n_max_dict = getattr(
-            protocol.method.stopping_policy.timer, "max_sample_size", {}
-        )
-        original_n = sum(n_max_dict.values()) if isinstance(n_max_dict, dict) else 0
+        method = cast(GST.GSTMethodSpec, protocol.method)
+        timer = method.stopping_policy.timer
+        n_max_raw = getattr(timer, "max_sample_size", None)
+
+        original_n = 0
+        if isinstance(n_max_raw, dict):
+            original_n = sum(n_max_raw.values())
+        elif isinstance(n_max_raw, list):
+            original_n = sum(n_max_raw)
+        elif isinstance(n_max_raw, (int, float)):
+            original_n = int(n_max_raw)
 
         return AdaptationLog(
             look=result.look or 1,
@@ -231,7 +241,7 @@ class ConditionalPowerAdaptationEngine:
     @classmethod
     def check_and_adapt(
         cls,
-        result: LookResult,
+        result: GSTLookResult,
         protocol: Protocol,
     ) -> AdaptationLog:
         """
@@ -253,12 +263,17 @@ class ConditionalPowerAdaptationEngine:
             new_proto = cls.replan_sample_size(
                 protocol, log, result, target_conditional_power
             )
-            new_n_dict = getattr(
-                new_proto.method.stopping_policy.timer, "max_sample_size", {}
-            )
-            log.recommended_sample_size = (
-                sum(new_n_dict.values()) if isinstance(new_n_dict, dict) else None
-            )
+            method = cast(GST.GSTMethodSpec, new_proto.method)
+            new_n_raw = getattr(method.stopping_policy.timer, "max_sample_size", None)
+
+            if isinstance(new_n_raw, dict):
+                log.recommended_sample_size = sum(new_n_raw.values())
+            elif isinstance(new_n_raw, list):
+                log.recommended_sample_size = sum(new_n_raw)
+            else:
+                log.recommended_sample_size = (
+                    int(new_n_raw) if new_n_raw is not None else None
+                )
 
         return log
 
@@ -267,7 +282,7 @@ class ConditionalPowerAdaptationEngine:
         cls,
         protocol: Protocol,
         adaptation_log: AdaptationLog,
-        look_result: LookResult,
+        look_result: GSTLookResult,
         target_conditional_power: float = 0.9,
     ) -> Protocol:
         """
@@ -344,18 +359,24 @@ class ConditionalPowerAdaptationEngine:
             new_n = min(new_n, int(np.ceil(inflation_cap * n_old_val)))
         new_n = max(new_n, n_old_val)
 
-        if hasattr(new_protocol.method.stopping_policy.timer, "max_sample_size"):
+        method_new = cast(GST.GSTMethodSpec, new_protocol.method)
+        if hasattr(method_new.stopping_policy.timer, "max_sample_size"):
             # Redistribute new_n proportionally
-            n_old_dict = getattr(
-                protocol.method.stopping_policy.timer, "max_sample_size", {}
-            )
-            if isinstance(n_old_dict, dict) and n_old_val > 0:
+            method_old = cast(GST.GSTMethodSpec, protocol.method)
+            n_old_raw = getattr(method_old.stopping_policy.timer, "max_sample_size", {})
+            if isinstance(n_old_raw, dict) and n_old_val > 0:
                 ratio = new_n / n_old_val
-                new_n_dict = {k: int(np.ceil(v * ratio)) for k, v in n_old_dict.items()}
-                new_protocol.method.stopping_policy.timer.max_sample_size = new_n_dict
+                new_n_dict = {
+                    k: int(np.ceil(float(v) * ratio)) for k, v in n_old_raw.items()
+                }
+                method_new.stopping_policy.timer.max_sample_size = new_n_dict
+            elif isinstance(n_old_raw, list) and n_old_val > 0:
+                ratio = new_n / n_old_val
+                new_n_list = [int(np.ceil(float(v) * ratio)) for v in n_old_raw]
+                method_new.stopping_policy.timer.max_sample_size = new_n_list
 
         # Attach snapshot for Type I error preservation
-        new_protocol.method.adaptation_snapshot = GST.AdaptationSnapshot(
+        method_new.adaptation_snapshot = GST.AdaptationSnapshot(
             z_t=z_t_val,
             info_frac=t_val,
             original_max_sample_size=n_old_val,

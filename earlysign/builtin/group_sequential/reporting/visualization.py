@@ -21,7 +21,7 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     SimulationCurve,
 )
 from earlysign.builtin.group_sequential.engine.engine import GroupSequentialEngine
-from earlysign.builtin.group_sequential.schema import LookResult
+from earlysign.builtin.group_sequential.schema import GSTLookResult
 from earlysign.parts.visualization.visual import VisualizationResult
 
 
@@ -33,7 +33,7 @@ def reconstruct_z_history(table: ibis.Expr) -> Tuple[List[int], List[float]]:
     return [lr.sample_n for lr in history], [lr.z_stat for lr in history]
 
 
-def reconstruct_full_history(table: ibis.Expr) -> List[LookResult]:
+def reconstruct_full_history(table: ibis.Expr) -> List[GSTLookResult]:
     """
     Reconstructs full LookResult history from the ledger.
     """
@@ -48,7 +48,7 @@ def reconstruct_full_history(table: ibis.Expr) -> List[LookResult]:
         if isinstance(payload, str):
             payload = json.loads(payload)
 
-        lr = LookResult.model_validate(payload)
+        lr = GSTLookResult.model_validate(payload)
         history.append(lr)
 
     return history
@@ -97,12 +97,24 @@ def plot_gst_summary(
         if hasattr(timer, "max_sample_size"):
             n_max_raw = timer.max_sample_size
             n_max = (
-                sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
+                sum(n_max_raw)
+                if isinstance(n_max_raw, list)
+                else (
+                    sum(n_max_raw.values())
+                    if isinstance(n_max_raw, dict)
+                    else n_max_raw
+                )
             )
         elif hasattr(timer, "max_events"):
             n_max_raw = timer.max_events
             n_max = (
-                sum(n_max_raw.values()) if isinstance(n_max_raw, dict) else n_max_raw
+                sum(n_max_raw)
+                if isinstance(n_max_raw, list)
+                else (
+                    sum(n_max_raw.values())
+                    if isinstance(n_max_raw, dict)
+                    else n_max_raw
+                )
             )
 
         if n_max > 0:
@@ -308,7 +320,7 @@ def generate_operating_characteristics_table(results: SimulationCurve) -> pd.Dat
 
 
 def visualize_protocol_design(
-    protocol: GST.Protocol,
+    protocol: GST.GSTProtocol,
     effect_sizes: List[float],
     return_fig: bool = True,
 ) -> Union[pd.DataFrame, VisualizationResult]:
@@ -440,9 +452,14 @@ def visualize_protocol_design(
     ax.axhline(max_n, color="#1f77b4", linestyle="--", alpha=0.3, label="Max N (Total)")
 
     fixed_n = getattr(curve, "n_fixed_total", None)
-    if fixed_n and fixed_n > 0 and protocol.task.futility:
+    if (
+        fixed_n
+        and fixed_n > 0
+        and hasattr(protocol.task, "futility")
+        and protocol.task.futility
+    ):
         # Approximate the effect size targeted by the design using the nearest power
-        target_power = protocol.task.futility.power
+        target_power = protocol.task.futility.power or 0.8
         nearest_idx = (df["Power"] - target_power).abs().idxmin()
         target_eff = df.loc[nearest_idx, "Effect Size (%)"]
 

@@ -1,0 +1,103 @@
+id: https://earlysign.io/schema/ES3/continuous
+name: es3_continuous
+title: EarlySign Continuous Core Schema
+
+imports:
+  - linkml:types
+  - ./base
+
+default_range: string
+default_prefix: https://earlysign.io/schema/ES3/continuous/
+
+classes:
+
+  ContinuousArmMetrics:
+    is_a: ArmMetrics
+    attributes:
+      mean:
+        range: float
+        required: true
+      variance:
+        range: float
+        required: true
+      sum:
+        range: float
+      sum_sq:
+        range: float
+
+  CanonicalGaussianModel:
+    is_a: Log
+    attributes:
+      kind:
+        range: string
+        equals_string: canonical_gaussian
+        ifabsent: string(canonical_gaussian)
+        required: true
+
+  TProcessModel:
+    is_a: Log
+    attributes:
+      kind:
+        range: string
+        equals_string: t_process
+        ifabsent: string(t_process)
+        required: true
+      degrees_of_freedom_method:
+        range: string
+        required: true
+
+  KnownVariance:
+    is_a: Log
+    attributes:
+      kind:
+        range: string
+        equals_string: known
+        ifabsent: string(known)
+        required: true
+      value:
+        range: float
+        required: true
+
+  EstimatedVariance:
+    is_a: Log
+    attributes:
+      kind:
+        range: string
+        equals_string: estimated
+        ifabsent: string(estimated)
+        required: true
+
+  Observation:
+    is_a: Log
+    attributes:
+      arm:
+        range: string
+        required: true
+      value:
+        range: float
+        required: true
+
+  ContinuousArmData:
+    is_a: Log
+    attributes:
+      arm:
+        range: string
+        required: true
+      total:
+        range: integer
+        required: true
+      sum:
+        range: float
+        required: true
+      sum_sq:
+        range: float
+        required: true
+      min:
+        range: float
+        required: true
+      max:
+        range: float
+        required: true
+      observation_count:
+        range: integer
+        required: true
