@@ -1,13 +1,16 @@
-from enum import Enum
 from typing import Any, Optional
 
 import ibis
-from pydantic import BaseModel
 
 import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.YEAST.adapters import BinomialAdapter, ContinuousAdapter
 from earlysign.builtin.YEAST.core import BoundaryModel, TrajectoryModel
-from earlysign.builtin.YEAST.schema import YeastLookResult, YeastProtocol
+from earlysign.builtin.YEAST.schema import (
+    Boundary as BoundarySchema,
+    DecisionStatus,
+    LookResult,
+    Protocol,
+)
 from earlysign.framework.entity import Entity, Snapshot
 from earlysign.framework.projector import ProjectionResult
 from earlysign.framework.trace import TraceId
@@ -17,16 +20,6 @@ from earlysign.schema.ES3.Binomial import (
 from earlysign.schema.ES3.Continuous import (
     Scoreboard as ContinuousScoreboard,
 )
-
-
-class DecisionStatus(str, Enum):
-    CONTINUE = "CONTINUE"
-    STOP_EFFICACY = "STOP_EFFICACY"
-    STOP_PLAN_END_REACHED = "STOP_PLAN_END_REACHED"
-
-
-class BoundarySchema(BaseModel):
-    value: Optional[float] = None
 
 
 class Boundary(Entity[BoundarySchema]):
@@ -47,7 +40,7 @@ class Boundary(Entity[BoundarySchema]):
         return BoundarySchema(value=None)
 
     @classmethod
-    def calculate(cls, protocol: YeastProtocol) -> float:
+    def calculate(cls, protocol: Protocol) -> float:
         return BoundaryModel.calculate_boundary_value(protocol)
 
     def compute(
@@ -106,7 +99,7 @@ class BinomialYEASTEngine:
     Orchestrator for Binomial YEAST execution.
     """
 
-    def __init__(self, protocol: YeastProtocol):
+    def __init__(self, protocol: Protocol):
         self.protocol = protocol
 
     def run(
@@ -114,7 +107,7 @@ class BinomialYEASTEngine:
         metrics: BinomialScoreboard,
         boundary: BoundarySchema,
         **kwargs: Any,
-    ) -> YeastLookResult:
+    ) -> LookResult:
         """
         Computes the test result given current summary statistics.
         """
@@ -149,19 +142,15 @@ class BinomialYEASTEngine:
 
         # Check for max N
         if hasattr(self.protocol.method, "expected_num_observations"):
-            expected_n = getattr(
-                self.protocol.method, "expected_num_observations", None
-            )
-            if expected_n is not None and cumulative_n >= expected_n:
+            if cumulative_n >= self.protocol.method.expected_num_observations:
                 if status == DecisionStatus.CONTINUE:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
-        return YeastLookResult(
+        return LookResult(
             sample_n=cumulative_n,
-            p_hat=raw_diff / cumulative_n if cumulative_n > 0 else 0.0,
-            z_score=0.0,
-            trajectory=[float(trajectory)],
-            raw_difference=float(raw_diff),
+            info_frac=0.0,  # Placeholder
+            trajectory=trajectory,
+            raw_difference=raw_diff,
             efficacy_boundary=boundary_val,
             is_efficacy_crossed=is_crossed,
             status=status,
@@ -173,7 +162,7 @@ class ContinuousYEASTEngine:
     Orchestrator for Continuous YEAST execution.
     """
 
-    def __init__(self, protocol: YeastProtocol):
+    def __init__(self, protocol: Protocol):
         self.protocol = protocol
 
     def run(
@@ -181,7 +170,7 @@ class ContinuousYEASTEngine:
         metrics: ContinuousScoreboard,
         boundary: BoundarySchema,
         **kwargs: Any,
-    ) -> YeastLookResult:
+    ) -> LookResult:
         """
         Computes the test result given current summary statistics.
         """
@@ -213,18 +202,14 @@ class ContinuousYEASTEngine:
             status = DecisionStatus.STOP_EFFICACY
 
         if hasattr(self.protocol.method, "expected_num_observations"):
-            expected_n = getattr(
-                self.protocol.method, "expected_num_observations", None
-            )
-            if expected_n is not None and cumulative_n >= expected_n:
+            if cumulative_n >= self.protocol.method.expected_num_observations:
                 if status == DecisionStatus.CONTINUE:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
-        return YeastLookResult(
+        return LookResult(
             sample_n=cumulative_n,
-            p_hat=raw_diff / cumulative_n if cumulative_n > 0 else 0.0,
-            z_score=0.0,
-            trajectory=[float(trajectory)],
+            info_frac=0.0,
+            trajectory=float(trajectory),
             raw_difference=float(raw_diff),
             efficacy_boundary=boundary_val,
             is_efficacy_crossed=is_crossed,

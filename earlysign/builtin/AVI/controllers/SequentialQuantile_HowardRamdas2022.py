@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import ibis
 
@@ -9,17 +9,17 @@ from earlysign.builtin.AVI.engine import (
 from earlysign.builtin.AVI.schema import (
     ArmMetrics,
     ArmStatus,
-    AVIProtocol,
-    AVITaskSpec,
+    Protocol,
     ResponseType,
     Scoreboard,
     SequentialQuantileLookResult,
     SequentialQuantileMethodSpec,
+    TaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.entity import SimpleSequentialEntity
-from earlysign.framework.projector import ProjectionResult, Projector, ProtocolProjector
+from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 
 
@@ -32,7 +32,7 @@ class SequentialQuantileMetrics(SimpleSequentialEntity[int, ArmMetrics]):
         super().__init__(state_type=ArmMetrics, identity=identity)
 
 
-class SequentialQuantileScoreboard(Projector[Scoreboard]):
+class SequentialQuantileScoreboard:
     """
     Projector that builds the latest Scoreboard from individual ArmMetrics trajectories.
     """
@@ -40,12 +40,8 @@ class SequentialQuantileScoreboard(Projector[Scoreboard]):
     def __init__(self, arm_ids: List[str]):
         self.arm_ids = arm_ids
 
-    @property
-    def type_dependencies(self) -> List[Union[str, Tuple[str, str]]]:
-        """Trajectory depends on individual arm metrics."""
-        return [(ArmMetrics.__name__, aid) for aid in self.arm_ids]
-
     def project(self, table: ibis.Expr) -> Any:
+        from earlysign.framework.projector import ProjectionResult
 
         arms = {}
         all_trace = []
@@ -59,14 +55,11 @@ class SequentialQuantileScoreboard(Projector[Scoreboard]):
                 # SequentialEntity.project returns List[Tuple[Index, T]]
                 # Sorted by project_trajectory
                 latest_metrics = res.data[-1][1]
-                arms[aid] = ArmStatus(
-                    arm_name=aid, metrics=latest_metrics, is_active=True
-                )
+                arms[aid] = ArmStatus(metrics=latest_metrics, is_active=True)
                 all_trace.extend(res.trace)
             else:
                 # Initial state for missing arms
                 arms[aid] = ArmStatus(
-                    arm_name=aid,
                     metrics=ArmMetrics(
                         total=0, ci_lower=0.0, ci_upper=0.0, quantile_estimate=0.0
                     ),
@@ -76,7 +69,7 @@ class SequentialQuantileScoreboard(Projector[Scoreboard]):
         return ProjectionResult(data=Scoreboard(arms=arms), trace=all_trace)
 
 
-class HowardRamdas2022Controller(Controller[AVIProtocol]):
+class HowardRamdas2022Controller(Controller[Protocol]):
     """Controller for Howard & Ramdas (2022) Sequential Quantile A/B Testing.
 
     Based on the method described in:
@@ -120,7 +113,7 @@ class HowardRamdas2022Controller(Controller[AVIProtocol]):
     >>> # Note: The intervals are disjoint (A approx [1, 2], B=[10, 11]), so we stop for efficacy (flag raised).
     """
 
-    _protocol_class = AVIProtocol
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
@@ -132,17 +125,15 @@ class HowardRamdas2022Controller(Controller[AVIProtocol]):
         quantile: float = 0.5,
         alpha: float = 0.05,
         max_n: Optional[int] = None,
-    ) -> AVIProtocol:
+    ) -> Protocol:
         """Design a Sequential Quantile protocol."""
         method = SequentialQuantileMethodSpec(
             quantile=quantile,
             alpha=alpha,
             max_n=max_n,
         )
-        task = AVITaskSpec(arms=arms, response_type=ResponseType.CONTINUOUS)
-        return AVIProtocol(
-            name="Sequential Quantile A/B Test", task=task, method=method
-        )
+        task = TaskSpec(arms=arms, response_type=ResponseType.CONTINUOUS)
+        return Protocol(name="Sequential Quantile A/B Test", task=task, method=method)
 
     def _calculate_order_statistics(
         self, table: ibis.Table, ranks: Tuple[int, int], q: float = 0.5
@@ -193,7 +184,7 @@ class HowardRamdas2022Controller(Controller[AVIProtocol]):
 
         with Session(self.ledger) as sess:
             # 1. Read Protocol
-            protocol_traced = sess.read(ProtocolProjector(AVIProtocol))
+            protocol_traced = sess.read(ProtocolProjector(Protocol))
             protocol = protocol_traced.data
             method = protocol.method
 
@@ -240,7 +231,13 @@ class HowardRamdas2022Controller(Controller[AVIProtocol]):
             arm_ids = [arms_struct.control_arm_name, arms_struct.treatment_arm_name]
 
             scoreboard_projector = SequentialQuantileScoreboard(arm_ids)
-            scoreboard_traced = sess.read(scoreboard_projector)
+            from earlysign.framework.projector import ProjectionResult
+            from earlysign.parts.trackers.binomial import Scoreboard
+
+            scoreboard_traced_raw = sess.read(cast(Any, scoreboard_projector))
+            scoreboard_traced: ProjectionResult[Scoreboard] = cast(
+                ProjectionResult[Scoreboard], scoreboard_traced_raw
+            )
 
             engine = SequentialQuantileEngine(protocol)
 

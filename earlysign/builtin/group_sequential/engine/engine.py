@@ -1,4 +1,4 @@
-from typing import Any, Optional, Sequence, Tuple, cast
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -20,7 +20,7 @@ from earlysign.builtin.group_sequential.engine.calculators import (
 )
 from earlysign.builtin.group_sequential.schema import (
     DecisionStatus,
-    GSTLookResult,
+    LookResult,
     ScheduleTrigger,
 )
 
@@ -43,7 +43,7 @@ class GroupSequentialEngine:
 
     def __init__(self, protocol: GST.Protocol, rng_seed: int = 42):
         self.protocol = protocol
-        method = cast(GST.GSTMethodSpec, protocol.method)
+        method = protocol.method
         schedule = method.stopping_policy.schedule
 
         # 1. Resolve stopping policy logic
@@ -72,8 +72,6 @@ class GroupSequentialEngine:
         if isinstance(timer, GST.SampleSizeTimer):
             if isinstance(timer.max_sample_size, dict):
                 self.n_max = sum(timer.max_sample_size.values())
-            elif isinstance(timer.max_sample_size, list):
-                self.n_max = sum(timer.max_sample_size)
             else:
                 self.n_max = timer.max_sample_size
 
@@ -92,7 +90,7 @@ class GroupSequentialEngine:
     @property
     def tails(self) -> int:
         """Required by BoundarySolver protocol."""
-        method = cast(GST.GSTMethodSpec, self.protocol.method)
+        method = self.protocol.method
         strategy = method.stopping_policy.strategy
         if hasattr(strategy, "sided"):
             return 1 if strategy.sided == GST.Sided.ONE else 2
@@ -145,10 +143,10 @@ class GroupSequentialEngine:
     def run(
         self,
         metrics: Any,
-        history: Sequence[Tuple[int, GSTLookResult]],
+        history: List[Tuple[int, LookResult]],
         trigger: Optional[ScheduleTrigger] = None,
         **kwargs: Any,
-    ) -> GSTLookResult:
+    ) -> LookResult:
         """
         Computes the test result using the strategy-based calculator and sequential engine.
         """
@@ -169,8 +167,9 @@ class GroupSequentialEngine:
         # If data is missing for required arms, return a CONTINUE result without Z-stat.
         # This prevents STOP decisions based on silent 0.0 defaults.
         if z_scores is None:
-            return GSTLookResult(
+            return LookResult(
                 look=trigger.index if trigger else None,
+                trigger=trigger,
                 sample_n=int(cumulative_n),
                 info_frac=info_frac,
                 z_stat=0.0,  # Schema requires float
@@ -227,12 +226,13 @@ class GroupSequentialEngine:
                 if status == DecisionStatus.CONTINUE:
                     status = DecisionStatus.STOP_PLAN_END_REACHED
 
-        return GSTLookResult(
+        return LookResult(
             look=look_num,
+            trigger=trigger,
             sample_n=int(cumulative_n),
             info_frac=info_frac,
             z_stat=representative_z,
-            z_stats=list(z_scores.values()) if z_scores else None,
+            z_stats=z_scores,
             efficacy_boundary=efficacy_boundary,
             is_efficacy_crossed=is_efficacy_crossed,
             futility_boundary=futility_boundary,
@@ -246,7 +246,7 @@ class GroupSequentialEngine:
         self,
         look_idx: int,
         info_frac: float,
-        history: Sequence[Tuple[int, GSTLookResult]],
+        history: List[Tuple[int, LookResult]],
     ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
         """Resolves efficacy and futility boundaries for the current look."""
         efficacy_boundary = None

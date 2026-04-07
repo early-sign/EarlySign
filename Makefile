@@ -1,4 +1,4 @@
-.PHONY: install lint type test check format docs-build docs-serve lint-type-test compile-ES3 generate-schemas generate-schemas-core generate-schemas-builtin
+.PHONY: install lint type test check format docs-build docs-serve lint-type-test compile-ES3
 
 install:
 	poetry install --with dev,ci
@@ -19,31 +19,6 @@ spec-test:
 compile-ES3:
 	$(MAKE) -C ES3 install
 	$(MAKE) -C ES3 compile
-
-#---- Schema Generation (LinkML to Pydantic) ----
-
-GEN_PYDANTIC = poetry run gen-pydantic
-IMPORT_MAP = --importmap importmap.yaml
-CORE_DIR = earlysign/schema/ES3
-BUILTIN_DIR = earlysign/builtin
-
-generate-schemas: generate-schemas-core generate-schemas-combined generate-schemas-builtin
-
-generate-schemas-core:
-	@echo "=== Generating Core ES3 Schemas ==="
-	$(GEN_PYDANTIC) $(CORE_DIR)/base.yaml > $(CORE_DIR)/Base.py
-	$(GEN_PYDANTIC) $(CORE_DIR)/binomial.yaml > $(CORE_DIR)/Binomial.py
-	$(GEN_PYDANTIC) $(CORE_DIR)/continuous.yaml > $(CORE_DIR)/Continuous.py
-
-generate-schemas-combined:
-	@echo "=== Generating Combined ES3 Schema (Flat Namespace) ==="
-	$(GEN_PYDANTIC) $(CORE_DIR)/combined.yaml > $(CORE_DIR)/Combined.py
-
-generate-schemas-builtin:
-	@echo "=== Generating Builtin SDK Schemas (Modular) ==="
-	poetry run python -m earlysign.parts.codegen.linkml_generator $(BUILTIN_DIR)/YEAST/schema.yaml $(BUILTIN_DIR)/YEAST/schema.py
-	poetry run python -m earlysign.parts.codegen.linkml_generator $(BUILTIN_DIR)/AVI/schema.yaml $(BUILTIN_DIR)/AVI/schema.py
-	poetry run python -m earlysign.parts.codegen.linkml_generator $(BUILTIN_DIR)/group_sequential/schema.yaml $(BUILTIN_DIR)/group_sequential/schema.py
 
 format:
 	# Format code using one Python version
@@ -80,5 +55,6 @@ check:
 	make docs-build
 
 check-lite:
+	$(MAKE) -C ES3 check-sync
 	mise exec python -- make lint-type-test
 	make docs-build

@@ -11,7 +11,7 @@ import numpy as np
 from earlysign.builtin.AVI.design.operating_characteristics.engines import (
     AVIMonteCarloSimulator,
 )
-from earlysign.builtin.AVI.schema import AVIProtocol, GAVIMethodSpec, MSPRTMethodSpec
+from earlysign.builtin.AVI.schema import GAVIMethodSpec, MSPRTMethodSpec, Protocol
 from earlysign.builtin.group_sequential.design.operating_characteristics.engines import (
     EvaluationResult,
     SimulationCurve,
@@ -24,7 +24,7 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
 
     def __init__(
         self,
-        protocol: AVIProtocol,
+        protocol: Protocol,
         mean_control: float = 0.0,
         n_sims: int = 2000,
         seed: Optional[int] = None,
@@ -87,14 +87,12 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
 
         if self.method_type == "msprt":
             method_msprt = cast(MSPRTMethodSpec, self.protocol.method)
-            from earlysign.builtin.AVI.schema import Sides
-
             alpha = (
                 method_msprt.alpha * 2
-                if method_msprt.sides == Sides.ONE
+                if method_msprt.sides == "one"
                 else method_msprt.alpha
             )
-            tau = method_msprt.mde or 1.0
+            tau = method_msprt.mde
 
             # Estimate running variance (simplified to true variance for simulation speed
             # or could compute empirical variance, but let's use the base variance supplied)
@@ -125,7 +123,7 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
             )
 
             V = (sigma2 / n_array) * 2
-            phi = float(method_gavi.max_n or 1000)
+            phi = float(method_gavi.max_n)
             n_val = (n_array * 2) / 2.0
 
             denom = np.log(np.log(np.exp(1) * alpha ** (-2))) - 2 * np.log(alpha)
@@ -143,9 +141,7 @@ class ContinuousAVIEvaluator(AVIMonteCarloSimulator):
             boundary[n_array < burn_in] = np.inf
 
         sides = str(self.protocol.method.sides)
-        from earlysign.builtin.AVI.schema import Sides
-
-        if sides == Sides.TWO:
+        if sides == "two":
             crossed = np.abs(trajectory) > boundary
         else:
             crossed = trajectory > boundary

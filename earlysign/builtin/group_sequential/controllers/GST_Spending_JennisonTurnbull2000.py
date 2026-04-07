@@ -107,7 +107,7 @@ from earlysign.builtin.group_sequential.schema import (
     AbsoluteDifference,
     DecisionStatus,
     EffectMeasure,
-    GSTLookResult,
+    LookResult,
     OddsRatio,
     RelativeImprovement,
     RelativeRisk,
@@ -124,7 +124,7 @@ from earlysign.framework.session import BacktestSession, Session
 from earlysign.parts.trackers.binomial import Scoreboard
 
 
-class JennisonTurnbull2000TaskSpec(GST.GSTTaskSpec):
+class JennisonTurnbull2000TaskSpec(GST.TaskSpec):
     response_type: GST.ResponseType = GST.ResponseType.BINARY
     # Design Requirements
     efficacy: GST.EfficacyRequirement
@@ -133,9 +133,9 @@ class JennisonTurnbull2000TaskSpec(GST.GSTTaskSpec):
     hypotheses: GST.HypothesisSpec
 
 
-class JennisonTurnbull2000Protocol(GST.GSTProtocol, AutoNameMixin, RichDisplayMixin):
+class JennisonTurnbull2000Protocol(GST.Protocol, AutoNameMixin, RichDisplayMixin):
     task: JennisonTurnbull2000TaskSpec
-    method: GST.GSTMethodSpec
+    method: GST.MethodSpec
     name: str = Field(default="")
 
 
@@ -200,7 +200,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         effect_spec: Optional[Union[EffectMeasure, Dict[str, Any]]] = None,
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
-        allocation_ratios: Optional[List[float]] = None,
+        allocation_ratios: Optional[Dict[str, float]] = None,
         method: Literal["simulation", "numerical_integration"] = "simulation",
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
@@ -267,35 +267,35 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
                     )
                 p_treatment = _resolve_p_treatment(p_control, effect_spec)
 
-            if allocation_ratios and len(allocation_ratios) > 2:
+            if allocation_ratios and len(allocation_ratios) > 1:
                 arms: ES3_BASE.ArmStructure = ES3_BASE.MultiArmComparison(
                     control_arm_name=control_arm_name,
-                    treatment_arm_names=[
-                        f"{treatment_arm_name}_{i}"
-                        for i in range(1, len(allocation_ratios))
-                    ],
+                    treatment_arm_names=list(allocation_ratios.keys()),
                     allocation_ratios=allocation_ratios,
                 )
-                props = [
-                    p_control,
-                    *[p_treatment for _ in range(len(allocation_ratios) - 1)],
-                ]
+                props = {control_arm_name: p_control}
+                props.update({arm: p_treatment for arm in allocation_ratios.keys()})
             else:
                 ratio = 1.0
-                if allocation_ratios and len(allocation_ratios) == 2:
-                    ratio = allocation_ratios[1]
+                if allocation_ratios:
+                    ratio = list(allocation_ratios.values())[0]
 
                 # TwoArmComparison using allocation_ratios
                 two_arm_ratios = None
                 if ratio != 1.0:
-                    two_arm_ratios = [1.0, ratio]
+                    two_arm_ratios = {treatment_arm_name: ratio}
+                elif allocation_ratios:
+                    two_arm_ratios = allocation_ratios
 
                 arms = ES3_BASE.TwoArmComparison(
                     control_arm_name=control_arm_name,
                     treatment_arm_name=treatment_arm_name,
                     allocation_ratios=two_arm_ratios,
                 )
-                props = [p_control, p_treatment]
+                props = {
+                    control_arm_name: p_control,
+                    treatment_arm_name: p_treatment,
+                }
 
             task = JennisonTurnbull2000TaskSpec(
                 arms=arms,
@@ -327,33 +327,32 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             )
         arms = task.arms
 
-        resolved_allocation_ratios = None
+        allocation_ratios = None
         control_arm_name = "control"
         treatment_arm_name = "treatment"
 
         if isinstance(arms, ES3_BASE.TwoArmComparison):
             control_arm_name = arms.control_arm_name
             treatment_arm_name = arms.treatment_arm_name
-            resolved_allocation_ratios = arms.allocation_ratios
+            allocation_ratios = arms.allocation_ratios
         elif isinstance(arms, ES3_BASE.MultiArmComparison):
             control_arm_name = arms.control_arm_name
             treatment_arm_name = arms.treatment_arm_names[0]
-            resolved_allocation_ratios = arms.allocation_ratios
+            allocation_ratios = arms.allocation_ratios
         else:
             raise NotImplementedError(
                 f"GST on {type(arms).__name__} is not yet supported in this controller. "
                 "Currently, only TwoArmComparison or MultiArmComparison is supported."
             )
 
-        _arm_0, _arm_1 = control_arm_name, treatment_arm_name
+        arm_0, arm_1 = control_arm_name, treatment_arm_name
 
         method_spec, _ = designer.design_gs_binomial(
             alpha=task.efficacy.alpha,
             power=task.futility.power if task.futility else 0.8,
-            p_control=proportions[0],
-            p_treatment=proportions[1],
+            p_control=proportions[arm_0],
+            p_treatment=proportions[arm_1],
             looks=looks,
-            allocation_ratios=resolved_allocation_ratios,
             scheduling=cast(Any, scheduling),
             spending_function=spending_function,
             spending_params=spending_params,
@@ -361,6 +360,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             futility_binding=bool(task.futility.binding) if task.futility else False,
             tails=1,
             rng_seed=rng_seed,
+            allocation_ratios=allocation_ratios,
             control_arm_name=control_arm_name,
             treatment_arm_name=treatment_arm_name,
             method=method,
@@ -374,7 +374,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
 
     def update(
         self, batch: Sequence[BaseModel], session: Optional[Session] = None
-    ) -> Optional[GSTLookResult]:
+    ) -> None:
         """
         Orchestrates a single minibatch update cycle:
         Ingest -> [Read -> Analyze -> Decide -> Snapshot].
@@ -382,14 +382,12 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         # 1. Ingest Data
         # Re-use provided session if available (optimization for backtests)
         if session is not None:
-            return self._update_with_session(session, batch)
+            self._update_with_session(session, batch)
         else:
             with Session(self.ledger) as sess:
-                return self._update_with_session(sess, batch)
+                self._update_with_session(sess, batch)
 
-    def _update_with_session(
-        self, sess: Session, batch: Sequence[BaseModel]
-    ) -> Optional[GSTLookResult]:
+    def _update_with_session(self, sess: Session, batch: Sequence[BaseModel]) -> None:
         """Internal helper for protocol-consistent update logic."""
         if batch:
             # Validate arm names
@@ -410,35 +408,34 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
                 sess.commit(item, trace=[])
 
         # 2. Analysis & Trigger check
+        # Reconstruct Protocol from Ledger
+        protocol_traced = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
         metrics = sess.read(Scoreboard(identity="metrics"))
         trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
-        protocol = sess.read(ProtocolProjector(JennisonTurnbull2000Protocol))
 
         # 3. Check if an analysis is "due"
-        trigger = get_pending_look_trigger(protocol, metrics, trajectory)
+        trigger = get_pending_look_trigger(protocol_traced, metrics, trajectory)
 
         if trigger:
             # 4. Engine Execution - compute result using trajectory history
-            engine = GroupSequentialEngine(protocol.data, rng_seed=self.rng_seed)
+            engine = GroupSequentialEngine(protocol_traced.data, rng_seed=self.rng_seed)
 
-            result = engine.run(
-                metrics=metrics.data,
-                history=trajectory.data,
-                trigger=trigger.data,
+            sess.call_and_commit(
+                LookResult,
+                engine.run,
+                identity="interim_analyses",
+                metrics=metrics,
+                history=trajectory,
+                trigger=trigger,
             )
-            sess.commit(result, identity="interim_analyses")
-            return result
-        return None
-        return None
 
     def report_progress(self) -> Dict[str, Any]:
-        """Returns the current progress report."""
+        """
+        Returns the current progress report.
+        """
         with Session(self.ledger) as sess:
-            from earlysign.builtin.group_sequential.reporting.projectors import (
-                ProgressProjector,
-            )
-
-            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+            report = sess.read(ProgressProjector()).data
+            return report.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
@@ -631,9 +628,8 @@ Stopping Policy:
         p0 = 0.0
         p1 = 0.0
         if isinstance(hypotheses.target_effect, BinaryEffectSize):
-            props_list = hypotheses.target_effect.proportions
-            p0 = props_list[0] if len(props_list) > 0 else 0
-            p1 = props_list[1] if len(props_list) > 1 else 0
+            p0 = hypotheses.target_effect.proportions.get(ctrl_arm, 0)
+            p1 = hypotheses.target_effect.proportions.get(trtm_arm, 0)
 
         policy = method.stopping_policy
         strategy = policy.strategy

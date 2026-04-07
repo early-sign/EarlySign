@@ -57,30 +57,30 @@ import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.AVI import GAVIEngine
 from earlysign.builtin.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.builtin.AVI.schema import (
-    AVIProtocol,
-    AVITaskSpec,
     GAVIMethodSpec,
     LookResult,
     Protocol,
     ResponseType,
     Sides,
+    TaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
+from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ContinuousArmData
 
 
-class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtocol]):
+class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[Protocol]):
     """Controller for Binomial Confidence Sequence (Waudby-Smith 2021).
 
     Uses GAVI framework with Known/Bounded Variance.
     """
 
-    _protocol_class = AVIProtocol
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
@@ -94,7 +94,7 @@ class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtocol
         max_n: int,
         sides: Literal["one", "two"] = "two",
         burn_in: int = 100,
-    ) -> AVIProtocol:
+    ) -> Protocol:
         """
         Design a Confidence Sequence experiment.
         """
@@ -104,10 +104,9 @@ class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtocol
             sides=Sides(sides),
             max_n=max_n,
             burn_in=burn_in,
-            theta=0.0,
         )
-        task = AVITaskSpec(arms=arms, response_type=ResponseType.BINARY)
-        return AVIProtocol(name="CS (Waudby-Smith 2021)", task=task, method=method)
+        task = TaskSpec(arms=arms, response_type=ResponseType.BINARY)
+        return Protocol(name="CS (Waudby-Smith 2021)", task=task, method=method)
 
     def update(self, batch: List[BinomialArmData]) -> None:
         if batch:
@@ -116,7 +115,7 @@ class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtocol
                     sess.commit(item, trace=[])
 
         with Session(self.ledger) as sess:
-            protocol = sess.read(ProtocolProjector(AVIProtocol)).data
+            protocol = sess.read(ProtocolProjector(Protocol)).data
             metrics = sess.read(BinomialScoreboard(identity="metrics"))
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
@@ -138,13 +137,13 @@ class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtocol
             return sess.read(FinalProjector()).data.model_dump(mode="json")
 
 
-class ContinuousConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtocol]):
+class ContinuousConfidenceSequenceWaudbySmith2021Controller(Controller[Protocol]):
     """Controller for Continuous Confidence Sequence (Waudby-Smith 2021).
 
     Uses GAVI framework with Known Variance.
     """
 
-    _protocol_class = AVIProtocol
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
@@ -163,9 +162,8 @@ class ContinuousConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtoc
             variance=variance,
             sides=Sides(sides),
             max_n=max_n,
-            theta=0.0,
         )
-        task = AVITaskSpec(arms=arms, response_type=ResponseType.CONTINUOUS)
+        task = TaskSpec(arms=arms, response_type=ResponseType.CONTINUOUS)
         return Protocol(
             name="Continuous CS (Waudby-Smith 2021)", task=task, method=method
         )
@@ -177,16 +175,8 @@ class ContinuousConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtoc
                     sess.commit(item, trace=[])
 
         with Session(self.ledger) as sess:
-            from earlysign.builtin.AVI.schema import AVIProtocol
-            from earlysign.framework.projector import ProtocolProjector
-
-            protocol = sess.read(ProtocolProjector(AVIProtocol)).data
-
-            from earlysign.parts.trackers.continuous import (
-                Scoreboard as ContinuousScoreboard,
-            )
-
-            metrics = sess.read(ContinuousScoreboard(identity="metrics")).data
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+            metrics = sess.read(ContinuousScoreboard(identity="metrics"))
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
@@ -195,18 +185,12 @@ class ContinuousConfidenceSequenceWaudbySmith2021Controller(Controller[AVIProtoc
                 )
 
             engine = GAVIEngine(protocol)
-            from earlysign.builtin.AVI.schema import LookResult
-
             sess.call_and_commit(LookResult, engine.run, metrics=metrics)
 
     def report_progress(self) -> Dict[str, Any]:
-        from earlysign.builtin.AVI.reporting import ProgressProjector
-
         with Session(self.ledger) as sess:
             return sess.read(ProgressProjector()).data.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
-        from earlysign.builtin.AVI.reporting import FinalProjector
-
         with Session(self.ledger) as sess:
             return sess.read(FinalProjector()).data.model_dump(mode="json")

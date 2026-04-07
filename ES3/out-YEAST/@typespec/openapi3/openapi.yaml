@@ -283,3 +283,126 @@ components:
             $ref: '#/components/schemas/Continuous.ArmStatus'
           description: Map of arm IDs to status.
       description: Collective state of all arms (Scoreboard).
+    YEAST.Boundary:
+      type: object
+      properties:
+        value:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+    YEAST.DecisionStatus:
+      type: string
+      enum:
+        - continue
+        - stop_efficacy
+        - stop_plan_end_reached
+        - stop
+    YEAST.LookResult:
+      type: object
+      required:
+        - sample_n
+        - info_frac
+        - trajectory
+        - is_efficacy_crossed
+        - status
+      properties:
+        sample_n:
+          type: integer
+          format: int32
+          description: Total number of samples (cumulative).
+        info_frac:
+          type: number
+          format: double
+          description: Fraction of information accrued.
+        trajectory:
+          type: number
+          format: double
+          description: The calculated trajectory value (Your Evidence).
+        raw_difference:
+          type: number
+          format: double
+          description: The raw difference (sum of successes/values difference) before normalization.
+        efficacy_boundary:
+          type: number
+          format: double
+          description: The efficacy boundary at this look.
+        is_efficacy_crossed:
+          type: boolean
+          description: Whether the trajectory crossed the efficacy boundary.
+        status:
+          anyOf:
+            - $ref: '#/components/schemas/YEAST.DecisionStatus'
+            - type: string
+          description: Current status of the YEAST test.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: Result of a statistical test/evaluation for the study at a look (YEAST).
+    YEAST.MethodSpec:
+      type: object
+      required:
+        - kind
+        - significance_level
+        - expected_num_observations
+        - estimated_variance
+      properties:
+        kind:
+          type: string
+          enum:
+            - yeast
+          default: yeast
+        significance_level:
+          type: number
+          format: double
+        expected_num_observations:
+          type: integer
+          format: int32
+        estimated_variance:
+          type: number
+          format: double
+          description: |-
+            The estimated variance of a single increment (difference).
+            If not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).
+          default: 0.5
+        boundary_sequence:
+          type: array
+          items:
+            type: number
+            format: double
+          default: []
+      allOf:
+        - $ref: '#/components/schemas/Base.MethodSpec'
+    YEAST.Protocol:
+      type: object
+      required:
+        - task
+        - method
+      properties:
+        task:
+          $ref: '#/components/schemas/YEAST.TaskSpec'
+        method:
+          $ref: '#/components/schemas/YEAST.MethodSpec'
+      allOf:
+        - $ref: '#/components/schemas/Base.Protocol'
+    YEAST.TaskSpec:
+      type: object
+      required:
+        - kind
+        - arms
+        - response_type
+      properties:
+        kind:
+          type: string
+          enum:
+            - yeast
+          default: yeast
+        arms:
+          $ref: '#/components/schemas/Base.ArmStructure'
+        response_type:
+          type: string
+          enum:
+            - binary
+            - continuous
+          default: binary
+      allOf:
+        - $ref: '#/components/schemas/Base.TaskSpec'

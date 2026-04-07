@@ -6,6 +6,280 @@ tags: []
 paths: {}
 components:
   schemas:
+    AVI.AVIMetadata:
+      type: object
+      required:
+        - version
+      properties:
+        version:
+          type: string
+          description: Metadata version
+    AVI.ArmMetrics:
+      type: object
+      required:
+        - total
+        - ci_lower
+        - ci_upper
+        - quantile_estimate
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Sample size n at the time of calculation.
+        ci_lower:
+          type: number
+          format: double
+          description: The value of the lower confidence bound (X at rank L_t).
+        ci_upper:
+          type: number
+          format: double
+          description: The value of the upper confidence bound (X at rank U_t).
+        quantile_estimate:
+          type: number
+          format: double
+          description: The point estimate of the target quantile.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: Metrics for a single arm in a sequential quantile test.
+    AVI.ArmStatus:
+      type: object
+      required:
+        - metrics
+        - is_active
+      properties:
+        metrics:
+          $ref: '#/components/schemas/AVI.ArmMetrics'
+        is_active:
+          type: boolean
+      description: Status wrapper for arm metrics.
+    AVI.BaseAVIMethodSpec:
+      type: object
+      properties:
+        burn_in:
+          type: integer
+          format: int32
+          description: |-
+            Optional burn-in sample size before checking stopping rules.
+            Recommended when using plug-in variance estimators to mitigate instability
+            at very small sample sizes, or for asymptotic approximations that require a
+            minimum sample size to become valid.
+          default: 100
+      allOf:
+        - $ref: '#/components/schemas/Base.MethodSpec'
+    AVI.DecisionStatus:
+      type: string
+      enum:
+        - continue
+        - stop_detected
+        - stop_plan_end_reached
+    AVI.GAVIMethodSpec:
+      type: object
+      required:
+        - kind
+        - alpha
+        - sides
+        - max_n
+      properties:
+        kind:
+          type: string
+          enum:
+            - GAVI
+          default: GAVI
+        alpha:
+          type: number
+          format: double
+          description: Significance level.
+        variance:
+          type: number
+          format: double
+          description: |-
+            Estimated variance (sigma squared).
+            If null, the variance is estimated from the data (Maharaj et al., 2023).
+        sides:
+          type: string
+          enum:
+            - one
+            - two
+          description: One-sided or two-sided test.
+        max_n:
+          type: integer
+          format: int32
+          description: Maximum sample size, used for rho calculation.
+      allOf:
+        - $ref: '#/components/schemas/AVI.BaseAVIMethodSpec'
+    AVI.LookResult:
+      type: object
+      required:
+        - sample_n
+        - trajectory
+        - boundary
+        - is_crossed
+        - status
+      properties:
+        sample_n:
+          type: integer
+          format: int32
+          description: The total sample size (cumulative) at this look.
+        trajectory:
+          type: number
+          format: double
+          description: The calculated trajectory statistic.
+        boundary:
+          type: number
+          format: double
+          description: The current boundary value.
+        is_crossed:
+          type: boolean
+          description: Whether the trajectory crossed the boundary.
+        status:
+          anyOf:
+            - $ref: '#/components/schemas/AVI.DecisionStatus'
+            - type: string
+          description: The decision status after this look.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+    AVI.MSPRTMethodSpec:
+      type: object
+      required:
+        - kind
+        - alpha
+        - sides
+        - mde
+      properties:
+        kind:
+          type: string
+          enum:
+            - mSPRT
+          default: mSPRT
+        alpha:
+          type: number
+          format: double
+          description: Significance level.
+        variance:
+          type: number
+          format: double
+          description: |-
+            Estimated variance (sigma squared).
+            If null, the variance is estimated from the data (Maharaj et al., 2023).
+        sides:
+          type: string
+          enum:
+            - one
+            - two
+          description: One-sided or two-sided test.
+        mde:
+          type: number
+          format: double
+          description: Minimum Detectable Effect (absolute difference), used for phi calculation.
+      allOf:
+        - $ref: '#/components/schemas/AVI.BaseAVIMethodSpec'
+    AVI.MethodSpec:
+      anyOf:
+        - $ref: '#/components/schemas/AVI.GAVIMethodSpec'
+        - $ref: '#/components/schemas/AVI.MSPRTMethodSpec'
+        - $ref: '#/components/schemas/AVI.SequentialQuantileMethodSpec'
+    AVI.Protocol:
+      type: object
+      required:
+        - task
+        - method
+      properties:
+        task:
+          $ref: '#/components/schemas/AVI.TaskSpec'
+        method:
+          $ref: '#/components/schemas/AVI.MethodSpec'
+      allOf:
+        - $ref: '#/components/schemas/Base.Protocol'
+    AVI.Scoreboard:
+      type: object
+      required:
+        - arms
+      properties:
+        arms:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AVI.ArmStatus'
+      description: Projection of all arm metrics in a sequential quantile test.
+    AVI.SequentialQuantileLookResult:
+      type: object
+      required:
+        - sample_n
+        - estimated_quantile
+        - interval_lower
+        - interval_upper
+        - status
+      properties:
+        sample_n:
+          type: integer
+          format: int32
+          description: Current cumulative sample size.
+        estimated_quantile:
+          type: number
+          format: double
+          description: Point estimate of the target quantile.
+        interval_lower:
+          type: number
+          format: double
+          description: Lower confidence bound.
+        interval_upper:
+          type: number
+          format: double
+          description: Upper confidence bound.
+        status:
+          anyOf:
+            - $ref: '#/components/schemas/AVI.DecisionStatus'
+            - type: string
+          description: Current status of the test.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: Result of a sequential quantile test look.
+    AVI.SequentialQuantileMethodSpec:
+      type: object
+      required:
+        - kind
+        - quantile
+        - alpha
+      properties:
+        kind:
+          type: string
+          enum:
+            - SequentialQuantile
+          default: SequentialQuantile
+        quantile:
+          type: number
+          format: double
+          description: Target quantile (e.g., 0.5 for median).
+        alpha:
+          type: number
+          format: double
+          description: Significance level.
+        max_n:
+          type: integer
+          format: int32
+          description: Optional maximum sample size for the horizon.
+      allOf:
+        - $ref: '#/components/schemas/AVI.BaseAVIMethodSpec'
+    AVI.TaskSpec:
+      type: object
+      required:
+        - kind
+        - arms
+        - response_type
+      properties:
+        kind:
+          type: string
+          enum:
+            - AVI
+          default: AVI
+        arms:
+          $ref: '#/components/schemas/Base.ArmStructure'
+        response_type:
+          type: string
+          enum:
+            - binary
+            - continuous
+      allOf:
+        - $ref: '#/components/schemas/Base.TaskSpec'
     Base.ArmStructure:
       anyOf:
         - $ref: '#/components/schemas/Base.SingleArm'

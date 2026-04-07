@@ -95,6 +95,7 @@ from earlysign.builtin.group_sequential.reporting.visualization import (
 from earlysign.builtin.group_sequential.schema import (
     AdaptationLog,
     DecisionStatus,
+    LookResult,
     PromisingZoneStatus,
 )
 from earlysign.core.ledger import Ledger
@@ -106,8 +107,8 @@ from earlysign.framework.session import Session
 class CuiHungWang1999Protocol(BaseModel):
     """Protocol for Promising Zone Adaptive Design (Cui-Hung-Wang 1999)."""
 
-    task: GST.GSTTaskSpec
-    method: GST.GSTMethodSpec
+    task: GST.TaskSpec
+    method: GST.MethodSpec
 
 
 CuiHungWang1999Protocol.model_rebuild()
@@ -136,7 +137,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
         looks: int,
         alpha: float,
         power: float,
-        task: Optional[GST.GSTTaskSpec] = None,
+        task: Optional[GST.TaskSpec] = None,
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
@@ -226,7 +227,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
                 )
 
             delta = p_treatment - p_control
-            task = GST.GSTTaskSpec(
+            task = GST.TaskSpec(
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
                     treatment_arm_name="treatment",
@@ -239,7 +240,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
                     h_alt_description=f"diff > {delta}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.BinaryEffectSize(
-                        proportions=[p_control, p_treatment]
+                        proportions={"control": p_control, "treatment": p_treatment}
                     ),
                 ),
             )
@@ -310,7 +311,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             history = sess.read(InterimAnalyses(identity="interim_analyses"))
 
             # 3. Standard GSD Engine
-            gst_protocol = GST.GSTProtocol(
+            gst_protocol = GST.Protocol(
                 name="CHW-Runtime",
                 task=protocol_traced.data.task,
                 method=protocol_traced.data.method,
@@ -318,7 +319,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             engine = GroupSequentialEngine(gst_protocol)
 
             sess.call_and_commit(
-                GST.GSTLookResult,
+                LookResult,
                 engine.run,
                 metrics=metrics,
                 history=history,

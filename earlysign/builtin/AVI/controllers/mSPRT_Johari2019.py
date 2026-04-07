@@ -70,14 +70,14 @@ from earlysign.builtin.AVI.reporting import (
     ProgressProjector,
 )
 from earlysign.builtin.AVI.schema import (
-    AVIProtocol as Protocol_Schema,
-    AVITaskSpec,
     DecisionStatus,
     LookResult,
     MethodSpec,
     MSPRTMethodSpec,
+    Protocol as Protocol_Schema,
     ResponseType,
     Sides,
+    TaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
@@ -85,6 +85,7 @@ from earlysign.framework.controller import Controller, RichDisplayMixin
 from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
+from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.schema.ES3.Binomial import BinomialArmData
 from earlysign.schema.ES3.Continuous import ContinuousArmData
 
@@ -131,9 +132,8 @@ class BinomialJohari2019Controller(Controller[Protocol]):
             variance=None,  # Binomial variance is implicit/estimated by engine
             sides=Sides(sides),
             mde=tau,
-            tau=tau,
         )
-        task = AVITaskSpec(arms=arms, response_type=ResponseType.BINARY)
+        task = TaskSpec(arms=arms, response_type=ResponseType.BINARY)
         return Protocol(name="mSPRT (Johari 2019)", task=task, method=method)
 
     def update(self, batch: List[BinomialArmData]) -> None:
@@ -282,7 +282,7 @@ Method:
         mde = 0.0
         sides = "two"
         if isinstance(method, MSPRTMethodSpec):
-            mde = method.mde or 0.0
+            mde = method.mde
             sides = str(method.sides)
 
         return tpl.substitute(
@@ -324,9 +324,8 @@ class ContinuousJohari2019Controller(Controller[Protocol]):
             variance=variance,
             sides=Sides(sides),
             mde=tau,
-            tau=tau,
         )
-        task = AVITaskSpec(arms=arms, response_type=ResponseType.CONTINUOUS)
+        task = TaskSpec(arms=arms, response_type=ResponseType.CONTINUOUS)
         return Protocol(name="Continuous mSPRT (Johari 2019)", task=task, method=method)
 
     def update(self, batch: List[ContinuousArmData]) -> None:
@@ -336,16 +335,8 @@ class ContinuousJohari2019Controller(Controller[Protocol]):
                     sess.commit(item, trace=[])
 
         with Session(self.ledger) as sess:
-            from earlysign.builtin.AVI.schema import AVIProtocol as Protocol
-            from earlysign.framework.projector import ProtocolProjector
-
             protocol = sess.read(ProtocolProjector(Protocol)).data
-
-            from earlysign.parts.trackers.continuous import (
-                Scoreboard as ContinuousScoreboard,
-            )
-
-            metrics = sess.read(ContinuousScoreboard(identity="metrics")).data
+            metrics = sess.read(ContinuousScoreboard(identity="metrics"))
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
@@ -354,13 +345,9 @@ class ContinuousJohari2019Controller(Controller[Protocol]):
                 )
 
             engine = mSPRTEngine(protocol)
-            from earlysign.builtin.AVI.schema import LookResult
-
             sess.call_and_commit(LookResult, engine.run, metrics=metrics)
 
     def report_progress(self) -> Dict[str, Any]:
-        from earlysign.builtin.AVI.reporting import ProgressProjector
-
         with Session(self.ledger) as sess:
             return sess.read(ProgressProjector()).data.model_dump(mode="json")
 

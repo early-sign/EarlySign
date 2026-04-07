@@ -4,10 +4,12 @@ import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.YEAST.engine import BinomialYEASTEngine, ContinuousYEASTEngine
 from earlysign.builtin.YEAST.reporting import FinalProjector, ProgressProjector
 from earlysign.builtin.YEAST.schema import (
+    Boundary as BoundarySchema,
     LookResult,
-    YeastMethodSpec,
-    YeastProtocol,
-    YeastTaskSpec,
+    MethodSpec,
+    Protocol,
+    ResponseType,
+    TaskSpec as YeastTaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
@@ -24,7 +26,7 @@ class BinomialKurennoy2025TaskSpec(YeastTaskSpec):
 
     kind: Literal["yeast"] = "yeast"
     arms: ES3_BASE.ArmStructure
-    response_type: Literal["binary"] = "binary"
+    response_type: ResponseType = ResponseType.BINARY
     hypotheses: Dict[str, Any]
 
 
@@ -33,11 +35,11 @@ class ContinuousKurennoy2025TaskSpec(YeastTaskSpec):
 
     kind: Literal["yeast"] = "yeast"
     arms: ES3_BASE.ArmStructure
-    response_type: Literal["continuous"] = "continuous"
+    response_type: ResponseType = ResponseType.CONTINUOUS
     hypotheses: Dict[str, Any]
 
 
-class BinomialKurennoy2025Controller(Controller[YeastProtocol]):
+class BinomialKurennoy2025Controller(Controller[Protocol]):
     """Controller for YEAST (Your Evidence Accumulation Sequential Test) on Binomial data.
 
     Based on the method described in:
@@ -89,12 +91,12 @@ class BinomialKurennoy2025Controller(Controller[YeastProtocol]):
         Boundary: 30.9898, Status: continue
     """
 
-    _protocol_class = YeastProtocol
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def set_protocol(self, protocol: YeastProtocol) -> None:
+    def set_protocol(self, protocol: Protocol) -> None:
         """
         Persists the trial protocol to the ledger and calculates initial boundary.
         """
@@ -115,21 +117,19 @@ class BinomialKurennoy2025Controller(Controller[YeastProtocol]):
         significance_level: float,
         expected_num_observations: int,
         estimated_variance: float,
-    ) -> YeastProtocol:
+    ) -> Protocol:
         """
         Design a YEAST protocol from parameters.
         """
-        method = YeastMethodSpec(
-            kind="YEAST",
-            alpha=significance_level,
-            mde=1.0,  # Placeholder
+        method = MethodSpec(
+            kind="yeast",
             significance_level=significance_level,
             expected_num_observations=expected_num_observations,
             estimated_variance=estimated_variance,
-            boundary_sequence=[],
+            boundary_sequence=[],  # Will be populated by Engine/Designer if needed
         )
 
-        return YeastProtocol(
+        return Protocol(
             name="YEAST Binomial",
             task=task,
             method=method,
@@ -146,26 +146,24 @@ class BinomialKurennoy2025Controller(Controller[YeastProtocol]):
                     sess.commit(item, trace=[])
 
             # Reconstruct Protocol from Ledger
-            protocol_obj = sess.read(ProtocolProjector(YeastProtocol)).data
+            protocol = sess.read(ProtocolProjector(Protocol)).data
 
             # Read Metrics
             metrics = sess.read(BinomialScoreboard(identity="metrics"))
 
             # 3. Engine Execution
-            engine = BinomialYEASTEngine(protocol_obj)
+            engine = BinomialYEASTEngine(protocol)
 
             # Extract current boundary if available in protocol sequence, else calculate
             boundary_val = None
-            boundary_seq = getattr(protocol_obj.method, "boundary_sequence", [])
-            if boundary_seq:
-                boundary_val = boundary_seq[0]
+            if protocol.method.boundary_sequence:
+                boundary_val = protocol.method.boundary_sequence[0]
             else:
                 from earlysign.builtin.YEAST.engine import Boundary
 
-                boundary_val = Boundary.calculate(protocol_obj)
+                boundary_val = Boundary.calculate(protocol)
 
-            # Recreate boundary as dict
-            boundary = {"value": boundary_val}
+            boundary = BoundarySchema(value=boundary_val)
 
             # 4. Commit Result via CallAndCommit
             sess.call_and_commit(
@@ -195,7 +193,7 @@ class BinomialKurennoy2025Controller(Controller[YeastProtocol]):
             return sess.read(FinalProjector()).data.model_dump(mode="json")
 
 
-class ContinuousKurennoy2025Controller(Controller[YeastProtocol]):
+class ContinuousKurennoy2025Controller(Controller[Protocol]):
     """Controller for YEAST (Your Evidence Accumulation Sequential Test) on Continuous data.
 
     Based on:
@@ -227,12 +225,12 @@ class ContinuousKurennoy2025Controller(Controller[YeastProtocol]):
         'continue'
     """
 
-    _protocol_class = YeastProtocol
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
 
-    def set_protocol(self, protocol: YeastProtocol) -> None:
+    def set_protocol(self, protocol: Protocol) -> None:
         """
         Persists the trial protocol to the ledger and calculates initial boundary.
         """
@@ -251,20 +249,18 @@ class ContinuousKurennoy2025Controller(Controller[YeastProtocol]):
         significance_level: float,
         expected_num_observations: int,
         estimated_variance: float,
-    ) -> YeastProtocol:
+    ) -> Protocol:
         """
         Design a YEAST protocol from parameters.
         """
-        method = YeastMethodSpec(
-            kind="YEAST",
-            alpha=significance_level,
-            mde=1.0,  # Placeholder
+        method = MethodSpec(
+            kind="yeast",
             significance_level=significance_level,
             expected_num_observations=expected_num_observations,
             estimated_variance=estimated_variance,
-            boundary_sequence=[],
+            boundary_sequence=[],  # Will be populated by Engine/Designer if needed
         )
-        return YeastProtocol(
+        return Protocol(
             name="YEAST Continuous",
             task=task,
             method=method,
@@ -280,7 +276,7 @@ class ContinuousKurennoy2025Controller(Controller[YeastProtocol]):
                     sess.commit(item, trace=[])
 
             # 1. Read State
-            protocol_traced = sess.read(ProtocolProjector(YeastProtocol))
+            protocol_traced = sess.read(ProtocolProjector(Protocol))
             metrics = sess.read(ContinuousScoreboard(identity="metrics"))
 
             # 2. Run Engine (YEAST Logic)
@@ -288,15 +284,14 @@ class ContinuousKurennoy2025Controller(Controller[YeastProtocol]):
 
             # Extract boundary
             boundary_val = None
-            boundary_seq = getattr(protocol_traced.data.method, "boundary_sequence", [])
-            if boundary_seq:
-                boundary_val = boundary_seq[0]
+            if protocol_traced.data.method.boundary_sequence:
+                boundary_val = protocol_traced.data.method.boundary_sequence[0]
             else:
                 from earlysign.builtin.YEAST.engine import Boundary
 
                 boundary_val = Boundary.calculate(protocol_traced.data)
 
-            boundary = {"value": boundary_val}
+            boundary = BoundarySchema(value=boundary_val)
 
             # 3. Commit Result
             # CallAndCommit ensures that 'LookResult' is causally linked to 'metrics'

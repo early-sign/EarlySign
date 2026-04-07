@@ -4,21 +4,24 @@ import earlysign.schema.ES3.Base as ES3_BASE
 from earlysign.builtin.AVI import GAVIEngine, mSPRTEngine
 from earlysign.builtin.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.builtin.AVI.schema import (
-    AVIProtocol,
-    AVITaskSpec,
     GAVIMethodSpec,
     LookResult,
     MSPRTMethodSpec,
+    Protocol,
     ResponseType,
     Sides,
+    TaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
-from earlysign.framework.projector import ProtocolProjector
+from earlysign.framework.projector import Projector, ProtocolProjector
 from earlysign.framework.session import Session
+from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
+from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
+from earlysign.schema.ES3.Binomial import Scoreboard as BinomialSchema
 
 
-class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol]):
+class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[Protocol]):
     r"""Controller for Asymptotic Confidence Sequences (Maharaj et al. 2023).
 
     This template implements the practical, variance-adaptive approaches described
@@ -75,7 +78,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol])
         Diff: 0.100, Boundary: 0.053, Status: stop_detected
     """
 
-    _protocol_class = AVIProtocol
+    _protocol_class = Protocol
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
@@ -88,7 +91,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol])
         max_n: int,
         variance: Optional[float] = None,
         sides: Literal["one", "two"] = "two",
-    ) -> AVIProtocol:
+    ) -> Protocol:
         """
         Design an Asymptotic CS optimized for a fixed budget.
 
@@ -127,11 +130,10 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol])
             variance=variance,
             sides=Sides(sides),
             max_n=max_n,
-            theta=0.0,
         )
-        task = AVITaskSpec(arms=arms, response_type=ResponseType.BINARY)
-        return AVIProtocol(
-            name="Asymptotic CS (Budget-Optimized)", task=task, method=method
+        task = TaskSpec(kind="AVI", arms=arms, response_type=ResponseType.BINARY)
+        return Protocol(
+            name="Asymptotic CS (Budget-based GAVI)", task=task, method=method
         )
 
     @classmethod
@@ -142,7 +144,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol])
         mde: float,
         variance: Optional[float] = None,
         sides: Literal["one", "two"] = "two",
-    ) -> AVIProtocol:
+    ) -> Protocol:
         """
         Design an Asymptotic CS optimized to detect a target effect.
 
@@ -175,17 +177,15 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol])
             variance: If provided, uses this fixed variance. If None, estimates from data.
             sides: "one" or "two" sided test.
         """
-        mde = mde or 0.0
         method = MSPRTMethodSpec(
             alpha=alpha,
             variance=variance,
             sides=Sides(sides),
             mde=mde,
-            tau=mde,
         )
-        task = AVITaskSpec(arms=arms, response_type=ResponseType.BINARY)
-        return AVIProtocol(
-            name="Asymptotic CS (Effect-Optimized)", task=task, method=method
+        task = TaskSpec(kind="AVI", arms=arms, response_type=ResponseType.BINARY)
+        return Protocol(
+            name="Asymptotic CS (Effect-based mSPRT)", task=task, method=method
         )
 
     def update(self, batch: List[Any]) -> None:
@@ -200,24 +200,22 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol])
                     sess.commit(item, trace=[])
 
         with Session(self.ledger) as sess:
-            protocol = sess.read(ProtocolProjector(AVIProtocol)).data
+            protocol = sess.read(ProtocolProjector(Protocol)).data
 
             # Determine response type to pick correct scoreboard
             # This logic mimics the standard AVI template but is simplified here
             response_type = getattr(protocol.task, "response_type", ResponseType.BINARY)
 
             if response_type == ResponseType.BINARY:
-                from earlysign.parts.trackers.binomial import (
-                    Scoreboard as BinomialScoreboard,
-                )
-
-                metrics = sess.read(cast(Any, BinomialScoreboard(identity="metrics")))
+                metrics = sess.read(BinomialScoreboard(identity="metrics"))
             else:
-                from earlysign.parts.trackers.continuous import (
-                    Scoreboard as ContinuousScoreboard,
+                # Cast to avoid mismatch when Session.read expects Projector[BinomialSchema]
+                metrics = sess.read(
+                    cast(
+                        Projector[BinomialSchema],
+                        ContinuousScoreboard(identity="metrics"),
+                    )
                 )
-
-                metrics = sess.read(cast(Any, ContinuousScoreboard(identity="metrics")))
 
             if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
                 raise NotImplementedError(
@@ -229,7 +227,7 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[AVIProtocol])
             engine: Union[GAVIEngine, mSPRTEngine]
             if protocol.method.kind == "GAVI":
                 engine = GAVIEngine(protocol)
-            elif protocol.method.kind == "MSPRT":
+            elif protocol.method.kind == "mSPRT":
                 engine = mSPRTEngine(protocol)
             else:
                 raise ValueError(f"Unknown AVI method kind: {protocol.method.kind}")

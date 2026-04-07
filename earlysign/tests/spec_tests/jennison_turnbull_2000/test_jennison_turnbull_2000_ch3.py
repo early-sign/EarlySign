@@ -6,7 +6,6 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from scipy import stats
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.model import (
     CanonicalJointModel,
     Config,
@@ -15,6 +14,9 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     AsymptoticSimulator,
 )
 from earlysign.builtin.group_sequential.design.solver import solve_boundaries
+from earlysign.builtin.group_sequential.schema import (
+    SampleSizeTimer,
+)
 from earlysign.builtin.group_sequential.shared.design_utils import get_info_times
 from earlysign.parts.stats.gaussian_process import CanonicalGaussianProcess
 from earlysign.parts.stats.t_distribution import (
@@ -329,11 +331,13 @@ def when_compute_design(design_params: Dict[str, Any]) -> Dict[str, Any]:
     schedule = protocol.method.stopping_policy.schedule
     info_times = get_info_times(schedule)
 
-    timer = cast(GST.SampleSizeTimer, protocol.method.stopping_policy.timer)
-    if isinstance(timer.max_sample_size, dict):
+    timer = protocol.method.stopping_policy.timer
+    if isinstance(timer, SampleSizeTimer):
         n_max = sum(timer.max_sample_size.values())
     else:
-        n_max = sum(timer.max_sample_size)
+        # For Fisher/Event timers, we just use the sum if it has max_sample_size (duck typing)
+        # or fallback. In these tests, it's usually SampleSizeTimer.
+        n_max = sum(cast(Any, timer).max_sample_size.values())
 
     # Verify policy boundaries using Library Factory
     policy = StoppingPolicyFactory.build_from_spec(protocol.method.stopping_policy)

@@ -29,11 +29,9 @@ from earlysign.builtin.group_sequential.engine.trigger_strategies import (
 from earlysign.builtin.group_sequential.reporting.projectors import (
     BacktestProjector,
     FinalProjector,
+    ProgressProjector,
 )
-from earlysign.builtin.group_sequential.schema import (
-    DecisionStatus,
-    GSTLookResult,
-)
+from earlysign.builtin.group_sequential.schema import DecisionStatus, LookResult
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
 from earlysign.framework.controller import (
@@ -47,7 +45,7 @@ from earlysign.framework.trace import Traced
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 
 
-class ClassicTaskSpec(GST.GSTTaskSpec):
+class ClassicTaskSpec(GST.TaskSpec):
     """Task specification for Classic GST."""
 
     pass
@@ -57,7 +55,7 @@ class ClassicProtocol(GST.Protocol, AutoNameMixin, RichDisplayMixin):
     """Protocol for Classic GST."""
 
     task: ClassicTaskSpec
-    method: GST.GSTMethodSpec
+    method: GST.MethodSpec
     name: str = Field(default="")
 
 
@@ -132,7 +130,11 @@ class ClassicGSTController(Controller[ClassicProtocol]):
                 # Explicit Proportions
                 calc_delta = pt - pc
                 response_type = GST.ResponseType.BINARY
-                eff_props = [pc, pt] if arms == 2 else [pt]
+                eff_props = (
+                    {control_arm_name: pc, treatment_arm_name: pt}
+                    if arms == 2
+                    else {treatment_arm_name: pt}
+                )
                 eff_size = GST.BinaryEffectSize(proportions=eff_props)
 
             case (float() as pc, None, float() as d, _):
@@ -140,7 +142,11 @@ class ClassicGSTController(Controller[ClassicProtocol]):
                 calc_delta = d
                 pt = pc + d
                 response_type = GST.ResponseType.BINARY
-                eff_props = [pc, pt] if arms == 2 else [pt]
+                eff_props = (
+                    {control_arm_name: pc, treatment_arm_name: pt}
+                    if arms == 2
+                    else {treatment_arm_name: pt}
+                )
                 eff_size = GST.BinaryEffectSize(proportions=eff_props)
 
             # --- Continuous Cases ---
@@ -162,7 +168,11 @@ class ClassicGSTController(Controller[ClassicProtocol]):
                         "For Continuous designs, must provide either `delta` or `mu_treatment`."
                     )
 
-                means = [mc, mt] if arms == 2 else [mt]
+                means = (
+                    {control_arm_name: mc, treatment_arm_name: mt}
+                    if arms == 2
+                    else {treatment_arm_name: mt}
+                )
                 eff_size = GST.ContinuousEffectSize(means=means, standard_deviation=s)
 
             case _:
@@ -224,26 +234,27 @@ class ClassicGSTController(Controller[ClassicProtocol]):
 
         return ClassicProtocol(task=task, method=method_spec)
 
-    def update(self, batch: Sequence[BaseModel]) -> Optional[GSTLookResult]:
+    def update(self, batch: Sequence[BaseModel]) -> None:
         """Updates the experiment with new data."""
-        # 1. Ingest Data
+        # Reuse standard logic: Commit -> (Read -> Engine -> Output)
         if batch:
             with Session(self.ledger) as sess:
                 for item in batch:
                     sess.commit(item, trace=[])
 
-        # 2. Analysis & Trigger check
         with Session(self.ledger) as sess:
             protocol = sess.read(ProtocolProjector(ClassicProtocol))
-
+            # The original code had a specific BinomialScoreboard import.
+            # Now we use the generic Scoreboard and rely on response_type.
+            metrics: Traced[Any]
             if protocol.data.task.response_type == GST.ResponseType.BINARY:
                 from earlysign.parts.trackers.binomial import (
                     Scoreboard as BinomialScoreboard,
                 )
 
-                metrics = sess.read(cast(Any, BinomialScoreboard(identity="metrics")))
+                metrics = sess.read(BinomialScoreboard(identity="metrics"))
             else:
-                metrics = sess.read(cast(Any, ContinuousScoreboard(identity="metrics")))
+                metrics = sess.read(ContinuousScoreboard(identity="metrics"))
 
             trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
             trigger = get_pending_look_trigger(
@@ -253,26 +264,27 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             )
 
             if trigger:
-                # GroupSequentialEngine is polymorphic and handles both types
-                engine = GroupSequentialEngine(protocol.data)
+                if protocol.data.task.response_type == GST.ResponseType.BINARY:
+                    engine = GroupSequentialEngine(protocol.data)
+                else:
+                    # GroupSequentialEngine is polymorphic and handles Continuous types
+                    engine = GroupSequentialEngine(protocol.data)
 
-                result = engine.run(
+                sess.call_and_commit(
+                    LookResult,
+                    engine.run,
+                    identity="interim_analyses",
                     metrics=metrics.data,
                     history=trajectory.data,
                     trigger=trigger.data,
                 )
-                sess.commit(result, identity="interim_analyses")
-                return result
-            return None
 
     def report_progress(self) -> Dict[str, Any]:
         """Returns the current progress report."""
         with Session(self.ledger) as sess:
-            from earlysign.builtin.group_sequential.reporting.projectors import (
-                ProgressProjector,
-            )
-
-            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+            # Reusing standard ProgressProjector
+            report = sess.read(ProgressProjector()).data
+            return report.model_dump(mode="json")
 
     def report_result(self) -> Dict[str, Any]:
         """Returns the final study report."""
@@ -386,7 +398,7 @@ Stopping Policy:
         # Extract details
         design_type = "Unknown"
         strategy = method.stopping_policy.strategy
-        if hasattr(strategy, "kind") and strategy.kind:
+        if hasattr(strategy, "kind"):
             design_type = strategy.kind.replace("_", " ").title()
 
         arms_desc = "N/A"

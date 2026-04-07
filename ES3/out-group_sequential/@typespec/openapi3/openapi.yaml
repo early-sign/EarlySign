@@ -1,0 +1,1646 @@
+openapi: 3.0.0
+info:
+  title: EarlySign Standard Schema (ES3)
+  version: 0.0.0
+tags: []
+paths: {}
+components:
+  schemas:
+    Base.ArmStructure:
+      anyOf:
+        - $ref: '#/components/schemas/Base.SingleArm'
+        - $ref: '#/components/schemas/Base.TwoArmComparison'
+        - $ref: '#/components/schemas/Base.MultiArmComparison'
+      description: Structural definition of study arms and their roles.
+    Base.ArmStructureBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+    Base.Log:
+      type: object
+      description: Base log/event model for metadata inclusion.
+    Base.Metadata:
+      type: object
+      properties:
+        ES3_version:
+          type: string
+          description: Schema version (e.g., "v1.0.0")
+          default: v1.0.0
+      description: Metadata for EarlySign events and records.
+    Base.MethodSpec:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          description: The kind of method (discriminator).
+      description: |-
+        Base class for Operational Method.
+        Concrete protocols should extend this (e.g., GST.MethodSpec).
+    Base.MultiArmComparison:
+      type: object
+      required:
+        - kind
+        - control_arm_name
+        - treatment_arm_names
+      properties:
+        kind:
+          type: string
+          enum:
+            - multi_arm
+        control_arm_name:
+          type: string
+        treatment_arm_names:
+          type: array
+          items:
+            type: string
+        allocation_ratios:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Mapping of treatment arm names to their ratio relative to control (n_treatment / n_control). If None, equal allocation is assumed.
+      allOf:
+        - $ref: '#/components/schemas/Base.ArmStructureBase'
+      description: A multi-arm comparison against a common control.
+    Base.Protocol:
+      type: object
+      required:
+        - name
+        - task
+        - method
+      properties:
+        name:
+          type: string
+          description: The name of the protocol.
+        task:
+          allOf:
+            - $ref: '#/components/schemas/Base.TaskSpec'
+          description: The problem definition.
+        method:
+          allOf:
+            - $ref: '#/components/schemas/Base.MethodSpec'
+          description: The operational method.
+      description: |-
+        The Root Protocol Container.
+        Defines the high-level structure of any EarlySign protocol.
+    Base.SingleArm:
+      type: object
+      required:
+        - kind
+        - arm_name
+      properties:
+        kind:
+          type: string
+          enum:
+            - single
+        arm_name:
+          type: string
+      allOf:
+        - $ref: '#/components/schemas/Base.ArmStructureBase'
+      description: A single-arm trial design.
+    Base.TaskSpec:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          description: The kind of task (discriminator).
+      description: |-
+        Base class for Problem Definition.
+        Concrete protocols should extend this (e.g., GST.TaskSpec).
+    Base.TwoArmComparison:
+      type: object
+      required:
+        - kind
+        - control_arm_name
+        - treatment_arm_name
+      properties:
+        kind:
+          type: string
+          enum:
+            - two_arm
+        control_arm_name:
+          type: string
+        treatment_arm_name:
+          type: string
+        allocation_ratios:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Mapping of treatment arm name to its ratio relative to control. Key must match treatment_arm_name.
+      allOf:
+        - $ref: '#/components/schemas/Base.ArmStructureBase'
+      description: A classic two-arm comparison (e.g., Treatment vs. Control).
+    Binomial.ArmMetrics:
+      type: object
+      required:
+        - total
+        - successes
+        - p_hat
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Total number of trials.
+        successes:
+          type: integer
+          format: int32
+          description: Total number of successes.
+        p_hat:
+          type: number
+          format: double
+          description: Success probability estimate (p-hat).
+      description: Standard statistics for a single arm (Bernoulli/Binomial).
+    Binomial.ArmStatus:
+      type: object
+      required:
+        - metrics
+        - is_active
+      properties:
+        metrics:
+          $ref: '#/components/schemas/Binomial.ArmMetrics'
+        is_active:
+          type: boolean
+          default: true
+      description: Latest status and metrics for a single arm.
+    Binomial.BinomialArmData:
+      type: object
+      required:
+        - total
+        - success
+        - arm
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Total number of trials.
+        success:
+          type: integer
+          format: int32
+          description: Total number of successes.
+        arm:
+          type: string
+          description: The name/id of the arm.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: 'Raw evidence: data for a single arm (Binomial).'
+    Binomial.Scoreboard:
+      type: object
+      required:
+        - arms
+      properties:
+        arms:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Binomial.ArmStatus'
+      description: Collective state of all arms (Scoreboard).
+    Continuous.ArmMetrics:
+      type: object
+      required:
+        - total
+        - mean
+        - variance
+      properties:
+        total:
+          type: integer
+          format: int32
+        mean:
+          type: number
+          format: double
+        variance:
+          type: number
+          format: double
+      description: Standard statistics for a single arm (Continuous).
+    Continuous.ArmStatus:
+      type: object
+      required:
+        - metrics
+        - is_active
+      properties:
+        metrics:
+          $ref: '#/components/schemas/Continuous.ArmMetrics'
+        is_active:
+          type: boolean
+          default: true
+      description: Latest status and metrics for a single arm.
+    Continuous.ContinuousArmData:
+      type: object
+      required:
+        - total
+        - sum_x
+        - sum_x2
+        - arm
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Sample size.
+        sum_x:
+          type: number
+          format: double
+          description: Sum of observations.
+        sum_x2:
+          type: number
+          format: double
+          description: Sum of squared observations.
+        arm:
+          type: string
+          description: Arm identifier.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: 'Raw evidence: aggregated data for a single arm (continuous).'
+    Continuous.Observation:
+      type: object
+      required:
+        - value
+        - arm
+      properties:
+        value:
+          type: number
+          format: double
+          description: The observed value.
+        arm:
+          type: string
+          description: Arm identifier.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: 'Raw evidence: data for a single arm (continuous observation).'
+    Continuous.Scoreboard:
+      type: object
+      required:
+        - arms
+      properties:
+        arms:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Continuous.ArmStatus'
+          description: Map of arm IDs to status.
+      description: Collective state of all arms (Scoreboard).
+    GST.AbsoluteDifference:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - absolute_difference
+          default: absolute_difference
+      allOf:
+        - $ref: '#/components/schemas/GST.EffectMeasureBase'
+    GST.AdaptationLog:
+      type: object
+      required:
+        - look
+        - conditional_power
+        - promising_zone_status
+        - promising_zone_recommendation
+        - original_sample_size
+      properties:
+        look:
+          type: integer
+          format: int32
+          description: Look index at which adaptation was calculated.
+        conditional_power:
+          type: number
+          format: double
+          description: Calculated conditional power based on current data.
+        promising_zone_status:
+          anyOf:
+            - $ref: '#/components/schemas/GST.PromisingZoneStatus'
+            - type: string
+          description: Status of the promising zone logic.
+        promising_zone_recommendation:
+          type: string
+          description: Human-readable recommendation or message.
+        original_sample_size:
+          type: integer
+          format: int32
+          description: Original planned max sample size.
+        recommended_sample_size:
+          type: integer
+          format: int32
+          description: Newly recommended max sample size (if SSR triggered).
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: Log entry for an adaptation event (e.g., SSR).
+    GST.AdaptationSnapshot:
+      type: object
+      required:
+        - z_t
+        - info_frac
+        - original_max_sample_size
+      properties:
+        z_t:
+          type: number
+          format: double
+          description: Observed Z-statistic at the time of adaptation.
+        info_frac:
+          type: number
+          format: double
+          description: Information fraction at the time of adaptation (t).
+        original_max_sample_size:
+          type: integer
+          format: int32
+          description: The maximum sample size before re-planning.
+        use_weighted_statistic:
+          type: boolean
+          description: Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error.
+          default: true
+      description: State captured during an adaptation event to preserve Type I error control.
+    GST.AdaptationSpec:
+      type: object
+      properties:
+        sample_size_reestimation:
+          $ref: '#/components/schemas/GST.SampleSizeReestimationSpec'
+    GST.AlphaBetaSpendingStrategy:
+      type: object
+      required:
+        - kind
+        - alpha_spending_fn
+        - beta_spending_fn
+        - alpha_budget
+        - beta_budget
+      properties:
+        kind:
+          type: string
+          enum:
+            - alpha_beta_spending
+          default: alpha_beta_spending
+        alpha_spending_fn:
+          $ref: '#/components/schemas/GST.SpendingFunction'
+        beta_spending_fn:
+          $ref: '#/components/schemas/GST.SpendingFunction'
+        alpha_budget:
+          type: number
+          format: double
+        beta_budget:
+          type: number
+          format: double
+        alpha_binding:
+          type: boolean
+          description: |-
+            Is the Alpha (Efficacy) boundary binding?
+            If True, crossing this boundary considers the trial stopped, providing slack for Beta calculations (fewer cases pass to the later stages for futility stopping, which reduces the false rejection cases, hence the boundary is less required to care the false rejection rate).
+          default: true
+        beta_binding:
+          type: boolean
+          description: |-
+            Is the Beta (Futility) boundary binding?
+            If True, crossing this boundary considers the trial stopped, providing slack for Alpha calculations (fewer cases pass to the later stages for efficacy stopping, which reduces the false rejection cases, hence the boundary is less required to care the false rejection rate).
+          default: false
+      allOf:
+        - $ref: '#/components/schemas/GST.SpendingFunctionStrategyBase'
+      description: Combined Alpha-Beta Spending Strategy.
+    GST.AlphaSpendingStrategy:
+      type: object
+      required:
+        - kind
+        - spending_fn
+        - budget
+        - sided
+      properties:
+        kind:
+          type: string
+          enum:
+            - alpha_spending
+          default: alpha_spending
+        spending_fn:
+          $ref: '#/components/schemas/GST.SpendingFunction'
+        budget:
+          type: number
+          format: double
+        sided:
+          type: string
+          enum:
+            - one
+            - two
+          default: two
+      allOf:
+        - $ref: '#/components/schemas/GST.SpendingFunctionStrategyBase'
+      description: Alpha (Efficacy) Spending Strategy.
+    GST.Analysis:
+      type: object
+      required:
+        - look
+        - statistic
+        - info_frac
+        - decision
+      properties:
+        trigger:
+          $ref: '#/components/schemas/GST.Trigger'
+        look:
+          type: integer
+          format: int32
+          description: Results
+        statistic:
+          type: number
+          format: double
+        info_frac:
+          type: number
+          format: double
+        decision:
+          anyOf:
+            - $ref: '#/components/schemas/GST.DecisionStatus'
+            - type: string
+        efficacy_boundary:
+          type: number
+          format: double
+        futility_boundary:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: |-
+        Structural Record of a GST Analysis Execution.
+        This captures the Context (Trigger), Metadata, and factual Result.
+    GST.BetaSpendingStrategy:
+      type: object
+      required:
+        - kind
+        - spending_fn
+        - budget
+      properties:
+        kind:
+          type: string
+          enum:
+            - beta_spending
+          default: beta_spending
+        spending_fn:
+          $ref: '#/components/schemas/GST.SpendingFunction'
+        budget:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.SpendingFunctionStrategyBase'
+      description: Beta (Futility) Spending Strategy.
+    GST.BinaryEffectSize:
+      type: object
+      required:
+        - type
+        - proportions
+      properties:
+        type:
+          type: string
+          enum:
+            - binary
+        proportions:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Arm name -> Expected rate
+      allOf:
+        - $ref: '#/components/schemas/GST.EffectSizeSpecBase'
+    GST.BinomialExactStatistic:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - binomial_exact
+          default: binomial_exact
+      allOf:
+        - $ref: '#/components/schemas/GST.TestStatisticSpec'
+    GST.BoundaryFunctionStrategyBase:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/GST.DecisionStrategyBase'
+      description: Abstract Base for Shape-Based Boundary Strategies.
+    GST.CanonicalGaussianModel:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - canonical_gaussian
+          default: canonical_gaussian
+      allOf:
+        - $ref: '#/components/schemas/GST.StatisticalModel'
+    GST.ContinuousEffectSize:
+      type: object
+      required:
+        - type
+        - means
+        - standard_deviation
+      properties:
+        type:
+          type: string
+          enum:
+            - continuous
+        means:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Arm name -> Expected mean
+        standard_deviation:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.EffectSizeSpecBase'
+    GST.Decision:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          anyOf:
+            - $ref: '#/components/schemas/GST.DecisionStatus'
+            - type: string
+        message:
+          type: string
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: Formalized Decision Event.
+    GST.DecisionStatus:
+      type: string
+      enum:
+        - continue
+        - stop_efficacy
+        - stop_futility
+        - stop_plan_end_reached
+        - stop
+      description: Status of an ongoing or completed Group Sequential Test.
+    GST.DecisionStrategy:
+      anyOf:
+        - $ref: '#/components/schemas/GST.AlphaSpendingStrategy'
+        - $ref: '#/components/schemas/GST.BetaSpendingStrategy'
+        - $ref: '#/components/schemas/GST.AlphaBetaSpendingStrategy'
+        - $ref: '#/components/schemas/GST.WhiteheadStrategy'
+        - $ref: '#/components/schemas/GST.OBrienFlemingStrategy'
+        - $ref: '#/components/schemas/GST.PocockStrategy'
+        - $ref: '#/components/schemas/GST.WangTsiatisStrategy'
+      description: Discriminated Union for Decision Strategies (The "Rule").
+    GST.DecisionStrategyBase:
+      type: object
+      required:
+        - kind
+        - statistical_model
+      properties:
+        kind:
+          type: string
+        statistical_model:
+          $ref: '#/components/schemas/GST.StatisticalModel'
+      description: |-
+        Abstract Base for Decision Strategy.
+        Holds the Inferential Model (Assumption).
+    GST.DueLookTrigger:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - due_look
+        tolerance:
+          type: number
+          format: double
+          description: Information time tolerance (e.g. 0.01 for 1% buffer).
+          default: 0
+      allOf:
+        - $ref: '#/components/schemas/GST.TriggerStrategySpecBase'
+      description: Triggers a look when a planned look is reached (due) and hasn't been analyzed.
+    GST.EffectMeasure:
+      anyOf:
+        - $ref: '#/components/schemas/GST.AbsoluteDifference'
+        - $ref: '#/components/schemas/GST.OddsRatio'
+        - $ref: '#/components/schemas/GST.RelativeRisk'
+        - $ref: '#/components/schemas/GST.RelativeImprovement'
+    GST.EffectMeasureBase:
+      type: object
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+        value:
+          type: number
+          format: double
+      description: Effect Measure for Binomial comparisons.
+    GST.EffectSizeSpecBase:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+      description: |-
+        Numerical assumptions for the Alternative Hypothesis (H1).
+        Note: This defines the "ball position" (simulation target), separate from the "goal posts" (Hypothesis Margins).
+    GST.EffectSizeUnion:
+      anyOf:
+        - $ref: '#/components/schemas/GST.BinaryEffectSize'
+        - $ref: '#/components/schemas/GST.ContinuousEffectSize'
+        - $ref: '#/components/schemas/GST.SurvivalEffectSize'
+    GST.EfficacyRequirement:
+      type: object
+      required:
+        - alpha
+      properties:
+        alpha:
+          type: number
+          format: double
+        binding:
+          type: boolean
+          description: 'Binding (defaults to true: usually true for efficacy).'
+          default: true
+      description: |-
+        Efficacy requirement for group sequential design.
+        Specifies the Type I error rate (alpha) to control and binding behavior.
+    GST.EqualityHypothesis:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - equality
+      allOf:
+        - $ref: '#/components/schemas/GST.HypothesisParametersBase'
+    GST.EquidistantSchedule:
+      type: object
+      required:
+        - kind
+        - n_looks
+      properties:
+        kind:
+          type: string
+          enum:
+            - equidistant
+          default: equidistant
+        n_looks:
+          type: integer
+          format: int32
+      allOf:
+        - $ref: '#/components/schemas/GST.ScheduleBase'
+    GST.EquivalenceHypothesis:
+      type: object
+      required:
+        - kind
+        - lower_margin
+        - upper_margin
+      properties:
+        kind:
+          type: string
+          enum:
+            - equivalence
+        lower_margin:
+          type: number
+          format: double
+        upper_margin:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.HypothesisParametersBase'
+    GST.EventCountTimer:
+      type: object
+      required:
+        - kind
+        - max_events
+      properties:
+        kind:
+          type: string
+          enum:
+            - event_count
+          default: event_count
+        max_events:
+          type: integer
+          format: int32
+      allOf:
+        - $ref: '#/components/schemas/GST.InformationTimerBase'
+    GST.ExactBinomialModel:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - exact_binomial
+          default: exact_binomial
+      allOf:
+        - $ref: '#/components/schemas/GST.StatisticalModel'
+    GST.FisherInformationTimer:
+      type: object
+      required:
+        - kind
+        - max_information
+      properties:
+        kind:
+          type: string
+          enum:
+            - fisher_information
+          default: fisher_information
+        max_information:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.InformationTimerBase'
+    GST.FixedSchedule:
+      type: object
+      required:
+        - kind
+        - analyses
+      properties:
+        kind:
+          type: string
+          enum:
+            - fixed
+          default: fixed
+        analyses:
+          type: array
+          items:
+            type: number
+            format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.ScheduleBase'
+    GST.FutilityRequirement:
+      type: object
+      required:
+        - power
+      properties:
+        power:
+          type: number
+          format: double
+          description: Target Power (1 - Beta)
+        binding:
+          type: boolean
+          description: 'Non-binding (defaults to false: regulatory best practice)'
+          default: false
+      description: |-
+        Futility requirement for group sequential design.
+        Specifies the target power (1 - beta) and binding behavior.
+    GST.HypothesisParameters:
+      anyOf:
+        - $ref: '#/components/schemas/GST.EqualityHypothesis'
+        - $ref: '#/components/schemas/GST.SuperiorityHypothesis'
+        - $ref: '#/components/schemas/GST.NonInferiorityHypothesis'
+        - $ref: '#/components/schemas/GST.EquivalenceHypothesis'
+    GST.HypothesisParametersBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+      description: Logical Margins and Test Objectives.
+    GST.HypothesisSpec:
+      type: object
+      required:
+        - h_null_description
+        - h_alt_description
+        - test_logic
+        - target_effect
+      properties:
+        h_null_description:
+          type: string
+        h_alt_description:
+          type: string
+        test_logic:
+          $ref: '#/components/schemas/GST.HypothesisParameters'
+        target_effect:
+          $ref: '#/components/schemas/GST.EffectSizeUnion'
+    GST.InformationTimer:
+      anyOf:
+        - $ref: '#/components/schemas/GST.SampleSizeTimer'
+        - $ref: '#/components/schemas/GST.FisherInformationTimer'
+        - $ref: '#/components/schemas/GST.EventCountTimer'
+      description: Discriminated Union for Timer (The "Clock").
+    GST.InformationTimerBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+    GST.KnownVariance:
+      type: object
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - known
+          default: known
+        value:
+          type: number
+          format: double
+      description: Shared Known Variance model.
+    GST.LookResult:
+      type: object
+      required:
+        - sample_n
+        - info_frac
+        - z_stat
+        - is_efficacy_crossed
+        - is_futility_crossed
+        - status
+      properties:
+        look:
+          type: integer
+          format: int32
+          description: Look index (1-indexed).
+        trigger:
+          allOf:
+            - $ref: '#/components/schemas/GST.Trigger'
+          description: The trigger for this look.
+        sample_n:
+          type: integer
+          format: int32
+          description: Current cumulative sample size.
+        info_frac:
+          type: number
+          format: double
+          description: Current fraction of information accrued.
+        z_stat:
+          type: number
+          format: double
+          description: Current calculated Z-statistic.
+        z_stats:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Dictionary of Z-statistics per arm (for MAMS).
+        efficacy_boundary:
+          type: number
+          format: double
+          description: The calculated efficacy boundary at this look.
+        is_efficacy_crossed:
+          type: boolean
+          description: Whether the efficacy boundary was crossed.
+        futility_boundary:
+          type: number
+          format: double
+          description: The calculated futility boundary at this look.
+        is_futility_crossed:
+          type: boolean
+          description: Whether the futility boundary was crossed.
+        alpha_spent:
+          type: number
+          format: double
+          description: Cumulative Alpha spent up to this look.
+        beta_spent:
+          type: number
+          format: double
+          description: Cumulative Beta spent up to this look.
+        status:
+          anyOf:
+            - $ref: '#/components/schemas/GST.DecisionStatus'
+            - type: string
+          description: The decision status resulting from this look.
+      description: Result of a statistical test/evaluation for the study at a look.
+    GST.ManualTrigger:
+      type: object
+      required:
+        - kind
+        - reason
+      properties:
+        kind:
+          type: string
+          enum:
+            - manual
+        reason:
+          type: string
+      allOf:
+        - $ref: '#/components/schemas/GST.Trigger'
+      description: Triggered manually by a human operator.
+    GST.MethodSpec:
+      type: object
+      required:
+        - kind
+        - stopping_policy
+      properties:
+        kind:
+          type: string
+          enum:
+            - group_sequential
+          description: The kind of method (discriminator).
+          default: group_sequential
+        stopping_policy:
+          allOf:
+            - $ref: '#/components/schemas/GST.StoppingPolicySpec'
+          description: Stopping Policy (discriminated union).
+        adaptation:
+          allOf:
+            - $ref: '#/components/schemas/GST.AdaptationSpec'
+          description: Technical specification for interim adaptation (SSR, etc.).
+        adaptation_snapshot:
+          allOf:
+            - $ref: '#/components/schemas/GST.AdaptationSnapshot'
+          description: Snapshot of internal state during adaptation, used for Weighted Z-score correction.
+      allOf:
+        - $ref: '#/components/schemas/Base.MethodSpec'
+      description: GST-Specific Method Definition (Univariate).
+    GST.MultivariateMethodSpec:
+      type: object
+      required:
+        - kind
+        - multiplicity_adjustment
+      properties:
+        kind:
+          type: string
+          enum:
+            - group_sequential_multivariate
+          default: group_sequential_multivariate
+        multiplicity_adjustment:
+          type: string
+          enum:
+            - none
+            - bonferroni
+            - holm
+            - hochberg
+            - gatekeeping
+        correlation_matrix:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+      allOf:
+        - $ref: '#/components/schemas/Base.MethodSpec'
+    GST.MultivariateProtocol:
+      type: object
+      required:
+        - task
+        - method
+      properties:
+        task:
+          $ref: '#/components/schemas/GST.MultivariateTaskSpec'
+        method:
+          $ref: '#/components/schemas/GST.MultivariateMethodSpec'
+      allOf:
+        - $ref: '#/components/schemas/Base.Protocol'
+    GST.MultivariateTaskSpec:
+      type: object
+      required:
+        - kind
+        - sub_tasks
+        - arms
+        - hypotheses
+      properties:
+        kind:
+          type: string
+          enum:
+            - group_sequential_multivariate
+          default: group_sequential_multivariate
+        sub_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/GST.TaskSpec'
+          description: Reusing the Standard GST TaskSpec
+        arms:
+          type: array
+          items:
+            type: string
+          description: Global parametersStudy-wide arms (must be consistent with sub_tasks)
+        hypotheses:
+          allOf:
+            - $ref: '#/components/schemas/GST.HypothesisSpec'
+          description: |-
+            Global Hypothesis (e.g., "At least one effective" or "Global Null").
+            Typically represents the Union-Intersection or Intersection-Union test.
+        alpha:
+          type: number
+          format: double
+          description: Global FWER
+        beta:
+          type: number
+          format: double
+          description: Global Power
+      allOf:
+        - $ref: '#/components/schemas/Base.TaskSpec'
+      description: |-
+        Multivariate Task (Multiple Endpoints).
+        Composed of multiple Univariate GST Tasks.
+    GST.NonInferiorityHypothesis:
+      type: object
+      required:
+        - kind
+        - non_inferiority_margin
+      properties:
+        kind:
+          type: string
+          enum:
+            - non_inferiority
+        non_inferiority_margin:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.HypothesisParametersBase'
+    GST.OBrienFlemingStrategy:
+      type: object
+      required:
+        - kind
+        - alpha
+        - sided
+      properties:
+        kind:
+          type: string
+          enum:
+            - obrien_fleming
+          default: obrien_fleming
+        alpha:
+          type: number
+          format: double
+        sided:
+          type: string
+          enum:
+            - one
+            - two
+          default: two
+      allOf:
+        - $ref: '#/components/schemas/GST.BoundaryFunctionStrategyBase'
+      description: Classic O'Brien-Fleming Strategy.
+    GST.OddsRatio:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - odds_ratio
+          default: odds_ratio
+      allOf:
+        - $ref: '#/components/schemas/GST.EffectMeasureBase'
+    GST.OneArmBinomialZ:
+      type: object
+      required:
+        - kind
+        - information_unit
+        - variance_source
+      properties:
+        kind:
+          type: string
+          enum:
+            - one_arm_binomial_z
+          default: one_arm_binomial_z
+        information_unit:
+          type: string
+          enum:
+            - fisher_information
+          default: fisher_information
+        variance_source:
+          type: string
+          enum:
+            - sample
+            - null_hypothesis
+          description: |-
+            Variance source.
+            - "sample": Uses observed estimate (Wald-like).
+            - "null_hypothesis": Uses null parameter (Score-like).
+          default: null_hypothesis
+      allOf:
+        - $ref: '#/components/schemas/GST.TestStatisticSpec'
+      description: One-Arm Binomial Z-Statistic.
+    GST.OneArmContinuousVariance:
+      anyOf:
+        - $ref: '#/components/schemas/GST.KnownVariance'
+        - $ref: '#/components/schemas/GST.OneArmEstimatedVariance'
+    GST.OneArmContinuousZ:
+      type: object
+      required:
+        - kind
+        - information_unit
+        - variance
+      properties:
+        kind:
+          type: string
+          enum:
+            - one_arm_continuous_z
+          default: one_arm_continuous_z
+        information_unit:
+          type: string
+          enum:
+            - fisher_information
+          default: fisher_information
+        variance:
+          $ref: '#/components/schemas/GST.OneArmContinuousVariance'
+      allOf:
+        - $ref: '#/components/schemas/GST.TestStatisticSpec'
+      description: One-Arm Continuous Z-Statistic.
+    GST.OneArmEstimatedVariance:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - estimated
+          default: estimated
+      description: One-Arm Variance options.
+    GST.PocockStrategy:
+      type: object
+      required:
+        - kind
+        - alpha
+        - sided
+      properties:
+        kind:
+          type: string
+          enum:
+            - pocock
+          default: pocock
+        alpha:
+          type: number
+          format: double
+        sided:
+          type: string
+          enum:
+            - one
+            - two
+          default: two
+      allOf:
+        - $ref: '#/components/schemas/GST.BoundaryFunctionStrategyBase'
+      description: Pocock Strategy.
+    GST.PromisingZoneSpec:
+      type: object
+      required:
+        - conditional_power_threshold_min
+        - conditional_power_threshold_max
+        - target_conditional_power
+      properties:
+        conditional_power_threshold_min:
+          type: number
+          format: double
+        conditional_power_threshold_max:
+          type: number
+          format: double
+        target_conditional_power:
+          type: number
+          format: double
+    GST.PromisingZoneStatus:
+      type: string
+      enum:
+        - futility
+        - efficacy
+        - promising
+        - continue
+    GST.Protocol:
+      type: object
+      required:
+        - task
+        - method
+      properties:
+        task:
+          allOf:
+            - $ref: '#/components/schemas/GST.TaskSpec'
+          description: The GST task specification.
+        method:
+          allOf:
+            - $ref: '#/components/schemas/GST.MethodSpec'
+          description: The GST method specification.
+      allOf:
+        - $ref: '#/components/schemas/Base.Protocol'
+      description: |-
+        GST-Specific Protocol Container.
+        Enforces that task and method belong to the GST domain.
+    GST.RelativeImprovement:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - relative_improvement
+          default: relative_improvement
+      allOf:
+        - $ref: '#/components/schemas/GST.EffectMeasureBase'
+    GST.RelativeRisk:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - relative_risk
+          default: relative_risk
+      allOf:
+        - $ref: '#/components/schemas/GST.EffectMeasureBase'
+    GST.SampleSizeReestimationSpec:
+      type: object
+      required:
+        - type
+        - method
+        - target_power
+        - n_range
+      properties:
+        type:
+          type: string
+          enum:
+            - sample_size_reestimation
+        method:
+          type: string
+          enum:
+            - conditional_power
+            - predictive_power
+        target_power:
+          type: number
+          format: double
+        use_weighted_statistic:
+          type: boolean
+          description: Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error.
+          default: true
+        n_range:
+          type: array
+          items: {}
+        promising_zone:
+          allOf:
+            - $ref: '#/components/schemas/GST.PromisingZoneSpec'
+          description: Promising zone configuration.
+    GST.SampleSizeTimer:
+      type: object
+      required:
+        - kind
+        - unit
+        - max_sample_size
+      properties:
+        kind:
+          type: string
+          enum:
+            - sample_size
+          default: sample_size
+        unit:
+          type: string
+          enum:
+            - individuals
+            - effective_size
+          description: |-
+            "individuals": Count individuals (e.g. n1 + n2).
+            "effective_size": Effective sample size (e.g. 4*n1*n2/(n1+n2)).
+          default: individuals
+        max_sample_size:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+          description: The maximum sample size (per-arm).
+      allOf:
+        - $ref: '#/components/schemas/GST.InformationTimerBase'
+    GST.ScheduleBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+    GST.ScheduleSpec:
+      anyOf:
+        - $ref: '#/components/schemas/GST.FixedSchedule'
+        - $ref: '#/components/schemas/GST.EquidistantSchedule'
+      description: Discriminated Union for Schedule (The "Checkpoints").
+    GST.ScheduleTrigger:
+      type: object
+      required:
+        - kind
+        - index
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - schedule
+        index:
+          type: integer
+          format: int32
+        value:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.Trigger'
+      description: Triggered by planned protocol milestones or schedules.
+    GST.SpendingFunction:
+      type: object
+      required:
+        - family
+      properties:
+        family:
+          anyOf:
+            - $ref: '#/components/schemas/GST.SpendingFunctionType'
+            - type: string
+        params:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: 'e.g. { "rho": 2.0, "gamma": -4.0 }'
+    GST.SpendingFunctionStrategyBase:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/GST.DecisionStrategyBase'
+      description: Abstract Base for Spending-Function Strategies.
+    GST.SpendingFunctionType:
+      type: string
+      enum:
+        - obrien_fleming
+        - pocock
+        - power_family
+        - hwang_shih_decani
+      description: Available spending function types for group sequential design.
+    GST.StatisticalModel:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+      description: 'The "Model": Statistical Assumptions for Inference.'
+    GST.StoppingPolicySpec:
+      type: object
+      required:
+        - statistic
+        - strategy
+        - timer
+        - schedule
+      properties:
+        statistic:
+          $ref: '#/components/schemas/GST.TestStatisticSpec'
+        strategy:
+          $ref: '#/components/schemas/GST.DecisionStrategy'
+        timer:
+          $ref: '#/components/schemas/GST.InformationTimer'
+        schedule:
+          $ref: '#/components/schemas/GST.ScheduleSpec'
+        trigger_strategy:
+          allOf:
+            - $ref: '#/components/schemas/GST.TriggerStrategySpec'
+          description: |-
+            Strategy for triggering interim analyses.
+            Defaults to "due_look" (trigger when a milestone is reached).
+          default:
+            kind: due_look
+            tolerance: 0
+      description: Composite Policy Container.
+    GST.SuperiorityHypothesis:
+      type: object
+      required:
+        - kind
+        - superiority_margin
+      properties:
+        kind:
+          type: string
+          enum:
+            - superiority
+        superiority_margin:
+          type: number
+          format: double
+          default: 0
+      allOf:
+        - $ref: '#/components/schemas/GST.HypothesisParametersBase'
+    GST.SurvivalEffectSize:
+      type: object
+      required:
+        - type
+        - hazard_ratios
+      properties:
+        type:
+          type: string
+          enum:
+            - time_to_event
+        hazard_ratios:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Arm name -> Hazard Ratio (relative to control)
+        median_survival_times:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: 'Optional: for sample size calc'
+        event_rate:
+          type: number
+          format: double
+          description: Overall event rate if needed
+      allOf:
+        - $ref: '#/components/schemas/GST.EffectSizeSpecBase'
+    GST.TProcessModel:
+      type: object
+      required:
+        - kind
+        - degrees_of_freedom_method
+      properties:
+        kind:
+          type: string
+          enum:
+            - t_process
+          default: t_process
+        degrees_of_freedom_method:
+          type: string
+          description: Degrees of Freedom method (e.g., "satterthwaite")
+      allOf:
+        - $ref: '#/components/schemas/GST.StatisticalModel'
+    GST.TaskSpec:
+      type: object
+      required:
+        - kind
+        - arms
+        - response_type
+        - hypotheses
+      properties:
+        kind:
+          type: string
+          enum:
+            - group_sequential
+          default: group_sequential
+        arms:
+          $ref: '#/components/schemas/Base.ArmStructure'
+        response_type:
+          type: string
+          enum:
+            - binary
+            - continuous
+            - time_to_event
+        hypotheses:
+          $ref: '#/components/schemas/GST.HypothesisSpec'
+        efficacy:
+          allOf:
+            - $ref: '#/components/schemas/GST.EfficacyRequirement'
+          description: |-
+            Design Requirements (Designer Input)
+            Presence implies the intent to stop for this reason.
+        futility:
+          $ref: '#/components/schemas/GST.FutilityRequirement'
+      allOf:
+        - $ref: '#/components/schemas/Base.TaskSpec'
+      description: GST-Specific Task Definition (Univariate).
+    GST.TestStatisticSpec:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+      description: 'The "Statistic": Operational Definition of the Test Statistic.'
+    GST.Trigger:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+      description: Defines the reason / cause for an operational event (e.g., Analysis Execution).
+    GST.TriggerStrategySpec:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/GST.DueLookTrigger'
+      description: Discriminated Union for Trigger Strategies.
+    GST.TriggerStrategySpecBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+    GST.TwoArmBinomialZ:
+      type: object
+      required:
+        - kind
+        - information_unit
+        - variance_estimation
+      properties:
+        kind:
+          type: string
+          enum:
+            - two_arm_binomial_z
+          default: two_arm_binomial_z
+        information_unit:
+          type: string
+          enum:
+            - fisher_information
+          default: fisher_information
+        variance_estimation:
+          type: string
+          enum:
+            - pooled
+            - unpooled
+          description: |-
+            Variance estimation method.
+            - "unpooled": Wald Z (Observed).
+            - "pooled": Score Z (Null/Common).
+          default: pooled
+      allOf:
+        - $ref: '#/components/schemas/GST.TestStatisticSpec'
+      description: |-
+        Two-Arm Binomial Z-Statistic.
+        Covers both Wald Z (unpooled) and Score Z (pooled).
+    GST.TwoArmContinuousVariance:
+      anyOf:
+        - $ref: '#/components/schemas/GST.KnownVariance'
+        - $ref: '#/components/schemas/GST.TwoArmEstimatedVariance'
+    GST.TwoArmContinuousZ:
+      type: object
+      required:
+        - kind
+        - information_unit
+        - variance
+      properties:
+        kind:
+          type: string
+          enum:
+            - two_arm_continuous_z
+          default: two_arm_continuous_z
+        information_unit:
+          type: string
+          enum:
+            - fisher_information
+          default: fisher_information
+        variance:
+          $ref: '#/components/schemas/GST.TwoArmContinuousVariance'
+      allOf:
+        - $ref: '#/components/schemas/GST.TestStatisticSpec'
+      description: Two-Arm Continuous Z-Statistic.
+    GST.TwoArmEstimatedVariance:
+      type: object
+      required:
+        - kind
+        - method
+      properties:
+        kind:
+          type: string
+          enum:
+            - estimated
+          default: estimated
+        method:
+          type: string
+          enum:
+            - pooled
+            - unpooled
+          description: |-
+            - "pooled": Equal variance assumption.
+            - "unpooled": Unequal variance (Welch).
+          default: pooled
+      description: Two-Arm Variance options.
+    GST.WangTsiatisStrategy:
+      type: object
+      required:
+        - kind
+        - alpha
+        - delta
+        - sided
+      properties:
+        kind:
+          type: string
+          enum:
+            - wang_tsiatis
+          default: wang_tsiatis
+        alpha:
+          type: number
+          format: double
+        delta:
+          type: number
+          format: double
+        sided:
+          type: string
+          enum:
+            - one
+            - two
+          default: two
+      allOf:
+        - $ref: '#/components/schemas/GST.BoundaryFunctionStrategyBase'
+      description: Wang-Tsiatis Power Family Strategy.
+    GST.WhiteheadStrategy:
+      type: object
+      required:
+        - kind
+        - alpha
+        - beta
+      properties:
+        kind:
+          type: string
+          enum:
+            - whitehead
+          default: whitehead
+        alpha:
+          type: number
+          format: double
+        beta:
+          type: number
+          format: double
+      allOf:
+        - $ref: '#/components/schemas/GST.BoundaryFunctionStrategyBase'
+      description: Whitehead's Triangular Test Strategy.

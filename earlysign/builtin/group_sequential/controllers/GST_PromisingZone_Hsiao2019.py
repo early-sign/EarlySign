@@ -90,6 +90,7 @@ from earlysign.builtin.group_sequential.engine.sample_size_reestimation import (
 from earlysign.builtin.group_sequential.reporting.projectors import (
     BacktestProjector,
     FinalProjector,
+    ProgressProjector,
 )
 from earlysign.builtin.group_sequential.reporting.visualization import (
     plot_gst_summary,
@@ -97,24 +98,24 @@ from earlysign.builtin.group_sequential.reporting.visualization import (
 from earlysign.builtin.group_sequential.schema import (
     AdaptationLog,
     DecisionStatus,
-    GSTMethodSpec,
-    GSTProtocol,
-    GSTTaskSpec,
+    LookResult,
+    Method,
     PromisingZoneSpec,
     PromisingZoneStatus,
+    SampleSizeReestimationSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
-from earlysign.framework.controller import Controller, RichDisplayMixin
-from earlysign.framework.projector import ProtocolProjector
+from earlysign.framework.controller import Controller
+from earlysign.framework.projector import ProjectionResult, ProtocolProjector
 from earlysign.framework.session import Session
 
 
-class Hsiao2019Protocol(GSTProtocol, RichDisplayMixin):
+class Hsiao2019Protocol(BaseModel):
     """Protocol for Optimal Promising Zone Design (Hsiao et al 2019)."""
 
-    task: GSTTaskSpec
-    method: GSTMethodSpec
+    task: GST.TaskSpec
+    method: GST.MethodSpec
 
     # Specific configuration for Hsiao methodology
     conditional_power_min: float = 0.5
@@ -149,7 +150,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         looks: int,
         alpha: float,
         power: float,
-        task: Optional[GST.GSTTaskSpec] = None,
+        task: Optional[GST.TaskSpec] = None,
         # Promising Zone Parameters
         conditional_power_min: float = 0.5,
         conditional_power_max: float = 0.9,
@@ -190,7 +191,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
                 )
 
             delta = p_treatment - p_control
-            task = GST.GSTTaskSpec(
+            task = GST.TaskSpec(
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name=control_arm_name,
                     treatment_arm_name=treatment_arm_name,
@@ -203,7 +204,10 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
                     h_alt_description=f"diff > {delta}",
                     test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
                     target_effect=GST.BinaryEffectSize(
-                        proportions=[p_control, p_treatment]
+                        proportions={
+                            control_arm_name: p_control,
+                            treatment_arm_name: p_treatment,
+                        }
                     ),
                 ),
             )
@@ -232,8 +236,8 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
             target_conditional_power=target_conditional_power,
         )
 
-        ssr_spec = GST.SampleSizeReestimationSpec(
-            method=GST.Method.CONDITIONAL_POWER,
+        ssr_spec = SampleSizeReestimationSpec(
+            method=Method.CONDITIONAL_POWER,
             promising_zone=promising_spec,
             use_weighted_statistic=False,
             n_range=[0, 1000000],
@@ -248,7 +252,6 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
 
         # Create Protocol
         protocol = Hsiao2019Protocol(
-            name="Optimal Promising Zone Design (Hsiao 2019)",
             task=task,
             method=method_spec,
             conditional_power_min=conditional_power_min,
@@ -262,9 +265,6 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         """
         Run update cycle with Adaptation using Hsiao et al (2019) logic.
         """
-        from earlysign.builtin.group_sequential.engine.trigger_strategies import (
-            get_pending_look_trigger,
-        )
         from earlysign.parts.trackers.binomial import Scoreboard
 
         # 1. Ingest
@@ -285,43 +285,37 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
             # 2. Analysis
             protocol_traced = sess.read(ProtocolProjector(Hsiao2019Protocol))
             current_protocol = protocol_traced.data
-
-            metrics = sess.read(Scoreboard(identity="metrics"))
-            trajectory = sess.read(InterimAnalyses(identity="interim_analyses"))
+            # The original line was: metrics = sess.read(Scoreboard(identity="metrics"))
+            # The instruction snippet seems to be trying to introduce a scoreboard_projector and then cast its result.
+            # Assuming the intent is to cast the result of Scoreboard(identity="metrics")
+            metrics_raw = sess.read(Scoreboard(identity="metrics"))
+            metrics: ProjectionResult[Scoreboard] = cast(
+                ProjectionResult[Scoreboard], metrics_raw
+            )
+            history = sess.read(InterimAnalyses(identity="interim_analyses"))
 
             # 3. Standard GSD Engine
-            from earlysign.builtin.group_sequential.schema import (
-                GSTMethodSpec,
-                GSTProtocol,
-                GSTTaskSpec,
-            )
-
-            gst_protocol = GSTProtocol(
-                name="Hsiao-Runtime",
+            # This engine will respect use_weighted_statistic=False if snapshot exists
+            gst_protocol = GST.Protocol(
+                name="Hsiao2019-Runtime",
                 task=current_protocol.task,
                 method=current_protocol.method,
             )
             engine = GroupSequentialEngine(gst_protocol)
 
-            trigger_info = get_pending_look_trigger(
-                protocol=protocol_traced,
+            sess.call_and_commit(
+                LookResult,
+                engine.run,
                 metrics=metrics,
-                history=trajectory,
+                history=history,
             )
 
-            look_result = None
-            if trigger_info:
-                result = engine.run(
-                    metrics=metrics.data,
-                    history=trajectory.data,
-                    trigger=trigger_info.data,
-                )
-                sess.commit(result, identity="interim_analyses")
-                look_result = result
-
             # 4. Adaptation Logic
-            if not look_result:
+            trajectory = sess.read(InterimAnalyses(identity="interim_analyses")).data
+            if not trajectory:
                 return
+
+            look_result = trajectory[-1][1]
 
             if look_result.status == DecisionStatus.CONTINUE:
                 # Use Hsiao parameters from protocol
@@ -351,9 +345,8 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
                     )
 
                     updated_hsiao_protocol = Hsiao2019Protocol(
-                        name="Hsiao 2019 Protocol",
-                        task=cast(GSTTaskSpec, new_protocol.task),
-                        method=cast(GSTMethodSpec, new_protocol.method),
+                        task=new_protocol.task,
+                        method=new_protocol.method,
                         conditional_power_min=cp_min,
                         conditional_power_max=cp_max,
                         target_conditional_power=target_conditional_power,
@@ -362,13 +355,24 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
                     sess.commit(updated_hsiao_protocol)
 
     def report_progress(self) -> Dict[str, Any]:
-        """Report intermediate progress."""
-        from earlysign.builtin.group_sequential.reporting.projectors import (
-            ProgressProjector,
-        )
-
         with Session(self.ledger) as sess:
-            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+            # Performance note: sess.read(ProgressProjector) is cheap here due to caching
+            report_data = sess.read(ProgressProjector()).data
+            report = report_data.model_dump(mode="json")
+            protocol_wrapper = sess.read(ProtocolProjector(Hsiao2019Protocol)).data
+
+            from earlysign.builtin.group_sequential.schema import SampleSizeTimer
+
+            timer = protocol_wrapper.method.stopping_policy.timer
+            if isinstance(timer, SampleSizeTimer):
+                report["max_sample_size"] = timer.max_sample_size
+
+            # Add Hsiao specific info
+            report["promising_zone"] = [
+                protocol_wrapper.conditional_power_min,
+                protocol_wrapper.conditional_power_max,
+            ]
+            return report
 
     def report_result(self) -> Dict[str, Any]:
         with Session(self.ledger) as sess:
@@ -452,15 +456,11 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
 
     def plot_result(self) -> Any:
         with Session(self.ledger) as sess:
-            # 1. Read Protocol
-            protocol_traced = sess.read(ProtocolProjector(GSTProtocol))
-            gst_protocol = protocol_traced.data
-
-            # Repackage as Hsiao2019Protocol
-            Hsiao2019Protocol(
-                name="Hsiao 2019 Protocol",
-                task=gst_protocol.task,
-                method=gst_protocol.method,
+            protocol_wrapper = sess.read(ProtocolProjector(Hsiao2019Protocol)).data
+            gst_protocol = GST.Protocol(
+                name="Hsiao2019-Plot",
+                task=protocol_wrapper.task,
+                method=protocol_wrapper.method,
             )
 
             trajectory = sess.read(InterimAnalyses(identity="interim_analyses")).data

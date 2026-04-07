@@ -1,5 +1,3 @@
-import typing
-
 import pytest
 
 from earlysign.builtin.group_sequential.controllers.GST_Spending_JennisonTurnbull2000 import (
@@ -50,7 +48,7 @@ def test_unequal_allocation_n_max_2_arm() -> None:
         p_treatment=p_t,
         looks=looks,
         spending_function="obrien_fleming",
-        allocation_ratios=[1.0, 2.0],
+        allocation_ratios={"treatment": 2.0},
     )
 
     # n_total(r) = ( (r+1)^2 / (4r) ) * n_total(1)
@@ -59,14 +57,13 @@ def test_unequal_allocation_n_max_2_arm() -> None:
     assert pytest.approx(n_uneq, abs=2) == 1.125 * n_bal
 
     # Check that max_sample_size is a dict
-
     from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 
     timer = spec_uneq.stopping_policy.timer
     assert isinstance(timer, SampleSizeTimer)
     max_ss = timer.max_sample_size
-    assert isinstance(max_ss, list)
-    assert max_ss[1] == pytest.approx(2 * max_ss[0], abs=1)
+    assert isinstance(max_ss, dict)
+    assert max_ss["treatment"] == pytest.approx(2 * max_ss["control"], abs=1)
 
 
 def test_multi_arm_allocation_n_max() -> None:
@@ -80,7 +77,7 @@ def test_multi_arm_allocation_n_max() -> None:
     looks = 1
 
     # 1:2:3 allocation
-    ratios = [1.0, 2.0, 3.0]
+    ratios = {"A": 2.0, "B": 3.0}
     spec, n_total = designer.design_gs_binomial(
         alpha=alpha,
         power=power,
@@ -93,17 +90,15 @@ def test_multi_arm_allocation_n_max() -> None:
         treatment_arm_name="A",  # Design against arm A
     )
 
-    from typing import Any
-
     from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 
-    timer = typing.cast(Any, spec).stopping_policy.timer
+    timer = spec.stopping_policy.timer
     assert isinstance(timer, SampleSizeTimer)
     max_ss = timer.max_sample_size
-    assert isinstance(max_ss, list)
-    assert max_ss[1] == pytest.approx(2 * max_ss[0], abs=1)
-    assert max_ss[2] == pytest.approx(3 * max_ss[0], abs=1)
-    assert sum(max_ss) == (n_total if isinstance(n_total, int) else sum(n_total))
+    assert isinstance(max_ss, dict)
+    assert max_ss["A"] == pytest.approx(2 * max_ss["C"], abs=1)
+    assert max_ss["B"] == pytest.approx(3 * max_ss["C"], abs=1)
+    assert sum(max_ss.values()) == n_total
 
 
 def test_template_design_with_relative_improvement() -> None:
@@ -114,20 +109,20 @@ def test_template_design_with_relative_improvement() -> None:
         alpha=0.05,
         power=0.8,
         looks=1,
-        allocation_ratios=[1.0, 2.0],
+        allocation_ratios={"treatment": 2.0},
     )
 
     from earlysign.builtin.group_sequential.schema import BinaryEffectSize
 
     hypotheses = protocol.task.hypotheses
     assert isinstance(hypotheses.target_effect, BinaryEffectSize)
-    assert hypotheses.target_effect.proportions[1] == pytest.approx(0.3)
+    assert hypotheses.target_effect.proportions["treatment"] == pytest.approx(0.3)
 
     from earlysign.schema.ES3.Base import TwoArmComparison
 
     arms = protocol.task.arms
     assert isinstance(arms, TwoArmComparison)
-    assert arms.allocation_ratios == [1.0, 2.0]
+    assert arms.allocation_ratios == {"treatment": 2.0}
 
     from earlysign.builtin.group_sequential.schema import SampleSizeTimer
 

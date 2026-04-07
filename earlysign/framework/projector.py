@@ -60,7 +60,7 @@ class Projector(Protocol, Generic[T]):
         """
         ...
 
-    def project(self, table: ibis.Expr) -> ProjectionResult[T]:
+    def project(self, data: ibis.Expr) -> ProjectionResult[T]:
         """
         Hydrates data from the provided Ibis expression and identifies its trace.
         """
@@ -83,29 +83,12 @@ class ProtocolProjector(Projector[P]):
         # Payload type is the class name
         type_name = self.protocol_type.__name__
         matched = table.filter(table.type == type_name)
+
+        # Get the latest one recorded in history
         latest = matched.order_by(ibis.desc("timestamp")).limit(1).execute()
 
         if latest.empty:
-            # Fallback to shared protocol base types (GSTProtocol, AVIProtocol)
-            # This handles cases where a generic design is cast to a specific controller protocol.
-            fallback_types = ["GSTProtocol", "AVIProtocol", "Protocol"]
-            for fb_type in fallback_types:
-                if fb_type != type_name:
-                    matched = table.filter(table.type == fb_type)
-                    latest = matched.order_by(ibis.desc("timestamp")).limit(1).execute()
-                    if not latest.empty:
-                        break
-
-        if latest.empty:
-            # Final attempt: debug info to see what IS in the ledger
-            try:
-                available_types = table.select("type").distinct().execute()["type"].tolist()
-            except Exception:
-                available_types = ["<error listing types>"]
-            raise RuntimeError(
-                f"No protocol of type {type_name} found in ledger. "
-                f"Available protocol types in this bound ledger: {available_types}"
-            )
+            raise RuntimeError(f"No protocol of type {type_name} found in ledger")
 
         row = latest.iloc[0]
 

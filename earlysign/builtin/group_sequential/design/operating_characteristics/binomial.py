@@ -54,7 +54,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         self.evaluator: OperatingCharacteristicsEvaluator
 
         # 1. Inspect Task to get Baseline/Target Props and Arms
-        task = cast(schema.GSTTaskSpec, protocol.task)
+        task = protocol.task
         if not isinstance(task.hypotheses.target_effect, schema.BinaryEffectSize):
             raise ValueError(
                 "Evaluator requires BinaryEffectSize in protocol hypotheses."
@@ -73,34 +73,30 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         self.arms = 2
 
         # Identify control and treatment proportions explicitly
-        # In the new schema, proportions is a list [control, treatment]
-        self.p_control = float(props[0])
-        p_t = float(props[1])
+        self.p_control = float(props[self.control_arm_name])
+        p_t = float(props[self.treatment_arm_name])
 
         self.target_delta = float(p_t) - self.p_control
 
         # 2. Derive statistical parameters for Canonical Model
-        gst_method = cast(schema.GSTMethodSpec, protocol.method)
-        timer = gst_method.stopping_policy.timer
+        timer = protocol.method.stopping_policy.timer
         if not isinstance(timer, schema.SampleSizeTimer):
             raise ValueError(
                 f"Protocol timer must be SampleSizeTimer, got {type(timer).__name__}."
             )
-        self.n_max_total = sum(timer.max_sample_size)
+        self.n_max_total = sum(timer.max_sample_size.values())
 
         # Variance per arm (assumed balanced for now)
         sigma2 = self.p_control * (1.0 - self.p_control)
         if self.arms == 1:
             # I = N / sigma^2
             self.i_max = self.n_max_total / sigma2
-            self.n_max_per_arm = {self.arm_names[0]: timer.max_sample_size[0]}
+            self.n_max_per_arm = timer.max_sample_size
         else:
             # I = N_total / (4 * sigma^2) = n_arm / (2 * sigma^2)
             self.i_max = self.n_max_total / (4 * sigma2)
-            self.n_max_per_arm = {
-                self.control_arm_name: timer.max_sample_size[0],
-                self.treatment_arm_name: timer.max_sample_size[1],
-            }
+            n_arm = self.n_max_total // 2
+            self.n_max_per_arm = {name: n_arm for name in self.arm_names}
 
         # 3. Solve Design Boundaries (Target Drift)
         target_drift = self.target_delta * np.sqrt(self.i_max)
@@ -202,13 +198,12 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
         from scipy.stats import norm
 
         # 0. Calculate n_fixed (for equivalent alpha/power at target delta)
-        task = cast(schema.GSTTaskSpec, self.protocol.task)
-        efficacy = task.efficacy
+        efficacy = self.protocol.task.efficacy
         if efficacy is None:
             raise ValueError("Protocol task missing efficacy requirements.")
         alpha = efficacy.alpha
 
-        futility = task.futility
+        futility = self.protocol.task.futility
         if futility is None:
             raise ValueError("Protocol task missing futility requirements.")
         power = futility.power

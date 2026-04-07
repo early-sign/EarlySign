@@ -70,7 +70,7 @@ Examples:
 
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, Literal, Optional, Sequence, Tuple, Union, cast
+from typing import Any, Dict, Literal, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -173,8 +173,8 @@ class CanonicalJointModel:
         rng_seed: int = 42,
     ) -> "CanonicalJointModel":
         """Instantiate the model from an ES3 GST.Protocol specification."""
-        task = cast(GST.GSTTaskSpec, spec.task)
-        method = cast(GST.GSTMethodSpec, spec.method)
+        task = spec.task
+        method = spec.method
         task_alpha = float(task.efficacy.alpha) if task.efficacy else None
         task_power = float(task.futility.power) if task.futility else None
 
