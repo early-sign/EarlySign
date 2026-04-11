@@ -6,7 +6,7 @@ applyTo: "**"
 - Language
   - In the code and comments, stick to English even if the conversation in the chat is in some other language. Proactively translate into English if you find other languages in the code (with the exception being in the internationalized versions of the docs).
 - Toolkit
-  - `make format` to auto-format code, and then `make check-lite` to run all sanity checks (lints, tests, and type checks). Therefore, you want to run `make format && make check-lite` for every set of edits you make.
+  - `mise run format` to auto-format code, and then `mise run check-lite` to run all sanity checks (lints, tests, and type checks). Therefore, you want to run `mise run format && mise run check-lite` for every set of edits you make.
   - We use `poetry` to manage dependencies. So you need to use `poetry run python` when you run Python commands.
   - tqdm progress bars follow the module logger level: INFO (or lower) enables progress, WARNING (or higher) suppresses it. Do not add per-call toggles like `enable_progress`; tune logging instead or use the `EARLYSIGN_ENABLE_TQDM` / `EARLYSIGN_DISABLE_TQDM` environment overrides when necessary.
 - Main architectural decisions:
@@ -20,11 +20,11 @@ applyTo: "**"
 
 # Development
 - Whenever you run a terminal command and the output seems empty, you should absolutely always autonomously check out "terminal_last_command" to fetch the results. Sometimes you need to wait for a few seconds and check again. Keep in mind that VSCode GitHub copilot extension (the platform you are working in) seems to have issues with the integrated terminal connection. Therefore, you need the above workaround.
-- This repository uses `make` to organize workspace tasks. For the details, see the Makefile.
+- This repository uses `mise` tasks to organize workspace tasks. For the details, see the `.mise.toml`.
 - We use `poetry`. So the commands usually need to be run as `poetry run python ...` etc.
-- At the end of the edits, make sure to run `make format` to ensure the code is compliant to the formatting standards of this repository.
-- Also run `make check-lite` occasionally to make sure the code passes the tests and lint checks.
-- Notebook regressions (`make check-lite` runs nbregression) sometimes need permission to start Jupyter kernels/bind ports; request the necessary execution/port-binding approval when prompted so the tests can run.
+- At the end of the edits, make sure to run `mise run format` to ensure the code is compliant to the formatting standards of this repository.
+- Also run `mise run check-lite` occasionally to make sure the code passes the tests and lint checks.
+- Notebook regressions (`mise run check-lite` runs nbregression) sometimes need permission to start Jupyter kernels/bind ports; request the necessary execution/port-binding approval when prompted so the tests can run.
 - Whenever you are adding a dependency, use `poetry add`. Do not try to specify versions unless that is absolutely necessary, so that poetry can do the version resolution for you. Do not write them directly edit `pyproject.toml` for this purpose.
     - You can edit `pyproject.toml` after adding the packages for formatting purposes.
 
@@ -55,7 +55,7 @@ The conceptual decisions are stored and updated in docs/source/reference/ADR.
   - ❌ Examples: "this method moved from...", "TODO: refactor later"
   - ✅ Keep only comments that should make into the production version of the code.
 - **Clean commits**: Ensure production code doesn't contain debug prints or temporary code
-- **Consistent formatting**: Follow project formatting standards (enforced via `make format`)
+- **Consistent formatting**: Follow project formatting standards (enforced via `mise run format`)
 - **Exports & language features**: Avoid `__all__` exports (except the top-level version string) and do not rely on `from __future__ import annotations`; code should run without future-import shims.
 - **Exception style**: Prefer control flow or helper queries instead of `try`/`except` blocks when checking for record existence (e.g., query for rows and branch on emptiness rather than catching `LookupError`).
 

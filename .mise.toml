@@ -13,6 +13,13 @@ PYTHONPATH = "."
 POETRY_PYTHON = "{{exec(command='mise which python')}}"
 
 # Development tasks
+[tasks.install]
+description = "Install project dependencies"
+run = [
+    "poetry install --with dev,ci",
+    "npm install"
+]
+
 [tasks.install-all]
 description = "Install Python versions and project dependencies"
 run = [
@@ -21,5 +28,72 @@ run = [
     "mise install python@3.12",
     "mise install python@3.13",
     "echo 'Installing project dependencies...'",
-    "poetry install --all-extras --with dev,ci"
+    "poetry install --all-extras --with dev,ci",
+    "npm install"
+]
+
+[tasks.lint]
+description = "Check code formatting and style"
+run = "poetry run black --check ."
+
+[tasks.type]
+description = "Run type checks"
+run = "poetry run mypy -p earlysign"
+
+[tasks.test]
+description = "Run unit tests"
+run = "poetry run pytest"
+
+[tasks.spec-test]
+description = "Run spec tests"
+run = "poetry run pytest earlysign/tests/spec_tests/"
+
+[tasks.compile-ES3]
+description = "Install and compile ES3"
+run = [
+    "make -C ES3 install",
+    "make -C ES3 compile"
+]
+
+[tasks.format]
+description = "Format code using isort, ruff, and black"
+run = [
+    "poetry run isort earlysign",
+    "poetry run ruff check --fix --unsafe-fixes earlysign",
+    "poetry run black ."
+]
+
+[tasks.docs-build]
+description = "Build Sphinx documentation"
+run = "poetry run sphinx-build -b html docs/source docs/_build/html"
+
+[tasks.docs-serve]
+description = "Serve documentation with live-reload"
+run = "poetry run sphinx-autobuild docs/source docs/_build/html --open-browser --ignore docs/source/autoapi --watch earlysign"
+
+[tasks.lint-type-test]
+description = "Run ruff, isort, black, mypy, and pytest"
+run = [
+    "poetry run ruff check earlysign",
+    "poetry run isort --check-only earlysign",
+    "poetry run black --check .",
+    "poetry run mypy -p earlysign",
+    "poetry run pytest"
+]
+
+[tasks.check]
+description = "Run comprehensive checks across multiple Python versions"
+run = """
+for version in 3.11 3.12 3.13; do
+    echo "Checking with Python $version..."
+    mise exec python@$version -- mise run lint-type-test
+done
+mise run docs-build
+"""
+
+[tasks.check-lite]
+description = "Run checks on current Python version"
+run = [
+    "mise run lint-type-test",
+    "mise run docs-build"
 ]
