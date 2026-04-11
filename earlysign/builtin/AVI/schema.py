@@ -1,0 +1,168 @@
+"""
+Anytime Valid Inference (AVI) Statistical Schema
+------------------------------------------------------
+
+Specialized protocol and method specifications for AVI-based sequential tests.
+Inherits from the EarlySign Standard Schema (ES3).
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Literal
+
+from pydantic import BaseModel, Field
+from typing_extensions import TypeAliasType
+
+from earlysign.schema.ES3.base import (
+    ArmStructure,
+    Log,
+    MethodSpec as MethodSpec_1,
+    Protocol as Protocol_1,
+    TaskSpec as TaskSpec_1,
+)
+
+
+class Sides(StrEnum):
+    """
+    One-sided or two-sided test.
+    """
+
+    ONE = "one"
+    TWO = "two"
+
+
+class ResponseType(StrEnum):
+    BINARY = "binary"
+    CONTINUOUS = "continuous"
+
+
+class DecisionStatus(StrEnum):
+    CONTINUE = "continue"
+    STOP_DETECTED = "stop_detected"
+    STOP_PLAN_END_REACHED = "stop_plan_end_reached"
+
+
+class AVIMetadata(BaseModel):
+    version: str = Field(..., description="Metadata version")
+
+
+class ArmMetrics(Log):
+    """
+    Metrics for a single arm in a sequential quantile test.
+    """
+
+    total: int = Field(..., description="Sample size n at the time of calculation.")
+    ci_lower: float = Field(
+        ..., description="The value of the lower confidence bound (X at rank L_t)."
+    )
+    ci_upper: float = Field(
+        ..., description="The value of the upper confidence bound (X at rank U_t)."
+    )
+    quantile_estimate: float = Field(
+        ..., description="The point estimate of the target quantile."
+    )
+
+
+class ArmStatus(BaseModel):
+    """
+    Status wrapper for arm metrics.
+    """
+
+    metrics: ArmMetrics
+    is_active: bool
+
+
+class BaseAVIMethodSpec(MethodSpec_1):
+    burn_in: int | None = Field(
+        100,
+        description="Optional burn-in sample size before checking stopping rules.\nRecommended when using plug-in variance estimators to mitigate instability\nat very small sample sizes, or for asymptotic approximations that require a\nminimum sample size to become valid.",
+    )
+
+
+class GAVIMethodSpec(BaseAVIMethodSpec):
+    kind: Literal["GAVI"] = "GAVI"
+    alpha: float = Field(..., description="Significance level.")
+    variance: float | None = Field(
+        None,
+        description="Estimated variance (sigma squared).\nIf null, the variance is estimated from the data (Maharaj et al., 2023).",
+    )
+    sides: Sides = Field(..., description="One-sided or two-sided test.")
+    max_n: int = Field(
+        ..., description="Maximum sample size, used for rho calculation."
+    )
+
+
+class LookResult(Log):
+    sample_n: int = Field(
+        ..., description="The total sample size (cumulative) at this look."
+    )
+    trajectory: float = Field(..., description="The calculated trajectory statistic.")
+    boundary: float = Field(..., description="The current boundary value.")
+    is_crossed: bool = Field(
+        ..., description="Whether the trajectory crossed the boundary."
+    )
+    status: DecisionStatus | str = Field(
+        ..., description="The decision status after this look."
+    )
+
+
+class MSPRTMethodSpec(BaseAVIMethodSpec):
+    kind: Literal["mSPRT"] = "mSPRT"
+    alpha: float = Field(..., description="Significance level.")
+    variance: float | None = Field(
+        None,
+        description="Estimated variance (sigma squared).\nIf null, the variance is estimated from the data (Maharaj et al., 2023).",
+    )
+    sides: Sides = Field(..., description="One-sided or two-sided test.")
+    mde: float = Field(
+        ...,
+        description="Minimum Detectable Effect (absolute difference), used for phi calculation.",
+    )
+
+
+class Scoreboard(BaseModel):
+    """
+    Projection of all arm metrics in a sequential quantile test.
+    """
+
+    arms: dict[str, ArmStatus]
+
+
+class SequentialQuantileLookResult(Log):
+    """
+    Result of a sequential quantile test look.
+    """
+
+    sample_n: int = Field(..., description="Current cumulative sample size.")
+    estimated_quantile: float = Field(
+        ..., description="Point estimate of the target quantile."
+    )
+    interval_lower: float = Field(..., description="Lower confidence bound.")
+    interval_upper: float = Field(..., description="Upper confidence bound.")
+    status: DecisionStatus | str = Field(..., description="Current status of the test.")
+
+
+class SequentialQuantileMethodSpec(BaseAVIMethodSpec):
+    kind: Literal["SequentialQuantile"] = "SequentialQuantile"
+    quantile: float = Field(..., description="Target quantile (e.g., 0.5 for median).")
+    alpha: float = Field(..., description="Significance level.")
+    max_n: int | None = Field(
+        None, description="Optional maximum sample size for the horizon."
+    )
+
+
+MethodSpec = TypeAliasType(
+    "MethodSpec", GAVIMethodSpec | MSPRTMethodSpec | SequentialQuantileMethodSpec
+)
+
+
+class TaskSpec(TaskSpec_1):
+    kind: Literal["AVI"] = "AVI"
+    arms: ArmStructure
+    response_type: ResponseType
+
+
+class Protocol(Protocol_1):
+    task: TaskSpec
+    method: MethodSpec

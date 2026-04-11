@@ -1,0 +1,361 @@
+"""Binomial and Continuous mSPRT Controller (Johari 2019).
+
+This controller implements the Mixture Sequential Probability Ratio Test (mSPRT)
+as described in Johari et al. (2019).
+
+Reference:
+    Johari, R., Pekelis, L., & Walsh, J. (2019).
+    Always Valid Inference: Continuous Monitoring of A/B Tests.
+    https://arxiv.org/abs/1512.04922
+
+Examples:
+    >>> import ibis, duckdb  # noqa: F401
+    >>> from earlysign.core.ledger import Ledger
+    >>> import earlysign.schema.ES3.base as ES3_BASE
+    >>> from earlysign.builtin.AVI.controllers.mSPRT_Johari2019 import BinomialJohari2019Controller
+    >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+    >>> from earlysign.builtin.AVI.schema import DecisionStatus
+
+    >>> conn = ibis.connect("duckdb://:memory:")
+    >>> ledger = Ledger(conn, "events")
+    >>> ledger.ensure()
+    >>> ledger = ledger.bind(experiment_id="doctest_msprt")
+    >>>
+    >>> # Scenario:
+    >>> # You are an SRE at Acme Corp deploying a new microservice version (v2).
+    >>> # You must ensure the error rate does NOT increase by more than 0.1% (absolute) vs v1 (Guardrail).
+    >>> # You monitor continuously and want to stop/rollback immediately if the boundary is crossed.
+    >>>
+    >>> # Design mSPRT (Binomial)
+    >>> controller = BinomialJohari2019Controller(ledger)
+    >>> protocol = controller.design(
+    ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="v1_stable", treatment_arm_name="v2_canary"),
+    ...     alpha=0.05,
+    ...     tau=0.01,  # Mixing parameter ~ MDE (e.g. 1% lift)
+    ...     sides="two"
+    ... )
+    >>> controller.set_protocol(protocol)
+    >>>
+    >>> # Update (Batch 1: Low data, identical error rates)
+    >>> batch = [
+    ...     BinomialArmData(total=100, success=2, arm="v1_stable"),
+    ...     BinomialArmData(total=100, success=2, arm="v2_canary")
+    ... ]
+    >>> controller.update(batch)
+    >>> res1 = controller.report_progress()
+    >>> print(f"Diff: {res1['trajectory']:.3f}, Status: {res1['status']}")
+    Diff: 0.000, Status: continue
+    >>>
+    >>> # Update (Batch 2: High data, v2 showing significantly higher errors)
+    >>> # v1: 200/1000 (20%), v2: 350/1000 (35%) -> Risk!
+    >>> batch2 = [
+    ...     BinomialArmData(total=1000, success=200, arm="v1_stable"),
+    ...     BinomialArmData(total=1000, success=350, arm="v2_canary")
+    ... ]
+    >>> controller.update(batch2)
+    >>> res2 = controller.report_progress()
+    >>> print(f"Diff: {res2['trajectory']:.3f}, Boundary: {res2['boundary']:.3f}, Status: {res2['status']}")
+    Diff: 0.136, Boundary: 0.095, Status: stop_detected
+"""
+
+from typing import Any, Dict, List, Literal, Optional, cast
+
+from pydantic import BaseModel
+
+import earlysign.schema.ES3.base as ES3_BASE
+from earlysign.builtin.AVI import mSPRTEngine
+from earlysign.builtin.AVI.reporting import (
+    BacktestProjector,
+    FinalProjector,
+    ProgressProjector,
+)
+from earlysign.builtin.AVI.schema import (
+    DecisionStatus,
+    LookResult,
+    MethodSpec,
+    MSPRTMethodSpec,
+    Protocol as Protocol_Schema,
+    ResponseType,
+    Sides,
+    TaskSpec,
+)
+from earlysign.core.ledger import Ledger
+from earlysign.core.util.logging import get_logger
+from earlysign.framework.controller import Controller, RichDisplayMixin
+from earlysign.framework.projector import ProtocolProjector
+from earlysign.framework.session import Session
+from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
+from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
+from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+from earlysign.schema.ES3.trackers.continuous import ContinuousArmData
+
+
+class Protocol(Protocol_Schema, RichDisplayMixin):
+    """Protocol for AVI with rich display support."""
+
+    pass
+
+
+# Ensure MethodSpec is available for Pydantic model reconstruction
+assert MethodSpec is not None
+Protocol.model_rebuild()
+
+
+class BinomialJohari2019Controller(Controller[Protocol]):
+    """Controller for Binomial mSPRT (Johari 2019)."""
+
+    _protocol_class = Protocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+
+    @classmethod
+    def design(
+        cls,
+        arms: ES3_BASE.ArmStructure,
+        alpha: float,
+        tau: float,
+        sides: Literal["one", "two"] = "two",
+    ) -> Protocol:
+        """
+        Design an mSPRT experiment for binomial data.
+
+        Args:
+            arms: List of arm names (exactly 2).
+            alpha: Target false positive rate (at any time).
+            tau: Mixing standard deviation (tuning parameter for the mixing distribution).
+                 Commonly set to the expected effect size or MDE.
+            sides: "one" or "two" sided testing.
+        """
+        method = MSPRTMethodSpec(
+            alpha=alpha,
+            variance=None,  # Binomial variance is implicit/estimated by engine
+            sides=Sides(sides),
+            mde=tau,
+        )
+        task = TaskSpec(arms=arms, response_type=ResponseType.BINARY)
+        return Protocol(name="mSPRT (Johari 2019)", task=task, method=method)
+
+    def update(self, batch: List[BinomialArmData]) -> None:
+        """
+        Update the experiment with a batch of data.
+        """
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.commit(item, trace=[])
+
+        with Session(self.ledger) as sess:
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+            metrics = sess.read(BinomialScoreboard(identity="metrics"))
+
+            if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"mSPRT (Binomial) on {type(protocol.task.arms).__name__} is not yet supported in this controller. "
+                    "Currently, only TwoArmComparison is supported."
+                )
+
+            # Run mSPRT Engine
+            engine = mSPRTEngine(protocol)
+            sess.call_and_commit(LookResult, engine.run, metrics=metrics)
+
+    def report_progress(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+
+    def report_result(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(FinalProjector()).data.model_dump(mode="json")
+
+    def backtest(self, batches: Any) -> Dict[str, Any]:
+        """
+        Historical Analysis: Replays data and stops immediately on a stopping decision.
+
+        Args:
+           batches: Iterator yielding `BinomialArmData` objects or lists of them.
+        """
+        logger = get_logger(__name__)
+
+        for i, batch in enumerate(batches):
+            self.update(batch if isinstance(batch, list) else [batch])
+            prog = self.report_progress()
+
+            if prog.get("status") != DecisionStatus.CONTINUE:
+                logger.info(
+                    f"Stopping criterion met at index {i}: {prog.get('status')}"
+                )
+                break
+
+        return self.report_result()
+
+    def backtest_from_table(
+        self,
+        table: Any,
+        *,
+        arm_col: str = "arm",
+        total_col: str = "total",
+        success_col: str = "success",
+        order_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Historical Analysis from an Ibis table.
+        """
+        from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+
+        # 1. Project and order
+        if order_by:
+            data_table = table.select(
+                arm=table[arm_col],
+                total=table[total_col],
+                success=table[success_col],
+                _order=table[order_by],
+            ).order_by("_order")
+        else:
+            data_table = table.select(
+                arm=table[arm_col],
+                total=table[total_col],
+                success=table[success_col],
+            )
+
+        # 2. Replay & Stop
+        df = data_table.execute()
+        logger = get_logger(__name__)
+
+        for i, (_, row) in enumerate(df.iterrows()):
+            batch = [
+                BinomialArmData(
+                    arm=str(row["arm"]),
+                    total=int(row["total"]),
+                    success=int(row["success"]),
+                )
+            ]
+            self.update(batch)
+            prog = self.report_progress()
+
+            if prog.get("status") != DecisionStatus.CONTINUE:
+                logger.info(f"Stopping criterion met at row {i}: {prog.get('status')}")
+                break
+
+        # Calculate efficiency report
+        with Session(self.ledger) as sess:
+            total_data_points = int(df[total_col].sum())
+            report = sess.read(BacktestProjector(total_samples=total_data_points)).data
+            res = report.model_dump(mode="json")
+            # Flatten final_report for compatibility
+            fr = res.pop("final_report")
+            res.update(fr)
+            return res
+
+    @classmethod
+    def describe_protocol_instance(cls, protocol: BaseModel) -> str:
+        """Summarizes the mSPRT design (Johari 2019)."""
+        from string import Template
+
+        tpl = Template(
+            """
+Design: mSPRT (Always Valid Inference) - Johari 2019
+==================================================
+Task: $task_name
+Response Type: $response_type
+Arms: $arms_desc
+Requirements: Alpha=$alpha (at any time)
+
+Method:
+  Kind: $method_kind
+  Tau (Mixing): $tau
+  Sides: $sides
+"""
+        )
+
+        avi_protocol = cast(Protocol, protocol)
+        task = avi_protocol.task
+        method = avi_protocol.method
+
+        arms_desc = "N/A"
+        if isinstance(task.arms, ES3_BASE.TwoArmComparison):
+            arms_desc = (
+                f"{task.arms.control_arm_name} vs {task.arms.treatment_arm_name}"
+            )
+
+        from earlysign.builtin.AVI.schema import MSPRTMethodSpec
+
+        mde = 0.0
+        sides = "two"
+        if isinstance(method, MSPRTMethodSpec):
+            mde = method.mde
+            sides = str(method.sides)
+
+        return tpl.substitute(
+            task_name=avi_protocol.name or "Unnamed mSPRT",
+            response_type=task.response_type,
+            arms_desc=arms_desc,
+            alpha=f"{method.alpha:.4f}",
+            method_kind="mSPRT",
+            tau=f"{mde:.4f}",
+            sides=sides,
+        ).strip()
+
+
+class ContinuousJohari2019Controller(Controller[Protocol]):
+    """Controller for Continuous mSPRT (Johari 2019)."""
+
+    _protocol_class = Protocol
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+
+    @classmethod
+    def design(
+        cls,
+        arms: ES3_BASE.ArmStructure,
+        alpha: float,
+        tau: float,
+        variance: float,
+        sides: Literal["one", "two"] = "two",
+    ) -> Protocol:
+        """
+        Design an mSPRT experiment for continuous data.
+
+        Args:
+            variance: Known variance of the outcome (assumed fixed).
+        """
+        method = MSPRTMethodSpec(
+            alpha=alpha,
+            variance=variance,
+            sides=Sides(sides),
+            mde=tau,
+        )
+        task = TaskSpec(arms=arms, response_type=ResponseType.CONTINUOUS)
+        return Protocol(name="Continuous mSPRT (Johari 2019)", task=task, method=method)
+
+    def update(self, batch: List[ContinuousArmData]) -> None:
+        if batch:
+            with Session(self.ledger) as sess:
+                for item in batch:
+                    sess.commit(item, trace=[])
+
+        with Session(self.ledger) as sess:
+            protocol = sess.read(ProtocolProjector(Protocol)).data
+            metrics = sess.read(ContinuousScoreboard(identity="metrics"))
+
+            if not isinstance(protocol.task.arms, ES3_BASE.TwoArmComparison):
+                raise NotImplementedError(
+                    f"mSPRT (Continuous) on {type(protocol.task.arms).__name__} is not yet supported in this controller. "
+                    "Currently, only TwoArmComparison is supported."
+                )
+
+            engine = mSPRTEngine(protocol)
+            sess.call_and_commit(LookResult, engine.run, metrics=metrics)
+
+    def report_progress(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(ProgressProjector()).data.model_dump(mode="json")
+
+    def report_result(self) -> Dict[str, Any]:
+        with Session(self.ledger) as sess:
+            return sess.read(FinalProjector()).data.model_dump(mode="json")
+
+    @classmethod
+    def describe_protocol_instance(cls, protocol: BaseModel) -> str:
+        """Summarizes the mSPRT design (Johari 2019)."""
+        return BinomialJohari2019Controller.describe_protocol_instance(protocol)

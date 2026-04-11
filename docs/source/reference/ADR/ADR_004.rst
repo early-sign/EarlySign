@@ -1,0 +1,73 @@
+.. ADR-004: Architecture of EarlySign v1
+.. :Date: 2026-02-20
+
+=========================================
+ADR-004: Architecture of EarlySign v1
+=========================================
+
+**Status**: **`Accepted`**
+
+📋 Context
+-----------
+
+EarlySign provides a framework for rigorous statistical analysis (Group Sequential Testing, Anytime-Valid Inference) on top of an event-sourced ledger. The system needs a clear separation of concerns to support:
+
+1.  **Reliable Persistence**: A backend-agnostic ledger.
+2.  **Flexible Execution**: A graph-based runtime for reproducible statistical flows.
+3.  **Methodological Rigor**: Correct implementation of statistical designs.
+4.  **User Usability**: Simple, high-level interfaces for end users.
+
+💡 Decision
+------------
+
+We adopt a **Four-Layer Architecture** for the v1 release:
+
+1.  **Core (`earlysign.core`)**: Persistence & Primitives
+    *   **Responsibility**: Manages the `Ledger`, database connections (Ibis), and basic schema.
+    *   **Key Components**: `Ledger`, `LedgerSession`.
+    *   **Dependency**: Independent (depends only on external libraries like Ibis).
+
+2.  **Framework (`earlysign.framework`)**: Runtime & Wiring
+    *   **Responsibility**: Defines the graph execution model, nodes, handles, and dependency injection.
+    *   **Key Components**: `Node`, `Graph`, `Handle`, `Runtime`.
+    *   **Dependency**: Depends on `core`.
+
+3.  **Methods (`earlysign.builtin`)**: Statistical Implementations
+    *   **Responsibility**: Implements specific statistical designs using the framework.
+    *   **Key Components**:
+        *   `earlysign.builtin.group_sequential` (GST)
+        *   `earlysign.builtin.AVI` (Anytime-Valid Inference)
+    *   **Dependency**: Depends on `framework` (for execution) and `core` (for data).
+    *   *Note*: `earlysign.parts.stats` exists as a shared library of pure statistical tools (e.g., Gaussian Processes) used by these methods.
+
+4.  **Controllers (`earlysign.builtin`)**: User Interface
+    *   **Responsibility**: Provides the high-level API for users to interact with the system. Acts as a facade that coordinates the lower layers.
+    *   **Key Components**: `GST_Spending_JennisonTurnbull2000`, `mSPRT_Johari2019`.
+    *   **Dependency**: Depends on `methods` and `core`.
+
+Layer Diagram
+~~~~~~~~~~~~~
+
+::
+
+    [ Controllers ]  (User Facing Facade)
+          |
+          v
+    [  Methods  ]  (Statistical Logic: GST, AVI)
+          |
+          v
+    [ Framework ]  (Execution Graph, Nodes, Handles)
+          |
+          v
+    [   Core    ]  (Ledger, Persistence, Ibis)
+
+✨ Consequences
+-----------------
+
+**Positive:**
+*   **Clear Boundaries**: Users rely on Controllers, while method developers work in Methods/Framework.
+*   **Testability**: Each layer can be tested in isolation (e.g., Framework tests don't need statistical correctness, just graph correctness).
+*   **Extensibility**: New statistical methods can be added to `methods/` without changing the core runtime.
+
+**Negative:**
+*   **bureaucracy**: Simple tasks might require traversing multiple layers (e.g., exposing a new statistic from Core to Controller).

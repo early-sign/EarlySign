@@ -1,0 +1,285 @@
+openapi: 3.0.0
+info:
+  title: EarlySign Standard Schema (ES3)
+  version: 0.0.0
+tags: []
+paths: {}
+components:
+  schemas:
+    Base.ArmStructure:
+      anyOf:
+        - $ref: '#/components/schemas/Base.SingleArm'
+        - $ref: '#/components/schemas/Base.TwoArmComparison'
+        - $ref: '#/components/schemas/Base.MultiArmComparison'
+      description: Structural definition of study arms and their roles.
+    Base.ArmStructureBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+    Base.Log:
+      type: object
+      description: Base log/event model for metadata inclusion.
+    Base.Metadata:
+      type: object
+      properties:
+        ES3_version:
+          type: string
+          description: Schema version (e.g., "v1.0.0")
+          default: v1.0.0
+      description: Metadata for EarlySign events and records.
+    Base.MethodSpec:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          description: The kind of method (discriminator).
+      description: |-
+        Base class for Operational Method.
+        Concrete protocols should extend this (e.g., GST.MethodSpec).
+    Base.MultiArmComparison:
+      type: object
+      required:
+        - kind
+        - control_arm_name
+        - treatment_arm_names
+      properties:
+        kind:
+          type: string
+          enum:
+            - multi_arm
+        control_arm_name:
+          type: string
+        treatment_arm_names:
+          type: array
+          items:
+            type: string
+        allocation_ratios:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Mapping of treatment arm names to their ratio relative to control (n_treatment / n_control). If None, equal allocation is assumed.
+      allOf:
+        - $ref: '#/components/schemas/Base.ArmStructureBase'
+      description: A multi-arm comparison against a common control.
+    Base.Protocol:
+      type: object
+      required:
+        - name
+        - task
+        - method
+      properties:
+        name:
+          type: string
+          description: The name of the protocol.
+        task:
+          allOf:
+            - $ref: '#/components/schemas/Base.TaskSpec'
+          description: The problem definition.
+        method:
+          allOf:
+            - $ref: '#/components/schemas/Base.MethodSpec'
+          description: The operational method.
+      description: |-
+        The Root Protocol Container.
+        Defines the high-level structure of any EarlySign protocol.
+    Base.SingleArm:
+      type: object
+      required:
+        - kind
+        - arm_name
+      properties:
+        kind:
+          type: string
+          enum:
+            - single
+        arm_name:
+          type: string
+      allOf:
+        - $ref: '#/components/schemas/Base.ArmStructureBase'
+      description: A single-arm trial design.
+    Base.TaskSpec:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          description: The kind of task (discriminator).
+      description: |-
+        Base class for Problem Definition.
+        Concrete protocols should extend this (e.g., GST.TaskSpec).
+    Base.TwoArmComparison:
+      type: object
+      required:
+        - kind
+        - control_arm_name
+        - treatment_arm_name
+      properties:
+        kind:
+          type: string
+          enum:
+            - two_arm
+        control_arm_name:
+          type: string
+        treatment_arm_name:
+          type: string
+        allocation_ratios:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Mapping of treatment arm name to its ratio relative to control. Key must match treatment_arm_name.
+      allOf:
+        - $ref: '#/components/schemas/Base.ArmStructureBase'
+      description: A classic two-arm comparison (e.g., Treatment vs. Control).
+    Binomial.ArmMetrics:
+      type: object
+      required:
+        - total
+        - successes
+        - p_hat
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Total number of trials.
+        successes:
+          type: integer
+          format: int32
+          description: Total number of successes.
+        p_hat:
+          type: number
+          format: double
+          description: Success probability estimate (p-hat).
+      description: Standard statistics for a single arm (Bernoulli/Binomial).
+    Binomial.ArmStatus:
+      type: object
+      required:
+        - metrics
+        - is_active
+      properties:
+        metrics:
+          $ref: '#/components/schemas/Binomial.ArmMetrics'
+        is_active:
+          type: boolean
+          default: true
+      description: Latest status and metrics for a single arm.
+    Binomial.BinomialArmData:
+      type: object
+      required:
+        - total
+        - success
+        - arm
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Total number of trials.
+        success:
+          type: integer
+          format: int32
+          description: Total number of successes.
+        arm:
+          type: string
+          description: The name/id of the arm.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: 'Raw evidence: data for a single arm (Binomial).'
+    Binomial.Scoreboard:
+      type: object
+      required:
+        - arms
+      properties:
+        arms:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Binomial.ArmStatus'
+      description: Collective state of all arms (Scoreboard).
+    Continuous.ArmMetrics:
+      type: object
+      required:
+        - total
+        - mean
+        - variance
+      properties:
+        total:
+          type: integer
+          format: int32
+        mean:
+          type: number
+          format: double
+        variance:
+          type: number
+          format: double
+      description: Standard statistics for a single arm (Continuous).
+    Continuous.ArmStatus:
+      type: object
+      required:
+        - metrics
+        - is_active
+      properties:
+        metrics:
+          $ref: '#/components/schemas/Continuous.ArmMetrics'
+        is_active:
+          type: boolean
+          default: true
+      description: Latest status and metrics for a single arm.
+    Continuous.ContinuousArmData:
+      type: object
+      required:
+        - total
+        - sum_x
+        - sum_x2
+        - arm
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Sample size.
+        sum_x:
+          type: number
+          format: double
+          description: Sum of observations.
+        sum_x2:
+          type: number
+          format: double
+          description: Sum of squared observations.
+        arm:
+          type: string
+          description: Arm identifier.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: 'Raw evidence: aggregated data for a single arm (continuous).'
+    Continuous.Observation:
+      type: object
+      required:
+        - value
+        - arm
+      properties:
+        value:
+          type: number
+          format: double
+          description: The observed value.
+        arm:
+          type: string
+          description: Arm identifier.
+      allOf:
+        - $ref: '#/components/schemas/Base.Log'
+      description: 'Raw evidence: data for a single arm (continuous observation).'
+    Continuous.Scoreboard:
+      type: object
+      required:
+        - arms
+      properties:
+        arms:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Continuous.ArmStatus'
+          description: Map of arm IDs to status.
+      description: Collective state of all arms (Scoreboard).

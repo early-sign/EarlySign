@@ -1,0 +1,85 @@
+"""
+YEAST (Your Evidence As Statistical Trajectory) Schema
+------------------------------------------------------
+
+Specialized protocol and method specifications for YEAST-based monitoring.
+Inherits from the EarlySign Standard Schema (ES3).
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Literal
+
+from pydantic import Field
+
+from earlysign.schema.ES3.base import (
+    ArmStructure,
+    Log,
+    MethodSpec as MethodSpec_1,
+    Protocol as Protocol_1,
+    TaskSpec as TaskSpec_1,
+)
+
+
+class Boundary(Log):
+    value: float | None = None
+
+
+class DecisionStatus(StrEnum):
+    CONTINUE = "continue"
+    STOP_EFFICACY = "stop_efficacy"
+    STOP_PLAN_END_REACHED = "stop_plan_end_reached"
+    STOP = "stop"
+
+
+class LookResult(Log):
+    """
+    Result of a statistical test/evaluation for the study at a look (YEAST).
+    """
+
+    sample_n: int = Field(..., description="Total number of samples (cumulative).")
+    info_frac: float = Field(..., description="Fraction of information accrued.")
+    trajectory: float = Field(
+        ..., description="The calculated trajectory value (Your Evidence)."
+    )
+    raw_difference: float | None = Field(
+        None,
+        description="The raw difference (sum of successes/values difference) before normalization.",
+    )
+    efficacy_boundary: float | None = Field(
+        None, description="The efficacy boundary at this look."
+    )
+    is_efficacy_crossed: bool = Field(
+        ..., description="Whether the trajectory crossed the efficacy boundary."
+    )
+    status: DecisionStatus | str = Field(
+        ..., description="Current status of the YEAST test."
+    )
+
+
+class MethodSpec(MethodSpec_1):
+    kind: Literal["yeast"] = "yeast"
+    significance_level: float
+    expected_num_observations: int
+    estimated_variance: float = Field(
+        ...,
+        description="The estimated variance of a single increment (difference).\nIf not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).",
+    )
+    boundary_sequence: list[float] | None = []
+
+
+class ResponseType(StrEnum):
+    BINARY = "binary"
+    CONTINUOUS = "continuous"
+
+
+class TaskSpec(TaskSpec_1):
+    kind: Literal["yeast"] = "yeast"
+    arms: ArmStructure
+    response_type: ResponseType
+
+
+class Protocol(Protocol_1):
+    task: TaskSpec
+    method: MethodSpec

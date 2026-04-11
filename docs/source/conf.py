@@ -7,17 +7,31 @@ sys.path.insert(0, os.path.abspath("../.."))
 sys.path.insert(0, os.path.abspath("."))
 
 project = "EarlySign"
-author = "Takeshi Teshima"
+author = "EarlySign Developers"
 
 extensions = [
-    "autoapi.extension",
+    "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx.ext.napoleon",
     "myst_nb",
     "sphinx_copybutton",
+    "sphinxcontrib.autodoc_pydantic",
+    "sphinx_autodoc_typehints",
+    "autoapi.extension",
+    "sphinx.ext.viewcode",
 ]
-templates_path = []
-exclude_patterns = []
+
+# autodoc_pydantic settings
+autodoc_pydantic_model_show_json = True
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_summary = True
+autodoc_pydantic_model_show_validator_members = True
+autodoc_pydantic_model_show_field_summary = True
+autodoc_pydantic_model_member_order = "bysource"
+autodoc_pydantic_field_list_validators = True
+autodoc_pydantic_field_doc_policy = "both"
+templates_path = ["_templates"]
+exclude_patterns = ["ADR_template.rst", "_templates"]
 
 nb_execution_mode = "off"
 
@@ -36,6 +50,10 @@ try:
             "use_repository_button": True,
             "use_issues_button": True,
             "path_to_docs": "docs/source",
+            "launch_buttons": {"colab_url": "https://colab.research.google.com"},
+            "show_navbar_depth": 1,
+            "navigation_depth": 10,
+            "max_navbar_depth": 10,
         }
     else:
         html_theme = "alabaster"
@@ -81,9 +99,17 @@ autoapi_dirs = ["../../earlysign"]
 autoapi_ignore = [
     "**/docs/**",
     "**/scripts/**",
-    "**/tests/**",
     "**/.venv/**",
     "**/__pycache__/**",
+    "**/.poetry/**",
+    "**/spec/**",
+    "**/.Trash/**",
+    "**/.git/**",
+    "**/.github/**",
+    "**/.mypy_cache/**",
+    "**/.pytest_cache/**",
+    "**/.ruff_cache/**",
+    "verify_*.py",
 ]
 
 autodoc_typehints = "description"
@@ -96,4 +122,109 @@ autoapi_options = [
     "show-module-summary",
 ]
 
+add_module_names = False
+
+napoleon_use_ivar = True
+
+autoapi_template_dir = os.path.join(os.path.dirname(__file__), "_templates", "autoapi")
+
+autoapi_keep_files = True
+
 autoapi_python_class_content = "both"  # "class", "init"
+autoapi_python_use_implicit_namespaces = True
+
+suppress_warnings = [
+    "autoapi.python_import_resolution",
+    "autodoc.import_object",
+]
+
+
+def generate_schema_rst(app):
+    """
+    Dynamically generates the ES3 Schema Reference page (schema.rst).
+    Scans the ES3/schema directory for all .tsp files and creates literalinclude sections.
+    """
+    docs_source_dir = app.srcdir
+    repo_root = os.path.abspath(os.path.join(docs_source_dir, "..", ".."))
+    schema_dir = os.path.join(repo_root, "ES3", "schema")
+    output_file = os.path.join(docs_source_dir, "reference", "schema.rst")
+
+    if not os.path.exists(schema_dir):
+        return
+
+    # Collect all .tsp files in root
+    tsp_files = []
+    for f in sorted(os.listdir(schema_dir)):
+        if f.endswith(".tsp"):
+            tsp_files.append(os.path.join(schema_dir, f))
+
+    # Builtin subdirs
+    builtin_dir = os.path.join(repo_root, "earlysign", "builtin")
+    if os.path.exists(builtin_dir):
+        # We sort directories to ensure deterministic order (e.g., AVI before YEAST)
+        for root, dirs, files in os.walk(builtin_dir):
+            dirs.sort()
+            for f in sorted(files):
+                if f.endswith(".tsp"):
+                    tsp_files.append(os.path.join(root, f))
+
+    content = [
+        "ES3 Schema Reference",
+        "====================",
+        "",
+        "**ES3 (EarlySign Static Schema)** is the formal specification for all data structures",
+        "used throughout the EarlySign framework. It ensures consistency across different",
+        "components and provides a language-neutral definition of our data models.",
+        "",
+        "TypeSpec Origin",
+        "---------------",
+        "",
+        "The authoritative source for these schemas is defined in **TypeSpec** (formerly ADL).",
+        "These definitions serve as the primary source of truth, from which Pydantic models",
+        "are automatically generated for the Python implementation.",
+        "",
+        "The source files are located in the ``ES3/schema`` directory of the repository.",
+        "",
+    ]
+
+    for tsp_path in tsp_files:
+        rel_path = os.path.relpath(tsp_path, os.path.join(docs_source_dir, "reference"))
+        filename = os.path.basename(tsp_path)
+
+        # Better title based on filename
+        title = filename.replace(".tsp", "").replace("es3_v1", "Manifest")
+        if title == "Manifest":
+            title = "Core Manifest"
+        elif title.upper() in ["GST", "AVI", "YEAST"]:
+            title = title.upper()
+        # If it's already PascalCase, just replace underscores if any
+        else:
+            title = title.replace("_", " ")
+
+        content.extend(
+            [
+                f"{title}",
+                f"{'-' * len(title)}",
+                "",
+                f".. literalinclude:: {rel_path}",
+                "   :language: typescript",
+                "   :linenos:",
+                f"   :caption: {filename}",
+                "",
+            ]
+        )
+
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    new_content = "\n".join(content)
+
+    if os.path.exists(output_file):
+        with open(output_file, "r") as f:
+            if f.read() == new_content:
+                return
+
+    with open(output_file, "w") as f:
+        f.write(new_content)
+
+
+def setup(app):
+    app.connect("builder-inited", generate_schema_rst)

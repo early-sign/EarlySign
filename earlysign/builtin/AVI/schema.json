@@ -1,0 +1,276 @@
+{
+  "$defs": {
+    "GAVIMethodSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "GAVI",
+          "default": "GAVI",
+          "title": "Kind",
+          "type": "string"
+        },
+        "burn_in": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 100,
+          "description": "Optional burn-in sample size before checking stopping rules.\nRecommended when using plug-in variance estimators to mitigate instability\nat very small sample sizes, or for asymptotic approximations that require a\nminimum sample size to become valid.",
+          "title": "Burn In"
+        },
+        "alpha": {
+          "description": "Significance level.",
+          "title": "Alpha",
+          "type": "number"
+        },
+        "variance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Estimated variance (sigma squared).\nIf null, the variance is estimated from the data (Maharaj et al., 2023).",
+          "title": "Variance"
+        },
+        "sides": {
+          "$ref": "#/$defs/Sides"
+        },
+        "max_n": {
+          "description": "Maximum sample size, used for rho calculation.",
+          "title": "Max N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "alpha",
+        "sides",
+        "max_n"
+      ],
+      "title": "GAVIMethodSpec",
+      "type": "object"
+    },
+    "MSPRTMethodSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "mSPRT",
+          "default": "mSPRT",
+          "title": "Kind",
+          "type": "string"
+        },
+        "burn_in": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 100,
+          "description": "Optional burn-in sample size before checking stopping rules.\nRecommended when using plug-in variance estimators to mitigate instability\nat very small sample sizes, or for asymptotic approximations that require a\nminimum sample size to become valid.",
+          "title": "Burn In"
+        },
+        "alpha": {
+          "description": "Significance level.",
+          "title": "Alpha",
+          "type": "number"
+        },
+        "variance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Estimated variance (sigma squared).\nIf null, the variance is estimated from the data (Maharaj et al., 2023).",
+          "title": "Variance"
+        },
+        "sides": {
+          "$ref": "#/$defs/Sides"
+        },
+        "mde": {
+          "description": "Minimum Detectable Effect (absolute difference), used for phi calculation.",
+          "title": "Mde",
+          "type": "number"
+        }
+      },
+      "required": [
+        "alpha",
+        "sides",
+        "mde"
+      ],
+      "title": "MSPRTMethodSpec",
+      "type": "object"
+    },
+    "MethodSpec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GAVIMethodSpec"
+        },
+        {
+          "$ref": "#/$defs/MSPRTMethodSpec"
+        },
+        {
+          "$ref": "#/$defs/SequentialQuantileMethodSpec"
+        }
+      ]
+    },
+    "MultiArmComparison": {
+      "$ref": "../../schema/es3_schema.json#/$defs/MultiArmComparison"
+    },
+    "ResponseType": {
+      "enum": [
+        "binary",
+        "continuous"
+      ],
+      "title": "ResponseType",
+      "type": "string"
+    },
+    "SequentialQuantileMethodSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "SequentialQuantile",
+          "default": "SequentialQuantile",
+          "title": "Kind",
+          "type": "string"
+        },
+        "burn_in": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 100,
+          "description": "Optional burn-in sample size before checking stopping rules.\nRecommended when using plug-in variance estimators to mitigate instability\nat very small sample sizes, or for asymptotic approximations that require a\nminimum sample size to become valid.",
+          "title": "Burn In"
+        },
+        "quantile": {
+          "description": "Target quantile (e.g., 0.5 for median).",
+          "title": "Quantile",
+          "type": "number"
+        },
+        "alpha": {
+          "description": "Significance level.",
+          "title": "Alpha",
+          "type": "number"
+        },
+        "max_n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional maximum sample size for the horizon.",
+          "title": "Max N"
+        }
+      },
+      "required": [
+        "quantile",
+        "alpha"
+      ],
+      "title": "SequentialQuantileMethodSpec",
+      "type": "object"
+    },
+    "Sides": {
+      "description": "One-sided or two-sided test.",
+      "enum": [
+        "one",
+        "two"
+      ],
+      "title": "Sides",
+      "type": "string"
+    },
+    "SingleArm": {
+      "$ref": "../../schema/es3_schema.json#/$defs/SingleArm"
+    },
+    "TaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "AVI",
+          "default": "AVI",
+          "title": "Kind",
+          "type": "string"
+        },
+        "arms": {
+          "description": "Structural definition of study arms and their roles.",
+          "discriminator": {
+            "mapping": {
+              "multi_arm": "#/$defs/MultiArmComparison",
+              "single": "#/$defs/SingleArm",
+              "two_arm": "#/$defs/TwoArmComparison"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SingleArm"
+            },
+            {
+              "$ref": "#/$defs/TwoArmComparison"
+            },
+            {
+              "$ref": "#/$defs/MultiArmComparison"
+            }
+          ],
+          "title": "Arms"
+        },
+        "response_type": {
+          "$ref": "#/$defs/ResponseType"
+        }
+      },
+      "required": [
+        "arms",
+        "response_type"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    },
+    "TwoArmComparison": {
+      "$ref": "../../schema/es3_schema.json#/$defs/TwoArmComparison"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "The name of the protocol.",
+      "title": "Name",
+      "type": "string"
+    },
+    "task": {
+      "$ref": "#/$defs/TaskSpec"
+    },
+    "method": {
+      "$ref": "#/$defs/MethodSpec"
+    }
+  },
+  "required": [
+    "name",
+    "task",
+    "method"
+  ],
+  "title": "Protocol",
+  "type": "object",
+  "$id": "https://early-sign.github.io/EarlySign/schema/v0.2.0.post502/builtin/AVI/schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

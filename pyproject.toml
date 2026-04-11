@@ -7,6 +7,7 @@ readme = "README.md"
 license = "Apache-2.0"
 homepage = "https://early-sign.github.io/EarlySign"
 repository = "https://github.com/early-sign/EarlySign"
+include = ["earlysign/**/*.json"]
 
 [tool.poetry.requires-plugins]
 poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
@@ -15,20 +16,24 @@ poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
 scipy = "^1.16.1"
-
-## Extra dependencies
-numpy = {version = "^2.3.2", optional = true}
-matplotlib = {version = "^3.10.6", optional = true}
+numpy = "^2.3.2"
+matplotlib = "^3.10.6"
+ibis-framework = "^11.0.0"
+pydantic = "^2.11.9"
+tqdm = "^4.67.1"
+jsonschema = "^4.26.0"
 
 [tool.poetry.extras]
-examples = ["matplotlib", "numpy"]
+examples = []
 
 #==== Development ====#
 [tool.poetry.group.dev.dependencies]
+datamodel-code-generator = "^0.54.0"
 jupyter = "^1.1.1" # Example development
 ipython = "^9.5.0" # Debugging
 pudb = "^2025.1" # Debugging
 pytest = "^8.4.1" # Tests
+pytest-bdd = "^8.1.0" # BDD Tests
 mypy = "^1.17.1" # Type validation
 black = {extras = ["jupyter"], version = "^25.1.0"} # Formatting
 ## Docs
@@ -42,6 +47,11 @@ myst-nb = "^1.3.0"
 sphinx-intl = "^2.3.2"
 babel = "^2.17.0"
 sphinx-autoapi = "^3.6.0"
+autodoc-pydantic = "^2.2.0"
+ibis-framework = {extras = ["duckdb", "polars"], version = "^11.0.0"}
+pytest-notebook = "^0.10.0"
+isort = "^6.1.0"
+ruff = "^0.12.0"
 
 [tool.poetry.group.ci.dependencies]
 pytest = "^8.4.1"
@@ -49,13 +59,37 @@ pytest = "^8.4.1"
 #==== Test tools ====#
 [tool.black]
 line-length = 88
-target-version = ["py311"]
+target-version = ["py311", "py312", "py313"]
 exclude = '''
-/(\.|venv|\.venv|\.git|\.mypy_cache|\.pytest_cache|build|dist|\.venv|\.poetry)/
+/(\.|venv|\.venv|\.git|\.mypy_cache|\.pytest_cache|\.tox|build|dist|\.poetry|docs/_build)/
 '''
 
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["earlysign"]
+src_paths = ["earlysign"]
+include_trailing_comma = true
+combine_as_imports = true
+multi_line_output = 3
+
+[tool.ruff]
+line-length = 88
+exclude = ["docs/_build", ".venv", ".git"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "TID"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"earlysign/schema/ES3/**" = ["TID252"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["earlysign"]
+
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.11"  # Base version for compatibility
 ignore_missing_imports = true
 show_error_codes = true
 strict = true
@@ -67,14 +101,29 @@ disallow_untyped_decorators = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 exclude = [
-    "earlysign/api/.*"
 ]
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
-addopts = "--import-mode=importlib --doctest-modules --pyargs -v"
+# --nb-test-files is run the notebooks that do not follow the test naming convention: `test_*.ipynb`.
+# --pdbcls=pudb.debugger:Debugger is used with optional `--pdb` or `--trace` so as to activate the pudb on post-mortem. Normally, these switches are not used. Use these switches when you write your own test and run pytest to debug.
+addopts = "--import-mode=importlib --doctest-modules --pyargs -v --nb-test-files --pdbcls=pudb.debugger:Debugger"
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
-testpaths = ["earlysign"]
-norecursedirs = ["docs"]
+testpaths = ["earlysign", "docs/source"]
+norecursedirs = ["docs/_build"]
+# This tells pytest-notebook to test that the jupyter-notebook executions will not stop with an error (and not comparing the results with the expectation).
+nb_diff_ignore = [
+  "/cells/*/outputs",
+  "/cells/*/execution_count",
+  "/metadata/language_info",
+  "/cells/*/outputs/*/*/*/state", # IPyWidgets
+  "/metadata/widgets", # the collective ipywidget states of the notebook
+]
 
 #==== CI ====#
 [build-system]

@@ -28,27 +28,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+      - name: Setup mise
+        uses: jdx/mise-action@v2
 
-      - name: Install Poetry and project dependencies
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-
-      - name: Install dependencies via Poetry
-        run: |
-          poetry config virtualenvs.create false
-          poetry install --with dev,ci --no-interaction
-
-      - name: Build HTML (via Make)
+      - name: Build HTML (via mise)
         run: |
           set -euo pipefail
-          # Use the Makefile target so CI uses the same commands as local
-          # development. The Make target uses `poetry run sphinx-build`.
-          make docs-build
+          mise run docs-build
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4

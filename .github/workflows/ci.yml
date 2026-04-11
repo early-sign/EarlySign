@@ -9,23 +9,20 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.11, 3.12]
+        python-version: ["3.11", "3.12", "3.13"]
+      fail-fast: false  # 一つのバージョンが失敗しても他を継続
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup mise
+        uses: jdx/mise-action@v2
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-      - name: Install dependencies
+          tool_versions: |
+            python ${{ matrix.python-version }}
+      - name: Install schema build dependencies
         run: |
-          poetry config virtualenvs.create false
-          poetry install --with dev,ci --no-interaction
+          mise run compile-ES3
       - name: Run tests
         run: |
-          make check
+          mise run lint-type-test

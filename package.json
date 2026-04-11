@@ -1,0 +1,7 @@
+{
+  "name": "earlysign-monorepo",
+  "private": true,
+  "workspaces": [
+    "ES3"
+  ]
+}

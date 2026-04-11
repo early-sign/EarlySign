@@ -1,0 +1,34 @@
+.. ADR-008: Dedicated ledger_id Column for Clustering
+.. :Date: 2026-02-16
+
+=====================================================
+ADR-008: Dedicated ledger_id Column for Clustering
+=====================================================
+
+**Status**: **`Accepted`**
+
+📋 Context
+-----------
+Previously, the `Ledger` stored experimental context (like `experiment_id`) solely within a JSON `attributes` column. While this provided high flexibility, it introduced performance bottlenecks in large-scale data warehouses like Google BigQuery. 
+
+In BigQuery, filtering on JSON fields is significantly slower and more expensive than filtering on top-level columns. Furthermore, BigQuery's clustering feature—which physically organizes data to optimize query performance—requires dedicated columns and cannot be applied to keys within a JSON blob.
+
+💡 Decision
+------------
+We decided to add a dedicated `ledger_id` column to the core `Ledger` schema, positioned immediately after the `timestamp` column. 
+
+*   **Explicit Identification**: The `Ledger` instance now optionally accepts a `ledger_id` upon initialization.
+*   **Automatic Filtering**: When a `ledger_id` is set, the `ledger.t` property automatically applies a filter on this column.
+*   **Clustering Support**: In the BigQuery backend, the table is automatically configured to cluster by the `ledger_id` column during creation via `ledger.ensure()`.
+*   **Legacy Compatibility**: The `bind()` and `unbind()` mechanism for arbitrary JSON attributes remains unchanged and continues to be used for secondary context.
+
+✨ Consequences
+-----------------
+**Positive:**
+*   **Performance**: Significant speedup for queries filtered by `ledger_id` (e.g., loading all events for a specific experiment) due to block pruning in BigQuery.
+*   **Cost Efficiency**: Reduced query costs in BigQuery as less data is scanned.
+*   **Clarity**: Provides a standard, high-performance way to partition the global event log into logical sub-ledgers.
+
+**Negative:**
+*   **Schema Change**: Existing ledgers without the `ledger_id` column must be migrated or recreated.
+*   **Slightly Less Flexibility**: Users are encouraged to use `ledger_id` for primary grouping instead of relying purely on dynamic JSON attributes.

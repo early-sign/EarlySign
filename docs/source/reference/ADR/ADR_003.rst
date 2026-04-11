@@ -1,0 +1,79 @@
+.. ADR-003: ibis-framework as the foundation of ledger implementation
+.. :Date: 2025-01-18
+
+================================================================
+ADR-003: ibis-framework as the foundation of ledger implementation
+================================================================
+
+**Status**: **`Accepted`**
+
+📋 Context
+-----------
+
+EarlySign requires a backend-agnostic ledger system for event-sourced statistical analysis. The ledger must support JSON-based payloads and labels while maintaining compatibility across multiple database backends (DuckDB, Polars, BigQuery, etc.).
+
+**Design requirements:**
+* Backend-agnostic data operations supporting multiple database systems
+* JSON column storage for flexible payload and metadata structures
+* Consistent query interface across all supported backends
+* Simple, maintainable architecture without unnecessary abstractions
+* Direct integration with statistical analysis workflows
+
+**Alternative approaches considered:**
+
+1. **SQLAlchemy-based approach**: Traditional ORM with typed models
+   - ❌ Limited JSON support across backends
+   - ❌ Heavy ORM overhead for analytical workloads
+   - ❌ Backend-specific SQL dialects cause portability issues
+
+2. **Strategy pattern with multiple persistence layers**: Abstract strategy classes for different storage approaches
+   - ❌ Adds architectural complexity without clear benefits
+   - ❌ Strategy switching creates inconsistent interfaces
+   - ❌ Over-engineering for single JSON-based requirement
+
+3. **Custom backend abstraction layer**: Build proprietary database abstraction
+   - ❌ Reinventing existing solutions (ibis already solves this)
+   - ❌ Significant development and maintenance burden
+   - ❌ Limited ecosystem compared to mature alternatives
+
+💡 Decision
+------------
+
+**Use ibis-framework as the foundation with direct JSON column persistence.**
+
+- Leverage ibis-framework for backend-agnostic database operations
+- Store payloads and labels as JSON columns in a single base table
+- Implement the ``Ledger`` as a thin wrapper around ibis TableExpr
+- Use direct JSON access patterns: `ledger.t.payload["key"]`
+- No strategy abstractions - single, simple persistence approach
+
+**Architecture:**
+```python
+# JSON column access through ibis
+result = ledger.t.select("uuid", ledger.t.payload["key"], ledger.t.labels["exp_id"])
+
+# Direct persistence operations
+ledger.append_rows(rows)
+ledger.ensure()
+```
+
+✨ Consequences
+-----------------
+
+**Positive:**
+* Full backend compatibility across ibis-supported databases
+* Consistent JSON operations regardless of backend choice
+* Simple, maintainable architecture without over-abstraction
+* Excellent performance leveraging ibis optimizations
+* Rich ecosystem integration with ibis-compatible tools
+* Clear operational boundaries between wrapper and ibis operations
+
+**Negative:**
+* JSON column approach may be less performant than typed columns for some analytical queries
+* No automatic schema validation at persistence layer
+* Users must handle JSON type casting explicitly in complex queries
+* Limited to single persistence approach (though this matches requirements)
+
+**Neutral:**
+* Architectural decisions favor simplicity over theoretical flexibility
+* JSON-first approach aligns with event-sourcing patterns commonly used in statistical analysis

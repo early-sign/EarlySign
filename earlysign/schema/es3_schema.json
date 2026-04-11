@@ -1,0 +1,261 @@
+{
+  "$defs": {
+    "ArmStructureBase": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "ArmStructureBase",
+      "type": "object"
+    },
+    "BaseES3Model": {
+      "additionalProperties": false,
+      "description": "Base Pydantic model for all EarlySign Standard Schema (ES3) entities.\nEnforces strict data integrity by forbidding extra fields and validating upon assignment.",
+      "properties": {},
+      "title": "BaseES3Model",
+      "type": "object"
+    },
+    "BaseModel": {
+      "properties": {},
+      "title": "BaseModel",
+      "type": "object"
+    },
+    "Log": {
+      "additionalProperties": false,
+      "description": "Base log/event model for metadata inclusion.",
+      "properties": {},
+      "title": "Log",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "description": "Metadata for EarlySign events and records.",
+      "properties": {
+        "ES3_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "v1.0.0",
+          "description": "Schema version (e.g., \"v1.0.0\")",
+          "title": "Es3 Version"
+        }
+      },
+      "title": "Metadata",
+      "type": "object"
+    },
+    "MethodSpec": {
+      "additionalProperties": false,
+      "description": "Base class for Operational Method.\nConcrete protocols should extend this (e.g., GST.MethodSpec).",
+      "properties": {
+        "kind": {
+          "description": "The kind of method (discriminator).",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "MethodSpec",
+      "type": "object"
+    },
+    "MultiArmComparison": {
+      "additionalProperties": false,
+      "description": "A multi-arm comparison against a common control.",
+      "properties": {
+        "kind": {
+          "const": "multi_arm",
+          "default": "multi_arm",
+          "title": "Kind",
+          "type": "string"
+        },
+        "control_arm_name": {
+          "title": "Control Arm Name",
+          "type": "string"
+        },
+        "treatment_arm_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Treatment Arm Names",
+          "type": "array"
+        },
+        "allocation_ratios": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mapping of treatment arm names to their ratio relative to control (n_treatment / n_control). If None, equal allocation is assumed.",
+          "title": "Allocation Ratios"
+        }
+      },
+      "required": [
+        "control_arm_name",
+        "treatment_arm_names"
+      ],
+      "title": "MultiArmComparison",
+      "type": "object"
+    },
+    "Protocol": {
+      "additionalProperties": false,
+      "description": "The Root Protocol Container.\nDefines the high-level structure of any EarlySign protocol.",
+      "properties": {
+        "name": {
+          "description": "The name of the protocol.",
+          "title": "Name",
+          "type": "string"
+        },
+        "task": {
+          "$ref": "#/$defs/TaskSpec",
+          "description": "The problem definition."
+        },
+        "method": {
+          "$ref": "#/$defs/MethodSpec",
+          "description": "The operational method."
+        }
+      },
+      "required": [
+        "name",
+        "task",
+        "method"
+      ],
+      "title": "Protocol",
+      "type": "object"
+    },
+    "SingleArm": {
+      "additionalProperties": false,
+      "description": "A single-arm trial design.",
+      "properties": {
+        "kind": {
+          "const": "single",
+          "default": "single",
+          "title": "Kind",
+          "type": "string"
+        },
+        "arm_name": {
+          "title": "Arm Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "arm_name"
+      ],
+      "title": "SingleArm",
+      "type": "object"
+    },
+    "TaskSpec": {
+      "additionalProperties": false,
+      "description": "Base class for Problem Definition.\nConcrete protocols should extend this (e.g., GST.TaskSpec).",
+      "properties": {
+        "kind": {
+          "description": "The kind of task (discriminator).",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    },
+    "TwoArmComparison": {
+      "additionalProperties": false,
+      "description": "A classic two-arm comparison (e.g., Treatment vs. Control).",
+      "properties": {
+        "kind": {
+          "const": "two_arm",
+          "default": "two_arm",
+          "title": "Kind",
+          "type": "string"
+        },
+        "control_arm_name": {
+          "title": "Control Arm Name",
+          "type": "string"
+        },
+        "treatment_arm_name": {
+          "title": "Treatment Arm Name",
+          "type": "string"
+        },
+        "allocation_ratios": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mapping of treatment arm name to its ratio relative to control. Key must match treatment_arm_name.",
+          "title": "Allocation Ratios"
+        }
+      },
+      "required": [
+        "control_arm_name",
+        "treatment_arm_name"
+      ],
+      "title": "TwoArmComparison",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/Protocol"
+    },
+    {
+      "$ref": "#/$defs/BaseModel"
+    },
+    {
+      "$ref": "#/$defs/BaseES3Model"
+    },
+    {
+      "$ref": "#/$defs/Log"
+    },
+    {
+      "$ref": "#/$defs/Metadata"
+    },
+    {
+      "$ref": "#/$defs/TaskSpec"
+    },
+    {
+      "$ref": "#/$defs/MethodSpec"
+    },
+    {
+      "$ref": "#/$defs/ArmStructureBase"
+    },
+    {
+      "$ref": "#/$defs/SingleArm"
+    },
+    {
+      "$ref": "#/$defs/TwoArmComparison"
+    },
+    {
+      "$ref": "#/$defs/MultiArmComparison"
+    }
+  ],
+  "$id": "https://early-sign.github.io/EarlySign/schema/v0.2.0.post502/schema/es3_schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
