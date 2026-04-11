@@ -1,15 +1,17 @@
 from typing import Any, Dict, Optional, Protocol as TypingProtocol
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import schema as GST
+import earlysign.schema.ES3.base as ES3_BASE
+from earlysign.builtin.group_sequential.schema.enums import (
+    ResponseType,
+    VarianceEstimation,
+)
+from earlysign.builtin.group_sequential.schema.protocol import Protocol
 
 
 class ZStatisticCalculator(TypingProtocol):
     """Protocol for Z-statistic calculators supporting MAMS and diverse stats models."""
 
-    def calculate(
-        self, metrics: Any, protocol: GST.Protocol
-    ) -> Optional[Dict[str, float]]:
+    def calculate(self, metrics: Any, protocol: Protocol) -> Optional[Dict[str, float]]:
         """
         Calculates Z-statistics for all treatment arms against the control.
         Returns a mapping of treatment arm name -> Z-statistic,
@@ -21,9 +23,7 @@ class ZStatisticCalculator(TypingProtocol):
 class BinomialZCalculator:
     """Binomial Z-statistic calculator supporting Wald (unpooled) and Score (pooled) variants."""
 
-    def calculate(
-        self, metrics: Any, protocol: GST.Protocol
-    ) -> Optional[Dict[str, float]]:
+    def calculate(self, metrics: Any, protocol: Protocol) -> Optional[Dict[str, float]]:
         task = protocol.task
         arms_struct = task.arms
 
@@ -54,7 +54,7 @@ class BinomialZCalculator:
         # In ES3.GST.OneArmBinomialZ, variance_source is used.
         stopping_stat = protocol.method.stopping_policy.statistic
 
-        variance_method = GST.VarianceEstimation.POOLED
+        variance_method = VarianceEstimation.POOLED
         if hasattr(stopping_stat, "variance_estimation"):
             variance_method = stopping_stat.variance_estimation
 
@@ -73,7 +73,7 @@ class BinomialZCalculator:
         return results if results else None
 
     def _compute_single_z(
-        self, control: Any, treatment: Any, method: GST.VarianceEstimation
+        self, control: Any, treatment: Any, method: VarianceEstimation
     ) -> Optional[float]:
         from earlysign.parts.stats.z_tests import calculate_two_arm_binomial_z
 
@@ -82,16 +82,14 @@ class BinomialZCalculator:
             successes_c=control.successes,
             n_t=treatment.total,
             successes_t=treatment.successes,
-            pooled=(method == GST.VarianceEstimation.POOLED),
+            pooled=(method == VarianceEstimation.POOLED),
         )
 
 
 class ContinuousZCalculator:
     """Continuous Z-statistic calculator supporting pooled and unpooled (Welch) variance."""
 
-    def calculate(
-        self, metrics: Any, protocol: GST.Protocol
-    ) -> Optional[Dict[str, float]]:
+    def calculate(self, metrics: Any, protocol: Protocol) -> Optional[Dict[str, float]]:
         task = protocol.task
         arms_struct = task.arms
 
@@ -155,11 +153,11 @@ class ZStatisticCalculatorFactory:
     """Factory to build the appropriate calculator based on Protocol."""
 
     @staticmethod
-    def build(protocol: GST.Protocol) -> ZStatisticCalculator:
+    def build(protocol: Protocol) -> ZStatisticCalculator:
         response_type = protocol.task.response_type
-        if response_type == GST.ResponseType.BINARY:
+        if response_type == ResponseType.BINARY:
             return BinomialZCalculator()
-        elif response_type == GST.ResponseType.CONTINUOUS:
+        elif response_type == ResponseType.CONTINUOUS:
             return ContinuousZCalculator()
         else:
             raise ValueError(

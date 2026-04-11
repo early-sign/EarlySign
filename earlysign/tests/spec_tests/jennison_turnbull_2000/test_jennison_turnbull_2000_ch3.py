@@ -14,9 +14,7 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     AsymptoticSimulator,
 )
 from earlysign.builtin.group_sequential.design.solver import solve_boundaries
-from earlysign.builtin.group_sequential.schema import (
-    SampleSizeTimer,
-)
+from earlysign.builtin.group_sequential.schema.timers import SampleSizeTimer
 from earlysign.builtin.group_sequential.shared.design_utils import get_info_times
 from earlysign.parts.stats.gaussian_process import CanonicalGaussianProcess
 from earlysign.parts.stats.t_distribution import (

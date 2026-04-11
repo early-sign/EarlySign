@@ -238,7 +238,7 @@ trajectories.
 .. code-block:: python
 
     >>> from earlysign.parts.trackers.binomial import Scoreboard
-    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+    >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
     >>> with Session(sess_ledger) as sess:
     ...     _ = sess.commit(BinomialArmData(total=10, success=2, arm="A"))
     >>> with Session(sess_ledger) as sess:

@@ -55,6 +55,5 @@ check:
 	make docs-build
 
 check-lite:
-	$(MAKE) -C ES3 check-sync
 	mise exec python -- make lint-type-test
 	make docs-build

@@ -11,9 +11,9 @@ Reference:
 Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
-    >>> import earlysign.schema.ES3.Base as ES3_BASE
+    >>> import earlysign.schema.ES3.base as ES3_BASE
     >>> from earlysign.builtin.AVI.controllers.mSPRT_Johari2019 import BinomialJohari2019Controller
-    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+    >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
     >>> from earlysign.builtin.AVI.schema import DecisionStatus
 
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -62,7 +62,7 @@ from typing import Any, Dict, List, Literal, Optional, cast
 
 from pydantic import BaseModel
 
-import earlysign.schema.ES3.Base as ES3_BASE
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.AVI import mSPRTEngine
 from earlysign.builtin.AVI.reporting import (
     BacktestProjector,
@@ -86,8 +86,8 @@ from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.Binomial import BinomialArmData
-from earlysign.schema.ES3.Continuous import ContinuousArmData
+from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+from earlysign.schema.ES3.trackers.continuous import ContinuousArmData
 
 
 class Protocol(Protocol_Schema, RichDisplayMixin):
@@ -200,7 +200,7 @@ class BinomialJohari2019Controller(Controller[Protocol]):
         """
         Historical Analysis from an Ibis table.
         """
-        from earlysign.schema.ES3.Binomial import BinomialArmData
+        from earlysign.schema.ES3.trackers.binomial import BinomialArmData
 
         # 1. Project and order
         if order_by:

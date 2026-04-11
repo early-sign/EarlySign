@@ -2,7 +2,7 @@ from typing import Any, Optional
 
 import ibis
 
-import earlysign.schema.ES3.Base as ES3_BASE
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.YEAST.adapters import BinomialAdapter, ContinuousAdapter
 from earlysign.builtin.YEAST.core import BoundaryModel, TrajectoryModel
 from earlysign.builtin.YEAST.schema import (
@@ -14,10 +14,10 @@ from earlysign.builtin.YEAST.schema import (
 from earlysign.framework.entity import Entity, Snapshot
 from earlysign.framework.projector import ProjectionResult
 from earlysign.framework.trace import TraceId
-from earlysign.schema.ES3.Binomial import (
+from earlysign.schema.ES3.trackers.binomial import (
     Scoreboard as BinomialScoreboard,
 )
-from earlysign.schema.ES3.Continuous import (
+from earlysign.schema.ES3.trackers.continuous import (
     Scoreboard as ContinuousScoreboard,
 )
 

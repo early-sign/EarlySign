@@ -5,42 +5,48 @@ calculations based on the canonical joint distribution of Z-statistics.
 
 Examples:
     >>> import numpy as np
-    >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.builtin.group_sequential import schema as GST
+    >>> import earlysign.schema.ES3.base as ES3_BASE
+    >>> from earlysign.builtin.group_sequential.schema.protocol import Protocol, TaskSpec, MethodSpec, EfficacyRequirement, FutilityRequirement
+    >>> from earlysign.builtin.group_sequential.schema.enums import ResponseType, Sided, VarianceEstimation
+    >>> from earlysign.builtin.group_sequential.schema.hypotheses import HypothesisSpec, SuperiorityHypothesis, BinaryEffectSize
+    >>> from earlysign.builtin.group_sequential.schema.policies import StoppingPolicySpec
+    >>> from earlysign.builtin.group_sequential.schema.statistics import TwoArmBinomialZ
+    >>> from earlysign.builtin.group_sequential.schema.strategies import AlphaSpendingStrategy, SpendingFunction as SpendingFunctionSpec, CanonicalGaussianModel
+    >>> from earlysign.builtin.group_sequential.schema.timers import SampleSizeTimer, Unit, FixedSchedule
     >>> from earlysign.builtin.group_sequential.core.model import CanonicalJointModel, Config
     >>> from earlysign.builtin.group_sequential.core.spending import OBrienFlemingSpending
     >>>
     >>> # --- Test: Model from Spec Basic ---
     >>> info_times = [0.5, 1.0]
-    >>> spec = GST.Protocol(
+    >>> spec = Protocol(
     ...     name="Test Protocol",
-    ...     task=GST.TaskSpec(
+    ...     task=TaskSpec(
     ...         kind="group_sequential",
     ...         arms=ES3_BASE.TwoArmComparison(control_arm_name="control", treatment_arm_name="treatment"),
-    ...         response_type=GST.ResponseType.BINARY,
-    ...         efficacy=GST.EfficacyRequirement(alpha=0.025),
-    ...         futility=GST.FutilityRequirement(power=0.9),
-    ...         hypotheses=GST.HypothesisSpec(
+    ...         response_type=ResponseType.BINARY,
+    ...         efficacy=EfficacyRequirement(alpha=0.025),
+    ...         futility=FutilityRequirement(power=0.9),
+    ...         hypotheses=HypothesisSpec(
     ...             h_null_description="H0", h_alt_description="H1",
-    ...             test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-    ...             target_effect=GST.BinaryEffectSize(proportions={"control": 0.1, "treatment": 0.15})
+    ...             test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+    ...             target_effect=BinaryEffectSize(proportions={"control": 0.1, "treatment": 0.15})
     ...         )
     ...     ),
-    ...     method=GST.MethodSpec(
+    ...     method=MethodSpec(
     ...         kind="group_sequential",
-    ...         stopping_policy=GST.StoppingPolicySpec(
-    ...             statistic=GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED),
-    ...             strategy=GST.AlphaSpendingStrategy(
-    ...                 spending_fn=GST.SpendingFunction(family="obrien_fleming"),
+    ...         stopping_policy=StoppingPolicySpec(
+    ...             statistic=TwoArmBinomialZ(variance_estimation=VarianceEstimation.POOLED),
+    ...             strategy=AlphaSpendingStrategy(
+    ...                 spending_fn=SpendingFunctionSpec(family="obrien_fleming"),
     ...                 budget=0.025,
-    ...                 sided=GST.Sided.ONE,
-    ...                 statistical_model=GST.CanonicalGaussianModel(),
+    ...                 sided=Sided.ONE,
+    ...                 statistical_model=CanonicalGaussianModel(),
     ...             ),
-    ...             timer=GST.SampleSizeTimer(
-    ...                 unit=GST.Unit.INDIVIDUALS,
+    ...             timer=SampleSizeTimer(
+    ...                 unit=Unit.INDIVIDUALS,
     ...                 max_sample_size={"control": 50, "treatment": 50}
     ...             ),
-    ...             schedule=GST.FixedSchedule(analyses=info_times)
+    ...             schedule=FixedSchedule(analyses=info_times)
     ...         ),
     ...     )
     ... )
@@ -76,13 +82,19 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.policy import (
     SpendingFunctionStoppingPolicy,
     StoppingPolicy,
     StoppingPolicyFactory,
 )
 from earlysign.builtin.group_sequential.core.spending import SpendingFunction
+from earlysign.builtin.group_sequential.schema.protocol import (
+    Protocol,
+)
+from earlysign.builtin.group_sequential.schema.timers import (
+    EquidistantSchedule,
+    FixedSchedule,
+)
 from earlysign.parts.stats.gaussian_process import CanonicalGaussianProcess
 
 # Internal numerical safety limits.
@@ -168,11 +180,11 @@ class CanonicalJointModel:
     @classmethod
     def from_spec(
         cls,
-        spec: GST.Protocol,
+        spec: Protocol,
         n_sims: int = 20000,
         rng_seed: int = 42,
     ) -> "CanonicalJointModel":
-        """Instantiate the model from an ES3 GST.Protocol specification."""
+        """Instantiate the model from an ES3 Protocol specification."""
         task = spec.task
         method = spec.method
         task_alpha = float(task.efficacy.alpha) if task.efficacy else None
@@ -181,9 +193,9 @@ class CanonicalJointModel:
         schedule_spec = method.stopping_policy.schedule
         schedule = schedule_spec
 
-        if isinstance(schedule, GST.FixedSchedule):
+        if isinstance(schedule, FixedSchedule):
             t = np.asarray(schedule.analyses)
-        elif isinstance(schedule, GST.EquidistantSchedule):
+        elif isinstance(schedule, EquidistantSchedule):
             k = schedule.n_looks
             t = np.linspace(1 / k, 1.0, k)
         else:

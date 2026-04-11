@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.design.operating_characteristics.binomial import (
     BinomialOperatingCharacteristicsEvaluator,
 )
@@ -21,7 +20,9 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     SimulationCurve,
 )
 from earlysign.builtin.group_sequential.engine.engine import GroupSequentialEngine
-from earlysign.builtin.group_sequential.schema import LookResult
+from earlysign.builtin.group_sequential.schema.enums import ResponseType
+from earlysign.builtin.group_sequential.schema.logs import LookResult
+from earlysign.builtin.group_sequential.schema.protocol import Protocol
 from earlysign.parts.visualization.visual import VisualizationResult
 
 
@@ -308,7 +309,7 @@ def generate_operating_characteristics_table(results: SimulationCurve) -> pd.Dat
 
 
 def visualize_protocol_design(
-    protocol: GST.Protocol,
+    protocol: Protocol,
     effect_sizes: List[float],
     return_fig: bool = True,
 ) -> Union[pd.DataFrame, VisualizationResult]:
@@ -327,7 +328,7 @@ def visualize_protocol_design(
     # 1. Select Evaluator
     evaluator: Any
     metric_type: str
-    if protocol.task.response_type == GST.ResponseType.BINARY:
+    if protocol.task.response_type == ResponseType.BINARY:
         evaluator = BinomialOperatingCharacteristicsEvaluator(protocol, n_sims=10000)
         metric_type = "relative_lift_pct"
     else:

@@ -8,7 +8,7 @@
    <div class="autoapi-breadcrumbs">{% set parts = obj.name.split('.') %}{% for i in range(parts|length) %}{% set path_prefix = '../' * (parts|length - i - 1) %}<a href="{{ path_prefix }}index.html">{{ parts[i] }}</a>{% if not loop.last %}.{% endif %}{% endfor %}</div>
 
 
-.. py:package:: {{ obj.name }}
+.. py:module:: {{ obj.name }}
 
       {% if obj.docstring %}
 .. autoapi-nested-parse::

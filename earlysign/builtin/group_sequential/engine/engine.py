@@ -2,7 +2,6 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.adapters.protocol import (
     get_standardized_drift,
 )
@@ -18,10 +17,19 @@ from earlysign.builtin.group_sequential.core.policy import (
 from earlysign.builtin.group_sequential.engine.calculators import (
     ZStatisticCalculatorFactory,
 )
-from earlysign.builtin.group_sequential.schema import (
+from earlysign.builtin.group_sequential.schema.enums import (
     DecisionStatus,
+    Sided,
+)
+from earlysign.builtin.group_sequential.schema.logs import (
     LookResult,
     ScheduleTrigger,
+)
+from earlysign.builtin.group_sequential.schema.protocol import Protocol
+from earlysign.builtin.group_sequential.schema.timers import (
+    EquidistantSchedule,
+    FixedSchedule,
+    SampleSizeTimer,
 )
 
 
@@ -36,12 +44,12 @@ class GroupSequentialEngine:
     4. Returns LookResult with explicit handling of missing data (None).
     """
 
-    _schedule: GST.FixedSchedule | GST.EquidistantSchedule
+    _schedule: FixedSchedule | EquidistantSchedule
     _points: list[float]
     n_max: int
     stopping_policy: StoppingPolicy
 
-    def __init__(self, protocol: GST.Protocol, rng_seed: int = 42):
+    def __init__(self, protocol: Protocol, rng_seed: int = 42):
         self.protocol = protocol
         method = protocol.method
         schedule = method.stopping_policy.schedule
@@ -58,9 +66,9 @@ class GroupSequentialEngine:
         self._schedule = schedule
         schedule_inner = self._schedule
         self._points = []
-        if isinstance(schedule_inner, GST.FixedSchedule):
+        if isinstance(schedule_inner, FixedSchedule):
             self._points = schedule_inner.analyses
-        elif isinstance(schedule_inner, GST.EquidistantSchedule):
+        elif isinstance(schedule_inner, EquidistantSchedule):
             k = schedule_inner.n_looks
             self._points = list(np.linspace(1 / k, 1.0, k))
         else:
@@ -69,7 +77,7 @@ class GroupSequentialEngine:
         # Max Sample Size
         self.n_max = 0
         timer = method.stopping_policy.timer
-        if isinstance(timer, GST.SampleSizeTimer):
+        if isinstance(timer, SampleSizeTimer):
             if isinstance(timer.max_sample_size, dict):
                 self.n_max = sum(timer.max_sample_size.values())
             else:
@@ -93,7 +101,7 @@ class GroupSequentialEngine:
         method = self.protocol.method
         strategy = method.stopping_policy.strategy
         if hasattr(strategy, "sided"):
-            return 1 if strategy.sided == GST.Sided.ONE else 2
+            return 1 if strategy.sided == Sided.ONE else 2
         return 1
 
     def find_critical_value(

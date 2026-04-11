@@ -26,9 +26,9 @@ Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.builtin.group_sequential.controllers.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Controller
-    >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-    >>> from earlysign.builtin.group_sequential.schema import DecisionStatus
+    >>> import earlysign.schema.ES3.base as ES3_BASE
+    >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+    >>> from earlysign.builtin.group_sequential.schema.enums import DecisionStatus
     >>>
     >>> # 1. Setup
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -72,8 +72,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import schema as GST
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -92,11 +91,24 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
 from earlysign.builtin.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.builtin.group_sequential.schema import (
-    AdaptationLog,
+from earlysign.builtin.group_sequential.schema.enums import (
     DecisionStatus,
-    LookResult,
     PromisingZoneStatus,
+    ResponseType,
+)
+from earlysign.builtin.group_sequential.schema.hypotheses import (
+    BinaryEffectSize,
+    HypothesisSpec,
+    SuperiorityHypothesis,
+)
+from earlysign.builtin.group_sequential.schema.logs import LookResult
+from earlysign.builtin.group_sequential.schema.protocol import (
+    EfficacyRequirement,
+    FutilityRequirement,
+    MethodSpec,
+    PromisingZoneSpec,
+    Protocol,
+    TaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.framework.controller import Controller
@@ -107,8 +119,8 @@ from earlysign.framework.session import Session
 class CuiHungWang1999Protocol(BaseModel):
     """Protocol for Promising Zone Adaptive Design (Cui-Hung-Wang 1999)."""
 
-    task: GST.TaskSpec
-    method: GST.MethodSpec
+    task: TaskSpec
+    method: MethodSpec
 
 
 CuiHungWang1999Protocol.model_rebuild()
@@ -137,7 +149,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
         looks: int,
         alpha: float,
         power: float,
-        task: Optional[GST.TaskSpec] = None,
+        task: Optional[TaskSpec] = None,
         spending_function: str = "obrien_fleming",
         spending_params: Optional[Dict[str, Any]] = None,
         designer_params: Optional[Dict[str, Any]] = None,
@@ -173,9 +185,9 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             >>> import ibis, duckdb  # noqa: F401
             >>> from earlysign.core.ledger import Ledger
             >>> from earlysign.builtin.group_sequential.controllers.GST_PromisingZone_CuiHungWang1999 import CuiHungWang1999Controller
-            >>> import earlysign.schema.ES3.Base as ES3_BASE
-            >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-            >>> from earlysign.builtin.group_sequential.schema import DecisionStatus
+            >>> import earlysign.schema.ES3.base as ES3_BASE
+            >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+            >>> from earlysign.builtin.group_sequential.schema.enums import DecisionStatus
             >>>
             >>> # 1. Setup
             >>> conn = ibis.connect("duckdb://:memory:")
@@ -227,19 +239,19 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
                 )
 
             delta = p_treatment - p_control
-            task = GST.TaskSpec(
+            task = TaskSpec(
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
                     treatment_arm_name="treatment",
                 ),
-                response_type=GST.ResponseType.BINARY,
-                efficacy=GST.EfficacyRequirement(alpha=alpha),
-                futility=GST.FutilityRequirement(power=power),
-                hypotheses=GST.HypothesisSpec(
+                response_type=ResponseType.BINARY,
+                efficacy=EfficacyRequirement(alpha=alpha),
+                futility=FutilityRequirement(power=power),
+                hypotheses=HypothesisSpec(
                     h_null_description="diff <= 0",
                     h_alt_description=f"diff > {delta}",
-                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.BinaryEffectSize(
+                    test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=BinaryEffectSize(
                         proportions={"control": p_control, "treatment": p_treatment}
                     ),
                 ),
@@ -261,7 +273,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
         )
 
         if method_spec.adaptation and method_spec.adaptation.sample_size_reestimation:
-            promising_spec = GST.PromisingZoneSpec(
+            promising_spec = PromisingZoneSpec(
                 conditional_power_threshold_min=conditional_power_min,
                 conditional_power_threshold_max=conditional_power_max,
                 target_conditional_power=target_conditional_power,
@@ -311,7 +323,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             history = sess.read(InterimAnalyses(identity="interim_analyses"))
 
             # 3. Standard GSD Engine
-            gst_protocol = GST.Protocol(
+            gst_protocol = Protocol(
                 name="CHW-Runtime",
                 task=protocol_traced.data.task,
                 method=protocol_traced.data.method,
@@ -355,7 +367,7 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
             report = sess.read(ProgressProjector()).data.model_dump(mode="json")
             protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
             # Enrich with current trial constraints
-            from earlysign.builtin.group_sequential.schema import SampleSizeTimer
+            from earlysign.builtin.group_sequential.schema.timers import SampleSizeTimer
 
             timer = protocol.method.stopping_policy.timer
             if isinstance(timer, SampleSizeTimer):
@@ -368,6 +380,8 @@ class CuiHungWang1999Controller(Controller[CuiHungWang1999Protocol]):
 
     def plot_result(self) -> Any:
         with Session(self.ledger) as sess:
+            from earlysign.builtin.group_sequential.schema.logs import AdaptationLog
+
             protocol = sess.read(ProtocolProjector(CuiHungWang1999Protocol)).data
             trajectory = sess.read(InterimAnalyses(identity="interim_analyses")).data
 

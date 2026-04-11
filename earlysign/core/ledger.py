@@ -90,7 +90,7 @@ from ibis.expr.types import Table
 from earlysign import __version__
 from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.core.util.sanitize_for_json import sanitize_for_json
-from earlysign.schema.ES3.Base import Metadata as ES3Metadata
+from earlysign.schema.ES3.base import Metadata as ES3Metadata
 
 T = TypeVar("T")
 

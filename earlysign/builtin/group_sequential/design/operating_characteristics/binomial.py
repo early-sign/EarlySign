@@ -7,10 +7,7 @@ from typing import Any, List, Literal, Optional, cast
 
 import numpy as np
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import (
-    schema,
-)
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.group_sequential.core.model import CanonicalJointModel
 from earlysign.builtin.group_sequential.design.operating_characteristics.engines import (
     AsymptoticSimulator,
@@ -20,6 +17,9 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     OperatingCharacteristicsEvaluator,
     SimulationCurve,
 )
+from earlysign.builtin.group_sequential.schema.hypotheses import BinaryEffectSize
+from earlysign.builtin.group_sequential.schema.protocol import Protocol
+from earlysign.builtin.group_sequential.schema.timers import SampleSizeTimer
 from earlysign.parts.stats.gaussian_process import CanonicalGaussianProcess
 
 
@@ -34,7 +34,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
     def __init__(
         self,
-        protocol: schema.Protocol,
+        protocol: Protocol,
         method: Literal["simulation", "numerical_integration"] = "simulation",
         n_sims: int = 50000,
         seed: Optional[int] = None,
@@ -55,7 +55,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 1. Inspect Task to get Baseline/Target Props and Arms
         task = protocol.task
-        if not isinstance(task.hypotheses.target_effect, schema.BinaryEffectSize):
+        if not isinstance(task.hypotheses.target_effect, BinaryEffectSize):
             raise ValueError(
                 "Evaluator requires BinaryEffectSize in protocol hypotheses."
             )
@@ -80,7 +80,7 @@ class BinomialOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 2. Derive statistical parameters for Canonical Model
         timer = protocol.method.stopping_policy.timer
-        if not isinstance(timer, schema.SampleSizeTimer):
+        if not isinstance(timer, SampleSizeTimer):
             raise ValueError(
                 f"Protocol timer must be SampleSizeTimer, got {type(timer).__name__}."
             )

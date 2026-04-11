@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Literal, Optional, Union, cast
 
-import earlysign.schema.ES3.Base as ES3_BASE
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.AVI import GAVIEngine, mSPRTEngine
 from earlysign.builtin.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.builtin.AVI.schema import (
@@ -18,7 +18,7 @@ from earlysign.framework.projector import Projector, ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.Binomial import Scoreboard as BinomialSchema
+from earlysign.schema.ES3.trackers.binomial import Scoreboard as BinomialSchema
 
 
 class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[Protocol]):
@@ -46,8 +46,8 @@ class AsymptoticConfidenceSequenceMaharaj2023Controller(Controller[Protocol]):
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
         >>> from earlysign.builtin.AVI.schema import DecisionStatus
-        >>> from earlysign.schema.ES3.Binomial import BinomialArmData
-        >>> import earlysign.schema.ES3.Base as ES3_BASE
+        >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+        >>> import earlysign.schema.ES3.base as ES3_BASE
         >>> from earlysign.builtin.AVI.controllers.AsymptoticConfidenceSequence_Maharaj2023 import AsymptoticConfidenceSequenceMaharaj2023Controller
         >>>
         >>> # Setup ledger

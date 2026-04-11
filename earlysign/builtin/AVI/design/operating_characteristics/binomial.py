@@ -16,7 +16,7 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     EvaluationResult,
     SimulationCurve,
 )
-from earlysign.schema.ES3 import Base as ES3_BASE
+from earlysign.schema.ES3 import base as ES3_BASE
 
 
 class BinomialAVIEvaluator(AVIMonteCarloSimulator):

@@ -10,8 +10,7 @@ from typing import Any, Dict, Literal, Optional, Sequence, Union, cast
 
 from pydantic import BaseModel, Field
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import schema as GST
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -31,7 +30,25 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
     FinalProjector,
     ProgressProjector,
 )
-from earlysign.builtin.group_sequential.schema import DecisionStatus, LookResult
+from earlysign.builtin.group_sequential.schema.enums import (
+    DecisionStatus,
+    ResponseType,
+)
+from earlysign.builtin.group_sequential.schema.hypotheses import (
+    BinaryEffectSize,
+    ContinuousEffectSize,
+    EffectSizeUnion,
+    HypothesisSpec,
+    SuperiorityHypothesis,
+)
+from earlysign.builtin.group_sequential.schema.logs import LookResult
+from earlysign.builtin.group_sequential.schema.protocol import (
+    EfficacyRequirement,
+    FutilityRequirement,
+    MethodSpec,
+    Protocol,
+    TaskSpec,
+)
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
 from earlysign.framework.controller import (
@@ -45,17 +62,17 @@ from earlysign.framework.trace import Traced
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 
 
-class ClassicTaskSpec(GST.TaskSpec):
+class ClassicTaskSpec(TaskSpec):
     """Task specification for Classic GST."""
 
     pass
 
 
-class ClassicProtocol(GST.Protocol, AutoNameMixin, RichDisplayMixin):
+class ClassicProtocol(Protocol, AutoNameMixin, RichDisplayMixin):
     """Protocol for Classic GST."""
 
     task: ClassicTaskSpec
-    method: GST.MethodSpec
+    method: MethodSpec
     name: str = Field(default="")
 
 
@@ -120,8 +137,8 @@ class ClassicGSTController(Controller[ClassicProtocol]):
         """
         # 1. Resolve Parameters via Match/Case
         # We determine response_type, effect_size, and calculated_delta
-        response_type: GST.ResponseType
-        eff_size: GST.EffectSizeUnion
+        response_type: ResponseType
+        eff_size: EffectSizeUnion
         calc_delta: float
 
         match (p_control, p_treatment, delta, sigma):
@@ -129,30 +146,30 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             case (float() as pc, float() as pt, _, _):
                 # Explicit Proportions
                 calc_delta = pt - pc
-                response_type = GST.ResponseType.BINARY
+                response_type = ResponseType.BINARY
                 eff_props = (
                     {control_arm_name: pc, treatment_arm_name: pt}
                     if arms == 2
                     else {treatment_arm_name: pt}
                 )
-                eff_size = GST.BinaryEffectSize(proportions=eff_props)
+                eff_size = BinaryEffectSize(proportions=eff_props)
 
             case (float() as pc, None, float() as d, _):
                 # Control + Delta
                 calc_delta = d
                 pt = pc + d
-                response_type = GST.ResponseType.BINARY
+                response_type = ResponseType.BINARY
                 eff_props = (
                     {control_arm_name: pc, treatment_arm_name: pt}
                     if arms == 2
                     else {treatment_arm_name: pt}
                 )
-                eff_size = GST.BinaryEffectSize(proportions=eff_props)
+                eff_size = BinaryEffectSize(proportions=eff_props)
 
             # --- Continuous Cases ---
             case (None, None, _, float() as s):
                 # Continuous (sigma provided)
-                response_type = GST.ResponseType.CONTINUOUS
+                response_type = ResponseType.CONTINUOUS
 
                 # Resolve Means
                 mc = mu_control if mu_control is not None else 0.0
@@ -173,7 +190,7 @@ class ClassicGSTController(Controller[ClassicProtocol]):
                     if arms == 2
                     else {treatment_arm_name: mt}
                 )
-                eff_size = GST.ContinuousEffectSize(means=means, standard_deviation=s)
+                eff_size = ContinuousEffectSize(means=means, standard_deviation=s)
 
             case _:
                 raise ValueError(
@@ -222,14 +239,14 @@ class ClassicGSTController(Controller[ClassicProtocol]):
         task = ClassicTaskSpec(
             arms=task_arms,
             response_type=response_type,
-            hypotheses=GST.HypothesisSpec(
+            hypotheses=HypothesisSpec(
                 h_null_description="No Difference",
                 h_alt_description=f"Difference {calc_delta}",
-                test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
+                test_logic=SuperiorityHypothesis(superiority_margin=0.0),
                 target_effect=eff_size,
             ),
-            efficacy=GST.EfficacyRequirement(alpha=alpha),
-            futility=GST.FutilityRequirement(power=power),
+            efficacy=EfficacyRequirement(alpha=alpha),
+            futility=FutilityRequirement(power=power),
         )
 
         return ClassicProtocol(task=task, method=method_spec)
@@ -247,7 +264,7 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             # The original code had a specific BinomialScoreboard import.
             # Now we use the generic Scoreboard and rely on response_type.
             metrics: Traced[Any]
-            if protocol.data.task.response_type == GST.ResponseType.BINARY:
+            if protocol.data.task.response_type == ResponseType.BINARY:
                 from earlysign.parts.trackers.binomial import (
                     Scoreboard as BinomialScoreboard,
                 )
@@ -264,7 +281,7 @@ class ClassicGSTController(Controller[ClassicProtocol]):
             )
 
             if trigger:
-                if protocol.data.task.response_type == GST.ResponseType.BINARY:
+                if protocol.data.task.response_type == ResponseType.BINARY:
                     engine = GroupSequentialEngine(protocol.data)
                 else:
                     # GroupSequentialEngine is polymorphic and handles Continuous types
@@ -324,7 +341,7 @@ class ClassicGSTController(Controller[ClassicProtocol]):
         Historical Analysis from an Ibis table.
         Replays data from the table and stops immediately on a stopping decision.
         """
-        from earlysign.schema.ES3.Binomial import BinomialArmData
+        from earlysign.schema.ES3.trackers.binomial import BinomialArmData
 
         # 1. Project and order
         if order_by:

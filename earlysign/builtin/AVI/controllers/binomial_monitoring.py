@@ -40,7 +40,7 @@ class BinomialMonitoringController(Controller[EProcessProtocol]):
     Examples:
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
-        >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+        >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
         >>> from earlysign.builtin.AVI.core import EProcessProtocol
         >>> from earlysign.builtin.AVI.controllers.binomial_monitoring import BinomialMonitoringController
         >>>

@@ -17,11 +17,22 @@ from typing import (
 import ibis
 from pydantic import BaseModel, Field
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.engine.calculators import (
     ZStatisticCalculatorFactory,
 )
-from earlysign.builtin.group_sequential.schema import DecisionStatus, LookResult
+from earlysign.builtin.group_sequential.schema.enums import (
+    DecisionStatus,
+    ResponseType,
+)
+from earlysign.builtin.group_sequential.schema.logs import (
+    LookResult,
+)
+from earlysign.builtin.group_sequential.schema.protocol import Protocol
+from earlysign.builtin.group_sequential.schema.timers import (
+    EquidistantSchedule,
+    FixedSchedule,
+    SampleSizeTimer,
+)
 from earlysign.framework.projector import (
     ProjectionResult,
     Projector,
@@ -96,7 +107,7 @@ class ProgressProjector(Projector[ProgressReport]):
         protocol = None
         n_max_total = 0.0
         schedule_points = []
-        response_type = GST.ResponseType.BINARY
+        response_type = ResponseType.BINARY
 
         try:
             protocol_df = (
@@ -112,14 +123,14 @@ class ProgressProjector(Projector[ProgressReport]):
                 if isinstance(payload, str):
                     payload = json.loads(payload)
 
-                # We need a proper GST.Protocol object to use calculators
-                protocol = GST.Protocol.model_validate(payload)
+                # We need a proper Protocol object to use calculators
+                protocol = Protocol.model_validate(payload)
 
                 response_type = protocol.task.response_type
 
                 # Determine max sample size
                 timer = protocol.method.stopping_policy.timer
-                if isinstance(timer, GST.SampleSizeTimer):
+                if isinstance(timer, SampleSizeTimer):
                     if isinstance(timer.max_sample_size, dict):
                         n_max_total = float(sum(timer.max_sample_size.values()))
                     else:
@@ -127,9 +138,9 @@ class ProgressProjector(Projector[ProgressReport]):
 
                 # Determine schedule
                 sched = protocol.method.stopping_policy.schedule
-                if isinstance(sched, GST.FixedSchedule):
+                if isinstance(sched, FixedSchedule):
                     schedule_points = sched.analyses
-                elif isinstance(sched, GST.EquidistantSchedule):
+                elif isinstance(sched, EquidistantSchedule):
                     import numpy as np
 
                     schedule_points = list(
@@ -140,7 +151,7 @@ class ProgressProjector(Projector[ProgressReport]):
 
         # 2. Read the latest Scoreboard
         metrics_traced: ProjectionResult[Any]
-        if response_type == GST.ResponseType.CONTINUOUS:
+        if response_type == ResponseType.CONTINUOUS:
             metrics_traced = ContinuousScoreboard(identity="metrics").project(table)
         else:
             metrics_traced = BinomialScoreboard(identity="metrics").project(table)
@@ -254,7 +265,7 @@ class FinalProjector(Projector[FinalReport]):
         latest_look = LookResult.model_validate(payload)
 
         # 2. Read Scoreboard (Determine response_type from protocol)
-        response_type = GST.ResponseType.BINARY
+        response_type = ResponseType.BINARY
         try:
             protocol_df = (
                 table.filter(table.type.like("%Protocol"))
@@ -271,13 +282,13 @@ class FinalProjector(Projector[FinalReport]):
                     else protocol_df.iloc[0]["payload"]
                 )
                 response_type = p_load.get("task", {}).get(
-                    "response_type", GST.ResponseType.BINARY
+                    "response_type", ResponseType.BINARY
                 )
         except Exception:
             pass
 
         metrics_traced: ProjectionResult[Any]
-        if response_type == GST.ResponseType.CONTINUOUS:
+        if response_type == ResponseType.CONTINUOUS:
             metrics_traced = ContinuousScoreboard(identity="metrics").project(table)
         else:
             metrics_traced = BinomialScoreboard(identity="metrics").project(table)

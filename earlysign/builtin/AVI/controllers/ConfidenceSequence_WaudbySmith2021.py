@@ -16,8 +16,8 @@ Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.builtin.AVI.controllers.ConfidenceSequence_WaudbySmith2021 import BinomialConfidenceSequenceWaudbySmith2021Controller
-    >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+    >>> import earlysign.schema.ES3.base as ES3_BASE
+    >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
 
     >>> conn = ibis.connect("duckdb://:memory:")
     >>> ledger = Ledger(conn, "events")
@@ -53,7 +53,7 @@ Examples:
 
 from typing import Any, Dict, List, Literal
 
-import earlysign.schema.ES3.Base as ES3_BASE
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.AVI import GAVIEngine
 from earlysign.builtin.AVI.reporting import FinalProjector, ProgressProjector
 from earlysign.builtin.AVI.schema import (
@@ -70,8 +70,8 @@ from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.Binomial import BinomialArmData
-from earlysign.schema.ES3.Continuous import ContinuousArmData
+from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+from earlysign.schema.ES3.trackers.continuous import ContinuousArmData
 
 
 class BinomialConfidenceSequenceWaudbySmith2021Controller(Controller[Protocol]):

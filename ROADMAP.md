@@ -42,7 +42,7 @@
   - [ ] AB-test template
   - [ ] Examples with OCE bench (backtest + online usages)
 
-- [x] AVI
+- [x] Anytime Valid Inference (AVI)
   - [x] ES3 Schema
   - [x] 1-sample Monitoring template
   - [x] 2-sample Regression Monitoring template

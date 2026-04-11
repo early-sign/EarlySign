@@ -6,8 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import schema as GST
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.group_sequential.adapters import (
     binomial,
     continuous,
@@ -22,6 +21,56 @@ from earlysign.builtin.group_sequential.core.model import (
 from earlysign.builtin.group_sequential.core.spending import (
     SpendingFunction,
     SpendingFunctionFactory,
+)
+from earlysign.builtin.group_sequential.schema.enums import (
+    Method,
+    MethodModel,
+    ResponseType,
+    Sided,
+    Unit,
+    VarianceEstimation,
+    VarianceSource,
+)
+from earlysign.builtin.group_sequential.schema.hypotheses import (
+    BinaryEffectSize,
+    ContinuousEffectSize,
+    HypothesisSpec,
+    SuperiorityHypothesis,
+    SurvivalEffectSize,
+)
+from earlysign.builtin.group_sequential.schema.policies import StoppingPolicySpec
+from earlysign.builtin.group_sequential.schema.protocol import (
+    AdaptationSpec,
+    EfficacyRequirement,
+    FutilityRequirement,
+    MethodSpec,
+    Protocol,
+    SampleSizeReestimationSpec,
+    TaskSpec,
+)
+from earlysign.builtin.group_sequential.schema.statistics import (
+    KnownVariance,
+    OneArmBinomialZ,
+    OneArmContinuousZ,
+    OneArmEstimatedVariance,
+    TwoArmBinomialZ,
+    TwoArmContinuousZ,
+    TwoArmEstimatedVariance,
+)
+from earlysign.builtin.group_sequential.schema.strategies import (
+    AlphaBetaSpendingStrategy,
+    AlphaSpendingStrategy,
+    CanonicalGaussianModel,
+    OBrienFlemingStrategy,
+    PocockStrategy,
+    SpendingFunction as SpendingFunctionSpec,
+    WangTsiatisStrategy,
+)
+from earlysign.builtin.group_sequential.schema.timers import (
+    EquidistantSchedule,
+    EventCountTimer,
+    FixedSchedule,
+    SampleSizeTimer,
 )
 
 # Internal numerical safety limits for GSD solving.
@@ -262,7 +311,7 @@ class ProtocolDesigner:
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
-    ) -> tuple[GST.MethodSpec, int]:
+    ) -> tuple[MethodSpec, int]:
         """Core logic for designing a Binomial Group Sequential Test.
 
         Args:
@@ -290,7 +339,7 @@ class ProtocolDesigner:
         # 0. Setup Spending Function Specimens (for Model Solver)
         sf_factory = SpendingFunctionFactory(budget=alpha)
         sf_eff = sf_factory.build_from_spec(
-            GST.SpendingFunction(family=spending_function, params=spending_params)
+            SpendingFunctionSpec(family=spending_function, params=spending_params)
         )
         sf_fut = None
         if futility:
@@ -299,14 +348,14 @@ class ProtocolDesigner:
             beta_budget = float(Decimal("1.0") - Decimal(str(power)))
             sf_factory_fut = SpendingFunctionFactory(budget=beta_budget)
             sf_fut = sf_factory_fut.build_from_spec(
-                GST.SpendingFunction(family=spending_function, params=spending_params)
+                SpendingFunctionSpec(family=spending_function, params=spending_params)
             )
 
         # 1. Determine Schedule
         if isinstance(scheduling, (np.ndarray, list)):
             info_times = np.array(scheduling)
         elif scheduling == "equidistant":
-            info_times = adapter.get_info_times(GST.EquidistantSchedule(n_looks=looks))
+            info_times = adapter.get_info_times(EquidistantSchedule(n_looks=looks))
         elif scheduling == "asn_minimizer":
             if looks == 1:
                 info_times = np.array([1.0])
@@ -387,41 +436,41 @@ class ProtocolDesigner:
         # 6. Construct MethodSpec
         strategy: Any
         if futility:
-            strategy = GST.AlphaBetaSpendingStrategy(
-                alpha_spending_fn=GST.SpendingFunction(
+            strategy = AlphaBetaSpendingStrategy(
+                alpha_spending_fn=SpendingFunctionSpec(
                     family=spending_function, params=spending_params
                 ),
-                beta_spending_fn=GST.SpendingFunction(
+                beta_spending_fn=SpendingFunctionSpec(
                     family=spending_function, params=spending_params
                 ),
                 alpha_budget=alpha,
                 beta_budget=float(Decimal("1.0") - Decimal(str(power))),
                 alpha_binding=True,
                 beta_binding=futility_binding,
-                statistical_model=GST.CanonicalGaussianModel(),
+                statistical_model=CanonicalGaussianModel(),
             )
         else:
-            strategy = GST.AlphaSpendingStrategy(
-                spending_fn=GST.SpendingFunction(
+            strategy = AlphaSpendingStrategy(
+                spending_fn=SpendingFunctionSpec(
                     family=spending_function, params=spending_params
                 ),
                 budget=alpha,
-                sided=GST.Sided.ONE if tails == 1 else GST.Sided.TWO,
-                statistical_model=GST.CanonicalGaussianModel(),
+                sided=Sided.ONE if tails == 1 else Sided.TWO,
+                statistical_model=CanonicalGaussianModel(),
             )
 
-        method_spec = GST.MethodSpec(
+        method_spec = MethodSpec(
             kind="group_sequential",
-            stopping_policy=GST.StoppingPolicySpec(
-                statistic=GST.TwoArmBinomialZ(
-                    variance_estimation=GST.VarianceEstimation.POOLED
+            stopping_policy=StoppingPolicySpec(
+                statistic=TwoArmBinomialZ(
+                    variance_estimation=VarianceEstimation.POOLED
                 ),
                 strategy=strategy,
-                timer=GST.SampleSizeTimer(
-                    unit=GST.Unit.INDIVIDUALS,
+                timer=SampleSizeTimer(
+                    unit=Unit.INDIVIDUALS,
                     max_sample_size=n_max,
                 ),
-                schedule=GST.FixedSchedule(analyses=info_times.tolist()),
+                schedule=FixedSchedule(analyses=info_times.tolist()),
             ),
         )
 
@@ -444,7 +493,7 @@ class ProtocolDesigner:
         method_config: Optional[
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
-    ) -> tuple[GST.MethodSpec, int]:
+    ) -> tuple[MethodSpec, int]:
         """Core logic for designing a Classic (Fixed Shape) Group Sequential Test.
 
         Args:
@@ -466,7 +515,7 @@ class ProtocolDesigner:
             A tuple of (MethodSpec, n_max).
         """
         # 1. Setup Model & Strategy
-        info_times = adapter.get_info_times(GST.EquidistantSchedule(n_looks=looks))
+        info_times = adapter.get_info_times(EquidistantSchedule(n_looks=looks))
         model = CanonicalJointModel(Config(info_times=info_times, rng_seed=rng_seed))
 
         shape_params = (
@@ -478,11 +527,11 @@ class ProtocolDesigner:
         # Mapping to internal policies to reuse their solver logic via solve_design
         # Mapping to internal policies for MethodSpec output
         if type == "pocock":
-            strategy_cls: Any = GST.PocockStrategy
+            strategy_cls: Any = PocockStrategy
         elif type == "obrien_fleming":
-            strategy_cls = GST.OBrienFlemingStrategy
+            strategy_cls = OBrienFlemingStrategy
         elif type == "wang_tsiatis":
-            strategy_cls = GST.WangTsiatisStrategy
+            strategy_cls = WangTsiatisStrategy
         else:
             raise ValueError(f"Unknown classic design type: {type}")
 
@@ -530,13 +579,11 @@ class ProtocolDesigner:
                 control_arm_name=arm_names[0],
                 treatment_arm_name=arm_names[1] if n_arms > 1 else arm_names[0],
             )
-            timer_unit = GST.Unit.INDIVIDUALS
+            timer_unit = Unit.INDIVIDUALS
             stat_spec: Any = (
-                GST.TwoArmBinomialZ(variance_estimation=GST.VarianceEstimation.POOLED)
+                TwoArmBinomialZ(variance_estimation=VarianceEstimation.POOLED)
                 if n_arms == 2
-                else GST.OneArmBinomialZ(
-                    variance_source=GST.VarianceSource.NULL_HYPOTHESIS
-                )
+                else OneArmBinomialZ(variance_source=VarianceSource.NULL_HYPOTHESIS)
             )
         elif sigma is not None:
             # Continuous
@@ -547,17 +594,17 @@ class ProtocolDesigner:
                 n_arms=n_arms,
                 arm_names=arm_names,
             )
-            timer_unit = GST.Unit.INDIVIDUALS
+            timer_unit = Unit.INDIVIDUALS
             stat_spec = (
-                GST.TwoArmContinuousZ(
+                TwoArmContinuousZ(
                     information_unit="fisher_information",
-                    variance=GST.TwoArmEstimatedVariance(
-                        kind="estimated", method=GST.MethodModel.POOLED
+                    variance=TwoArmEstimatedVariance(
+                        kind="estimated", method=MethodModel.POOLED
                     ),
                 )
                 if n_arms == 2
-                else GST.OneArmContinuousZ(
-                    variance=GST.OneArmEstimatedVariance(kind="estimated")
+                else OneArmContinuousZ(
+                    variance=OneArmEstimatedVariance(kind="estimated")
                 )
             )
         else:
@@ -569,19 +616,19 @@ class ProtocolDesigner:
         # Prepare strategy arguments
         strategy_kwargs: Dict[str, Any] = {
             "alpha": alpha,
-            "sided": GST.Sided.ONE if tails == 1 else GST.Sided.TWO,
-            "statistical_model": GST.CanonicalGaussianModel(),
+            "sided": Sided.ONE if tails == 1 else Sided.TWO,
+            "statistical_model": CanonicalGaussianModel(),
         }
         if type == "wang_tsiatis":
             strategy_kwargs["delta"] = wang_tsiatis_delta
 
-        method_spec = GST.MethodSpec(
+        method_spec = MethodSpec(
             kind="group_sequential",
-            stopping_policy=GST.StoppingPolicySpec(
+            stopping_policy=StoppingPolicySpec(
                 statistic=stat_spec,
                 strategy=strategy_cls(**strategy_kwargs),
-                timer=GST.SampleSizeTimer(unit=timer_unit, max_sample_size=n_max_dict),
-                schedule=GST.FixedSchedule(analyses=info_times.tolist()),
+                timer=SampleSizeTimer(unit=timer_unit, max_sample_size=n_max_dict),
+                schedule=FixedSchedule(analyses=info_times.tolist()),
             ),
         )
 
@@ -602,8 +649,8 @@ class ProtocolDesigner:
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
         rng_seed: int = 42,
-    ) -> GST.Protocol:
-        """Plans a binomial A/B design and returns a fully populated GST.Protocol.
+    ) -> Protocol:
+        """Plans a binomial A/B design and returns a fully populated Protocol.
 
         Args:
             alpha: Type I error rate.
@@ -619,7 +666,7 @@ class ProtocolDesigner:
             method_config: Configuration object.
 
         Returns:
-            A fully populated GST.Protocol representing the planned design.
+            A fully populated Protocol representing the planned design.
         """
         info_times = np.linspace(1 / k, 1.0, k)
         p_treatment = p_control + delta
@@ -644,28 +691,28 @@ class ProtocolDesigner:
         )
 
         # Construct the realized protocol
-        return GST.Protocol(
+        return Protocol(
             name="Designed Protocol",
-            task=GST.TaskSpec(
+            task=TaskSpec(
                 kind="group_sequential",
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
                     treatment_arm_name="treatment",
                 ),
-                response_type=GST.ResponseType.BINARY,
-                hypotheses=GST.HypothesisSpec(
+                response_type=ResponseType.BINARY,
+                hypotheses=HypothesisSpec(
                     h_null_description="Difference <= 0",
                     h_alt_description=f"Difference > {delta}",
-                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.BinaryEffectSize(
+                    test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=BinaryEffectSize(
                         proportions={
                             "control": p_control,
                             "treatment": p_treatment,
                         }
                     ),
                 ),
-                efficacy=GST.EfficacyRequirement(alpha=alpha),
-                futility=GST.FutilityRequirement(power=power),
+                efficacy=EfficacyRequirement(alpha=alpha),
+                futility=FutilityRequirement(power=power),
             ),
             method=method_spec,
         )
@@ -683,7 +730,7 @@ class ProtocolDesigner:
         control_arm_name: str = "control",
         treatment_arm_name: str = "treatment",
         rng_seed: int = 42,
-    ) -> GST.Protocol:
+    ) -> Protocol:
         """Plans a binomial design with unequal allocation.
 
         Args:
@@ -699,7 +746,7 @@ class ProtocolDesigner:
             treatment_arm_name: Name of the primary treatment arm.
 
         Returns:
-            A fully populated GST.Protocol.
+            A fully populated Protocol.
         """
         info_times = np.linspace(1 / k, 1.0, k)
         spending_family = spending_fn.name if spending_fn else "obrien_fleming"
@@ -746,33 +793,33 @@ class ProtocolDesigner:
             )
             props = {control_arm_name: p_control, treatment_arm_name: p_treatment}
 
-        return GST.Protocol(
+        return Protocol(
             name="Designed Protocol (Unequal)",
-            task=GST.TaskSpec(
+            task=TaskSpec(
                 kind="group_sequential",
                 arms=arms,
-                response_type=GST.ResponseType.BINARY,
-                hypotheses=GST.HypothesisSpec(
+                response_type=ResponseType.BINARY,
+                hypotheses=HypothesisSpec(
                     h_null_description="Difference <= 0",
                     h_alt_description=f"Difference > {p_treatment - p_control:.4f}",
-                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.BinaryEffectSize(proportions=props),
+                    test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=BinaryEffectSize(proportions=props),
                 ),
-                efficacy=GST.EfficacyRequirement(alpha=alpha),
-                futility=GST.FutilityRequirement(power=power),
+                efficacy=EfficacyRequirement(alpha=alpha),
+                futility=FutilityRequirement(power=power),
             ),
             method=method_spec,
         )
 
     def method_from_task_spec(
-        self, task: GST.TaskSpec, params: Dict[str, Any]
-    ) -> GST.MethodSpec:
+        self, task: TaskSpec, params: Dict[str, Any]
+    ) -> MethodSpec:
         """
         Derives a MethodSpec from a TaskSpec effectively serving as a 'Design Strategy'.
 
         Examples:
             >>> from earlysign.builtin.group_sequential.design.protocol_design import ProtocolDesigner
-            >>> import earlysign.schema.ES3.Base as ES3_BASE
+            >>> import earlysign.schema.ES3.base as ES3_BASE
             >>> from earlysign.builtin.group_sequential import schema as GST
             >>> from pydantic import ValidationError
 
@@ -780,16 +827,16 @@ class ProtocolDesigner:
 
             1. Valid power in task.futility
 
-            >>> task = GST.TaskSpec(
+            >>> task = TaskSpec(
             ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
-            ...     response_type=GST.ResponseType.BINARY,
-            ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
-            ...     futility=GST.FutilityRequirement(power=0.8),
-            ...     hypotheses=GST.HypothesisSpec(
+            ...     response_type=ResponseType.BINARY,
+            ...     efficacy=EfficacyRequirement(alpha=0.05),
+            ...     futility=FutilityRequirement(power=0.8),
+            ...     hypotheses=HypothesisSpec(
             ...         h_null_description="null",
             ...         h_alt_description="alt",
-            ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-            ...         target_effect=GST.BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
+            ...         test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+            ...         target_effect=BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
             ...     ),
             ... )
             >>> params = {"looks": 2, "spending_function": "obrien_fleming"}
@@ -799,16 +846,16 @@ class ProtocolDesigner:
 
             2. Valid power in params
 
-            >>> task_no_fut = GST.TaskSpec(
+            >>> task_no_fut = TaskSpec(
             ...     arms=ES3_BASE.TwoArmComparison(control_arm_name="A", treatment_arm_name="B"),
-            ...     response_type=GST.ResponseType.BINARY,
-            ...     efficacy=GST.EfficacyRequirement(alpha=0.05),
+            ...     response_type=ResponseType.BINARY,
+            ...     efficacy=EfficacyRequirement(alpha=0.05),
             ...     futility=None,
-            ...     hypotheses=GST.HypothesisSpec(
+            ...     hypotheses=HypothesisSpec(
             ...         h_null_description="null",
             ...         h_alt_description="alt",
-            ...         test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-            ...         target_effect=GST.BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
+            ...         test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+            ...         target_effect=BinaryEffectSize(proportions={"A": 0.1, "B": 0.2}),
             ...     ),
             ... )
             >>> params_with_power = {
@@ -858,7 +905,7 @@ class ProtocolDesigner:
         if not hypotheses:
             raise ValueError("Task is missing hypotheses.")
 
-        if not isinstance(hypotheses.target_effect, GST.BinaryEffectSize):
+        if not isinstance(hypotheses.target_effect, BinaryEffectSize):
             raise ValueError("Task must have BinaryEffectSize for Binomial Design")
 
         props = hypotheses.target_effect.proportions
@@ -927,16 +974,14 @@ class ProtocolDesigner:
             if v_params.ssr_method == "hsiao_2019":
                 use_weighted = False
 
-            ssr_spec = GST.SampleSizeReestimationSpec(
-                method=GST.Method.CONDITIONAL_POWER,
+            ssr_spec = SampleSizeReestimationSpec(
+                method=Method.CONDITIONAL_POWER,
                 target_power=float(target_power),
                 n_range=[0, 1000000],  # Default wide range
                 use_weighted_statistic=use_weighted,
             )
 
-            method_spec.adaptation = GST.AdaptationSpec(
-                sample_size_reestimation=ssr_spec
-            )
+            method_spec.adaptation = AdaptationSpec(sample_size_reestimation=ssr_spec)
 
         return method_spec
 
@@ -953,7 +998,7 @@ class ProtocolDesigner:
             Union[SimulationConfig, NumericalIntegrationConfig]
         ] = None,
         rng_seed: int = 42,
-    ) -> GST.Protocol:
+    ) -> Protocol:
         """
         Plans a Continuous (Two Means) A/B design.
 
@@ -978,7 +1023,7 @@ class ProtocolDesigner:
 
         Returns
         -------
-        GST.Protocol
+        Protocol
             Populated protocol with TwoArmContinuousZ statistic.
         """
         # Standardized effect size
@@ -1009,52 +1054,52 @@ class ProtocolDesigner:
         i_max = (drift / theta) ** 2
         n_max = int(np.ceil(i_max))
 
-        return GST.Protocol(
+        return Protocol(
             name="Continuous AB Protocol",
-            task=GST.TaskSpec(
+            task=TaskSpec(
                 kind="group_sequential",
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
                     treatment_arm_name="treatment",
                 ),
-                response_type=GST.ResponseType.CONTINUOUS,
-                hypotheses=GST.HypothesisSpec(
+                response_type=ResponseType.CONTINUOUS,
+                hypotheses=HypothesisSpec(
                     h_null_description="Difference <= 0",
                     h_alt_description=f"Difference > {delta}",
-                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.ContinuousEffectSize(
+                    test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=ContinuousEffectSize(
                         means={"control": 0.0, "treatment": delta},
                         standard_deviation=sigma,
                     ),
                 ),
-                efficacy=GST.EfficacyRequirement(alpha=alpha),
-                futility=GST.FutilityRequirement(power=power),
+                efficacy=EfficacyRequirement(alpha=alpha),
+                futility=FutilityRequirement(power=power),
             ),
-            method=GST.MethodSpec(
+            method=MethodSpec(
                 kind="group_sequential",
-                stopping_policy=GST.StoppingPolicySpec(
-                    statistic=GST.TwoArmContinuousZ(
+                stopping_policy=StoppingPolicySpec(
+                    statistic=TwoArmContinuousZ(
                         information_unit="fisher_information",
-                        variance=GST.TwoArmEstimatedVariance(
-                            kind="estimated", method=GST.MethodModel.POOLED
+                        variance=TwoArmEstimatedVariance(
+                            kind="estimated", method=MethodModel.POOLED
                         ),
                     ),
-                    strategy=GST.AlphaSpendingStrategy(
-                        spending_fn=GST.SpendingFunction(
+                    strategy=AlphaSpendingStrategy(
+                        spending_fn=SpendingFunctionSpec(
                             family=spending_fn.name if spending_fn else "obrien_fleming"
                         ),
                         budget=alpha,
-                        sided=GST.Sided.ONE,
-                        statistical_model=GST.CanonicalGaussianModel(),
+                        sided=Sided.ONE,
+                        statistical_model=CanonicalGaussianModel(),
                     ),
-                    timer=GST.SampleSizeTimer(
-                        unit=GST.Unit.INDIVIDUALS,
+                    timer=SampleSizeTimer(
+                        unit=Unit.INDIVIDUALS,
                         max_sample_size={
                             "control": n_max // 2,
                             "treatment": n_max - (n_max // 2),
                         },
                     ),
-                    schedule=GST.FixedSchedule(
+                    schedule=FixedSchedule(
                         analyses=info_times.tolist(),
                     ),
                 ),
@@ -1069,7 +1114,7 @@ class ProtocolDesigner:
         k: int,
         spending_fn: Optional[SpendingFunction] = None,
         rng_seed: int = 42,
-    ) -> GST.Protocol:
+    ) -> Protocol:
         """
         Plans a Survival (Time-to-Event) A/B design using Log-Rank Test.
 
@@ -1082,7 +1127,7 @@ class ProtocolDesigner:
 
         Returns
         -------
-        GST.Protocol
+        Protocol
             Populated protocol with EventCountTimer.
         """
         log_hr = np.log(hazard_ratio)
@@ -1109,46 +1154,46 @@ class ProtocolDesigner:
         # drift = theta * sqrt(Events)
         events_max = int(np.ceil((drift / theta) ** 2))
 
-        return GST.Protocol(
+        return Protocol(
             name="Survival AB Protocol",
-            task=GST.TaskSpec(
+            task=TaskSpec(
                 kind="group_sequential",
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name="control",
                     treatment_arm_name="treatment",
                 ),
-                response_type=GST.ResponseType.TIME_TO_EVENT,
-                hypotheses=GST.HypothesisSpec(
+                response_type=ResponseType.TIME_TO_EVENT,
+                hypotheses=HypothesisSpec(
                     h_null_description="HR >= 1",
                     h_alt_description=f"HR < {hazard_ratio}",
-                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.SurvivalEffectSize(
+                    test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=SurvivalEffectSize(
                         hazard_ratios={"control": 1.0, "treatment": hazard_ratio}
                     ),
                 ),
-                efficacy=GST.EfficacyRequirement(alpha=alpha),
-                futility=GST.FutilityRequirement(power=power),
+                efficacy=EfficacyRequirement(alpha=alpha),
+                futility=FutilityRequirement(power=power),
             ),
-            method=GST.MethodSpec(
+            method=MethodSpec(
                 kind="group_sequential",
-                stopping_policy=GST.StoppingPolicySpec(
-                    statistic=GST.TwoArmContinuousZ(
+                stopping_policy=StoppingPolicySpec(
+                    statistic=TwoArmContinuousZ(
                         kind="two_arm_continuous_z",
                         information_unit="fisher_information",
-                        variance=GST.KnownVariance(value=1.0),
+                        variance=KnownVariance(value=1.0),
                     ),
-                    strategy=GST.AlphaSpendingStrategy(
-                        spending_fn=GST.SpendingFunction(
+                    strategy=AlphaSpendingStrategy(
+                        spending_fn=SpendingFunctionSpec(
                             family=spending_fn.name if spending_fn else "obrien_fleming"
                         ),
                         budget=alpha,
-                        sided=GST.Sided.ONE,
-                        statistical_model=GST.CanonicalGaussianModel(),
+                        sided=Sided.ONE,
+                        statistical_model=CanonicalGaussianModel(),
                     ),
-                    timer=GST.EventCountTimer(
+                    timer=EventCountTimer(
                         max_events=events_max,
                     ),
-                    schedule=GST.FixedSchedule(
+                    schedule=FixedSchedule(
                         analyses=info_times.tolist(),
                     ),
                 ),

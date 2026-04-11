@@ -1,9 +1,9 @@
 from typing import Tuple
 
-from earlysign.schema.ES3.Binomial import (
+from earlysign.schema.ES3.trackers.binomial import (
     Scoreboard as BinomialScoreboard,
 )
-from earlysign.schema.ES3.Continuous import (
+from earlysign.schema.ES3.trackers.continuous import (
     Scoreboard as ContinuousScoreboard,
 )
 

@@ -1,6 +1,6 @@
 from typing import Any, List, Optional
 
-import earlysign.schema.ES3.Base as ES3_BASE
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.AVI.adapters import BinomialAdapter, ContinuousAdapter
 from earlysign.builtin.AVI.core import (
     BinomialEValueModel,
@@ -18,8 +18,8 @@ from earlysign.builtin.AVI.schema import (
     SequentialQuantileMethodSpec,
 )
 from earlysign.framework.trace import TraceId
-from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboard
-from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboard
+from earlysign.schema.ES3.trackers.binomial import Scoreboard as BinomialScoreboard
+from earlysign.schema.ES3.trackers.continuous import Scoreboard as ContinuousScoreboard
 
 
 class BinomialEValueEngine:

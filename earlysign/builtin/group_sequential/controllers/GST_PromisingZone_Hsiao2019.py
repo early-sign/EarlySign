@@ -25,8 +25,8 @@ Examples:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.builtin.group_sequential.controllers.GST_PromisingZone_Hsiao2019 import Hsiao2019Controller
-    >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+    >>> import earlysign.schema.ES3.base as ES3_BASE
+    >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
     >>>
     >>> # 1. Setup
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -74,8 +74,7 @@ from typing import Any, Dict, Literal, Optional, Sequence, Union, cast
 
 from pydantic import BaseModel
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import schema as GST
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -95,14 +94,30 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
 from earlysign.builtin.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.builtin.group_sequential.schema import (
-    AdaptationLog,
+from earlysign.builtin.group_sequential.schema.enums import (
     DecisionStatus,
-    LookResult,
     Method,
-    PromisingZoneSpec,
     PromisingZoneStatus,
+    ResponseType,
+)
+from earlysign.builtin.group_sequential.schema.hypotheses import (
+    BinaryEffectSize,
+    HypothesisSpec,
+    SuperiorityHypothesis,
+)
+from earlysign.builtin.group_sequential.schema.logs import (
+    AdaptationLog,
+    LookResult,
+)
+from earlysign.builtin.group_sequential.schema.protocol import (
+    AdaptationSpec,
+    EfficacyRequirement,
+    FutilityRequirement,
+    MethodSpec,
+    PromisingZoneSpec,
+    Protocol,
     SampleSizeReestimationSpec,
+    TaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
@@ -114,8 +129,8 @@ from earlysign.framework.session import Session
 class Hsiao2019Protocol(BaseModel):
     """Protocol for Optimal Promising Zone Design (Hsiao et al 2019)."""
 
-    task: GST.TaskSpec
-    method: GST.MethodSpec
+    task: TaskSpec
+    method: MethodSpec
 
     # Specific configuration for Hsiao methodology
     conditional_power_min: float = 0.5
@@ -150,7 +165,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         looks: int,
         alpha: float,
         power: float,
-        task: Optional[GST.TaskSpec] = None,
+        task: Optional[TaskSpec] = None,
         # Promising Zone Parameters
         conditional_power_min: float = 0.5,
         conditional_power_max: float = 0.9,
@@ -191,19 +206,19 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
                 )
 
             delta = p_treatment - p_control
-            task = GST.TaskSpec(
+            task = TaskSpec(
                 arms=ES3_BASE.TwoArmComparison(
                     control_arm_name=control_arm_name,
                     treatment_arm_name=treatment_arm_name,
                 ),
-                response_type=GST.ResponseType.BINARY,
-                efficacy=GST.EfficacyRequirement(alpha=alpha),
-                futility=GST.FutilityRequirement(power=power),
-                hypotheses=GST.HypothesisSpec(
+                response_type=ResponseType.BINARY,
+                efficacy=EfficacyRequirement(alpha=alpha),
+                futility=FutilityRequirement(power=power),
+                hypotheses=HypothesisSpec(
                     h_null_description="diff <= 0",
                     h_alt_description=f"diff > {delta}",
-                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.BinaryEffectSize(
+                    test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=BinaryEffectSize(
                         proportions={
                             control_arm_name: p_control,
                             treatment_arm_name: p_treatment,
@@ -245,7 +260,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         )
 
         if method_spec.adaptation is None:
-            method_spec.adaptation = GST.AdaptationSpec()
+            method_spec.adaptation = AdaptationSpec()
 
         # Assign SSR spec to the composition container
         method_spec.adaptation.sample_size_reestimation = ssr_spec
@@ -296,7 +311,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
 
             # 3. Standard GSD Engine
             # This engine will respect use_weighted_statistic=False if snapshot exists
-            gst_protocol = GST.Protocol(
+            gst_protocol = Protocol(
                 name="Hsiao2019-Runtime",
                 task=current_protocol.task,
                 method=current_protocol.method,
@@ -361,7 +376,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
             report = report_data.model_dump(mode="json")
             protocol_wrapper = sess.read(ProtocolProjector(Hsiao2019Protocol)).data
 
-            from earlysign.builtin.group_sequential.schema import SampleSizeTimer
+            from earlysign.builtin.group_sequential.schema.timers import SampleSizeTimer
 
             timer = protocol_wrapper.method.stopping_policy.timer
             if isinstance(timer, SampleSizeTimer):
@@ -408,7 +423,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
         """
         Historical Analysis from an Ibis table.
         """
-        from earlysign.schema.ES3.Binomial import BinomialArmData
+        from earlysign.schema.ES3.trackers.binomial import BinomialArmData
 
         # 1. Project and order
         if order_by:
@@ -457,7 +472,7 @@ class Hsiao2019Controller(Controller[Hsiao2019Protocol]):
     def plot_result(self) -> Any:
         with Session(self.ledger) as sess:
             protocol_wrapper = sess.read(ProtocolProjector(Hsiao2019Protocol)).data
-            gst_protocol = GST.Protocol(
+            gst_protocol = Protocol(
                 name="Hsiao2019-Plot",
                 task=protocol_wrapper.task,
                 method=protocol_wrapper.method,

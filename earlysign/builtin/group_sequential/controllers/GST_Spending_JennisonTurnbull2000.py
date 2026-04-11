@@ -11,11 +11,10 @@ Example:
     >>> import ibis, duckdb  # noqa: F401
     >>> from earlysign.core.ledger import Ledger
     >>> from earlysign.builtin.group_sequential.controllers.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Controller, JennisonTurnbull2000TaskSpec
-    >>> import earlysign.schema.ES3.Base as ES3_BASE
-    >>> from earlysign.builtin.group_sequential import schema as GST
-    >>> from earlysign.builtin.group_sequential.schema import DecisionStatus
+    >>> import earlysign.schema.ES3.base as ES3_BASE
+    >>> from earlysign.builtin.group_sequential.schema.enums import DecisionStatus
     >>> from earlysign.tests.util import BinomialStream
-    >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+    >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
     >>> import numpy as np
     >>> # Setup
     >>> conn = ibis.connect("duckdb://:memory:")
@@ -77,8 +76,7 @@ from typing import (
 
 from pydantic import BaseModel, Field, TypeAdapter
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import schema as GST
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.group_sequential.core.model import (
     NumericalIntegrationConfig,
     SimulationConfig,
@@ -103,14 +101,29 @@ from earlysign.builtin.group_sequential.reporting.projectors import (
 from earlysign.builtin.group_sequential.reporting.visualization import (
     plot_gst_summary,
 )
-from earlysign.builtin.group_sequential.schema import (
-    AbsoluteDifference,
+from earlysign.builtin.group_sequential.schema.enums import (
     DecisionStatus,
+    ResponseType,
+)
+from earlysign.builtin.group_sequential.schema.hypotheses import (
+    AbsoluteDifference,
+    BinaryEffectSize,
     EffectMeasure,
-    LookResult,
+    HypothesisSpec,
     OddsRatio,
     RelativeImprovement,
     RelativeRisk,
+    SuperiorityHypothesis,
+)
+from earlysign.builtin.group_sequential.schema.logs import (
+    LookResult,
+)
+from earlysign.builtin.group_sequential.schema.protocol import (
+    EfficacyRequirement,
+    FutilityRequirement,
+    MethodSpec,
+    Protocol,
+    TaskSpec,
 )
 from earlysign.core.ledger import Ledger
 from earlysign.core.util.logging import get_logger
@@ -124,18 +137,17 @@ from earlysign.framework.session import BacktestSession, Session
 from earlysign.parts.trackers.binomial import Scoreboard
 
 
-class JennisonTurnbull2000TaskSpec(GST.TaskSpec):
-    response_type: GST.ResponseType = GST.ResponseType.BINARY
+class JennisonTurnbull2000TaskSpec(TaskSpec):
+    response_type: ResponseType = ResponseType.BINARY
     # Design Requirements
-    efficacy: GST.EfficacyRequirement
-    futility: GST.FutilityRequirement
+    efficacy: EfficacyRequirement
+    futility: FutilityRequirement
+    hypotheses: HypothesisSpec
 
-    hypotheses: GST.HypothesisSpec
 
-
-class JennisonTurnbull2000Protocol(GST.Protocol, AutoNameMixin, RichDisplayMixin):
+class JennisonTurnbull2000Protocol(Protocol, AutoNameMixin, RichDisplayMixin):
     task: JennisonTurnbull2000TaskSpec
-    method: GST.MethodSpec
+    method: MethodSpec
     name: str = Field(default="")
 
 
@@ -235,7 +247,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         Examples:
             >>> import numpy as np
             >>> from earlysign.builtin.group_sequential.controllers.GST_Spending_JennisonTurnbull2000 import JennisonTurnbull2000Controller
-            >>> import earlysign.schema.ES3.Base as ES3_BASE
+            >>> import earlysign.schema.ES3.base as ES3_BASE
             >>>
             >>> from earlysign.builtin.group_sequential.shared.design_utils import get_info_times
             >>>
@@ -299,14 +311,14 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
 
             task = JennisonTurnbull2000TaskSpec(
                 arms=arms,
-                response_type=GST.ResponseType.BINARY,
-                efficacy=GST.EfficacyRequirement(alpha=alpha),
-                futility=GST.FutilityRequirement(power=power),
-                hypotheses=GST.HypothesisSpec(
+                response_type=ResponseType.BINARY,
+                efficacy=EfficacyRequirement(alpha=alpha),
+                futility=FutilityRequirement(power=power),
+                hypotheses=HypothesisSpec(
                     h_null_description="Difference <= 0",
                     h_alt_description=f"Difference > {p_treatment - p_control:.4f}",
-                    test_logic=GST.SuperiorityHypothesis(superiority_margin=0.0),
-                    target_effect=GST.BinaryEffectSize(proportions=props),
+                    test_logic=SuperiorityHypothesis(superiority_margin=0.0),
+                    target_effect=BinaryEffectSize(proportions=props),
                 ),
             )
 
@@ -316,7 +328,6 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
         rng_seed = designer_params.get("model_params", {}).get("rng_seed", 42)
 
         # 3. Design Strategy Components using common ProtocolDesigner
-        from earlysign.builtin.group_sequential.schema import BinaryEffectSize
 
         hypotheses = task.hypotheses
         if isinstance(hypotheses.target_effect, BinaryEffectSize):
@@ -493,7 +504,7 @@ class JennisonTurnbull2000Controller(Controller[JennisonTurnbull2000Protocol]):
             success_col: Column name for the number of successes.
             order_by: Column name to order the data by.
         """
-        from earlysign.schema.ES3.Binomial import BinomialArmData
+        from earlysign.schema.ES3.trackers.binomial import BinomialArmData
 
         # 1. Project and order
         if order_by:
@@ -622,8 +633,6 @@ Stopping Policy:
             else "treatment"
         )
 
-        from earlysign.builtin.group_sequential.schema import BinaryEffectSize
-
         hypotheses = task.hypotheses
         p0 = 0.0
         p1 = 0.0
@@ -635,7 +644,7 @@ Stopping Policy:
         strategy = policy.strategy
 
         spending_fn = "Unknown"
-        from earlysign.builtin.group_sequential.schema import (
+        from earlysign.builtin.group_sequential.schema.strategies import (
             AlphaBetaSpendingStrategy,
         )
 

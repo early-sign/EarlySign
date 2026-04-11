@@ -5,20 +5,23 @@ Engine for Adaptive Group Sequential Design / Sample Size Re-estimation.
 import numpy as np
 from scipy import stats
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.adapters.protocol import (
     get_final_efficacy_boundary,
     get_standardized_drift,
 )
-from earlysign.builtin.group_sequential.schema import (
+from earlysign.builtin.group_sequential.schema.enums import PromisingZoneStatus
+from earlysign.builtin.group_sequential.schema.logs import (
     AdaptationLog,
+    AdaptationSnapshot,
     LookResult,
-    PromisingZoneStatus,
+)
+from earlysign.builtin.group_sequential.schema.protocol import (
     Protocol,
+    SampleSizeReestimationSpec,
 )
 
 
-def _get_ssr_spec(protocol: Protocol) -> GST.SampleSizeReestimationSpec:
+def _get_ssr_spec(protocol: Protocol) -> SampleSizeReestimationSpec:
     """Helper to find the SampleSizeReestimationSpec in the protocol."""
     if not protocol.method.adaptation:
         raise ValueError("Protocol has no adaptation configured.")
@@ -105,16 +108,30 @@ class ConditionalPowerAdaptationEngine:
         """
         Assess if the trial is in the 'Promising Zone' and recommend action.
 
-        >>> import earlysign.schema.ES3.Base as ES3_BASE
-        >>> from earlysign.builtin.group_sequential.schema import (
-        ...     Protocol, MethodSpec, StoppingPolicySpec, OBrienFlemingStrategy,
-        ...     TaskSpec, HypothesisSpec, BinaryEffectSize, EquidistantSchedule,
-        ...     TwoArmBinomialZ, SampleSizeTimer, EqualityHypothesis,
-        ...     CanonicalGaussianModel, SampleSizeReestimationSpec, PromisingZoneSpec,
-        ...     AdaptationSpec
+        >>> import earlysign.schema.ES3.base as ES3_BASE
+        >>> from earlysign.builtin.group_sequential.schema.protocol import (
+        ...     Protocol, MethodSpec, SampleSizeReestimationSpec, PromisingZoneSpec,
+        ...     AdaptationSpec, TaskSpec
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.policies import (
+        ...     StoppingPolicySpec,
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.strategies import (
+        ...     OBrienFlemingStrategy, CanonicalGaussianModel,
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.hypotheses import (
+        ...     HypothesisSpec, BinaryEffectSize, EqualityHypothesis,
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.timers import (
+        ...     EquidistantSchedule, SampleSizeTimer,
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.statistics import (
+        ...     TwoArmBinomialZ,
         ... )
         >>> from earlysign.builtin.group_sequential.engine.sample_size_reestimation import ConditionalPowerAdaptationEngine
-        >>> from earlysign.builtin.group_sequential.schema import LookResult
+        >>> from earlysign.builtin.group_sequential.schema.logs import (
+        ...     LookResult,
+        ... )
         >>> # Mock results
         >>> res = LookResult(
         ...     look=1, sample_n=50, info_frac=0.5, z_stat=2.0,
@@ -355,7 +372,7 @@ class ConditionalPowerAdaptationEngine:
                 new_protocol.method.stopping_policy.timer.max_sample_size = new_n_dict
 
         # Attach snapshot for Type I error preservation
-        new_protocol.method.adaptation_snapshot = GST.AdaptationSnapshot(
+        new_protocol.method.adaptation_snapshot = AdaptationSnapshot(
             z_t=z_t_val,
             info_frac=t_val,
             original_max_sample_size=n_old_val,

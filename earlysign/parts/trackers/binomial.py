@@ -7,7 +7,7 @@ from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity import Entity, Snapshot
 from earlysign.framework.projector import ProjectionResult
 from earlysign.framework.trace import TraceId
-from earlysign.schema.ES3.Binomial import (
+from earlysign.schema.ES3.trackers.binomial import (
     ArmMetrics,
     ArmStatus,
     BinomialArmData,

@@ -1,11 +1,11 @@
 from typing import Tuple
 
-from earlysign.schema.ES3.Binomial import (
+from earlysign.schema.ES3.trackers.binomial import (
     ArmMetrics as BinomialArmMetrics,
     ArmStatus as BinomialArmStatus,
     Scoreboard as BinomialScoreboard,
 )
-from earlysign.schema.ES3.Continuous import (
+from earlysign.schema.ES3.trackers.continuous import (
     ArmMetrics as ContinuousArmMetrics,
     ArmStatus as ContinuousArmStatus,
     Scoreboard as ContinuousScoreboard,

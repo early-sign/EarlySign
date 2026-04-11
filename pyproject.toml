@@ -7,6 +7,7 @@ readme = "README.md"
 license = "Apache-2.0"
 homepage = "https://early-sign.github.io/EarlySign"
 repository = "https://github.com/early-sign/EarlySign"
+include = ["earlysign/**/*.json"]
 
 [tool.poetry.requires-plugins]
 poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
@@ -20,6 +21,7 @@ matplotlib = "^3.10.6"
 ibis-framework = "^11.0.0"
 pydantic = "^2.11.9"
 tqdm = "^4.67.1"
+jsonschema = "^4.26.0"
 
 [tool.poetry.extras]
 examples = []

@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "MethodSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "yeast",
+          "default": "yeast",
+          "title": "Kind",
+          "type": "string"
+        },
+        "significance_level": {
+          "title": "Significance Level",
+          "type": "number"
+        },
+        "expected_num_observations": {
+          "title": "Expected Num Observations",
+          "type": "integer"
+        },
+        "estimated_variance": {
+          "description": "The estimated variance of a single increment (difference).\nIf not specified, conservatively defaults to the max variance for a difference of two Binomials (0.5).",
+          "title": "Estimated Variance",
+          "type": "number"
+        },
+        "boundary_sequence": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": [],
+          "title": "Boundary Sequence"
+        }
+      },
+      "required": [
+        "significance_level",
+        "expected_num_observations",
+        "estimated_variance"
+      ],
+      "title": "MethodSpec",
+      "type": "object"
+    },
+    "MultiArmComparison": {
+      "$ref": "../../schema/es3_schema.json#/$defs/MultiArmComparison"
+    },
+    "ResponseType": {
+      "enum": [
+        "binary",
+        "continuous"
+      ],
+      "title": "ResponseType",
+      "type": "string"
+    },
+    "SingleArm": {
+      "$ref": "../../schema/es3_schema.json#/$defs/SingleArm"
+    },
+    "TaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "yeast",
+          "default": "yeast",
+          "title": "Kind",
+          "type": "string"
+        },
+        "arms": {
+          "description": "Structural definition of study arms and their roles.",
+          "discriminator": {
+            "mapping": {
+              "multi_arm": "#/$defs/MultiArmComparison",
+              "single": "#/$defs/SingleArm",
+              "two_arm": "#/$defs/TwoArmComparison"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SingleArm"
+            },
+            {
+              "$ref": "#/$defs/TwoArmComparison"
+            },
+            {
+              "$ref": "#/$defs/MultiArmComparison"
+            }
+          ],
+          "title": "Arms"
+        },
+        "response_type": {
+          "$ref": "#/$defs/ResponseType"
+        }
+      },
+      "required": [
+        "arms",
+        "response_type"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    },
+    "TwoArmComparison": {
+      "$ref": "../../schema/es3_schema.json#/$defs/TwoArmComparison"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "The name of the protocol.",
+      "title": "Name",
+      "type": "string"
+    },
+    "task": {
+      "$ref": "#/$defs/TaskSpec"
+    },
+    "method": {
+      "$ref": "#/$defs/MethodSpec"
+    }
+  },
+  "required": [
+    "name",
+    "task",
+    "method"
+  ],
+  "title": "Protocol",
+  "type": "object",
+  "$id": "https://early-sign.github.io/EarlySign/schema/v0.2.0.post502/builtin/YEAST/schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

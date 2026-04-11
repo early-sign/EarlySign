@@ -11,8 +11,12 @@ from earlysign.framework.projector import (
 )
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboardSchema
-from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboardSchema
+from earlysign.schema.ES3.trackers.binomial import (
+    Scoreboard as BinomialScoreboardSchema,
+)
+from earlysign.schema.ES3.trackers.continuous import (
+    Scoreboard as ContinuousScoreboardSchema,
+)
 
 
 class ProgressReport(BaseModel):

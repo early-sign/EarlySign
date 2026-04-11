@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import ibis
 
-import earlysign.schema.ES3.Base as ES3_BASE
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.AVI.engine import (
     SequentialQuantileEngine,
 )
@@ -81,7 +81,7 @@ class HowardRamdas2022Controller(Controller[Protocol]):
     >>> import ibis
     >>> import duckdb
     >>> from earlysign.core.ledger import Ledger
-    >>> import earlysign.schema.ES3.Base as ES3_BASE
+    >>> import earlysign.schema.ES3.base as ES3_BASE
     >>> from earlysign.builtin.AVI.controllers.SequentialQuantile_HowardRamdas2022 import HowardRamdas2022Controller
     >>> con = ibis.duckdb.connect(":memory:")
     >>> # Scenario:

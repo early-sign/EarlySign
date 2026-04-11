@@ -5,51 +5,43 @@ ES3 Schema Reference
 used throughout the EarlySign framework. It ensures consistency across different
 components and provides a language-neutral definition of our data models.
 
-TypeSpec Origin
----------------
+Pydantic-First Architecture
+---------------------------
 
-The authoritative source for these schemas is defined in **TypeSpec** (formerly ADL).
-These definitions serve as the primary source of truth, from which Pydantic models
-are automatically generated for the Python implementation.
+The authoritative source for these schemas is defined in **Pydantic Models**.
+These definitions serve as the primary source of truth, ensuring type-safety
+and runtime validation within the Python environment.
 
-The source files are located in the ``ES3/schema`` directory of the repository.
+The source files are located in the ``earlysign/schema/ES3`` directory of the repository.
 
-Core Manifest
+Core Protocol
 -------------
 
-.. literalinclude:: ../../../ES3/schema/es3_v1.tsp
-   :language: typescript
+.. literalinclude:: ../../../earlysign/schema/ES3/base.py
+   :language: python
    :linenos:
-   :caption: es3_v1.tsp
+   :caption: base.py
 
-AVI
----
+Anytime Valid Inference (AVI)
+-----------------------------
 
-.. literalinclude:: ../../../earlysign/builtin/AVI/AVI.tsp
-   :language: typescript
+.. literalinclude:: ../../../earlysign/builtin/AVI/schema.py
+   :language: python
    :linenos:
-   :caption: AVI.tsp
-
-SequentialQuantile
-------------------
-
-.. literalinclude:: ../../../earlysign/builtin/AVI/SequentialQuantile.tsp
-   :language: typescript
-   :linenos:
-   :caption: SequentialQuantile.tsp
+   :caption: schema.py
 
 YEAST
 -----
 
-.. literalinclude:: ../../../earlysign/builtin/YEAST/YEAST.tsp
-   :language: typescript
+.. literalinclude:: ../../../earlysign/builtin/YEAST/schema.py
+   :language: python
    :linenos:
-   :caption: YEAST.tsp
+   :caption: schema.py
 
-GST
----
+Group Sequential (GST)
+----------------------
 
-.. literalinclude:: ../../../earlysign/builtin/group_sequential/GST.tsp
-   :language: typescript
+.. literalinclude:: ../../../earlysign/builtin/group_sequential/schema/protocol.py
+   :language: python
    :linenos:
-   :caption: GST.tsp
+   :caption: protocol.py

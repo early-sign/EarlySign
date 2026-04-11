@@ -7,10 +7,7 @@ from typing import Any, List, Literal, Optional, cast
 
 import numpy as np
 
-import earlysign.schema.ES3.Base as ES3_BASE
-from earlysign.builtin.group_sequential import (
-    schema,
-)
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.group_sequential.core.model import CanonicalJointModel
 from earlysign.builtin.group_sequential.design.operating_characteristics.engines import (
     AsymptoticSimulator,
@@ -19,6 +16,15 @@ from earlysign.builtin.group_sequential.design.operating_characteristics.engines
     NumericalCalculator,
     OperatingCharacteristicsEvaluator,
     SimulationCurve,
+)
+from earlysign.builtin.group_sequential.schema.hypotheses import (
+    ContinuousEffectSize,
+)
+from earlysign.builtin.group_sequential.schema.protocol import (
+    Protocol,
+)
+from earlysign.builtin.group_sequential.schema.timers import (
+    SampleSizeTimer,
 )
 from earlysign.parts.stats.gaussian_process import CanonicalGaussianProcess
 
@@ -29,56 +35,74 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
     Assumes Normal distribution with known variance (sigma^2) for planning purposes.
 
     Examples:
-        >>> from earlysign.builtin.group_sequential import schema
-        >>> import earlysign.schema.ES3.Base as ES3_BASE
+        >>> from earlysign.builtin.group_sequential.schema.enums import (
+        ...     MethodModel, ResponseType, Sided, Unit
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.hypotheses import (
+        ...     ContinuousEffectSize, EqualityHypothesis, HypothesisSpec
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.policies import StoppingPolicySpec
+        >>> from earlysign.builtin.group_sequential.schema.protocol import (
+        ...     EfficacyRequirement, FutilityRequirement, MethodSpec, Protocol, TaskSpec
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.statistics import (
+        ...     TwoArmContinuousZ, TwoArmEstimatedVariance
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.strategies import (
+        ...     CanonicalGaussianModel, OBrienFlemingStrategy
+        ... )
+        >>> from earlysign.builtin.group_sequential.schema.timers import (
+        ...     EquidistantSchedule, SampleSizeTimer
+        ... )
+        >>> import earlysign.schema.ES3.base as ES3_BASE
         >>> from earlysign.builtin.group_sequential.design.operating_characteristics import (
         ...     ContinuousOperatingCharacteristicsEvaluator,
         ... )
 
         1. Verify I_max calculation for 1-arm and 2-arm continuous designs
 
-        >>> effect = schema.ContinuousEffectSize(
+        >>> effect = ContinuousEffectSize(
         ...     means={"control": 0.0, "treatment": 1.0},
         ...     standard_deviation=2.0,
         ... )
-        >>> hyp = schema.HypothesisSpec(
+        >>> hyp = HypothesisSpec(
         ...     h_null_description="H0",
         ...     h_alt_description="H1",
-        ...     test_logic=schema.EqualityHypothesis(),
+        ...     test_logic=EqualityHypothesis(),
         ...     target_effect=effect,
         ... )
-        >>> timer = schema.SampleSizeTimer(
-        ...     unit=schema.Unit.INDIVIDUALS,
+        >>> timer = SampleSizeTimer(
+        ...     unit=Unit.INDIVIDUALS,
         ...     max_sample_size={"control": 50, "treatment": 50}
         ... )
-        >>> sched = schema.EquidistantSchedule(n_looks=2)
-        >>> strat = schema.OBrienFlemingStrategy(
+        >>> sched = EquidistantSchedule(n_looks=2)
+        >>> strat = OBrienFlemingStrategy(
         ...     alpha=0.05,
-        ...     sided=schema.Sided.TWO,
-        ...     statistical_model=schema.CanonicalGaussianModel(),
+        ...     sided=Sided.TWO,
+        ...     statistical_model=CanonicalGaussianModel(),
         ... )
-        >>> policy = schema.StoppingPolicySpec(
-        ...     statistic=schema.TwoArmContinuousZ(
-        ...         variance=schema.TwoArmEstimatedVariance(method=schema.MethodModel.POOLED)
+        >>> policy = StoppingPolicySpec(
+        ...     statistic=TwoArmContinuousZ(
+        ...         variance=TwoArmEstimatedVariance(method=MethodModel.POOLED)
         ...     ),
         ...     strategy=strat,
         ...     timer=timer,
         ...     schedule=sched,
         ... )
-        >>> method = schema.MethodSpec(kind="group_sequential", stopping_policy=policy)
+        >>> method = MethodSpec(kind="group_sequential", stopping_policy=policy)
 
         --- 2-Arm Check ---
 
-        >>> task_2arm = schema.TaskSpec(
+        >>> task_2arm = TaskSpec(
         ...     kind="group_sequential",
-        ...     response_type=schema.ResponseType.CONTINUOUS,
+        ...     response_type=ResponseType.CONTINUOUS,
         ...     arms=ES3_BASE.TwoArmComparison(
         ...         control_arm_name="control", treatment_arm_name="treatment"
         ...     ),
         ...     hypotheses=hyp,
-        ...     efficacy=schema.EfficacyRequirement(alpha=0.05),
+        ...     efficacy=EfficacyRequirement(alpha=0.05),
         ... )
-        >>> protocol_2arm = schema.Protocol(name="Test", task=task_2arm, method=method)
+        >>> protocol_2arm = Protocol(name="Test", task=task_2arm, method=method)
         >>> eval_2arm = ContinuousOperatingCharacteristicsEvaluator(protocol_2arm)
         >>> # I_max = N / (4 * sigma^2) = 100 / (4 * 4) = 100 / 16 = 6.25
         >>> eval_2arm.i_max
@@ -88,14 +112,14 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         --- 1-Arm Check ---
 
-        >>> task_1arm = schema.TaskSpec(
+        >>> task_1arm = TaskSpec(
         ...     kind="group_sequential",
-        ...     response_type=schema.ResponseType.CONTINUOUS,
+        ...     response_type=ResponseType.CONTINUOUS,
         ...     arms=ES3_BASE.SingleArm(arm_name="treatment"),
         ...     hypotheses=hyp,
-        ...     efficacy=schema.EfficacyRequirement(alpha=0.05),
+        ...     efficacy=EfficacyRequirement(alpha=0.05),
         ... )
-        >>> protocol_1arm = schema.Protocol(name="Test", task=task_1arm, method=method)
+        >>> protocol_1arm = Protocol(name="Test", task=task_1arm, method=method)
         >>> eval_1arm = ContinuousOperatingCharacteristicsEvaluator(protocol_1arm)
         >>> # I_max = N / sigma^2 = 100 / 4 = 25.0
         >>> eval_1arm.i_max
@@ -105,45 +129,45 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         2. Verify that power increases with effect size
 
-        >>> effect_power = schema.ContinuousEffectSize(
+        >>> effect_power = ContinuousEffectSize(
         ...     means={"control": 0.0, "treatment": 1.0},
         ...     standard_deviation=1.0,
         ... )
-        >>> task_power = schema.TaskSpec(
+        >>> task_power = TaskSpec(
         ...     kind="group_sequential",
-        ...     response_type=schema.ResponseType.CONTINUOUS,
+        ...     response_type=ResponseType.CONTINUOUS,
         ...     arms=ES3_BASE.TwoArmComparison(
         ...         control_arm_name="control", treatment_arm_name="treatment"
         ...     ),
-        ...     hypotheses=schema.HypothesisSpec(
+        ...     hypotheses=HypothesisSpec(
         ...         h_null_description="H0",
         ...         h_alt_description="H1",
-        ...         test_logic=schema.EqualityHypothesis(),
+        ...         test_logic=EqualityHypothesis(),
         ...         target_effect=effect_power,
         ...     ),
-        ...     efficacy=schema.EfficacyRequirement(alpha=0.05),
-        ...     futility=schema.FutilityRequirement(power=0.8),
+        ...     efficacy=EfficacyRequirement(alpha=0.05),
+        ...     futility=FutilityRequirement(power=0.8),
         ... )
-        >>> timer_power = schema.SampleSizeTimer(
-        ...     unit=schema.Unit.INDIVIDUALS,
+        >>> timer_power = SampleSizeTimer(
+        ...     unit=Unit.INDIVIDUALS,
         ...     max_sample_size={"control": 100, "treatment": 100}
         ... )
-        >>> policy_power = schema.StoppingPolicySpec(
-        ...     statistic=schema.TwoArmContinuousZ(
-        ...         variance=schema.TwoArmEstimatedVariance(method=schema.MethodModel.POOLED)
+        >>> policy_power = StoppingPolicySpec(
+        ...     statistic=TwoArmContinuousZ(
+        ...         variance=TwoArmEstimatedVariance(method=MethodModel.POOLED)
         ...     ),
-        ...     strategy=schema.OBrienFlemingStrategy(
+        ...     strategy=OBrienFlemingStrategy(
         ...         alpha=0.05,
-        ...         sided=schema.Sided.TWO,
-        ...         statistical_model=schema.CanonicalGaussianModel(),
+        ...         sided=Sided.TWO,
+        ...         statistical_model=CanonicalGaussianModel(),
         ...     ),
         ...     timer=timer_power,
-        ...     schedule=schema.EquidistantSchedule(n_looks=1),
+        ...     schedule=EquidistantSchedule(n_looks=1),
         ... )
-        >>> protocol_power = schema.Protocol(
+        >>> protocol_power = Protocol(
         ...     name="Test",
         ...     task=task_power,
-        ...     method=schema.MethodSpec(kind="group_sequential", stopping_policy=policy_power),
+        ...     method=MethodSpec(kind="group_sequential", stopping_policy=policy_power),
         ... )
         >>> evaluator = ContinuousOperatingCharacteristicsEvaluator(protocol_power, n_sims=5000)
         >>> curve = evaluator.evaluate_metric_at(
@@ -161,7 +185,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
     def __init__(
         self,
-        protocol: schema.Protocol,
+        protocol: Protocol,
         method: Literal["simulation", "numerical_integration"] = "simulation",
         n_sims: int = 50000,
         seed: Optional[int] = None,
@@ -182,7 +206,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 1. Inspect Task to get Baseline/Target Means and Variance
         task = protocol.task
-        if not isinstance(task.hypotheses.target_effect, schema.ContinuousEffectSize):
+        if not isinstance(task.hypotheses.target_effect, ContinuousEffectSize):
             raise ValueError(
                 "Evaluator requires ContinuousEffectSize in protocol hypotheses."
             )
@@ -220,7 +244,7 @@ class ContinuousOperatingCharacteristicsEvaluator(MonteCarloSimulator):
 
         # 2. Derive statistical parameters for Canonical Model
         timer = protocol.method.stopping_policy.timer
-        if not isinstance(timer, schema.SampleSizeTimer):
+        if not isinstance(timer, SampleSizeTimer):
             raise ValueError(
                 f"Protocol timer must be SampleSizeTimer, got {type(timer).__name__}."
             )

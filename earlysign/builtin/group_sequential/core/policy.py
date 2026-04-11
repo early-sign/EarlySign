@@ -5,10 +5,19 @@ from typing import Any, Optional, Protocol, Tuple, cast, runtime_checkable
 import numpy as np
 from numpy.typing import NDArray
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.core.spending import (
     SpendingFunction,
     SpendingFunctionFactory,
+)
+from earlysign.builtin.group_sequential.schema.policies import StoppingPolicySpec
+from earlysign.builtin.group_sequential.schema.strategies import (
+    AlphaBetaSpendingStrategy,
+    AlphaSpendingStrategy,
+    BetaSpendingStrategy,
+    OBrienFlemingStrategy,
+    PocockStrategy,
+    WangTsiatisStrategy,
+    WhiteheadStrategy,
 )
 
 
@@ -395,25 +404,25 @@ class StoppingPolicyFactory:
     """Factory for creating StoppingPolicy instances from ES3 specs."""
 
     @staticmethod
-    def build_from_spec(spec: GST.StoppingPolicySpec) -> StoppingPolicy:
+    def build_from_spec(spec: StoppingPolicySpec) -> StoppingPolicy:
         """Translates a StoppingPolicySpec into a concrete StoppingPolicy."""
         policy = spec.strategy
 
-        if isinstance(policy, GST.AlphaSpendingStrategy):
+        if isinstance(policy, AlphaSpendingStrategy):
             factory = SpendingFunctionFactory(budget=policy.budget)
             return SpendingFunctionStoppingPolicy(
                 efficacy_spending=factory.build_from_spec(policy.spending_fn),
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
-        if isinstance(policy, GST.BetaSpendingStrategy):
+        if isinstance(policy, BetaSpendingStrategy):
             factory = SpendingFunctionFactory(budget=policy.budget)
             return SpendingFunctionStoppingPolicy(
                 futility_spending=factory.build_from_spec(policy.spending_fn),
                 sided="one",
             )
 
-        if isinstance(policy, GST.AlphaBetaSpendingStrategy):
+        if isinstance(policy, AlphaBetaSpendingStrategy):
             eff_factory = SpendingFunctionFactory(budget=policy.alpha_budget)
             fut_factory = SpendingFunctionFactory(budget=policy.beta_budget)
             return SpendingFunctionStoppingPolicy(
@@ -428,13 +437,13 @@ class StoppingPolicyFactory:
                 sided="one",
             )
 
-        if isinstance(policy, GST.OBrienFlemingStrategy):
+        if isinstance(policy, OBrienFlemingStrategy):
             return OBrienFlemingStoppingPolicy(
                 alpha=policy.alpha,
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
-        if isinstance(policy, GST.WhiteheadStrategy):
+        if isinstance(policy, WhiteheadStrategy):
             return WhiteheadStoppingPolicy(
                 alpha=policy.alpha,
                 beta=policy.beta,
@@ -444,13 +453,13 @@ class StoppingPolicyFactory:
                 beta_binding=False,
             )
 
-        if isinstance(policy, GST.PocockStrategy):
+        if isinstance(policy, PocockStrategy):
             return PocockStoppingPolicy(
                 alpha=policy.alpha,
                 sided=str(policy.sided) if policy.sided else "two",
             )
 
-        if isinstance(policy, GST.WangTsiatisStrategy):
+        if isinstance(policy, WangTsiatisStrategy):
             return WangTsiatisStoppingPolicy(
                 alpha=policy.alpha,
                 delta=policy.delta,

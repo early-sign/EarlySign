@@ -1,0 +1,1112 @@
+{
+  "$defs": {
+    "AdaptationSnapshot": {
+      "description": "State captured during an adaptation event to preserve Type I error control.",
+      "properties": {
+        "z_t": {
+          "description": "Observed Z-statistic at the time of adaptation.",
+          "title": "Z T",
+          "type": "number"
+        },
+        "info_frac": {
+          "description": "Information fraction at the time of adaptation (t).",
+          "title": "Info Frac",
+          "type": "number"
+        },
+        "original_max_sample_size": {
+          "description": "The maximum sample size before re-planning.",
+          "title": "Original Max Sample Size",
+          "type": "integer"
+        },
+        "use_weighted_statistic": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "description": "Whether to use a weighted test statistic (e.g., Cui-Hung-Wang) after adaptation to preserve Type I error.",
+          "title": "Use Weighted Statistic"
+        }
+      },
+      "required": [
+        "z_t",
+        "info_frac",
+        "original_max_sample_size"
+      ],
+      "title": "AdaptationSnapshot",
+      "type": "object"
+    },
+    "AdaptationSpec": {
+      "properties": {
+        "sample_size_reestimation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SampleSizeReestimationSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "AdaptationSpec",
+      "type": "object"
+    },
+    "AlphaBetaSpendingStrategy": {
+      "properties": {
+        "kind": {
+          "const": "alpha_beta_spending",
+          "default": "alpha_beta_spending",
+          "title": "Kind",
+          "type": "string"
+        },
+        "statistical_model": {
+          "$ref": "#/$defs/StatisticalModel"
+        },
+        "alpha_spending_fn": {
+          "$ref": "#/$defs/SpendingFunction"
+        },
+        "beta_spending_fn": {
+          "$ref": "#/$defs/SpendingFunction"
+        },
+        "alpha_budget": {
+          "title": "Alpha Budget",
+          "type": "number"
+        },
+        "beta_budget": {
+          "title": "Beta Budget",
+          "type": "number"
+        },
+        "alpha_binding": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Alpha Binding"
+        },
+        "beta_binding": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": false,
+          "title": "Beta Binding"
+        }
+      },
+      "required": [
+        "statistical_model",
+        "alpha_spending_fn",
+        "beta_spending_fn",
+        "alpha_budget",
+        "beta_budget"
+      ],
+      "title": "AlphaBetaSpendingStrategy",
+      "type": "object"
+    },
+    "AlphaSpendingStrategy": {
+      "properties": {
+        "kind": {
+          "const": "alpha_spending",
+          "default": "alpha_spending",
+          "title": "Kind",
+          "type": "string"
+        },
+        "statistical_model": {
+          "$ref": "#/$defs/StatisticalModel"
+        },
+        "spending_fn": {
+          "$ref": "#/$defs/SpendingFunction"
+        },
+        "budget": {
+          "title": "Budget",
+          "type": "number"
+        },
+        "sided": {
+          "$ref": "#/$defs/Sided"
+        }
+      },
+      "required": [
+        "statistical_model",
+        "spending_fn",
+        "budget",
+        "sided"
+      ],
+      "title": "AlphaSpendingStrategy",
+      "type": "object"
+    },
+    "BetaSpendingStrategy": {
+      "properties": {
+        "kind": {
+          "const": "beta_spending",
+          "default": "beta_spending",
+          "title": "Kind",
+          "type": "string"
+        },
+        "statistical_model": {
+          "$ref": "#/$defs/StatisticalModel"
+        },
+        "spending_fn": {
+          "$ref": "#/$defs/SpendingFunction"
+        },
+        "budget": {
+          "title": "Budget",
+          "type": "number"
+        }
+      },
+      "required": [
+        "statistical_model",
+        "spending_fn",
+        "budget"
+      ],
+      "title": "BetaSpendingStrategy",
+      "type": "object"
+    },
+    "BinaryEffectSize": {
+      "properties": {
+        "type": {
+          "const": "binary",
+          "default": "binary",
+          "title": "Type",
+          "type": "string"
+        },
+        "proportions": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Proportions",
+          "type": "object"
+        }
+      },
+      "required": [
+        "proportions"
+      ],
+      "title": "BinaryEffectSize",
+      "type": "object"
+    },
+    "ContinuousEffectSize": {
+      "properties": {
+        "type": {
+          "const": "continuous",
+          "default": "continuous",
+          "title": "Type",
+          "type": "string"
+        },
+        "means": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Means",
+          "type": "object"
+        },
+        "standard_deviation": {
+          "title": "Standard Deviation",
+          "type": "number"
+        }
+      },
+      "required": [
+        "means",
+        "standard_deviation"
+      ],
+      "title": "ContinuousEffectSize",
+      "type": "object"
+    },
+    "DecisionStrategy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AlphaSpendingStrategy"
+        },
+        {
+          "$ref": "#/$defs/BetaSpendingStrategy"
+        },
+        {
+          "$ref": "#/$defs/AlphaBetaSpendingStrategy"
+        },
+        {
+          "$ref": "#/$defs/WhiteheadStrategy"
+        },
+        {
+          "$ref": "#/$defs/OBrienFlemingStrategy"
+        },
+        {
+          "$ref": "#/$defs/PocockStrategy"
+        },
+        {
+          "$ref": "#/$defs/WangTsiatisStrategy"
+        }
+      ],
+      "description": "Discriminated Union for Decision Strategies."
+    },
+    "EffectSizeUnion": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BinaryEffectSize"
+        },
+        {
+          "$ref": "#/$defs/ContinuousEffectSize"
+        },
+        {
+          "$ref": "#/$defs/SurvivalEffectSize"
+        }
+      ]
+    },
+    "EfficacyRequirement": {
+      "properties": {
+        "alpha": {
+          "title": "Alpha",
+          "type": "number"
+        },
+        "binding": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "description": "Binding.",
+          "title": "Binding"
+        }
+      },
+      "required": [
+        "alpha"
+      ],
+      "title": "EfficacyRequirement",
+      "type": "object"
+    },
+    "EqualityHypothesis": {
+      "properties": {
+        "kind": {
+          "const": "equality",
+          "default": "equality",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "EqualityHypothesis",
+      "type": "object"
+    },
+    "EquidistantSchedule": {
+      "properties": {
+        "kind": {
+          "const": "equidistant",
+          "default": "equidistant",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n_looks": {
+          "title": "N Looks",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n_looks"
+      ],
+      "title": "EquidistantSchedule",
+      "type": "object"
+    },
+    "EquivalenceHypothesis": {
+      "properties": {
+        "kind": {
+          "const": "equivalence",
+          "default": "equivalence",
+          "title": "Kind",
+          "type": "string"
+        },
+        "lower_margin": {
+          "title": "Lower Margin",
+          "type": "number"
+        },
+        "upper_margin": {
+          "title": "Upper Margin",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lower_margin",
+        "upper_margin"
+      ],
+      "title": "EquivalenceHypothesis",
+      "type": "object"
+    },
+    "EventCountTimer": {
+      "properties": {
+        "kind": {
+          "const": "event_count",
+          "default": "event_count",
+          "title": "Kind",
+          "type": "string"
+        },
+        "max_events": {
+          "title": "Max Events",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_events"
+      ],
+      "title": "EventCountTimer",
+      "type": "object"
+    },
+    "FisherInformationTimer": {
+      "properties": {
+        "kind": {
+          "const": "fisher_information",
+          "default": "fisher_information",
+          "title": "Kind",
+          "type": "string"
+        },
+        "max_information": {
+          "title": "Max Information",
+          "type": "number"
+        }
+      },
+      "required": [
+        "max_information"
+      ],
+      "title": "FisherInformationTimer",
+      "type": "object"
+    },
+    "FixedSchedule": {
+      "properties": {
+        "kind": {
+          "const": "fixed",
+          "default": "fixed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "analyses": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Analyses",
+          "type": "array"
+        }
+      },
+      "required": [
+        "analyses"
+      ],
+      "title": "FixedSchedule",
+      "type": "object"
+    },
+    "FutilityRequirement": {
+      "properties": {
+        "power": {
+          "description": "Target Power (1 - Beta)",
+          "title": "Power",
+          "type": "number"
+        },
+        "binding": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": false,
+          "description": "Non-binding.",
+          "title": "Binding"
+        }
+      },
+      "required": [
+        "power"
+      ],
+      "title": "FutilityRequirement",
+      "type": "object"
+    },
+    "HypothesisParameters": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EqualityHypothesis"
+        },
+        {
+          "$ref": "#/$defs/SuperiorityHypothesis"
+        },
+        {
+          "$ref": "#/$defs/NonInferiorityHypothesis"
+        },
+        {
+          "$ref": "#/$defs/EquivalenceHypothesis"
+        }
+      ]
+    },
+    "HypothesisSpec": {
+      "properties": {
+        "h_null_description": {
+          "title": "H Null Description",
+          "type": "string"
+        },
+        "h_alt_description": {
+          "title": "H Alt Description",
+          "type": "string"
+        },
+        "test_logic": {
+          "$ref": "#/$defs/HypothesisParameters"
+        },
+        "target_effect": {
+          "$ref": "#/$defs/EffectSizeUnion"
+        }
+      },
+      "required": [
+        "h_null_description",
+        "h_alt_description",
+        "test_logic",
+        "target_effect"
+      ],
+      "title": "HypothesisSpec",
+      "type": "object"
+    },
+    "InformationTimer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SampleSizeTimer"
+        },
+        {
+          "$ref": "#/$defs/FisherInformationTimer"
+        },
+        {
+          "$ref": "#/$defs/EventCountTimer"
+        }
+      ],
+      "description": "Discriminated Union for Timer."
+    },
+    "Method": {
+      "enum": [
+        "conditional_power",
+        "predictive_power"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "MethodSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "group_sequential",
+          "default": "group_sequential",
+          "title": "Kind",
+          "type": "string"
+        },
+        "stopping_policy": {
+          "$ref": "#/$defs/StoppingPolicySpec"
+        },
+        "adaptation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdaptationSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "adaptation_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdaptationSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "stopping_policy"
+      ],
+      "title": "MethodSpec",
+      "type": "object"
+    },
+    "MultiArmComparison": {
+      "$ref": "../../schema/es3_schema.json#/$defs/MultiArmComparison"
+    },
+    "NonInferiorityHypothesis": {
+      "properties": {
+        "kind": {
+          "const": "non_inferiority",
+          "default": "non_inferiority",
+          "title": "Kind",
+          "type": "string"
+        },
+        "non_inferiority_margin": {
+          "title": "Non Inferiority Margin",
+          "type": "number"
+        }
+      },
+      "required": [
+        "non_inferiority_margin"
+      ],
+      "title": "NonInferiorityHypothesis",
+      "type": "object"
+    },
+    "OBrienFlemingStrategy": {
+      "properties": {
+        "kind": {
+          "const": "obrien_fleming",
+          "default": "obrien_fleming",
+          "title": "Kind",
+          "type": "string"
+        },
+        "statistical_model": {
+          "$ref": "#/$defs/StatisticalModel"
+        },
+        "alpha": {
+          "title": "Alpha",
+          "type": "number"
+        },
+        "sided": {
+          "$ref": "#/$defs/Sided"
+        }
+      },
+      "required": [
+        "statistical_model",
+        "alpha",
+        "sided"
+      ],
+      "title": "OBrienFlemingStrategy",
+      "type": "object"
+    },
+    "PocockStrategy": {
+      "properties": {
+        "kind": {
+          "const": "pocock",
+          "default": "pocock",
+          "title": "Kind",
+          "type": "string"
+        },
+        "statistical_model": {
+          "$ref": "#/$defs/StatisticalModel"
+        },
+        "alpha": {
+          "title": "Alpha",
+          "type": "number"
+        },
+        "sided": {
+          "$ref": "#/$defs/Sided"
+        }
+      },
+      "required": [
+        "statistical_model",
+        "alpha",
+        "sided"
+      ],
+      "title": "PocockStrategy",
+      "type": "object"
+    },
+    "PromisingZoneSpec": {
+      "properties": {
+        "conditional_power_threshold_min": {
+          "title": "Conditional Power Threshold Min",
+          "type": "number"
+        },
+        "conditional_power_threshold_max": {
+          "title": "Conditional Power Threshold Max",
+          "type": "number"
+        },
+        "target_conditional_power": {
+          "title": "Target Conditional Power",
+          "type": "number"
+        }
+      },
+      "required": [
+        "conditional_power_threshold_min",
+        "conditional_power_threshold_max",
+        "target_conditional_power"
+      ],
+      "title": "PromisingZoneSpec",
+      "type": "object"
+    },
+    "ResponseType": {
+      "enum": [
+        "binary",
+        "continuous",
+        "time_to_event"
+      ],
+      "title": "ResponseType",
+      "type": "string"
+    },
+    "SampleSizeReestimationSpec": {
+      "properties": {
+        "type": {
+          "const": "sample_size_reestimation",
+          "default": "sample_size_reestimation",
+          "title": "Type",
+          "type": "string"
+        },
+        "method": {
+          "$ref": "#/$defs/Method"
+        },
+        "target_power": {
+          "title": "Target Power",
+          "type": "number"
+        },
+        "use_weighted_statistic": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": true,
+          "title": "Use Weighted Statistic"
+        },
+        "n_range": {
+          "items": {},
+          "title": "N Range",
+          "type": "array"
+        },
+        "promising_zone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromisingZoneSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "method",
+        "target_power",
+        "n_range"
+      ],
+      "title": "SampleSizeReestimationSpec",
+      "type": "object"
+    },
+    "SampleSizeTimer": {
+      "properties": {
+        "kind": {
+          "const": "sample_size",
+          "default": "sample_size",
+          "title": "Kind",
+          "type": "string"
+        },
+        "unit": {
+          "$ref": "#/$defs/Unit"
+        },
+        "max_sample_size": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Max Sample Size",
+          "type": "object"
+        }
+      },
+      "required": [
+        "unit",
+        "max_sample_size"
+      ],
+      "title": "SampleSizeTimer",
+      "type": "object"
+    },
+    "ScheduleSpec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FixedSchedule"
+        },
+        {
+          "$ref": "#/$defs/EquidistantSchedule"
+        }
+      ],
+      "description": "Discriminated Union for Schedule."
+    },
+    "Sided": {
+      "enum": [
+        "one",
+        "two"
+      ],
+      "title": "Sided",
+      "type": "string"
+    },
+    "SingleArm": {
+      "$ref": "../../schema/es3_schema.json#/$defs/SingleArm"
+    },
+    "SpendingFunction": {
+      "properties": {
+        "family": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpendingFunctionType"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Family"
+        },
+        "params": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params"
+        }
+      },
+      "required": [
+        "family"
+      ],
+      "title": "SpendingFunction",
+      "type": "object"
+    },
+    "SpendingFunctionType": {
+      "description": "Available spending function types for group sequential design.",
+      "enum": [
+        "obrien_fleming",
+        "pocock",
+        "power_family",
+        "hwang_shih_decani"
+      ],
+      "title": "SpendingFunctionType",
+      "type": "string"
+    },
+    "StatisticalModel": {
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "StatisticalModel",
+      "type": "object"
+    },
+    "StoppingPolicySpec": {
+      "properties": {
+        "statistic": {
+          "$ref": "#/$defs/TestStatisticSpec"
+        },
+        "strategy": {
+          "$ref": "#/$defs/DecisionStrategy"
+        },
+        "timer": {
+          "$ref": "#/$defs/InformationTimer"
+        },
+        "schedule": {
+          "$ref": "#/$defs/ScheduleSpec"
+        },
+        "trigger_strategy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerStrategySpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "statistic",
+        "strategy",
+        "timer",
+        "schedule"
+      ],
+      "title": "StoppingPolicySpec",
+      "type": "object"
+    },
+    "SuperiorityHypothesis": {
+      "properties": {
+        "kind": {
+          "const": "superiority",
+          "default": "superiority",
+          "title": "Kind",
+          "type": "string"
+        },
+        "superiority_margin": {
+          "title": "Superiority Margin",
+          "type": "number"
+        }
+      },
+      "required": [
+        "superiority_margin"
+      ],
+      "title": "SuperiorityHypothesis",
+      "type": "object"
+    },
+    "SurvivalEffectSize": {
+      "properties": {
+        "type": {
+          "const": "time_to_event",
+          "default": "time_to_event",
+          "title": "Type",
+          "type": "string"
+        },
+        "hazard_ratios": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Hazard Ratios",
+          "type": "object"
+        },
+        "median_survival_times": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Median Survival Times"
+        },
+        "event_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Rate"
+        }
+      },
+      "required": [
+        "hazard_ratios"
+      ],
+      "title": "SurvivalEffectSize",
+      "type": "object"
+    },
+    "TaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "group_sequential",
+          "default": "group_sequential",
+          "title": "Kind",
+          "type": "string"
+        },
+        "arms": {
+          "description": "Structural definition of study arms and their roles.",
+          "discriminator": {
+            "mapping": {
+              "multi_arm": "#/$defs/MultiArmComparison",
+              "single": "#/$defs/SingleArm",
+              "two_arm": "#/$defs/TwoArmComparison"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SingleArm"
+            },
+            {
+              "$ref": "#/$defs/TwoArmComparison"
+            },
+            {
+              "$ref": "#/$defs/MultiArmComparison"
+            }
+          ],
+          "title": "Arms"
+        },
+        "response_type": {
+          "$ref": "#/$defs/ResponseType"
+        },
+        "hypotheses": {
+          "$ref": "#/$defs/HypothesisSpec"
+        },
+        "efficacy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EfficacyRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "futility": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FutilityRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "arms",
+        "response_type",
+        "hypotheses"
+      ],
+      "title": "TaskSpec",
+      "type": "object"
+    },
+    "TestStatisticSpec": {
+      "description": "The \"Statistic\": Operational Definition of the Test Statistic.",
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "TestStatisticSpec",
+      "type": "object"
+    },
+    "TriggerStrategySpec": {
+      "description": "Discriminated Union for Trigger Strategies.",
+      "properties": {
+        "kind": {
+          "const": "due_look",
+          "default": "due_look",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tolerance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0,
+          "title": "Tolerance"
+        }
+      },
+      "title": "TriggerStrategySpec",
+      "type": "object"
+    },
+    "TwoArmComparison": {
+      "$ref": "../../schema/es3_schema.json#/$defs/TwoArmComparison"
+    },
+    "Unit": {
+      "description": "\"individuals\": Count individuals (e.g. n1 + n2).\n\"effective_size\": Effective sample size (e.g. 4*n1*n2/(n1+n2)).",
+      "enum": [
+        "individuals",
+        "effective_size"
+      ],
+      "title": "Unit",
+      "type": "string"
+    },
+    "WangTsiatisStrategy": {
+      "properties": {
+        "kind": {
+          "const": "wang_tsiatis",
+          "default": "wang_tsiatis",
+          "title": "Kind",
+          "type": "string"
+        },
+        "statistical_model": {
+          "$ref": "#/$defs/StatisticalModel"
+        },
+        "alpha": {
+          "title": "Alpha",
+          "type": "number"
+        },
+        "delta": {
+          "title": "Delta",
+          "type": "number"
+        },
+        "sided": {
+          "$ref": "#/$defs/Sided"
+        }
+      },
+      "required": [
+        "statistical_model",
+        "alpha",
+        "delta",
+        "sided"
+      ],
+      "title": "WangTsiatisStrategy",
+      "type": "object"
+    },
+    "WhiteheadStrategy": {
+      "properties": {
+        "kind": {
+          "const": "whitehead",
+          "default": "whitehead",
+          "title": "Kind",
+          "type": "string"
+        },
+        "statistical_model": {
+          "$ref": "#/$defs/StatisticalModel"
+        },
+        "alpha": {
+          "title": "Alpha",
+          "type": "number"
+        },
+        "beta": {
+          "title": "Beta",
+          "type": "number"
+        }
+      },
+      "required": [
+        "statistical_model",
+        "alpha",
+        "beta"
+      ],
+      "title": "WhiteheadStrategy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "The name of the protocol.",
+      "title": "Name",
+      "type": "string"
+    },
+    "task": {
+      "$ref": "#/$defs/TaskSpec"
+    },
+    "method": {
+      "$ref": "#/$defs/MethodSpec"
+    }
+  },
+  "required": [
+    "name",
+    "task",
+    "method"
+  ],
+  "title": "Protocol",
+  "type": "object",
+  "$id": "https://early-sign.github.io/EarlySign/schema/v0.2.0.post502/builtin/group_sequential/schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

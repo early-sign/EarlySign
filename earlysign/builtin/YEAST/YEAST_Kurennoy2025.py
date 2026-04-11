@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Literal
 
-import earlysign.schema.ES3.Base as ES3_BASE
+import earlysign.schema.ES3.base as ES3_BASE
 from earlysign.builtin.YEAST.engine import BinomialYEASTEngine, ContinuousYEASTEngine
 from earlysign.builtin.YEAST.reporting import FinalProjector, ProgressProjector
 from earlysign.builtin.YEAST.schema import (
@@ -17,8 +17,8 @@ from earlysign.framework.projector import ProtocolProjector
 from earlysign.framework.session import Session
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
-from earlysign.schema.ES3.Binomial import BinomialArmData
-from earlysign.schema.ES3.Continuous import ContinuousArmData
+from earlysign.schema.ES3.trackers.binomial import BinomialArmData
+from earlysign.schema.ES3.trackers.continuous import ContinuousArmData
 
 
 class BinomialKurennoy2025TaskSpec(YeastTaskSpec):
@@ -52,9 +52,9 @@ class BinomialKurennoy2025Controller(Controller[Protocol]):
     Examples:
         >>> import ibis, duckdb  # noqa: F401
         >>> from earlysign.core.ledger import Ledger
-        >>> import earlysign.schema.ES3.Base as ES3_BASE
+        >>> import earlysign.schema.ES3.base as ES3_BASE
         >>> from earlysign.builtin.YEAST.YEAST_Kurennoy2025 import BinomialKurennoy2025Controller, BinomialKurennoy2025TaskSpec
-        >>> from earlysign.schema.ES3.Binomial import BinomialArmData
+        >>> from earlysign.schema.ES3.trackers.binomial import BinomialArmData
 
         >>> # Scenario:
         >>> # You are an ML Engineer at Acme Corp monitoring a new ad-bidding model (v2) against the incumbent (v1).
@@ -202,9 +202,9 @@ class ContinuousKurennoy2025Controller(Controller[Protocol]):
     Examples:
         >>> import ibis
         >>> from earlysign.core.ledger import Ledger
-        >>> import earlysign.schema.ES3.Base as ES3_BASE
+        >>> import earlysign.schema.ES3.base as ES3_BASE
         >>> from earlysign.builtin.YEAST.YEAST_Kurennoy2025 import ContinuousKurennoy2025Controller, ContinuousKurennoy2025TaskSpec
-        >>> from earlysign.schema.ES3.Continuous import ContinuousArmData
+        >>> from earlysign.schema.ES3.trackers.continuous import ContinuousArmData
 
         >>> con = ibis.duckdb.connect(":memory:")
         >>> ledger = Ledger(con, "events_cont")

@@ -22,12 +22,16 @@ from earlysign.framework.trace import TraceId
 from earlysign.parts.trackers.binomial import Scoreboard as BinomialScoreboard
 from earlysign.parts.trackers.continuous import Scoreboard as ContinuousScoreboard
 from earlysign.parts.visualization.visual import VisualizationResult
-from earlysign.schema.ES3.Binomial import Scoreboard as BinomialScoreboardSchema
-from earlysign.schema.ES3.Continuous import Scoreboard as ContinuousScoreboardSchema
+from earlysign.schema.ES3.trackers.binomial import (
+    Scoreboard as BinomialScoreboardSchema,
+)
+from earlysign.schema.ES3.trackers.continuous import (
+    Scoreboard as ContinuousScoreboardSchema,
+)
 
 
 class ProgressReport(BaseModel):
-    """AVI interim progress report."""
+    """Anytime Valid Inference (AVI) interim progress report."""
 
     sample_n: int
     trajectory: float
@@ -37,7 +41,7 @@ class ProgressReport(BaseModel):
 
 
 class FinalReport(BaseModel):
-    """AVI final summary report."""
+    """Anytime Valid Inference (AVI) final summary report."""
 
     sample_n: int
     trajectory: float
@@ -47,7 +51,7 @@ class FinalReport(BaseModel):
 
 
 class BacktestReport(BaseModel):
-    """Report for historical backtesting (AVI)."""
+    """Report for historical backtesting (Anytime Valid Inference / AVI)."""
 
     final_report: FinalReport
     efficiency: float
@@ -58,7 +62,7 @@ class BacktestReport(BaseModel):
 
 class ProgressProjector(Projector[ProgressReport]):
     """
-    Projector for AVI interim monitoring.
+    Projector for Anytime Valid Inference (AVI) interim monitoring.
     Reads the latest LookResult and Scoreboard from the ledger.
     """
 
@@ -121,7 +125,7 @@ class ProgressProjector(Projector[ProgressReport]):
 
 class FinalProjector(Projector[FinalReport]):
     """
-    Projector for AVI final study summary.
+    Projector for Anytime Valid Inference (AVI) final study summary.
     """
 
     @property
@@ -174,7 +178,7 @@ class FinalProjector(Projector[FinalReport]):
 
 class BacktestProjector(Projector[BacktestReport]):
     """
-    Projector for AVI backtesting results.
+    Projector for Anytime Valid Inference (AVI) backtesting results.
     """
 
     def __init__(self, total_samples: int):
@@ -338,14 +342,14 @@ class TrajectoryProjector(Projector[pd.DataFrame]):
 
 def plot_avi_trajectory(
     ledger: Any,
-    title: str = "AVI Trajectory",
+    title: str = "Anytime Valid Inference (AVI) Trajectory",
     xlabel: str = "Cumulative Sample Size (N)",
     ylabel: str = "Effect Estimate",
     ax: Optional[Any] = None,
     figsize: tuple[int, int] = (10, 6),
 ) -> VisualizationResult:
     """
-    Plots the history of AVI trajectory and boundaries.
+    Plots the history of Anytime Valid Inference (AVI) trajectory and boundaries.
 
     This function uses TrajectoryProjector to reconstruct history from the ledger
     and provides a standard visualization for AVI methods.
@@ -398,7 +402,7 @@ def plot_avi_trajectory(
 
 
 def generate_avi_operating_characteristics_table(results: Any) -> pd.DataFrame:
-    """Generates a summary DataFrame from a SimulationCurve for AVI."""
+    """Generates a summary DataFrame from a SimulationCurve for Anytime Valid Inference (AVI)."""
     rows = []
     n_max_total = results.n_max_total or 0.0
 
@@ -436,7 +440,7 @@ def visualize_avi_design(
     return_fig: bool = True,
 ) -> Union[pd.DataFrame, VisualizationResult]:
     """
-    Visualizes the Operating Characteristics (OC) of an AVI protocol design.
+    Visualizes the Operating Characteristics (OC) of an Anytime Valid Inference (AVI) protocol design.
 
     Args:
         protocol: The design to evaluate.
@@ -486,7 +490,9 @@ def visualize_avi_design(
 
     title_proto = protocol.name if protocol.name else "Protocol"
     fig.suptitle(
-        f"AVI Operating Characteristics: {title_proto}", fontsize=14, fontweight="bold"
+        f"Anytime Valid Inference (AVI) Operating Characteristics: {title_proto}",
+        fontsize=14,
+        fontweight="bold",
     )
 
     # Plot 1: Power Curve

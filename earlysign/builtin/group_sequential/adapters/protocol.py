@@ -1,23 +1,33 @@
 import numpy as np
 
-from earlysign.builtin.group_sequential import schema as GST
 from earlysign.builtin.group_sequential.adapters import binomial, continuous
+from earlysign.builtin.group_sequential.schema.hypotheses import (
+    BinaryEffectSize,
+    ContinuousEffectSize,
+    SurvivalEffectSize,
+)
+from earlysign.builtin.group_sequential.schema.protocol import Protocol
+from earlysign.builtin.group_sequential.schema.timers import (
+    EquidistantSchedule,
+    FixedSchedule,
+    ScheduleSpec,
+)
 
 
-def get_standardized_drift(protocol: GST.Protocol) -> float:
+def get_standardized_drift(protocol: Protocol) -> float:
     """
     Dispatches to domain-specific drift calculations.
     """
     task = protocol.task
     effect = task.hypotheses.target_effect
 
-    if isinstance(effect, GST.BinaryEffectSize):
+    if isinstance(effect, BinaryEffectSize):
         props = list(effect.proportions.values())
         if len(props) < 2:
             raise ValueError("BinaryEffectSize must define at least 2 arm proportions.")
         return binomial.get_standardized_drift(props[0], props[1])
 
-    elif isinstance(effect, GST.ContinuousEffectSize):
+    elif isinstance(effect, ContinuousEffectSize):
         means = list(effect.means.values())
         if len(means) < 2:
             raise ValueError("ContinuousEffectSize must define at least 2 arm means.")
@@ -26,7 +36,7 @@ def get_standardized_drift(protocol: GST.Protocol) -> float:
             delta, effect.standard_deviation, n_arms=len(means)
         )
 
-    elif isinstance(effect, GST.SurvivalEffectSize):
+    elif isinstance(effect, SurvivalEffectSize):
         # theta = |log(HR)| / 2
         hrs = list(effect.hazard_ratios.values())
         if len(hrs) < 2:
@@ -39,18 +49,18 @@ def get_standardized_drift(protocol: GST.Protocol) -> float:
     raise ValueError(f"Unsupported effect size type: {type(effect)}")
 
 
-def get_info_times(schedule: GST.ScheduleSpec) -> np.ndarray:
+def get_info_times(schedule: ScheduleSpec) -> np.ndarray:
     """
     Returns the array of information fractions (0 < t <= 1) defined by the Schedule.
     """
-    if isinstance(schedule, GST.FixedSchedule):
+    if isinstance(schedule, FixedSchedule):
         return np.array(schedule.analyses)
-    elif isinstance(schedule, GST.EquidistantSchedule):
+    elif isinstance(schedule, EquidistantSchedule):
         return np.linspace(1.0 / schedule.n_looks, 1.0, schedule.n_looks)
     return np.array([1.0])
 
 
-def get_final_efficacy_boundary(protocol: GST.Protocol) -> float:
+def get_final_efficacy_boundary(protocol: Protocol) -> float:
     """
     Calculates the efficacy boundary (Z-scale) at the final analysis (t=1.0).
     """

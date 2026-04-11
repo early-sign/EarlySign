@@ -131,6 +131,7 @@ autoapi_template_dir = os.path.join(os.path.dirname(__file__), "_templates", "au
 autoapi_keep_files = True
 
 autoapi_python_class_content = "both"  # "class", "init"
+autoapi_python_use_implicit_namespaces = True
 
 suppress_warnings = [
     "autoapi.python_import_resolution",

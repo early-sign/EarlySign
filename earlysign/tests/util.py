@@ -3,7 +3,7 @@ from typing import Dict, Iterator, List, Optional, Union
 
 import numpy as np
 
-from earlysign.schema.ES3.Binomial import BinomialArmData
+from earlysign.schema.ES3.trackers.binomial import BinomialArmData
 
 
 class BinomialStream:

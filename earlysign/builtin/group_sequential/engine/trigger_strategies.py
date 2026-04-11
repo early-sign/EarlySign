@@ -1,14 +1,16 @@
 from typing import Any, List, Optional, Tuple
 
 from earlysign.builtin.group_sequential.adapters.protocol import get_info_times
-from earlysign.builtin.group_sequential.schema import (
-    DueLookTrigger,
+from earlysign.builtin.group_sequential.schema.logs import (
+    LookResult,
+    ScheduleTrigger,
+)
+from earlysign.builtin.group_sequential.schema.policies import DueLookTrigger
+from earlysign.builtin.group_sequential.schema.protocol import Protocol
+from earlysign.builtin.group_sequential.schema.timers import (
     EventCountTimer,
     FisherInformationTimer,
-    LookResult,
-    Protocol,
     SampleSizeTimer,
-    ScheduleTrigger,
 )
 from earlysign.framework.trace import Traced, extract_traces
 

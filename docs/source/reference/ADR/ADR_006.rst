@@ -1,5 +1,7 @@
-ADR-006: Selection of Schema Management and Pydantic Generation Strategy
-======================================================================
+ADR-006: Selection of Schema Management
+=======================================
+
+**Status**: **`Accepted`**
 
 📋 Context
 -----------
@@ -7,39 +9,77 @@ The EarlySign Standard Schema (ES3) requires a robust technical foundation for d
 
 1. **Schema-First Workflow**: Single source of truth for protocol definitions.
 2. **Human-Readable Syntax**: Easy for domain experts to review and edit.
-3. **Pydantic v2 Integration**: Automatic generation of high-quality Pydantic models.
-4. **Namespace Support**: Ability to organize models into logical groups (e.g., ``GST``, ``Base``, ``AVI``).
-5. **Deterministic Builds**: Consistent output for CI/CD and synchronization checks.
-6. **Flexibility**: Support for discriminators, enums, literals, and inheritance.
+3. **Namespace Support**: Ability to organize models into logical groups (e.g., ``GST``, ``Base``, ``AVI``) and allow users to construct extensions seamlessly.
+4. **Flexibility**: Support for discriminators, enums, literals, and inheritance.
+5. **Logic Integration**: Ability to link schemas effortlessly to execution-heavy compiled statistical classes.
+6. **Robust Type Safety**: Seamless IDE compatibility and strict validation natively integrated with the python implementation.
 
 💡 Decision
 ------------
-We have selected **TypeSpec** as the primary schema language, pipelined with the **OpenAPI 3** emitter and **datamodel-code-generator** for Python SDK generation.
+After evaluating code generation (Codegen) approaches utilizing external DSLs, we decided to adopt a **Pydantic-First** strategy. Pydantic (v2/v3) will serve directly as the single source of truth for the ES3 schema without any intermediate external DSL code generation.
 
-The workflow is as follows:
-1. Define the schema in ``.tsp`` files using TypeSpec.
-2. Compile TypeSpec to an OpenAPI 3 YAML specification via ``@typespec/openapi3``.
-3. Generate namespaced Pydantic models using ``datamodel-code-generator`` with specific flags:
-   * ``--enum-field-as-literal one``: Keeps single-value "kind" fields as Literals for better type hinting.
-   * ``--capitalise-enum-members``: Ensures consistent enum member naming.
-   * ``--reuse-model``: Reduces redundancy across namespaces.
+1. **Schema as Code**: Protocol definitions and schemas are natively written as Python Pydantic models. The core schemas are organized under the ``earlysign.schema`` module and distributed natively via the Python package.
+2. **Extension Mechanism**: Users utilize standard Python imports to load library base models and extend them via inheritance or composition. Any name collisions (e.g., creating a local ``Model`` class) are naturally resolved using Python's inherent module system (e.g., ``import Model as EarlySignModel``).
+3. **Distribution of Schema via Export**: For non-Python environments and tooling support, we programmatically export a ``JSON Schema`` directly from the authoritative Pydantic models. This exported JSON Schema serves as the distributed, platform-agnostic specification.
+4. **Dynamic Instantiation**: We leverage Pydantic's ``TypeAdapter`` and ``Discriminated Unions`` to handle deserialization from user configuration files (YAML/JSON). This allows dynamic mapping of configuration type flags to appropriate statistical subclasses.
 
-**Alternatives Considered:**
+🔄 Alternatives Considered
+--------------------------
+Prior to arriving at a Pydantic-First approach, we heavily explored external DSLs via a Codegen workflow. However, generating code across package boundaries (from the core library to user extensions) proved untenable. Ultimately, bridging highly-abstract structural datamodels output by DSLs directly into our heavily-compiled statistical execution classes required excessively convoluted hacks.
 
-* **LinkML**: Investigated for its freshness. While powerful, it introduced friction in generating nested Python namespaces and deterministic outputs compared to the TypeSpec/OpenAPI pipeline.
-* **Protobuf/gRPC**: Excellent for performance, but lacks the natural mapping to Pydantic models required for this project's orchestration layer.
-* **Raw JSON Schema/OpenAPI**: Rejected as primary authoring formats due to extreme verbosity and poor human readability.
+TypeSpec (Previously Assessed)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeSpec is a modern DSL from Microsoft that resembles TypeScript. It was initially planned as our primary ES3 schema language.
+
+* **Pros:**
+  * **Excellent Readability:** Clean, modern syntax that is approachable for both developers and domain experts.
+  * **Strong Tooling:** Powerful IDE extensions and deterministic compilation to OpenAPI models.
+* **Cons:**
+  * **Inflexible Import Generation:** Its Pydantic emitter lacked the flexibility to smoothly generate code carrying partial module imports correctly mapped to an existing Python package hierarchy.
+  * **Subclassing Friction:** Because our framework inherently requires users to extend library-provided base schemas across distinct module boundaries, robust subclassing generation was mandatory but poorly supported.
+  * **Emitter Customization Burden:** Because the default Pydantic emitter lacked the required functionality to support our partial import structures and class inheritances, we would be forced to implement an independent customization to the emitter itself. Taking ownership of and maintaining customized emitter logic heavily degraded the maintainability of this approach.
+  * **Differing Primary Focus:** Because TypeSpec is fundamentally designed and optimized around API description and routing, it is unlikely to prioritize or expand the specific feature sets required exclusively for static configuration schema definitions. This mismatch in development trajectory introduces a long-term risk.
+* **Historical Configuration Note:** During our initial TypeSpec evaluation, we generated namespaced models via ``datamodel-code-generator`` using specific flags: ``--enum-field-as-literal one`` (to keep single-value fields as Literals), ``--capitalise-enum-members``, and ``--reuse-model``. This configuration is preserved in this record for historical reference.
+
+LinkML
+^^^^^^
+LinkML (Linked Data Modeling Language) is a general-purpose semantic modeling language. We investigated it for its ability to generate multiple downstream targets directly, including Pydantic models.
+
+* **Pros:**
+  * **Semantic Focus:** Excellent abstraction layer designed fundamentally around data linkage and schema compilation.
+  * **Dedicated Generator:** Included a native ``gen-pydantic`` implementation actively targeting Python developers.
+* **Cons:**
+  * **Flat Namespace Architecture:** Its specification relies upon a flat namespace. Due to this constraint, even with Python's hierarchical submodules, users constructing schema extensions would have to manually and artificially carefully avoid name collisions (e.g. unable to safely use the generic name ``Trial`` if the base schema also defined a ``Trial``).
+  * **Compiler Rewrite Burden:** We briefly considered building a fully custom Python backend emitter inside LinkML to intercept generation and force hierarchical module mappings. However, assuming the maintenance burden of an entire custom compiler was ruled out as unsustainable.
+
+Protobuf / gRPC
+^^^^^^^^^^^^^^^
+Standard binary serialization format and RPC framework developed by Google.
+
+* **Pros:**
+  * **High Performance:** Excellent execution speed and footprint.
+* **Cons:**
+  * **Framework Mismatch:** Lacked the natural mapping to Pydantic models required for this project's Python-centric orchestration layer.
+
+Raw JSON Schema / OpenAPI
+^^^^^^^^^^^^^^^^^^^^^^^^^
+Authoring the protocol directly in raw JSON Schema or OpenAPI YAML structures without a higher-level DSL. 
+
+* **Pros:**
+  * **Ubiquity:** Universally supported cross-language standards without requiring "middleman" compilers.
+* **Cons:**
+  * **Poor Developer Experience:** Extreme verbosity makes writing, extending, and refactoring schemas deeply cumbersome.
+  * **Human Unreadable:** Fundamentally unfriendly for domain experts to directly read and review without specialized parsing UIs.
 
 ✨ Consequences
 -----------------
-The choice of TypeSpec provides a clean, modern syntax that mirrors TypeScript/IDL, making it accessible to developers while retaining the full power of the OpenAPI ecosystem.
-
 **Positive:**
-* **Developer Velocity**: Rapid schema iteration with immediate feedback.
-* **Type Safety**: Strong alignment between schema definitions and the Python orchestration layer.
-* **CI/CD Integration**: Easy implementation of synchronization checks (``make check-sync``).
-* **Maintainability**: Clear separation of concerns between standard definitions and implementation.
+
+* **Resolved Import Issues**: Cross-package subclass dependencies simply rely on native Python import resolution, freeing the codebase from fragile custom code-rewriting scripts.
+* **100% Type Safety**: Ensures perfect compatibility with IDEs (Pyright/mypy), drastically improving the core developer experience for users building their trial extensions.
+* **Logic Injection**: Using Pydantic features like ``Annotated``, ``BeforeValidator``, or ``model_validator``, we can naturally instantiate, validate, and execute complex compiled statistical classes from deserialized configuration data.
+* **Low Maintenance Cost**: We decouple our schema definitions from the quirks, limitations, and rigid update cycles of third-party DSL compilers.
 
 **Negative:**
-* **Tooling Overhead**: Requires Node.js and specific TypeSpec packages (``@typespec/compiler``, etc.).
-* **Generator Complexity**: ``datamodel-code-generator`` flags require careful tuning to ensure correct inheritance and enum behavior.
+
+* **Python-Centric**: Schema authoring as the "source of truth" relies entirely on Python implementation. Adopting the schema in other languages (R, Julia, C++) will require those communities to consume our generated JSON Schema instead of writing schema in a language-agnostic DSL.

@@ -10,7 +10,7 @@ from typing import Any, List, Optional, Tuple, Type
 import ibis
 from pydantic import BaseModel
 
-from earlysign.builtin.group_sequential.schema import LookResult
+from earlysign.builtin.group_sequential.schema.logs import LookResult
 from earlysign.core.util.json_ops import extract_json_scalar
 from earlysign.framework.entity import (
     SequentialEntity,
